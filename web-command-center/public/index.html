@@ -1,0 +1,2929 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>草人杯 - 大厅</title>
+    <!-- Stage 3.14.1: voice QA scoring records + map voters shown on BP cards -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --bg: #f4f7fb;
+            --panel: #ffffff;
+            --panel-soft: #f8fafc;
+            --border: #d9e2ec;
+            --text: #243447;
+            --muted: #6b7b8c;
+            --primary: #2563eb;
+            --primary-soft: #e8f0ff;
+            --danger: #d32f2f;
+            --warning: #f59e0b;
+            --success: #2e7d32;
+            --shadow: 0 10px 30px rgba(31, 41, 55, 0.08);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+            margin: 0;
+            padding: 24px;
+            color: var(--text);
+            background: linear-gradient(180deg, #eef4ff 0%, #f7f9fc 180px, #f4f7fb 100%);
+        }
+
+        .player-list {
+            margin-top: 20px;
+        }
+
+        .player-item {
+            padding: 5px;
+            border-bottom: 1px solid #ccc;
+        }
+
+        button {
+            margin: 5px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            background-color: #f0f0f0;
+        }
+
+            button:hover {
+                background-color: #e0e0e0;
+            }
+
+            button:disabled {
+                background-color: #cccccc;
+                color: #666666;
+                cursor: not-allowed;
+                border: 1px solid #aaa;
+            }
+
+        input[type="text"], input[type="number"], select {
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 3% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 95%;
+            max-width: 1100px;
+            line-height: 1.5;
+            position: relative;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .close {
+            color: #aaa;
+            position: absolute;
+            right: 15px;
+            top: 10px;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+            .close:hover {
+                color: #333;
+            }
+
+        #timer-display {
+            font-size: 20px;
+            font-weight: bold;
+            color: #cc0000;
+            margin: 10px 0;
+        }
+
+        .live-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #eee;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        /* 放大并优化九宫格尺寸 */
+        .task-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 180px);
+            gap: 20px;
+            margin: 15px 0;
+            padding: 10px;
+        }
+
+        .task-cell {
+            width: 180px;
+            height: 200px;
+            border: 2px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: center;
+            background: #fdfdfd;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 6px;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            word-break: break-word;
+            line-height: 1.4;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+            .task-cell:hover {
+                background: #fff;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+
+            .task-cell::-webkit-scrollbar {
+                width: 4px;
+            }
+
+            .task-cell::-webkit-scrollbar-thumb {
+                background: #ccc;
+                border-radius: 2px;
+            }
+
+            .task-cell.abandoned {
+                background: #e0e0e0;
+                cursor: not-allowed;
+                color: #777;
+            }
+
+            .task-cell.selected {
+                outline: 3px dashed #ff0000;
+                outline-offset: 4px;
+            }
+
+        /* 任务描述内允许使用的富文本基础样式 */
+        .task-desc b {
+            font-weight: 900;
+        }
+
+        .task-desc u {
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .scoreboard-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+            .scoreboard-table th, .scoreboard-table td {
+                border: 1px solid #ddd;
+                padding: 10px;
+                text-align: left;
+            }
+
+            .scoreboard-table tr.undercover {
+                background: #ffe0b2;
+            }
+
+            .scoreboard-table tr.detective {
+                background: #b3e5fc;
+            }
+
+            .scoreboard-table tr.soldier {
+                background: #c8e6c9;
+            }
+
+        /* 可视化模板编辑器布局 */
+        .tpl-editor-layout {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            align-items: flex-start;
+        }
+
+        .tpl-preview-area {
+            flex: 0 0 600px;
+            padding: 10px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .tpl-form-area {
+            flex: 1;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .tpl-form-group {
+            margin-bottom: 15px;
+        }
+
+            .tpl-form-group label {
+                display: block;
+                font-size: 13px;
+                font-weight: bold;
+                color: #555;
+                margin-bottom: 5px;
+            }
+
+            .tpl-form-group input, .tpl-form-group select, .tpl-form-group textarea {
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+        /* 富文本工具栏 */
+        .format-toolbar {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+            flex-wrap: wrap;
+        }
+
+        .format-btn {
+            padding: 4px 8px;
+            font-size: 12px;
+            margin: 0;
+            background: #fff;
+            border: 1px solid #ccc;
+            font-weight: bold;
+        }
+
+
+        h1 {
+            margin: 0 0 18px;
+            font-size: 30px;
+            color: #102a43;
+        }
+
+        h2, h3, h4 { color: #1f2937; }
+
+        .page-shell {
+            max-width: 1480px;
+            margin: 0 auto;
+        }
+
+        .page-subtitle {
+            margin: 8px 0 24px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            padding: 18px;
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 700;
+            background: var(--primary-soft);
+            color: var(--primary);
+        }
+
+        .toolbar-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+            margin: 16px 0;
+        }
+
+        .info-card {
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 14px 16px;
+        }
+
+        .info-card .label {
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .info-card .value {
+            font-size: 20px;
+            font-weight: 800;
+            color: #102a43;
+        }
+
+        #login-area, #lobby-area {
+            max-width: 1480px;
+            margin: 0 auto;
+        }
+
+        #login-area {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            border-radius: 18px;
+            padding: 24px;
+        }
+
+        .player-list {
+            margin-top: 16px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            padding: 18px;
+        }
+
+        .player-item {
+            padding: 10px 12px;
+            border-bottom: 1px solid #e9eef5;
+            border-radius: 10px;
+        }
+
+        .player-item:last-child { border-bottom: 0; }
+
+        button {
+            margin: 5px;
+            padding: 9px 14px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 10px;
+            border: 1px solid #cfd8e3;
+            background-color: #fff;
+            color: #243447;
+            transition: .16s ease;
+        }
+
+        button:hover {
+            background-color: #f6f8fb;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.08);
+        }
+
+        input[type="text"], input[type="number"], select, textarea {
+            padding: 9px 10px;
+            font-size: 14px;
+            border: 1px solid #cfd8e3;
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        textarea { line-height: 1.6; }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 2.5% auto;
+            padding: 24px;
+            border: 1px solid var(--border);
+            width: 95%;
+            max-width: 1180px;
+            line-height: 1.6;
+            position: relative;
+            border-radius: 16px;
+            box-shadow: 0 24px 60px rgba(15, 23, 42, 0.2);
+        }
+
+        #timer-display {
+            font-size: 18px;
+            font-weight: 700;
+            color: #b45309;
+            margin: 10px 0 0;
+            background: #fff7ed;
+            display: inline-block;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid #fed7aa;
+        }
+
+        .task-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(180px, 1fr));
+            gap: 18px;
+            margin: 15px 0;
+            padding: 10px 0;
+        }
+
+        .task-cell {
+            width: 100%;
+            min-height: 210px;
+            height: auto;
+            border: 1px solid #dbe5ef;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            text-align: center;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 14px;
+            padding: 16px;
+            overflow-y: auto;
+            word-break: break-word;
+            line-height: 1.5;
+            transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+        }
+
+        .task-cell:hover {
+            background: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+            border-color: #b9c8db;
+        }
+
+        .task-cell.selected {
+            outline: 3px solid #ef4444;
+            outline-offset: 2px;
+        }
+
+        .scoreboard-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+            margin-top: 15px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+        }
+
+        .scoreboard-table th, .scoreboard-table td {
+            border-bottom: 1px solid #e5edf5;
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        .scoreboard-table th {
+            background: #f8fafc;
+            font-weight: 800;
+            color: #334155;
+            position: sticky;
+            top: 0;
+        }
+
+        .scoreboard-table tr:last-child td { border-bottom: 0; }
+
+        #extra-info > div,
+        #extra-info > table,
+        #extra-info > .scoreboard-table,
+        #extra-info > h2,
+        #extra-info > h3,
+        #extra-info > h4,
+        #extra-info > p,
+        #extra-info > hr {
+            max-width: 100%;
+        }
+
+        #phase-info, #extra-info {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            padding: 18px;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .soft-block {
+            background: #f8fbff;
+            border: 1px solid #dbe7f5;
+            border-radius: 14px;
+            padding: 14px;
+        }
+
+        .danger-text { color: var(--danger); }
+        .muted { color: var(--muted); }
+
+        .json-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 12px 0 0;
+        }
+
+        @media (max-width: 960px) {
+            body { padding: 14px; }
+            .tpl-editor-layout { flex-direction: column; }
+            .tpl-preview-area { flex: 1 1 auto; width: 100%; }
+            .task-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+        }
+
+        @media (max-width: 640px) {
+            .task-grid { grid-template-columns: 1fr; }
+            .toolbar-row { flex-direction: column; align-items: stretch; }
+            #timer-display { display: block; }
+        }
+
+
+
+        /* Stage 3.3：更接近旧版后台表格风格 */
+        body {
+            background: #edf3f8;
+            padding: 18px 22px;
+        }
+
+        .page-shell {
+            max-width: 1600px;
+        }
+
+        h1 {
+            font-size: 28px;
+            letter-spacing: .5px;
+            margin-bottom: 10px;
+        }
+
+        .page-subtitle {
+            margin-bottom: 16px;
+        }
+
+        .panel, #login-area, .player-list, #phase-info, #extra-info {
+            border-radius: 8px;
+            box-shadow: 0 3px 14px rgba(15, 23, 42, 0.06);
+        }
+
+        .toolbar-row.panel {
+            padding: 12px 16px;
+            min-height: 58px;
+        }
+
+        #my-identity {
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin: 12px 0;
+        }
+
+        .player-list {
+            padding: 12px 16px;
+        }
+
+        .cc-table-wrap {
+            overflow-x: auto;
+            border: 1px solid #cfd8e3;
+            border-radius: 6px;
+            background: #fff;
+        }
+
+        .cc-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            min-width: 760px;
+        }
+
+        .cc-table th,
+        .cc-table td {
+            border: 1px solid #d7dee8;
+            padding: 8px 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .cc-table th {
+            background: #eef2f7;
+            color: #1f2937;
+            font-weight: 800;
+        }
+
+        .cc-table tr:nth-child(even) td {
+            background: #fafcff;
+        }
+
+        .cc-table tr.role-undercover td { background: #ffe8ae; }
+        .cc-table tr.role-detective td { background: #d9efff; }
+        .cc-table tr.role-soldier td { background: #e5f3dc; }
+        .cc-table tr.role-admin td { background: #f2e8ff; }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 800;
+            border: 1px solid transparent;
+        }
+
+        .tag-blue { color: #075985; background: #e0f2fe; border-color: #bae6fd; }
+        .tag-orange { color: #9a3412; background: #ffedd5; border-color: #fed7aa; }
+        .tag-green { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
+        .tag-gray { color: #475569; background: #f1f5f9; border-color: #cbd5e1; }
+        .tag-red { color: #991b1b; background: #fee2e2; border-color: #fecaca; }
+        .tag-purple { color: #6b21a8; background: #f3e8ff; border-color: #e9d5ff; }
+
+        .live-header {
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+
+        .scoreboard-table {
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .scoreboard-table th,
+        .scoreboard-table td {
+            padding: 8px 9px;
+        }
+
+        .task-grid {
+            grid-template-columns: repeat(3, 170px);
+            align-items: stretch;
+        }
+
+        .task-cell {
+            min-height: 178px;
+            border-radius: 6px;
+            box-shadow: none;
+            padding: 12px;
+        }
+
+        .tpl-preview-area,
+        .tpl-form-area {
+            border-radius: 8px;
+            box-shadow: none;
+        }
+
+
+        /* Stage 3.7 地图 BP 卡片 */
+        .map-bp-board {
+            background: #fff;
+            border: 1px solid #dbe5ef;
+            border-radius: 16px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            padding: 18px;
+        }
+
+        .map-bp-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #e5edf5;
+            margin-bottom: 16px;
+        }
+
+        .map-bp-title {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 900;
+            color: #102a43;
+        }
+
+        .map-bp-subtitle {
+            margin: 8px 0 0;
+            color: #607086;
+            font-size: 14px;
+        }
+
+        .map-bp-turn {
+            min-width: 220px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #f8fbff;
+            border: 1px solid #dbe7f5;
+            text-align: right;
+        }
+
+        .map-bp-turn b {
+            font-size: 20px;
+            color: #d32f2f;
+        }
+
+        .map-bp-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .map-bp-summary-card {
+            border: 1px solid #dbe5ef;
+            background: #f8fbff;
+            border-radius: 14px;
+            padding: 12px 14px;
+        }
+
+        .map-bp-summary-card span {
+            display: block;
+            color: #6b7b8c;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+
+        .map-bp-summary-card strong {
+            color: #102a43;
+            font-size: 16px;
+        }
+
+        .map-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 16px;
+            margin-top: 12px;
+        }
+
+        .map-card {
+            position: relative;
+            overflow: hidden;
+            border: 2px solid #dbe5ef;
+            background: #fff;
+            border-radius: 18px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, opacity .15s ease;
+        }
+
+        .map-card.clickable {
+            cursor: pointer;
+        }
+
+        .map-card.clickable:hover {
+            transform: translateY(-3px);
+            border-color: #ef4444;
+            box-shadow: 0 16px 30px rgba(239, 68, 68, 0.16);
+        }
+
+        .map-card.banned {
+            opacity: .58;
+            filter: grayscale(1);
+        }
+
+        .map-card.selected-map {
+            border-color: #2e7d32;
+            box-shadow: 0 0 0 4px rgba(46, 125, 50, .12), 0 16px 30px rgba(46, 125, 50, .12);
+        }
+
+        .map-card-image {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: linear-gradient(135deg, #334155 0%, #94a3b8 100%);
+            background-size: cover;
+            background-position: center;
+            border-bottom: 1px solid #e5edf5;
+        }
+
+        .map-card-image.placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255,255,255,.86);
+            font-weight: 900;
+            font-size: 28px;
+            letter-spacing: .04em;
+            text-shadow: 0 2px 8px rgba(0,0,0,.25);
+        }
+
+        .map-card-body {
+            padding: 12px 14px 14px;
+        }
+
+        .map-card-name {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .map-card-name strong {
+            font-size: 18px;
+            color: #102a43;
+        }
+
+        .map-card-slug {
+            font-size: 12px;
+            color: #6b7b8c;
+            background: #f1f5f9;
+            border-radius: 999px;
+            padding: 4px 8px;
+            white-space: nowrap;
+        }
+
+        .map-card-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 28px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 800;
+            border: 1px solid transparent;
+        }
+
+        .map-card-status.available {
+            color: #b91c1c;
+            background: #fff1f2;
+            border-color: #fecdd3;
+        }
+
+        .map-card-status.waiting {
+            color: #475569;
+            background: #f8fafc;
+            border-color: #e2e8f0;
+        }
+
+        .map-card-status.banned {
+            color: #334155;
+            background: #e2e8f0;
+            border-color: #cbd5e1;
+        }
+
+        .map-card-status.selected {
+            color: #166534;
+            background: #dcfce7;
+            border-color: #bbf7d0;
+        }
+
+        .map-card-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            font-size: 34px;
+            font-weight: 900;
+            color: rgba(255,255,255,.92);
+            background: rgba(15, 23, 42, .42);
+            text-shadow: 0 3px 12px rgba(0,0,0,.35);
+        }
+
+        .map-vote-list {
+            margin: 10px 0 0;
+            padding: 0;
+            list-style: none;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .map-vote-list li {
+            padding: 6px 10px;
+            background: #f8fafc;
+            border: 1px solid #dbe5ef;
+            border-radius: 999px;
+            font-size: 13px;
+        }
+
+        .map-admin-ban-row {
+            margin-top: 16px;
+            padding-top: 14px;
+            border-top: 1px dashed #cbd5e1;
+        }
+
+        .map-thumb-spec {
+            margin-top: 16px;
+            padding: 12px 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            color: #475569;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+
+        /* Stage 3.9：全局悬浮倒计时，滚动页面时仍可见 */
+        #timer-display {
+            position: fixed;
+            top: 14px;
+            right: 18px;
+            z-index: 2000;
+            margin: 0;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: 1px solid #fed7aa;
+            background: rgba(255, 247, 237, 0.96);
+            color: #c2410c;
+            font-size: 17px;
+            font-weight: 900;
+            box-shadow: 0 10px 28px rgba(194, 65, 12, 0.16);
+            backdrop-filter: blur(6px);
+        }
+
+        #timer-display:empty {
+            display: none;
+        }
+
+        .side-thumb-spec {
+            margin-top: 14px;
+            padding: 12px 14px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            color: #475569;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+
+        /* Stage 3.10：更醒目的官匹式 BP 倒计时 */
+        #timer-display {
+            position: fixed;
+            top: 18px;
+            right: 22px;
+            z-index: 5000;
+            min-width: 210px;
+            margin: 0;
+            padding: 12px 18px 13px;
+            border-radius: 18px;
+            border: 2px solid rgba(255,255,255,.75);
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 52%, #f59e0b 100%);
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: 900;
+            text-align: center;
+            letter-spacing: .02em;
+            box-shadow: 0 18px 42px rgba(239, 68, 68, .34), 0 0 0 4px rgba(249, 115, 22, .12);
+            backdrop-filter: blur(8px);
+            animation: timerPulse 1.2s ease-in-out infinite;
+        }
+
+        #timer-display::before {
+            content: "当前投票倒计时";
+            display: block;
+            font-size: 12px;
+            line-height: 1;
+            margin-bottom: 5px;
+            font-weight: 800;
+            opacity: .92;
+            letter-spacing: .12em;
+        }
+
+        #timer-display:empty {
+            display: none;
+        }
+
+        @keyframes timerPulse {
+            0%, 100% {
+                transform: translateY(0) scale(1);
+                box-shadow: 0 18px 42px rgba(239, 68, 68, .34), 0 0 0 4px rgba(249, 115, 22, .12);
+            }
+            50% {
+                transform: translateY(-1px) scale(1.025);
+                box-shadow: 0 22px 54px rgba(239, 68, 68, .42), 0 0 0 7px rgba(249, 115, 22, .16);
+            }
+        }
+
+        .map-bp-header {
+            position: sticky;
+            top: 10px;
+            z-index: 80;
+            background: rgba(255,255,255,.94);
+            backdrop-filter: blur(10px);
+            border: 1px solid #dbe5ef;
+            border-radius: 16px;
+            padding: 14px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
+        }
+
+        .map-bp-turn-wrap {
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .map-bp-turn {
+            min-width: 220px;
+            padding: 12px 16px;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%);
+            border: 2px solid #fed7aa;
+            text-align: right;
+            box-shadow: 0 10px 22px rgba(234, 88, 12, .10);
+        }
+
+        .map-bp-turn b {
+            font-size: 22px;
+            color: #dc2626;
+        }
+
+        .bp-inline-timer {
+            min-width: 160px;
+            padding: 12px 16px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+            color: #fff;
+            text-align: center;
+            box-shadow: 0 14px 28px rgba(239, 68, 68, .24);
+        }
+
+        .bp-inline-timer span {
+            display: block;
+            font-size: 12px;
+            font-weight: 800;
+            opacity: .9;
+            margin-bottom: 4px;
+        }
+
+        .bp-inline-timer strong {
+            display: block;
+            font-size: 24px;
+            font-weight: 950;
+            line-height: 1.1;
+        }
+
+        @media (max-width: 720px) {
+            #timer-display {
+                top: auto;
+                right: 12px;
+                bottom: 12px;
+                min-width: 170px;
+                font-size: 18px;
+                border-radius: 16px;
+            }
+
+            .map-bp-header {
+                top: 6px;
+            }
+        }
+
+
+        /* Stage 3.11：选人倒计时面板 */
+        .draft-board {
+            background: #fff;
+            border: 1px solid #dbe5ef;
+            border-radius: 16px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+            padding: 18px;
+        }
+
+        .draft-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: stretch;
+            gap: 14px;
+            flex-wrap: wrap;
+            background: rgba(255,255,255,.94);
+            border: 1px solid #dbe5ef;
+            border-radius: 16px;
+            padding: 14px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .08);
+            margin-bottom: 16px;
+        }
+
+        .draft-title {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 900;
+            color: #102a43;
+        }
+
+        .draft-subtitle {
+            margin: 8px 0 0;
+            color: #607086;
+            font-size: 14px;
+        }
+
+        .draft-turn-card {
+            min-width: 220px;
+            padding: 12px 16px;
+            border-radius: 16px;
+            background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+            border: 2px solid #dbe7f5;
+            text-align: right;
+        }
+
+        .draft-turn-card b {
+            font-size: 22px;
+            color: #2563eb;
+        }
+
+        .draft-pick-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+            gap: 12px;
+            margin: 14px 0;
+        }
+
+        .draft-player-card {
+            border: 1px solid #dbe5ef;
+            background: #fff;
+            border-radius: 14px;
+            padding: 14px;
+            min-height: 84px;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+            transition: .15s ease;
+        }
+
+        .draft-player-card.pickable {
+            cursor: pointer;
+            border-color: #93c5fd;
+        }
+
+        .draft-player-card.pickable:hover {
+            transform: translateY(-2px);
+            border-color: #2563eb;
+            box-shadow: 0 14px 26px rgba(37, 99, 235, .14);
+        }
+
+        .draft-player-card strong {
+            display: block;
+            font-size: 18px;
+            color: #102a43;
+            margin-bottom: 8px;
+        }
+
+        .draft-team-panels {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-top: 14px;
+        }
+
+        .draft-team-panel {
+            border: 1px solid #dbe5ef;
+            border-radius: 14px;
+            padding: 14px;
+            background: #f8fbff;
+        }
+
+        .draft-team-panel.a { background: #fff7ed; border-color: #fed7aa; }
+        .draft-team-panel.b { background: #eff6ff; border-color: #bfdbfe; }
+
+
+        /* Stage 3.12：地图卡片内显示本队投票人 */
+        .map-card-voters {
+            margin-top: 10px;
+            min-height: 32px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .map-card-voters-empty {
+            color: #94a3b8;
+            font-size: 12px;
+            padding: 5px 0;
+        }
+
+        .map-voter-pill {
+            display: inline-flex;
+            align-items: center;
+            max-width: 100%;
+            gap: 4px;
+            padding: 5px 8px;
+            border-radius: 999px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1d4ed8;
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+
+        .map-voter-pill.me {
+            background: #fff7ed;
+            border-color: #fdba74;
+            color: #c2410c;
+        }
+
+        .map-voter-pill .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: currentColor;
+            flex: 0 0 auto;
+        }
+
+        .map-card-vote-count {
+            margin-left: auto;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 800;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 999px;
+            padding: 5px 8px;
+        }
+
+        .map-card.my-vote {
+            border-color: #f97316;
+            box-shadow: 0 0 0 4px rgba(249, 115, 22, .12), 0 16px 30px rgba(249, 115, 22, .12);
+        }
+
+
+        /* Stage 3.14：结算明细表 */
+        .score-detail-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            width: 100%;
+            margin-top: 18px;
+            border: 1px solid #dbe5ef;
+            border-radius: 14px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
+            font-size: 13px;
+        }
+
+        .score-detail-table th,
+        .score-detail-table td {
+            border-right: 1px solid #e5edf5;
+            border-bottom: 1px solid #e5edf5;
+            padding: 10px 10px;
+            vertical-align: top;
+            text-align: left;
+        }
+
+        .score-detail-table th:last-child,
+        .score-detail-table td:last-child {
+            border-right: 0;
+        }
+
+        .score-detail-table tr:last-child td {
+            border-bottom: 0;
+        }
+
+        .score-detail-table th {
+            background: #f8fafc;
+            color: #334155;
+            font-weight: 900;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        .score-detail-table tr.undercover td {
+            background: #fff7ed;
+        }
+
+        .score-detail-table tr.detective td {
+            background: #eff6ff;
+        }
+
+        .score-detail-table tr.soldier td {
+            background: #f0fdf4;
+        }
+
+        .score-term {
+            display: block;
+            line-height: 1.55;
+            white-space: nowrap;
+        }
+
+        .score-term.muted {
+            color: #94a3b8;
+        }
+
+        .score-positive {
+            color: #15803d;
+            font-weight: 900;
+        }
+
+        .score-negative {
+            color: #dc2626;
+            font-weight: 900;
+        }
+
+        .score-neutral {
+            color: #334155;
+            font-weight: 700;
+        }
+
+        .score-count {
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        .score-final {
+            font-size: 22px;
+            font-weight: 950;
+            white-space: nowrap;
+        }
+
+        .score-detail-wrap {
+            overflow-x: auto;
+            padding-bottom: 4px;
+        }
+
+        .score-rule-note {
+            margin-top: 12px;
+            padding: 12px 14px;
+            background: #f8fafc;
+            border: 1px solid #dbe5ef;
+            border-radius: 12px;
+            color: #64748b;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="page-shell">
+    <h1>草人杯对局指挥台</h1>
+    <p class="page-subtitle">用于管理草人杯比赛流程、玩家绑定、身份分配、实时比分与最终结算。</p>
+    <div id="login-area">
+        <input id="name-input" type="text" placeholder="输入昵称；恢复时填原昵称" style="width:230px;" />
+        <input id="extra-input" type="text" placeholder="管理员密码 / 绑定码 / spec（可选）" style="width:260px;" />
+        <button onclick="login()">进入/恢复大厅</button>
+        <div style="color:#475569; font-size:13px; margin-top:10px; line-height:1.8; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+            <b>第二个输入框填写说明：</b><br>
+            管理员输入管理员密码；重连玩家输入绑定码；旁观玩家输入 <code>spec</code>；普通玩家请留空。
+        </div>
+    </div>
+    <div id="lobby-area" style="display:none;">
+        <div class="toolbar-row panel" style="margin-bottom:14px;"><div><div class="status-chip">当前身份信息</div><p style="margin:10px 0 0; font-size:16px;">欢迎，<span id="my-name"></span>。你的绑定码：<strong id="my-bindcode"></strong></p><div style="margin-top:8px; color:#334155; font-size:13px; line-height:1.7; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;"><b>请牢记绑定码！</b> 绑定码用于与游戏内玩家绑定，也可用于网页掉线后重连。<br>绑定方式：在游戏内打开聊天栏，输入 <code>!ccbind &lt;绑定码&gt;</code>，例如 <code>!ccbind 1145</code>。</div></div><div id="timer-display"></div></div>
+        <p id="my-identity" style="font-weight:bold; color: #0056b3; font-size: 18px;"></p>
+        <div class="player-list" id="player-list"></div>
+        <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
+            <h3 style="margin-top:0;">管理员控制区</h3>
+            <button onclick="advancePhase()" style="font-weight:bold; background-color:#ffeb3b; border-color:#fbc02d; font-size: 16px; padding: 10px 20px;">推进阶段 (当前: Lobby)</button>
+            <button onclick="openTemplateModal()" style="font-weight:bold; background-color:#bbdefb; border-color:#90caf9; font-size: 16px; padding: 10px 20px;">配置任务模板</button>
+            <button onclick="terminateGame()" style="font-weight:bold; background-color:#d32f2f; color:#fff; border-color:#b71c1c; font-size: 16px; padding: 10px 20px;">终止本局游戏</button>
+        </div>
+    </div>
+
+    <!-- 任务模板编辑弹窗 -->
+    <div id="template-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeTemplateModal()">&times;</span>
+            <h2 style="margin-top:0; color:#333;">任务模板编辑器</h2>
+            <div style="margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 10px;">
+                <button id="btn-tab-visual" onclick="switchTemplateTab('visual')" style="background:#e0e0e0; font-weight:bold;">可视化编辑</button>
+                <button id="btn-tab-json" onclick="switchTemplateTab('json')">JSON 导入 / 导出</button>
+            </div>
+
+            <div id="template-visual-tab" style="display:block;">
+                <div class="tpl-editor-layout">
+                    <!-- 左侧预览区 -->
+                    <div class="tpl-preview-area">
+                        <h4 style="margin-top:0; text-align:center; color:#666;">点击左侧格子开始编辑</h4>
+                        <div id="tpl-preview-grid" class="task-grid" style="margin:0 auto;"></div>
+                        <div id="tpl-preview-replacement" style="margin-top:20px; padding:10px; border:2px dashed #aaa; border-radius:6px; cursor:pointer; text-align:center; background:#fff;" onclick="selectTplCell('rep')">
+                            <b>[备用任务]</b> <span id="tpl-prev-rep-desc">备用任务</span>
+                        </div>
+                    </div>
+                    <!-- 右侧编辑区 -->
+                    <div class="tpl-form-area" id="tpl-edit-form">
+                        <h3 id="tpl-edit-title" style="margin-top:0; color:#d32f2f;">请先在左侧选择一个格子</h3>
+                        <div id="tpl-edit-fields" style="display:none;">
+                            <div class="tpl-form-group">
+                                <label>任务描述 (选中文字使用上方工具栏可改样式)：</label>
+                                <div class="format-toolbar">
+                                    <button class="format-btn" onclick="applyTplFormat('b')"><b>加粗</b></button>
+                                    <button class="format-btn" onclick="applyTplFormat('u')"><u>下划线</u></button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#00B050')" style="color:#00B050">绿(1级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#0070C0')" style="color:#0070C0">蓝(2级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#E36C09')" style="color:#E36C09">橙(3级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#7030A0')" style="color:#7030A0">紫(4级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#FF0000')" style="color:#FF0000">红(5级)</button>
+                                </div>
+                                <textarea id="tpl-edit-desc" rows="4" oninput="handleTplInput()"></textarea>
+                            </div>
+
+                            <div style="display:flex; gap:15px;" id="tpl-edit-basic-row">
+                                <div class="tpl-form-group" style="flex:1;">
+                                    <label>任务类型</label>
+                                    <select id="tpl-edit-ntype" onchange="handleTplInput()">
+                                        <option value="none">普通任务</option>
+                                        <option value="3N_multi">多回合累计 N 任务</option>
+                                        <option value="3N_single">单回合达成 N 任务</option>
+                                        <option value="5_4N_single">连续递增 N 任务（如 5/4N）</option>
+                                    </select>
+                                </div>
+                                <div class="tpl-form-group" style="flex:1;" id="tpl-edit-level-group">
+                                    <label>任务等级</label>
+                                    <select id="tpl-edit-level" onchange="handleTplInput()">
+                                        <option value="1">1级</option>
+                                        <option value="2">2级</option>
+                                        <option value="3">3级</option>
+                                        <option value="4">4级</option>
+                                        <option value="5">5级</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="tpl-edit-n-simple" style="display:none; background:#f0f8ff; padding:15px; border-radius:6px; border:1px solid #b6d4fe; margin-bottom:15px;">
+                                <div class="tpl-form-group" style="margin-bottom:0;">
+                                    <label>最大 N 值</label>
+                                    <input type="number" id="tpl-edit-nmax" min="1" max="9" oninput="handleTplInput()" placeholder="例如 3 或 4">
+                                </div>
+                                <p style="font-size:13px; color:#607d8b; margin:8px 0 0;">说明：系统会自动显示为“等级N”，例如 3级 + 最大N=4 会显示为 3N。</p>
+                            </div>
+
+                            <div id="tpl-edit-nfields" style="display:none; background:#fff7ed; padding:15px; border-radius:6px; border:1px solid #fed7aa;">
+                                <div style="display:flex; gap:10px;">
+                                    <div class="tpl-form-group" style="flex:1; margin-bottom:0;">
+                                        <label>首个 N 分值</label>
+                                        <input type="number" id="tpl-edit-baseLevel" min="1" max="9" oninput="handleTplInput()" placeholder="例如 5">
+                                    </div>
+                                    <div class="tpl-form-group" style="flex:1; margin-bottom:0;">
+                                        <label>后续每个 N 分值</label>
+                                        <input type="number" id="tpl-edit-extraLevel" min="1" max="9" oninput="handleTplInput()" placeholder="例如 4">
+                                    </div>
+                                    <div class="tpl-form-group" style="flex:1; margin-bottom:0;">
+                                        <label>最大 N 值</label>
+                                        <input type="number" id="tpl-edit-streak-nmax" min="1" max="9" oninput="handleTplInput()" placeholder="例如 4">
+                                    </div>
+                                </div>
+                                <p style="font-size:13px; color:#9a3412; margin:8px 0 0;">说明：适合“连续击杀/连续达成”类任务，系统会自动显示为“首个/后续N”，例如 5/4N。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align:center; margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+                    <button onclick="saveTemplate()" style="background:#4caf50; color:#fff; font-size:18px; padding:12px 30px; border-radius:30px;">保存并应用模板</button>
+                    <button onclick="downloadTemplateJson()" style="background:#2563eb; color:#fff; font-size:16px; padding:12px 24px; border-radius:30px;">导出为 JSON 文件</button>
+                    <button onclick="saveTemplateToLocal()" style="background:#475569; color:#fff; font-size:16px; padding:12px 24px; border-radius:30px;">保存到浏览器本地</button>
+                </div>
+            </div>
+
+            <div id="template-json-tab" style="display:none;">
+                <p style="font-size:14px; color:#666;">你可以在这里导出、复制、备份或导入任务模板 JSON。</p>
+                <textarea id="template-json-textarea" style="width: 100%; height: 400px; font-family: monospace; font-size: 13px; border:1px solid #ccc; padding:10px; box-sizing:border-box;"></textarea>
+                <div class="json-toolbar">
+                    <button onclick="saveTemplateFromJson()" style="background:#4caf50; color:#fff; font-size:16px;">解析并应用 JSON</button>
+                    <button onclick="downloadTemplateJson()" style="background:#2563eb; color:#fff; font-size:16px;">导出为 JSON 文件</button>
+                    <button onclick="copyTemplateJson()" style="background:#0f766e; color:#fff; font-size:16px;">复制 JSON</button>
+                    <button onclick="saveTemplateToLocal()" style="background:#475569; color:#fff; font-size:16px;">保存到浏览器本地</button>
+                    <button onclick="loadTemplateFromLocal()" style="background:#7c3aed; color:#fff; font-size:16px;">读取本地备份</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 须知模态框 -->
+    <div id="rules-modal" class="modal">
+        <div class="modal-content" style="max-width:600px;">
+            <span class="close" onclick="closeRules()">&times;</span>
+            <div id="rules-content"></div>
+            <div id="rules-navigation" style="margin-top: 15px;"></div>
+            <button id="rules-ready" style="display:none; margin-top: 15px; background:#2196f3; color:#fff;" onclick="readyPlayer()">我准备好了</button>
+        </div>
+    </div>
+
+    <!-- 退出确认弹窗 -->
+    <div id="quit-modal" class="modal">
+        <div class="modal-content" style="max-width:400px;">
+            <p>确定要退出游戏吗？请输入你的昵称确认：</p>
+            <input id="quit-name-input" type="text" placeholder="你的昵称" style="width:80%;" />
+            <br><br>
+            <button onclick="doQuit()" style="background:#f44336; color:#fff;">确认退出</button>
+            <button onclick="closeQuit()">取消</button>
+        </div>
+    </div>
+
+    <script>
+        const ws = io();
+        let myPlayerId = null;
+        let countdownInterval = null;
+        let currentTimerEndAt = null;
+        let serverClockOffset = 0;
+        window._currentPlayer = null;
+        window._currentGamePhase = null;
+        window._liveGameData = null;
+        window._allPlayers = {};
+        window.selectedCellId = null;
+
+        // 模板编辑器状态
+        window._currentTaskTemplate = null;
+        window._editingTemplate = null;
+        window._editingCellId = null;
+
+
+        function syncedNow() {
+            return Date.now() + serverClockOffset;
+        }
+
+        function getTimerSecondsText() {
+            if (!currentTimerEndAt) return '-- 秒';
+            return Math.max(0, Math.ceil((currentTimerEndAt - syncedNow()) / 1000)) + ' 秒';
+        }
+
+        function updateTimerDisplay() {
+            const display = document.getElementById('timer-display');
+            if (!currentTimerEndAt) {
+                display.textContent = '';
+                document.querySelectorAll('.inline-timer-text').forEach(el => el.textContent = '-- 秒');
+                if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+                return;
+            }
+            const remaining = Math.max(0, Math.ceil((currentTimerEndAt - syncedNow()) / 1000));
+            display.textContent = '⏳ 剩余时间：' + remaining + ' 秒';
+            document.querySelectorAll('.inline-timer-text').forEach(el => el.textContent = remaining + ' 秒');
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+                currentTimerEndAt = null;
+                display.textContent = '';
+            }
+        }
+
+        function resetToLogin(message) {
+            document.getElementById('lobby-area').style.display = 'none';
+            document.getElementById('login-area').style.display = 'block';
+            myPlayerId = null;
+            window._currentPlayer = null;
+            document.getElementById('name-input').value = '';
+            document.getElementById('extra-input').value = '';
+            if (message) alert(message);
+        }
+
+        ws.on('LOGIN_RESPONSE', (data) => {
+            if (data.success) {
+                myPlayerId = data.playerId;
+                document.getElementById('login-area').style.display = 'none';
+                document.getElementById('lobby-area').style.display = 'block';
+                const displayName = (data.message || '').split('，')[0].replace('欢迎，', '').replace('！已恢复你的房间身份。', '').replace('！你的绑定码是:', '').trim();
+                document.getElementById('my-name').textContent = displayName || document.getElementById('name-input').value.trim();
+                document.getElementById('my-bindcode').textContent = data.bindCode || '未分配';
+            } else {
+                if (data.resetClient || data.message === '你已退出游戏' || String(data.message || '').includes('终止')) {
+                    resetToLogin(data.message || '你已退出房间，请重新进入');
+                } else {
+                    alert('登录失败：' + data.message);
+                }
+            }
+        });
+
+        ws.on('GAME_STATE', (state) => {
+            if (typeof state.serverNow === 'number') serverClockOffset = state.serverNow - Date.now();
+            window._currentGamePhase = state.phase;
+            if (state.liveGameData) window._liveGameData = state.liveGameData;
+            if (state.taskTemplate) window._currentTaskTemplate = state.taskTemplate;
+            window._allPlayers = state.players;
+
+            if (state.timerEndAt !== currentTimerEndAt) {
+                if (countdownInterval) clearInterval(countdownInterval);
+                currentTimerEndAt = state.timerEndAt;
+                if (currentTimerEndAt) {
+                    updateTimerDisplay();
+                    countdownInterval = setInterval(updateTimerDisplay, 1000);
+                } else {
+                    document.getElementById('timer-display').textContent = '';
+                }
+            }
+
+            const currentPlayer = state.players[myPlayerId];
+            window._currentPlayer = currentPlayer || null;
+            const isAdmin = currentPlayer?.role === 'Admin';
+
+            if (currentPlayer) {
+                let identityHtml = '你是：<b>' + currentPlayer.name + '</b>';
+                if (isAdmin) identityHtml += ' <span style="color:#d32f2f;">(管理员)</span>';
+                else {
+                    if (currentPlayer.rosterTeam) identityHtml += ' | <span style="font-weight:bold;">' + currentPlayer.rosterTeam + '队阵容</span>';
+                    if (currentPlayer.team === 'CT') identityHtml += ' | <span style="color:#1976d2; font-weight:bold;">当前CT</span>';
+                    else if (currentPlayer.team === 'T') identityHtml += ' | <span style="color:#f57c00; font-weight:bold;">当前T</span>';
+
+                    if (currentPlayer.steamIdBound) identityHtml += ' | <span style="color:#2e7d32; font-weight:bold;">已绑定</span>';
+                    else identityHtml += ' | <span style="color:#9ca3af; font-weight:bold;">未绑定</span>';
+                    if (currentPlayer.gameRole) identityHtml += ' | 身份: ' + currentPlayer.gameRole;
+                    else if (state.phase === 'PreGameSetup' && !state.rolesReleased) identityHtml += ' | 身份未发放';
+                }
+                document.getElementById('my-identity').innerHTML = identityHtml;
+            }
+
+            const listDiv = document.getElementById('player-list');
+            const teamSortWeight = (p) => p.rosterTeam === 'A' ? 0 : (p.rosterTeam === 'B' ? 1 : (p.role === 'Spectator' ? 3 : (p.role === 'Admin' ? 4 : 2)));
+            const visiblePlayers = Object.values(state.players)
+                .filter(p => isAdmin || p.role !== 'Admin')
+                .sort((a, b) => (teamSortWeight(a) - teamSortWeight(b)) || String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
+            let playerTable = '<h3 style="margin-top:0;">当前房间玩家</h3>';
+            playerTable += '<div class="cc-table-wrap"><table class="cc-table"><thead><tr>' +
+                '<th>#</th><th>玩家名</th><th>阵容</th><th>当前阵营</th><th>绑定状态</th><th>身份</th><th>准备</th>' + (isAdmin ? '<th>操作</th>' : '') +
+                '</tr></thead><tbody>';
+            visiblePlayers.forEach((p, idx) => {
+                const roleClass = p.role === 'Admin' ? 'role-admin' : (p.gameRole === 'Undercover' ? 'role-undercover' : (p.gameRole === 'Detective' ? 'role-detective' : (p.gameRole === 'Soldier' ? 'role-soldier' : '')));
+                const roster = p.rosterTeam ? `<span class="tag tag-gray">${p.rosterTeam}队</span>` : '<span class="tag tag-gray">未分配</span>';
+                const side = p.team === 'CT' ? '<span class="tag tag-blue">CT</span>' : (p.team === 'T' ? '<span class="tag tag-orange">T</span>' : '<span class="tag tag-gray">-</span>');
+                const bind = p.steamIdBound ? '<span class="tag tag-green">已绑定</span>' : '<span class="tag tag-red">未绑定</span>';
+                const roleText = p.role === 'Admin' ? '<span class="tag tag-purple">管理员</span>' : (p.gameRole ? `<span class="tag tag-gray">${p.gameRole}</span>` : '<span class="tag tag-gray">未分配</span>');
+                const ready = p.isReady ? '<span class="tag tag-green">已准备</span>' : '<span class="tag tag-gray">-</span>';
+                const adminOps = isAdmin && p.role !== 'Admin' ? `<td><button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button></td>` : (isAdmin ? '<td>-</td>' : '');
+                playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${p.name}</b></td><td>${roster}</td><td>${side}</td><td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
+            });
+            playerTable += '</tbody></table></div>';
+            listDiv.innerHTML = playerTable;
+
+            if (isAdmin) {
+                document.getElementById('admin-controls').style.display = 'block';
+                const btn = document.querySelector('#admin-controls button');
+                if (btn) btn.textContent = '推进阶段 (当前: ' + state.phase + ')';
+            } else {
+                document.getElementById('admin-controls').style.display = 'none';
+            }
+
+            const lobbyArea = document.getElementById('lobby-area');
+            let phaseDiv = document.getElementById('phase-info');
+            if (!phaseDiv) {
+                phaseDiv = document.createElement('div');
+                phaseDiv.id = 'phase-info';
+                phaseDiv.style.marginTop = '20px';
+                phaseDiv.style.fontSize = '18px';
+                phaseDiv.style.fontWeight = 'bold';
+                lobbyArea.appendChild(phaseDiv);
+            }
+            phaseDiv.innerHTML = '<div class="section-title"><div><div class="status-chip">阶段信息</div><div style="margin-top:10px;font-size:20px;font-weight:800;">当前阶段：' + state.phase + '</div></div></div>'; 
+
+            let extraDiv = document.getElementById('extra-info');
+            if (!extraDiv) {
+                extraDiv = document.createElement('div');
+                extraDiv.id = 'extra-info';
+                extraDiv.style.marginTop = '15px';
+                lobbyArea.appendChild(extraDiv);
+            }
+            extraDiv.innerHTML = '';
+
+            if (state.phase === 'Lobby') {
+                let html = '';
+                if (isAdmin) {
+                    html += '<div style="background:#e3f2fd; padding:15px; border-radius:5px; border:1px solid #90caf9;"><b>游戏人员配置：</b><br><br>' +
+                        '卧底数量(每边)：<input id="undercover-count" type="number" value="' + state.undercoverCount + '" min="0" style="width:80px;"> &nbsp;&nbsp;' +
+                        '侦探数量(每边)：<input id="detective-count" type="number" value="' + state.detectiveCount + '" min="0" style="width:80px;"> &nbsp;' +
+                        '<button onclick="updateRoleCounts()" style="background:#2196f3; color:#fff;">更新数量</button></div>';
+                }
+                html += '<hr><button onclick="confirmQuit()" style="color:#d32f2f; border-color:#d32f2f;">退出房间</button>';
+                extraDiv.innerHTML = html;
+            }
+
+            if (state.phase === 'CaptainSelection') {
+                const capA = state.players[state.captains.A];
+                const capB = state.players[state.captains.B];
+                extraDiv.innerHTML = '<h3>🎲 队长确立</h3><p>A队先发队长：<b>' + (capA ? capA.name : '无') + '</b></p><p>B队先发队长：<b>' + (capB ? capB.name : '无') + '</b></p>';
+                if (isAdmin) {
+                    extraDiv.innerHTML += '<hr><div style="background:#fff3e0; padding:10px; border:1px solid #ffcc80;"><b>管理员强制干预：</b><br>' +
+                        '<button onclick="rerandomCaptain(\'A\')">重抽 A队</button> <button onclick="rerandomCaptain(\'B\')">重抽 B队</button><br><br>' +
+                        '手动指派 A队: <select id="capA-select">' + Object.values(state.players).filter(p => p.playerId !== state.captains.B && p.role !== 'Admin').map(p => '<option value="' + p.playerId + '">' + p.name + '</option>').join('') + '</select> ' +
+                        '<button onclick="setCaptain(\'A\')">确认</button><br>' +
+                        '手动指派 B队: <select id="capB-select">' + Object.values(state.players).filter(p => p.playerId !== state.captains.A && p.role !== 'Admin').map(p => '<option value="' + p.playerId + '">' + p.name + '</option>').join('') + '</select> ' +
+                        '<button onclick="setCaptain(\'B\')">确认</button></div>';
+                }
+            }
+
+            if (state.phase === 'Roll') {
+                const isCaptain = myPlayerId === state.captains.A || myPlayerId === state.captains.B;
+                const alreadyRolled = (myPlayerId === state.captains.A && state.rollValues.A !== null) ||
+                    (myPlayerId === state.captains.B && state.rollValues.B !== null);
+                if (isCaptain && !alreadyRolled) {
+                    extraDiv.innerHTML = '<button onclick="doRoll()" style="font-size:24px; padding:15px 30px; background:#4caf50; color:#fff; border-radius:8px;">🎲 立即掷骰子</button>';
+                }
+                const rollA = state.rollValues.A !== null ? `<span style="color:red;font-size:20px">${state.rollValues.A}</span>` : '未掷';
+                const rollB = state.rollValues.B !== null ? `<span style="color:blue;font-size:20px">${state.rollValues.B}</span>` : '未掷';
+                extraDiv.innerHTML += '<p style="font-size:18px;">A队长 (' + (state.players[state.captains.A]?.name || '') + ') ： ' + rollA + '</p>';
+                extraDiv.innerHTML += '<p style="font-size:18px;">B队长 (' + (state.players[state.captains.B]?.name || '') + ') ： ' + rollB + '</p>';
+                extraDiv.innerHTML += '<p style="color:#666;">（注：点数大的一方将获得选人与BP地图的绝对先手权！）</p>';
+            }
+
+            if (state.phase === 'PlayerDraft') {
+                const currentTeam = state.draftOrder[state.draftIndex];
+                const capAId = state.captains.A;
+                const capBId = state.captains.B;
+                const capA = state.players[capAId];
+                const capB = state.players[capBId];
+                const isMyTurn = (currentTeam === 'A' && myPlayerId === capAId) || (currentTeam === 'B' && myPlayerId === capBId);
+                const available = Object.values(state.players).filter(p => !p.rosterTeam && p.playerId !== capAId && p.playerId !== capBId && p.role !== 'Admin' && p.role !== 'Spectator');
+                const totalPicks = state.draftOrder.length;
+                const donePicks = Math.min(state.draftIndex, totalPicks);
+                const currentCaptain = currentTeam === 'A' ? capA : capB;
+                let batchStart = state.draftIndex;
+                while (batchStart > 0 && state.draftOrder[batchStart - 1] === currentTeam) batchStart--;
+                let batchEnd = state.draftIndex;
+                while (batchEnd < state.draftOrder.length && state.draftOrder[batchEnd] === currentTeam) batchEnd++;
+                const batchTotal = Math.max(0, batchEnd - batchStart);
+                const batchDone = Math.max(0, state.draftIndex - batchStart);
+                const batchLeft = Math.max(0, batchEnd - state.draftIndex);
+
+                let html = '<div class="draft-board">';
+                html += '<div class="draft-header">';
+                html += '<div><h2 class="draft-title">蛇形选人</h2>';
+                html += `<p class="draft-subtitle">当前蛇形批次共 ${batchTotal || 0} 人，已选 ${batchDone || 0} 人，剩余 ${batchLeft || 0} 人；同一批次不会因为选了第 1 个人就重置倒计时。</p></div>`;
+                html += `<div class="map-bp-turn-wrap">
+                            <div class="draft-turn-card"><span style="display:block;color:#607086;font-size:13px;margin-bottom:6px;">当前轮次</span><b>${currentTeam || '-'}队</b><div style="font-size:13px;color:#607086;margin-top:4px;">队长：${currentCaptain?.name || '-'}</div></div>
+                            <div class="bp-inline-timer"><span>选人倒计时</span><strong class="inline-timer-text">${getTimerSecondsText()}</strong></div>
+                         </div>`;
+                html += '</div>';
+
+                html += '<div class="map-bp-summary">';
+                html += `<div class="map-bp-summary-card"><span>选人进度</span><strong>${donePicks} / ${totalPicks}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>本批次</span><strong>${currentTeam || '-'}队 ${batchDone}/${batchTotal}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>A 队队长</span><strong>${capA?.name || '-'}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>B 队队长</span><strong>${capB?.name || '-'}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>你的状态</span><strong>${isMyTurn ? '轮到你选人' : (currentTeam ? '等待队长选择' : '选人完成')}</strong></div>`;
+                html += '</div>';
+
+                if (available.length > 0) {
+                    html += '<h3 style="margin-top:18px;">可选玩家</h3>';
+                    html += '<div class="draft-pick-grid">';
+                    available.forEach(p => {
+                        html += `<div class="draft-player-card ${isMyTurn ? 'pickable' : ''}" ${isMyTurn ? `onclick="pick('${p.playerId}')"` : ''}>
+                                    <strong>${p.name}</strong>
+                                    <span class="map-card-status ${isMyTurn ? 'available' : 'waiting'}">${isMyTurn ? '点击选择' : '等待选择'}</span>
+                                    ${isAdmin ? `<div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;"><button onclick="event.stopPropagation(); adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;">分到A</button><button onclick="event.stopPropagation(); adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;">分到B</button></div>` : ''}
+                                 </div>`;
+                    });
+                    html += '</div>';
+                } else {
+                    html += '<div class="soft-block" style="margin-top:14px;">人员分配完毕，即将进入地图 BP。</div>';
+                }
+
+                html += '<div class="draft-team-panels">';
+                html += '<div class="draft-team-panel a"><b>A队阵容</b><br><br>' + state.teams.A.players.map(id => state.players[id]?.name || '-').join('<br>') + '</div>';
+                html += '<div class="draft-team-panel b"><b>B队阵容</b><br><br>' + state.teams.B.players.map(id => state.players[id]?.name || '-').join('<br>') + '</div>';
+                html += '</div>';
+                html += '</div>';
+                extraDiv.innerHTML = html;
+            }
+
+            if (state.phase === 'MapBan') {
+                const available = state.mapPool.filter(m => !state.bannedMaps.includes(m));
+                const currTeam = state.mapVote?.team;
+                const myTeam = currentPlayer?.rosterTeam;
+                const votes = state.mapVote?.votes || {};
+                const myVotedMap = votes[myPlayerId];
+                const canVote = !!state.mapVote && myTeam === currTeam;
+
+                let voteItems = '';
+                Object.values(state.players).forEach(p => {
+                    if (p.rosterTeam === currTeam && votes[p.playerId]) {
+                        voteItems += `<li>${p.name} → <b>${votes[p.playerId]}</b></li>`;
+                    }
+                });
+
+                let html = '<div class="map-bp-board">';
+                html += '<div class="map-bp-header">';
+                html += '<div><h2 class="map-bp-title">地图 BP</h2>';
+                html += `<p class="map-bp-subtitle">所有可操作玩家都可以点击卡片投票；没有确认按钮，倒计时结束后系统 Ban 票数最高的地图。</p></div>`;
+                html += `<div class="map-bp-turn-wrap">
+                            <div class="map-bp-turn"><span style="display:block;color:#607086;font-size:13px;margin-bottom:6px;">当前操作</span><b>${currTeam || '-'}队 Ban 图</b></div>
+                            <div class="bp-inline-timer"><span>倒计时</span><strong class="inline-timer-text">${getTimerSecondsText()}</strong></div>
+                         </div>`;
+                html += '</div>';
+
+                html += '<div class="map-bp-summary">';
+                html += `<div class="map-bp-summary-card"><span>剩余地图</span><strong>${available.length > 0 ? available.join(' / ') : '无'}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>已 Ban</span><strong>${state.bannedMaps.length > 0 ? state.bannedMaps.join(' / ') : '暂无'}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>你的状态</span><strong>${canVote ? '轮到你所在队伍，可点击/改选地图' : (myVotedMap ? '已投票：' + myVotedMap + '（可改选）' : '等待当前队伍操作')}</strong></div>`;
+                html += '</div>';
+
+                if (state.mapVote) {
+                    html += '<div class="soft-block" style="margin-bottom:14px;">';
+                    html += `<b>${currTeam}队投票情况：</b>`;
+                    html += voteItems ? `<ul class="map-vote-list">${voteItems}</ul>` : '<span style="color:#64748b;margin-left:8px;">暂无投票</span>';
+                    html += '</div>';
+                }
+
+                html += '<div class="map-card-grid">';
+                state.mapPool.forEach(m => {
+                    html += renderMapCard(m, state, { canVote, myVote: myVotedMap });
+                });
+                html += '</div>';
+
+                if (isAdmin) {
+                    html += '<div class="map-admin-ban-row"><b>管理员强制干预：</b><span style="color:#64748b;font-size:13px;"> 可直接 Ban 任意未禁用地图。</span><br>';
+                    available.forEach(m => {
+                        html += `<button onclick="adminBanMap('${m}')" style="background:#1f2937; color:#fff;">强 Ban ${m}</button> `;
+                    });
+                    html += '</div>';
+                }
+
+                html += '<div class="map-thumb-spec"><b>缩略图规范：</b>请将地图图放在 <code>public/assets/maps/</code>，推荐 640×360px，16:9，JPG/WebP/PNG 均可。文件名建议使用 <code>de_mirage.jpg</code>、<code>de_inferno.jpg</code>、<code>de_dust2.jpg</code> 这种格式。</div>';
+                html += '</div>';
+                extraDiv.innerHTML = html;
+            }
+
+            if (state.phase === 'SidePick') {
+                const sideVote = state.sideVote || {};
+                const voteTeam = sideVote.team || state.sidePickTeam || 'A';
+                const myTeam = currentPlayer?.rosterTeam;
+                const canSideVote = !!state.sideVote && myTeam === voteTeam;
+                const sideVotes = sideVote.votes || {};
+                const mySideVote = sideVotes[myPlayerId];
+                const ctVotes = Object.values(sideVotes).filter(v => v === 'CT').length;
+                const tVotes = Object.values(sideVotes).filter(v => v === 'T').length;
+                let voteItems = '';
+                Object.values(state.players).forEach(p => {
+                    if (p.rosterTeam === voteTeam && sideVotes[p.playerId]) {
+                        voteItems += `<li>${p.name} → <b>${sideVotes[p.playerId]}</b></li>`;
+                    }
+                });
+
+                let html = '<div class="map-bp-board">';
+                html += '<div class="map-bp-header">';
+                html += '<div><h2 class="map-bp-title">阵营选择</h2>';
+                html += `<p class="map-bp-subtitle">本局地图：<b>${state.selectedMap || '地图未确定'}</b>。${voteTeam}队所有队员都可以投票；没有确认按钮，倒计时结束后选择票数更多的一方。</p></div>`;
+                html += `<div class="map-bp-turn-wrap">
+                            <div class="map-bp-turn"><span style="display:block;color:#607086;font-size:13px;margin-bottom:6px;">当前投票队伍</span><b>${voteTeam}队</b></div>
+                            <div class="bp-inline-timer"><span>倒计时</span><strong class="inline-timer-text">${getTimerSecondsText()}</strong></div>
+                         </div>`;
+                html += '</div>';
+
+                html += '<div class="map-bp-summary">';
+                html += `<div class="map-bp-summary-card"><span>CT 票数</span><strong>${ctVotes}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>T 票数</span><strong>${tVotes}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>你的状态</span><strong>${canSideVote ? (mySideVote ? '已投票：' + mySideVote + '（可改选）' : '可点击下方阵营投票') : '等待投票队伍选择'}</strong></div>`;
+                html += '</div>';
+
+                html += '<div class="map-card-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">';
+                html += `<div class="map-card ${canSideVote ? 'clickable' : ''} ${mySideVote === 'CT' ? 'selected-map' : ''}" ${canSideVote ? "onclick=\"selectSide('CT')\"" : ''}>
+                            <div class="map-card-image" style="background-image: linear-gradient(180deg, rgba(21,101,192,.08), rgba(21,101,192,.34)), url('/assets/sides/ct.jpg'); background-color:#1565c0;">
+                                <span style="display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:40px;font-weight:900;color:rgba(255,255,255,.92);text-shadow:0 3px 12px rgba(0,0,0,.35);">CT</span>
+                            </div>
+                            <div class="map-card-body">
+                                <div class="map-card-name"><strong>选择 CT</strong><span class="map-card-slug">Counter-Terrorist</span></div>
+                                <span class="map-card-status ${mySideVote === 'CT' ? 'selected' : (canSideVote ? 'available' : 'waiting')}">${mySideVote === 'CT' ? '你的选择' : (canSideVote ? '点击投票' : '等待')}</span>
+                            </div>
+                         </div>`;
+                html += `<div class="map-card ${canSideVote ? 'clickable' : ''} ${mySideVote === 'T' ? 'selected-map' : ''}" ${canSideVote ? "onclick=\"selectSide('T')\"" : ''}>
+                            <div class="map-card-image" style="background-image: linear-gradient(180deg, rgba(180,83,9,.08), rgba(180,83,9,.34)), url('/assets/sides/t.jpg'); background-color:#b45309;">
+                                <span style="display:inline-flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:40px;font-weight:900;color:rgba(255,255,255,.92);text-shadow:0 3px 12px rgba(0,0,0,.35);">T</span>
+                            </div>
+                            <div class="map-card-body">
+                                <div class="map-card-name"><strong>选择 T</strong><span class="map-card-slug">Terrorist</span></div>
+                                <span class="map-card-status ${mySideVote === 'T' ? 'selected' : (canSideVote ? 'available' : 'waiting')}">${mySideVote === 'T' ? '你的选择' : (canSideVote ? '点击投票' : '等待')}</span>
+                            </div>
+                         </div>`;
+                html += '</div>';
+                html += '<div class="side-thumb-spec"><b>阵营缩略图：</b>可放在 <code>public/assets/sides/</code>，推荐 <code>ct.jpg</code> 和 <code>t.jpg</code>，尺寸同地图图：640×360px，16:9。没有图片时会显示默认渐变背景。</div>';
+
+                html += '<div class="soft-block" style="margin-top:14px;">';
+                html += `<b>${voteTeam}队投票情况：</b>`;
+                html += voteItems ? `<ul class="map-vote-list">${voteItems}</ul>` : '<span style="color:#64748b;margin-left:8px;">暂无投票</span>';
+                html += '</div>';
+
+                html += '</div>';
+                extraDiv.innerHTML = html;
+            }
+
+            if (state.phase === 'PreGameSetup') {
+                const role = currentPlayer?.gameRole;
+                let html = '';
+                if (isAdmin) {
+                    html += '<div style="background:#f3e5f5; padding:15px; border:1px solid #ce93d8;"><h4>🛠️ 裁判面板：分配身份</h4>';
+                    html += '<table border=1 cellpadding=6 style="width:100%; border-collapse:collapse; background:#fff; text-align:center;"><tr><th>玩家</th><th>阵容</th><th>当前阵营</th><th>绑定</th><th>分配身份</th><th>操作</th></tr>';
+                    Object.values(state.players).forEach(p => {
+                        if (p.role === 'Spectator' || p.role === 'Admin') return;
+                        const curRole = p.gameRole || '<span style="color:red">未分配</span>';
+                        html += `<tr><td><b>${p.name}</b></td><td>${p.rosterTeam || '-'}</td><td>${p.team || '-'}</td><td>${p.steamIdBound ? '已绑定' : '未绑定'}</td><td>${curRole}</td>`;
+                        html += `<td><select id="role-select-${p.playerId}">
+                                <option value="Undercover" ${p.gameRole === 'Undercover' ? 'selected' : ''}>卧底</option>
+                                <option value="Detective" ${p.gameRole === 'Detective' ? 'selected' : ''}>侦探</option>
+                                <option value="Soldier" ${p.gameRole === 'Soldier' ? 'selected' : ''}>士兵</option>
+                                </select> <button onclick="setPlayerRole('${p.playerId}')">确认</button></td></tr>`;
+                    });
+                    html += '</table>';
+                    html += `<p style="margin-top:10px;">目标名额(单边)：${state.undercoverCount} 卧底, ${state.detectiveCount} 侦探</p>`;
+                    html += '<button onclick="randomRemainingRoles()" style="background:#7c3aed; color:#fff; font-weight:bold;">随机补齐剩余身份（仅管理员可见）</button> ';
+                    html += '<button onclick="releaseRoles()" style="background:#d32f2f; color:#fff; font-weight:bold;">发放身份给玩家</button>';
+                    html += `<p style="font-size:13px;color:#6b7280;margin-bottom:0;">发放状态：${state.rolesReleased ? '<b style="color:#2e7d32;">已发放</b>' : '<b style="color:#d32f2f;">未发放</b>'}。未发放前，普通玩家看不到任何人的身份。</p></div><hr>`;
+                }
+                if (role) {
+                    let roleStyle = role === 'Undercover' ? 'color:#d32f2f' : (role === 'Detective' ? 'color:#1976d2' : 'color:#388e3c');
+                    html += `<h2 style="text-align:center;">你的真实身份是：<span style="${roleStyle}; font-size:32px;">${role}</span></h2>`;
+                    html += '<div style="text-align:center;"><button onclick="showRules()" style="font-size:18px; padding:10px 20px;">📜 查看此身份的专属说明书</button></div>';
+                } else {
+                    html += '<h3 style="text-align:center; color:#666;">身份尚未由管理员发放，请先完成准备并等待裁判操作。</h3>';
+                }
+
+                html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
+                if (currentPlayer?.role !== 'Admin' && !currentPlayer?.isReady) {
+                    html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">✔️ 我已准备，等待发放身份</button>';
+                } else {
+                    html += '<h3 style="color:#4caf50;">✅ 您已准备就绪，等待全员就位</h3>';
+                }
+                html += '<p style="color:#888; font-size:14px; margin-top:15px;">已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
+                extraDiv.innerHTML = html;
+            }
+
+            if (state.phase === 'LiveGame') {
+                renderLiveGame(state);
+            }
+
+            if (state.phase === 'MidGameQA') {
+                extraDiv.innerHTML = '<div style="background:#e3f2fd; padding:20px; border:1px solid #90caf9; border-radius:8px;"><h2 style="margin-top:0;color:#1565c0;">中场问答已改为游戏内语音</h2><p>网页不再提交问题或记录回答。侦探可以在 LiveGame 阶段的“侦探语音问答草稿”中记录想问的问题；管理员在自己的 LiveGame 页面记录每名侦探被回答的问题数量，用于结算 -12 规则。</p></div>';
+            }
+
+            if (state.phase === 'PostGameAccusation') {
+                let html = '<div style="background:#fff8e1; padding:20px; border:2px solid #ffa000; border-radius:8px;">';
+                html += '<h2 style="color:#e65100; margin-top:0;">🫵 终局指认时刻</h2>';
+                html += '<p style="font-size:16px;">请仔细回想整场比赛的蛛丝马迹，投出你神圣的两票：</p>';
+
+                const myAcc = state.accusations[myPlayerId] || { own: null, enemy: null };
+                if (!isAdmin && currentPlayer) {
+                    if (!myAcc.own) {
+                        html += '<div class="accuse-area" style="background:#e8f5e9; padding:15px; border:1px solid #c8e6c9;"><b>🔹 抓出己方内鬼：</b><br><br>';
+                        Object.values(state.players).forEach(p => {
+                            if (p.playerId === myPlayerId || p.role === 'Spectator' || p.role === 'Admin') return;
+                            if (p.rosterTeam === currentPlayer.rosterTeam) {
+                                html += `<button onclick="accuse('${p.playerId}', 'own')" style="font-size:16px; padding:8px 15px;">指认 ${p.name}</button> `;
+                            }
+                        });
+                        html += '</div>';
+                    } else {
+                        html += `<p style="font-size:16px; color:#2e7d32;">✅ 己方指认完成：已锁定 <b>${state.players[myAcc.own]?.name || ''}</b></p>`;
+                    }
+
+                    if (!myAcc.enemy) {
+                        html += '<div class="accuse-area" style="background:#ffebee; padding:15px; border:1px solid #ffcdd2; margin-top:15px;"><b>🔸 揭露敌方演帝：</b><br><br>';
+                        Object.values(state.players).forEach(p => {
+                            if (p.playerId === myPlayerId || p.role === 'Spectator' || p.role === 'Admin') return;
+                            if (p.rosterTeam !== currentPlayer.rosterTeam) {
+                                html += `<button onclick="accuse('${p.playerId}', 'enemy')" style="font-size:16px; padding:8px 15px;">指认 ${p.name}</button> `;
+                            }
+                        });
+                        html += '</div>';
+                    } else {
+                        html += `<p style="font-size:16px; color:#c62828;">✅ 敌方指认完成：已锁定 <b>${state.players[myAcc.enemy]?.name || ''}</b></p>`;
+                    }
+                } else {
+                    html += '<p style="color:#666;">（上帝不参与凡人的纷争）</p>';
+                }
+
+                html += '<hr><p><b>实况计票墙 (匿名)：</b></p>';
+                for (const [pId, acc] of Object.entries(state.accusations)) {
+                    const p = state.players[pId];
+                    if (!p || p.role === 'Admin') continue;
+                    const ownText = acc.own ? '✔️已投' : '⏳未投';
+                    const enemyText = acc.enemy ? '✔️已投' : '⏳未投';
+                    html += `<p style="margin:5px 0; color:#555;">玩家 ${p.name} - 己方票: ${ownText} | 敌方票: ${enemyText}</p>`;
+                }
+                html += '</div>';
+                extraDiv.innerHTML = html;
+            }
+
+            if (state.phase === 'Scoreboard') {
+                const live = state.liveGameData || {};
+                const winnerText = live.winnerTeam ? `｜胜者：${live.winnerTeam}队` : '';
+                let html = `<h2 style="color:#fbc02d; text-align:center; font-size:32px;">🏆 最终结算</h2><p style="text-align:center;font-size:18px;">最终比分：A队 ${live.scoreA || 0} : ${live.scoreB || 0} B队 ${winnerText}</p>`;
+
+                if (Object.values(state.players).some(p => p.finalScore !== undefined)) {
+                    const sortedPlayers = Object.values(state.players)
+                        .filter(p => p.role !== 'Admin')
+                        .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0));
+
+                    html += '<div class="score-detail-wrap">';
+                    html += '<table class="score-detail-table"><tr><th>玩家</th><th>阵容</th><th>身份</th><th>击杀</th><th>死亡</th><th>助攻</th><th>游戏胜负</th><th>回合胜负</th><th>伤害</th><th>指认 / 问答</th><th>任务 / 暴露</th><th>最终得分</th></tr>';
+
+                    sortedPlayers.forEach(p => {
+                        html += renderScoreboardRow(p, state);
+                    });
+
+                    html += '</table></div>';
+                    html += '<div class="score-rule-note">显示规则：红色代表负分，绿色代表正分；公式中的次数、票数、回合数不染色。除最终得分外，数值最多保留 1 位小数；最终得分最多保留 2 位小数；整数与 0 不强制补零。</div>';
+
+                    if (isAdmin) {
+                        html += '<div style="margin-top:18px; padding:16px; background:#f8fbff; border:1px solid #dbe7f5; border-radius:12px;"><h4 style="margin-top:0; color:#1976d2;">裁判操作区：导入 / 重新导入 MatchZy CSV 并重新计分</h4>';
+                        html += '<input type="file" id="csv-file-input" accept=".csv" style="font-size:16px;"> ';
+                        html += '<button onclick="uploadCsv()" style="background:#1976d2; color:#fff; font-size:16px; padding:8px 15px;">解析文件并生成最终战报</button>';
+                        html += '<p style="color:#666; font-size:13px; margin-bottom:0;">说明：最终分数只在结算阶段计算。导入 CSV 后会用 CSV 战绩覆盖插件实时战绩并重新计算。</p></div>';
+                    }
+                } else {
+                    html += '<div style="text-align:center; padding:30px; background:#f5f5f5; border-radius:8px;"><p style="font-size:18px; color:#666;"><i>正在等待主裁汇入比赛关键数据...</i></p>';
+                    if (isAdmin) {
+                        html += '<hr style="margin:20px 0;"><h4 style="color:#1976d2;">裁判操作区：导入 MatchZy CSV 并自动计分</h4>';
+                        html += '<input type="file" id="csv-file-input" accept=".csv" style="font-size:16px;"> ';
+                        html += '<button onclick="uploadCsv()" style="background:#1976d2; color:#fff; font-size:16px; padding:8px 15px;">解析文件并生成最终战报</button>';
+                    }
+                    html += '</div>';
+                }
+
+                if (state.accusations && Object.keys(state.accusations).length > 0) {
+                    html += '<h4 style="margin-top:20px;">🕵️ 赛后复盘：全员指认记录</h4><div style="background:#fafafa; padding:15px; border:1px solid #ddd; border-radius:5px; column-count:2; font-size:13px;">';
+                    for (const [pId, acc] of Object.entries(state.accusations)) {
+                        const p = state.players[pId];
+                        if (!p || p.role === 'Admin') continue;
+                        const ownName = acc.own ? state.players[acc.own]?.name : '-';
+                        const enemyName = acc.enemy ? state.players[acc.enemy]?.name : '-';
+                        html += `<p style="margin:5px 0;"><b>${p.name}</b> 咬定了 <span style="color:#2e7d32;">${ownName}(己)</span> 和 <span style="color:#c62828;">${enemyName}(敌)</span></p>`;
+                    }
+                    html += '</div>';
+                }
+                extraDiv.innerHTML = html;
+            }
+        });
+
+
+
+        // Stage 3.14：结算页格式化与公式渲染
+        function htmlEscape(value) {
+            return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function trimFixed(num, digits) {
+            const n = Number(num || 0);
+            if (!Number.isFinite(n) || Math.abs(n) < 1e-9) return '0';
+            return n.toFixed(digits).replace(/\.?0+$/, '');
+        }
+
+        function fmtData(num) {
+            return trimFixed(num, 1);
+        }
+
+        function fmtResult(num) {
+            return trimFixed(num, 2);
+        }
+
+        function scoreClass(num) {
+            const n = Number(num || 0);
+            if (n > 0) return 'score-positive';
+            if (n < 0) return 'score-negative';
+            return 'score-neutral';
+        }
+
+        function scoreSpan(num, isFinal = false) {
+            const text = isFinal ? fmtResult(num) : fmtData(num);
+            return `<span class="${scoreClass(num)}">${text}</span>`;
+        }
+
+        function countSpan(num) {
+            return `<span class="score-count">${fmtData(num)}</span>`;
+        }
+
+        function scoreTerm(label, inner, muted = false) {
+            return `<span class="score-term ${muted ? 'muted' : ''}">${label ? `<b>${label}</b>：` : ''}${inner}</span>`;
+        }
+
+        function formulaTerm(label, multiplier, count, result) {
+            return scoreTerm(label, `${scoreSpan(multiplier)} × ${countSpan(count)} = ${scoreSpan(result)}`);
+        }
+
+        function singleScoreTerm(label, result) {
+            return scoreTerm(label, scoreSpan(result));
+        }
+
+        function emptyScoreTerm(text = '-') {
+            return `<span class="score-term muted">${text}</span>`;
+        }
+
+        function getPlayerRoundRecordForScore(p, state) {
+            const live = state.liveGameData || {};
+            const scoreA = Number(live.scoreA || 0);
+            const scoreB = Number(live.scoreB || 0);
+            if (p.rosterTeam === 'A') return { won: scoreA, lost: scoreB };
+            if (p.rosterTeam === 'B') return { won: scoreB, lost: scoreA };
+            return { won: 0, lost: 0 };
+        }
+
+        function getScoreBreakdownValue(p, key) {
+            return Number((p.scoreBreakdown && p.scoreBreakdown[key]) || 0);
+        }
+
+        function renderRoundScoreTerms(role, p, state) {
+            const rr = getPlayerRoundRecordForScore(p, state);
+            if (role === 'Undercover') {
+                const winScore = rr.won * -4;
+                const loseScore = rr.lost * 10;
+                return formulaTerm('赢回合', -4, rr.won, winScore) +
+                    formulaTerm('输回合', 10, rr.lost, loseScore) +
+                    singleScoreTerm('小计', getScoreBreakdownValue(p, '回合胜负'));
+            }
+            if (role === 'Detective') {
+                const winScore = rr.won * 8;
+                const loseScore = rr.lost * -4;
+                return formulaTerm('赢回合', 8, rr.won, winScore) +
+                    formulaTerm('输回合', -4, rr.lost, loseScore) +
+                    singleScoreTerm('小计', getScoreBreakdownValue(p, '回合胜负'));
+            }
+            const winScore = rr.won * 10;
+            const loseScore = rr.lost * -4;
+            return formulaTerm('赢回合', 10, rr.won, winScore) +
+                formulaTerm('输回合', -4, rr.lost, loseScore) +
+                singleScoreTerm('小计', getScoreBreakdownValue(p, '回合胜负'));
+        }
+
+        function renderScoreboardRow(p, state) {
+            const role = p.gameRole || '-';
+            const rowClass = role ? String(role).toLowerCase() : '';
+            const stats = p.stats || { kills: 0, deaths: 0, assists: 0, damage: 0 };
+            const kills = Number(stats.kills || 0);
+            const deaths = Number(stats.deaths || 0);
+            const assists = Number(stats.assists || 0);
+            const damage = Number(stats.damage || 0);
+            const damageUnits = Math.floor(damage / 100);
+
+            let killCell = emptyScoreTerm();
+            let deathCell = emptyScoreTerm();
+            let assistCell = emptyScoreTerm();
+            let gameCell = emptyScoreTerm();
+            let roundCell = emptyScoreTerm();
+            let damageCell = emptyScoreTerm();
+            let accuseCell = emptyScoreTerm();
+            let taskCell = emptyScoreTerm();
+
+            if (role === 'Soldier') {
+                killCell = formulaTerm('', 5, kills, getScoreBreakdownValue(p, '击杀'));
+                deathCell = formulaTerm('', -2, deaths, getScoreBreakdownValue(p, '死亡'));
+                assistCell = formulaTerm('', 2, assists, getScoreBreakdownValue(p, '助攻'));
+                gameCell = singleScoreTerm('', getScoreBreakdownValue(p, '游戏胜负'));
+                roundCell = renderRoundScoreTerms(role, p, state);
+                damageCell = formulaTerm('', 1, damageUnits, getScoreBreakdownValue(p, '伤害')) + scoreTerm('原始伤害', countSpan(damage));
+                accuseCell = formulaTerm('成功指认', 15, getScoreBreakdownValue(p, '指认成功票数'), getScoreBreakdownValue(p, '指认成功'));
+                taskCell = emptyScoreTerm('无任务');
+            } else if (role === 'Undercover') {
+                killCell = formulaTerm('', -2, kills, getScoreBreakdownValue(p, '击杀'));
+                deathCell = formulaTerm('', 5, deaths, getScoreBreakdownValue(p, '死亡'));
+                assistCell = formulaTerm('', -1, assists, getScoreBreakdownValue(p, '助攻'));
+                gameCell = singleScoreTerm('', getScoreBreakdownValue(p, '游戏胜负'));
+                roundCell = renderRoundScoreTerms(role, p, state);
+                damageCell = formulaTerm('', -0.75, damageUnits, getScoreBreakdownValue(p, '伤害')) + scoreTerm('原始伤害', countSpan(damage));
+                accuseCell = formulaTerm('被指认', -5, getScoreBreakdownValue(p, '被指认票数'), getScoreBreakdownValue(p, '被指认')) +
+                    singleScoreTerm('暴露惩罚', getScoreBreakdownValue(p, '暴露惩罚'));
+                taskCell = singleScoreTerm('任务等级', getScoreBreakdownValue(p, '任务等级')) +
+                    formulaTerm('连线', 14, getScoreBreakdownValue(p, '连线数'), getScoreBreakdownValue(p, '连线')) +
+                    singleScoreTerm('任务小计', getScoreBreakdownValue(p, '任务'));
+            } else if (role === 'Detective') {
+                killCell = formulaTerm('', 4, kills, getScoreBreakdownValue(p, '击杀'));
+                deathCell = formulaTerm('', -2, deaths, getScoreBreakdownValue(p, '死亡'));
+                assistCell = formulaTerm('', 2, assists, getScoreBreakdownValue(p, '助攻'));
+                gameCell = singleScoreTerm('', getScoreBreakdownValue(p, '游戏胜负'));
+                roundCell = renderRoundScoreTerms(role, p, state);
+                damageCell = formulaTerm('', 0.9, damageUnits, getScoreBreakdownValue(p, '伤害')) + scoreTerm('原始伤害', countSpan(damage));
+                accuseCell = formulaTerm('成功指认', 20, getScoreBreakdownValue(p, '指认成功票数'), getScoreBreakdownValue(p, '指认成功')) +
+                    scoreTerm('问答数', countSpan(getScoreBreakdownValue(p, '问答问题数'))) +
+                    singleScoreTerm('问答惩罚', getScoreBreakdownValue(p, '问答惩罚'));
+                taskCell = emptyScoreTerm('无任务');
+            }
+
+            return `<tr class="${rowClass}">
+                <td><b>${htmlEscape(p.name)}</b></td>
+                <td>${p.rosterTeam || '-'}</td>
+                <td>${role}</td>
+                <td>${killCell}</td>
+                <td>${deathCell}</td>
+                <td>${assistCell}</td>
+                <td>${gameCell}</td>
+                <td>${roundCell}</td>
+                <td>${damageCell}</td>
+                <td>${accuseCell}</td>
+                <td>${taskCell}</td>
+                <td><span class="score-final ${scoreClass(p.finalScore || 0)}">${fmtResult(p.finalScore || 0)}</span></td>
+            </tr>`;
+        }
+
+        // Stage 3.7：地图 BP 卡片配置
+        const MAP_THUMBNAILS = {
+            'Dust II': '/assets/maps/de_dust2.jpg',
+            'Dust2': '/assets/maps/de_dust2.jpg',
+            'de_dust2': '/assets/maps/de_dust2.jpg',
+            'Inferno': '/assets/maps/de_inferno.jpg',
+            'de_inferno': '/assets/maps/de_inferno.jpg',
+            'Mirage': '/assets/maps/de_mirage.jpg',
+            'de_mirage': '/assets/maps/de_mirage.jpg',
+            'Nuke': '/assets/maps/de_nuke.jpg',
+            'de_nuke': '/assets/maps/de_nuke.jpg',
+            'Overpass': '/assets/maps/de_overpass.jpg',
+            'de_overpass': '/assets/maps/de_overpass.jpg',
+            'Vertigo': '/assets/maps/de_vertigo.jpg',
+            'de_vertigo': '/assets/maps/de_vertigo.jpg',
+            'Ancient': '/assets/maps/de_ancient.jpg',
+            'de_ancient': '/assets/maps/de_ancient.jpg',
+            'Anubis': '/assets/maps/de_anubis.jpg',
+            'de_anubis': '/assets/maps/de_anubis.jpg',
+            'Train': '/assets/maps/de_train.jpg',
+            'de_train': '/assets/maps/de_train.jpg',
+            'Cache': '/assets/maps/de_cache.jpg',
+            'de_cache': '/assets/maps/de_cache.jpg'
+        };
+
+        const MAP_SLUGS = {
+            'Dust II': 'de_dust2',
+            'Dust2': 'de_dust2',
+            'Inferno': 'de_inferno',
+            'Mirage': 'de_mirage',
+            'Nuke': 'de_nuke',
+            'Overpass': 'de_overpass',
+            'Vertigo': 'de_vertigo',
+            'Ancient': 'de_ancient',
+            'Anubis': 'de_anubis',
+            'Train': 'de_train',
+            'Cache': 'de_cache'
+        };
+
+        function normalizeMapSlug(map) {
+            if (!map) return '';
+            if (MAP_SLUGS[map]) return MAP_SLUGS[map];
+            const lower = String(map).trim().toLowerCase().replace(/\s+/g, '_');
+            if (lower.startsWith('de_')) return lower;
+            if (lower === 'dust_ii' || lower === 'dust2') return 'de_dust2';
+            return 'de_' + lower;
+        }
+
+        function getMapThumb(map) {
+            return MAP_THUMBNAILS[map] || '/assets/maps/' + normalizeMapSlug(map) + '.jpg';
+        }
+
+        function escapeAttr(value) {
+            return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+
+        function getMapVoters(map, state) {
+            const votes = state.mapVote?.votes || {};
+            const team = state.mapVote?.team;
+            return Object.values(state.players || {})
+                .filter(p => p.rosterTeam === team && votes[p.playerId] === map)
+                .map(p => ({
+                    playerId: p.playerId,
+                    name: p.name || '未命名玩家'
+                }));
+        }
+
+        function renderMapCard(map, state, options) {
+            const banned = state.bannedMaps.includes(map);
+            const selected = state.selectedMap === map;
+            const myVote = options.myVote === map;
+            const canVote = options.canVote && !banned && !selected;
+            const voters = getMapVoters(map, state);
+            const statusClass = selected ? 'selected' : (banned ? 'banned' : (myVote ? 'available' : (canVote ? 'available' : 'waiting')));
+            const cardClass = ['map-card', banned ? 'banned' : '', selected ? 'selected-map' : '', myVote ? 'selected-map my-vote' : '', canVote ? 'clickable' : ''].join(' ');
+            const statusText = selected ? '本局地图' : (banned ? '已 Ban' : (myVote ? '你的选择' : (canVote ? '点击投票' : '等待')));
+            const slug = normalizeMapSlug(map);
+            const thumb = getMapThumb(map);
+            const click = canVote ? `onclick="voteMap('${escapeAttr(map)}')"` : '';
+            const initials = String(map || '?').split(/\s+/).map(s => s[0]).join('').slice(0, 3).toUpperCase();
+
+            let votersHtml = '';
+            if (!banned && !selected && state.mapVote) {
+                if (voters.length > 0) {
+                    votersHtml = voters.map(v => {
+                        const isMe = v.playerId === myPlayerId;
+                        return `<span class="map-voter-pill ${isMe ? 'me' : ''}"><span class="dot"></span>${isMe ? '你' : v.name}</span>`;
+                    }).join('');
+                    votersHtml += `<span class="map-card-vote-count">${voters.length}票</span>`;
+                } else {
+                    votersHtml = '<span class="map-card-voters-empty">暂无队友选择这张图</span>';
+                }
+            }
+
+            return `
+                <div class="${cardClass}" ${click} title="${canVote ? '点击 Ban ' + escapeAttr(map) : escapeAttr(map)}">
+                    <div class="map-card-image" style="background-image: linear-gradient(180deg, rgba(15,23,42,.08), rgba(15,23,42,.26)), url('${thumb}');" onerror="this.classList.add('placeholder'); this.style.backgroundImage='linear-gradient(135deg,#334155,#94a3b8)'; this.textContent='${initials}';"></div>
+                    ${banned ? '<div class="map-card-overlay">BANNED</div>' : ''}
+                    ${selected ? '<div class="map-card-overlay" style="background:rgba(22,101,52,.38);">PICK</div>' : ''}
+                    <div class="map-card-body">
+                        <div class="map-card-name">
+                            <strong>${map}</strong>
+                            <span class="map-card-slug">${slug}</span>
+                        </div>
+                        <span class="map-card-status ${statusClass}">${statusText}</span>
+                        <div class="map-card-voters">${votersHtml}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+
+        // 取对应的色彩值，便于显示UI
+        function getLevelColor(lbl) {
+            if (!lbl) return '#333';
+            const s = lbl.toString().toUpperCase();
+            if (s.includes('1')) return '#00B050';
+            if (s.includes('2')) return '#0070C0';
+            if (s.includes('3')) return '#E36C09';
+            if (s.includes('6')) return '#C00000';
+            if (s.includes('5')) return '#FF0000';
+            if (s.includes('4')) return '#7030A0';
+            return '#333';
+        }
+
+        function getTaskStatusBadge(status) {
+            const map = {
+                Complete: { text: 'Complete', bg: '#e8f5e9', fg: '#1b5e20', border: '#81c784' },
+                Abandoned: { text: 'Abandoned', bg: '#eeeeee', fg: '#616161', border: '#bdbdbd' },
+                Partial: { text: 'Partial', bg: '#fff8e1', fg: '#e65100', border: '#ffcc80' },
+                Incomplete: { text: 'Incomplete', bg: '#ffebee', fg: '#b71c1c', border: '#ef9a9a' },
+            };
+            const item = map[status] || map.Incomplete;
+            return `<span style="display:inline-block;min-width:86px;text-align:center;padding:2px 8px;border-radius:999px;background:${item.bg};color:${item.fg};border:1px solid ${item.border};font-weight:800;">${item.text}</span>`;
+        }
+
+        function renderLiveGame(state) {
+            const live = state.liveGameData || window._liveGameData || {};
+            const currentPlayer = window._currentPlayer;
+            let html = '<div class="live-header" style="background:#263238; color:#fff;">' +
+                '<span style="font-size:24px;">赛况：A队 <span style="color:#64b5f6;">' + (live.scoreA || 0) + '</span> - <span style="color:#ffb74d;">' + (live.scoreB || 0) + '</span> B队</span> ' +
+                '<span style="font-size:16px; color:#b0bec5;">CT/T参考：' + (live.scoreCT || 0) + ':' + (live.scoreT || 0) + '</span> ' +
+                '<span style="font-size:20px; color:#aed581;">第 ' + (live.currentRound || 0) + ' 回合｜目标 ' + (live.winTarget || 13) + ' 分</span> ' +
+                '<button onclick="showRules()" style="background:#455a64; color:#fff; border:1px solid #78909c;">📖 温习规则指引</button></div>';
+            if (live.matchFinished) {
+                html += '<div style="background:#fff8e1; border:1px solid #fbc02d; padding:12px; border-radius:6px; margin-bottom:12px; font-weight:bold; color:#e65100;">比赛已自动判定结束：' + (live.winnerTeam || '?') + '队获胜。请等待进入结算/指认流程。</div>';
+            }
+
+            if (currentPlayer?.gameRole === 'Undercover') {
+                html += '<h3 style="color:#d32f2f;">你的任务面板</h3><div class="task-grid" style="background:#fafafa; border-radius:8px; border:1px solid #ddd;">';
+                const grid = currentPlayer.taskGrid || {};
+                ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'].forEach(cellId => {
+                    const cell = grid[cellId];
+                    let bgClass = cell?.status === 'Abandoned' ? 'background:#e0e0e0;' : 'background:#fff;';
+
+                    let boxShadow = '';
+                    if (cell && cell.borderHistory && cell.borderHistory.length > 0) {
+                        boxShadow = cell.borderHistory.map((color, idx) => `0 0 0 ${(idx + 1) * 4}px ${color}`).join(', ');
+                    }
+
+                    let titleHtml = '';
+                    if (cell && cell.levelLabel) {
+                        const color = getLevelColor(cell.levelLabel);
+                        titleHtml = `<div style="color:${color}; font-weight:900; font-size:16px; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${cell.levelLabel}】</div>`;
+                    }
+                    const desc = cell ? cell.description : '无';
+                    const nInfo = (cell && cell.nType !== 'none' && cell.nValue > 0) ? `<div style="color:#d32f2f; font-size:15px; margin-top:8px; font-weight:bold; background:#ffebee; padding:4px; border-radius:4px; width:100%;">当前 N = ${cell.nValue}</div>` : '';
+
+                    html += `<div class="task-cell" id="cell-${cellId}" onclick="handleCellClick('${cellId}')" style="${bgClass} box-shadow: ${boxShadow}; margin: 8px;">${titleHtml} <div class="task-desc" style="flex:1; display:flex; align-items:center; font-size:15px;"><div>${desc}</div></div> ${nInfo}</div>`;
+                });
+                html += '</div>';
+
+                html += '<div style="background:#fff3e0; padding:15px; border-radius:6px; border:1px solid #ffcc80; margin-top:20px;">';
+                html += '<p><b>基础状态干预：</b> ' +
+                    '<button id="btn-complete" onclick="markComplete()" style="background:#4caf50; color:#fff;">✓ 标记完成</button> ' +
+                    '<button id="btn-undo" onclick="undoComplete()">⟲ 撤销状态</button> ' +
+                    '<button id="btn-abandon" onclick="abandonTask()" style="background:#9e9e9e; color:#fff;">放弃任务</button> ' +
+                    '<button id="btn-hint" onclick="requestHint()" style="background:#2196f3; color:#fff;">💡 申请提示</button> ' +
+                    '<button id="btn-replace" onclick="replaceTask()" style="background:#9c27b0; color:#fff;">替换任务</button></p>';
+                html += '<p style="margin-top:15px;"><b>动态数值(N)修调：</b> ' +
+                    '<button id="btn-n-add" onclick="changeN(\'N_ADD\')" style="font-weight:bold; font-size:16px;">N + 1</button> ' +
+                    '<button id="btn-n-sub" onclick="changeN(\'N_SUB\')" style="font-weight:bold; font-size:16px;">N - 1</button> ' +
+                    '<button id="btn-n-set" onclick="changeN(\'N_SET\')" style="background:#607d8b; color:#fff;">精准录入 N 值</button></p>';
+                html += '<hr style="border-top:1px dashed #ffb74d;"><p style="font-size:16px; margin-bottom:0;">当前操作焦点：<span id="selected-cell" style="color:#d32f2f; font-weight:bold; font-size:20px;">未锁定格子</span></p>';
+                html += '</div>';
+            } else if (currentPlayer?.gameRole === 'Detective') {
+                html += '<div style="background:#e3f2fd; padding:20px; border-radius:8px; border:1px solid #90caf9;">';
+                html += '<h3 style="color:#1565c0; margin-top:0;">侦探语音问答草稿</h3>';
+                html += '<p style="color:#455a64; line-height:1.7;">中场问答不再通过网页提交。请在这里临时记录你想通过游戏内语音询问管理员的问题；实际提问和回答以游戏内语音交流为准。</p>';
+                html += '<textarea id="detective-question" placeholder="例如：我想问：卧底任务是否和故意少击杀/故意吃闪/刻意拖时间有关？&#10;这里的内容仅保存在当前浏览器页面，不会自动提交给管理员。" style="width:100%; height:150px; font-size:15px; padding:10px; box-sizing:border-box;"></textarea></div>';
+            } else if (currentPlayer?.gameRole === 'Soldier') {
+                html += '<div style="text-align:center; padding:40px; background:#e8f5e9; border:1px solid #a5d6a5; border-radius:8px;"><h2 style="color:#2e7d32;">专注比赛</h2><p style="font-size:16px; color:#555;">你的主要目标是帮助队伍取胜，并留意场上可能存在的异常行为。</p></div>';
+            }
+
+            if (currentPlayer?.role === 'Admin') {
+                html += '<hr><div style="background:#eceff1; padding:15px; border-radius:6px; border:1px solid #cfd8dc;">';
+                html += '<h4 style="margin-top:0;">裁判控制：手动修正对局数据</h4>';
+                html += 'A队比分：<input id="admin-scoreA" type="number" value="' + (live.scoreA || 0) + '" style="width:60px;"> &nbsp;&nbsp;';
+                html += 'B队比分：<input id="admin-scoreB" type="number" value="' + (live.scoreB || 0) + '" style="width:60px;"> &nbsp;&nbsp;';
+                html += 'CT参考：<input id="admin-scoreCT" type="number" value="' + (live.scoreCT || 0) + '" style="width:60px;"> &nbsp;&nbsp;';
+                html += 'T参考：<input id="admin-scoreT" type="number" value="' + (live.scoreT || 0) + '" style="width:60px;"> &nbsp;&nbsp;';
+                html += '当前回合：<input id="admin-round" type="number" value="' + (live.currentRound || 0) + '" style="width:60px;"> &nbsp;';
+                html += '<button onclick="updateLiveData()" style="background:#607d8b; color:#fff;">覆盖赛局</button> ';
+                html += '<button onclick="resetFormalMatchCounters()" style="background:#d32f2f; color:#fff;">现在是第一回合（重置正式赛数据）</button>';
+                html += '<p style="font-size:13px;color:#64748b;margin:8px 0 0;">若正式赛前插件已经记录过娱乐回合，请在正式开赛第一回合时点此按钮，避免回合数、伤害和战绩被赛前数据污染。</p></div>';
+
+                html += '<div style="margin-top:15px; padding:15px; background:#e8f5e9; border:1px solid #a5d6a5; border-radius:6px;">';
+                html += '<h4 style="margin-top:0; color:#2e7d32;">侦探语音问答记录</h4>';
+                html += '<p style="color:#455a64; line-height:1.7; margin-top:0;">中场问答现在通过游戏内语音完成。请管理员只记录每名侦探“被管理员回答的问题数量”。若记录为 2，结算时该侦探自动 -12 分。</p>';
+                const detectives = Object.values(window._allPlayers || {}).filter(p => p.gameRole === 'Detective');
+                if (detectives.length === 0) {
+                    html += '<p style="color:#777;">当前没有侦探玩家</p>';
+                } else {
+                    html += '<table class="scoreboard-table" style="margin-top:10px;"><tr><th>侦探</th><th>阵容</th><th>已回答问题数</th><th>计分影响</th><th>操作</th></tr>';
+                    detectives.forEach(p => {
+                        const count = Math.max(0, Math.min(2, Number(p.detectiveQuestionCount || 0)));
+                        html += `<tr>
+                            <td><b>${p.name}</b></td>
+                            <td>${p.rosterTeam || '-'}</td>
+                            <td><input id="dq-${p.playerId}" type="number" min="0" max="2" value="${count}" style="width:70px;"></td>
+                            <td>${count >= 2 ? '<span style="color:#d32f2f;font-weight:bold;">-12</span>' : '<span style="color:#2e7d32;">0</span>'}</td>
+                            <td><button onclick="setDetectiveQuestionCount('${p.playerId}')" style="background:#2e7d32;color:#fff;">应用</button></td>
+                        </tr>`;
+                    });
+                    html += '</table>';
+                }
+                html += '</div>';
+
+                html += '<div style="margin-top:15px; padding: 15px; background: #fff3e0; border: 1px solid #ffb74d; border-radius:6px;"><h4 style="margin-top:0; color:#e65100;">卧底任务监控</h4>';
+                const undercovers = Object.values(window._allPlayers || {}).filter(p => p.gameRole === 'Undercover');
+                if (undercovers.length === 0) {
+                    html += '<p style="color:#777;">当前没有卧底玩家</p>';
+                } else {
+                    undercovers.forEach(p => {
+                        html += `<b>玩家：${p.name} [${p.rosterTeam || '-'}队 / 当前${p.team || '-'}]</b><ul style="margin:8px 0 15px 0; font-size:14px; background:#fff; padding:10px 10px 10px 30px; border-radius:4px; border:1px solid #ddd;">`;
+                        if (p.taskGrid) {
+                            for (const [cellId, cell] of Object.entries(p.taskGrid)) {
+                                const statusBadge = getTaskStatusBadge(cell.status || 'Incomplete');
+                                const rowBg = cell.status === 'Complete' ? '#f1f8e9' : (cell.status === 'Abandoned' ? '#f5f5f5' : (cell.nValue && cell.nValue > 0 ? '#fff8e1' : '#fff'));
+                                html += `<li style="margin-bottom:6px;padding:6px 8px;border-radius:8px;background:${rowBg};border:1px solid #eee;"><b>${cellId}</b>: ${cell.levelLabel ? `【${cell.levelLabel}】` : ''} <span class="task-desc">${cell.description}</span> | 状态: ${statusBadge} | N=<b>${cell.nValue || 0}</b></li>`;
+                            }
+                        }
+                        html += `</ul>`;
+                    });
+                }
+                html += '</div>';
+            }
+            document.getElementById('extra-info').innerHTML = html;
+
+            updateButtonStates();
+        }
+
+        function updateButtonStates() {
+            if (window._currentGamePhase !== 'LiveGame' || window._currentPlayer?.gameRole !== 'Undercover') return;
+
+            const cellId = window.selectedCellId;
+            const cell = window._currentPlayer?.taskGrid?.[cellId];
+
+            const btnComplete = document.getElementById('btn-complete');
+            const btnUndo = document.getElementById('btn-undo');
+            const btnAbandon = document.getElementById('btn-abandon');
+            const btnHint = document.getElementById('btn-hint');
+            const btnReplace = document.getElementById('btn-replace');
+            const btnNAdd = document.getElementById('btn-n-add');
+            const btnNSub = document.getElementById('btn-n-sub');
+            const btnNSet = document.getElementById('btn-n-set');
+
+            if (!cell) {
+                [btnComplete, btnUndo, btnAbandon, btnHint, btnReplace, btnNAdd, btnNSub, btnNSet].forEach(b => b && (b.disabled = true));
+                return;
+            }
+
+            const isAbandoned = cell.status === 'Abandoned';
+            const isComplete = cell.status === 'Complete';
+            const isNTask = cell.nType !== 'none';
+            const abandonCount = window._currentPlayer.abandonCount || 0;
+            const replaceCount = window._currentPlayer.replaceCount || 0;
+
+            if (isAbandoned) {
+                [btnComplete, btnUndo, btnAbandon, btnHint, btnReplace, btnNAdd, btnNSub, btnNSet].forEach(b => b && (b.disabled = true));
+                return;
+            }
+
+            if (btnComplete) btnComplete.disabled = isNTask || isComplete;
+            if (btnUndo) btnUndo.disabled = cell.isReplaced || (!isComplete && (!cell.nValue || cell.nValue === 0));
+            if (btnAbandon) btnAbandon.disabled = isComplete || abandonCount >= 1;
+            if (btnHint) btnHint.disabled = isComplete || cell.isHintUsed;
+            if (btnReplace) btnReplace.disabled = isComplete || cell.isReplaced || replaceCount >= 1;
+
+            const canEditN = isNTask && !isComplete;
+            if (btnNAdd) btnNAdd.disabled = !canEditN || cell.nValue >= (cell.nMax || 99);
+            if (btnNSub) btnNSub.disabled = !canEditN || cell.nValue <= 0;
+            if (btnNSet) btnNSet.disabled = !canEditN;
+        }
+
+        // ===== 全局交互函数 =====
+        function login() {
+            const name = document.getElementById('name-input').value.trim();
+            const extra = document.getElementById('extra-input').value.trim();
+            if (!name && !extra) return alert('请输入昵称，或输入绑定码恢复身份');
+            ws.emit('LOGIN', { name, extraParam: extra || undefined });
+        }
+        function resume() { login(); }
+        function advancePhase() {
+            if (window._currentGamePhase === 'Scoreboard') {
+                const hasScores = Object.values(window._allPlayers || {}).some(p => p.finalScore !== undefined);
+                if (!hasScores) {
+                    const ok = confirm('⚠️ 警告：当前尚未导入 CSV 进行计分，确定要清空现场退回大厅吗？');
+                    if (!ok) return;
+                }
+            }
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADVANCE_PHASE' });
+        }
+        function terminateGame() {
+            const text = prompt('危险操作：这会强制终止本局、踢出所有玩家、清空房间。所有人必须重新进入。请输入 TERMINATE 确认：');
+            if (text !== 'TERMINATE') return alert('已取消终止操作');
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
+        }
+        function doRoll() { ws.emit('ROLL', { playerId: myPlayerId, value: Math.floor(Math.random() * 100) + 1 }); }
+        function pick(pickedId) { ws.emit('DRAFT_PICK', { playerId: myPlayerId, pickedId }); }
+        function rerandomCaptain(team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RERANDOM_CAPTAIN', payload: { team } }); }
+        function setCaptain(team) { const select = document.getElementById('cap' + team + '-select'); if (select && select.value) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_CAPTAIN', payload: { team, playerId: select.value } }); }
+        function adminAssignTeam(playerId, team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ASSIGN_ROSTER_TEAM', payload: { playerId, team } }); }
+        function kickPlayer(playerId, name) { if (confirm('确定要踢出玩家：' + name + '？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
+        function voteMap(map) { ws.emit('VOTE', { playerId: myPlayerId, map }); }
+        function adminBanMap(map) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADMIN_BAN_MAP', payload: { map } }); }
+        function selectSide(side) { ws.emit('SIDE_PICK', { playerId: myPlayerId, side }); }
+        function readyPlayer() { ws.emit('PLAYER_READY', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
+        function updateRoleCounts() { const u = parseInt(document.getElementById('undercover-count').value) || 0; const d = parseInt(document.getElementById('detective-count').value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_ROLES_COUNT', payload: { undercoverCount: u, detectiveCount: d } }); }
+        function setPlayerRole(playerId) { const sel = document.getElementById('role-select-' + playerId); if (sel) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_PLAYER_ROLE', payload: { playerId, gameRole: sel.value } }); }
+        function randomRemainingRoles() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RANDOM_REMAINING_ROLES' }); }
+        function releaseRoles() { if (confirm('确认现在向所有玩家发放身份？发放后玩家只能看到自己的身份。')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RELEASE_ROLES' }); }
+        function updateLiveData() { const scoreA = parseInt(document.getElementById('admin-scoreA')?.value) || 0; const scoreB = parseInt(document.getElementById('admin-scoreB')?.value) || 0; const scoreCT = parseInt(document.getElementById('admin-scoreCT')?.value) || 0; const scoreT = parseInt(document.getElementById('admin-scoreT')?.value) || 0; const round = parseInt(document.getElementById('admin-round')?.value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_LIVE_DATA', payload: { scoreA, scoreB, scoreCT, scoreT, round } }); }
+        function resetFormalMatchCounters() { if (confirm('确认将当前插件回合视为正式第 1 回合，并清零当前正式比分/战绩？请只在正式开赛第一回合使用。')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RESET_FORMAL_MATCH_COUNTERS' }); }
+        function setDetectiveQuestionCount(targetId) { const el = document.getElementById('dq-' + targetId); const count = Math.max(0, Math.min(2, parseInt(el?.value || '0') || 0)); ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_DETECTIVE_QUESTION_COUNT', payload: { playerId: targetId, count } }); }
+        function accuse(targetId, type) { ws.emit('ACCUSE', { playerId: myPlayerId, targetId, type }); }
+        function uploadCsv() {
+            const fileInput = document.getElementById('csv-file-input');
+            const file = fileInput?.files?.[0];
+            if (!file) return alert('请先选择一份合法的 MatchZy CSV 文件！');
+            const formData = new FormData();
+            formData.append('csvfile', file);
+            fetch('/api/upload-csv', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`导入解析大获成功！已精确匹配 ${data.matchedPlayers} 名场上玩家数据。`);
+                        if (data.report) {
+                            const blob = new Blob([data.report], { type: 'text/plain;charset=utf-8' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url; a.download = '草人杯卧底深度任务报告.txt'; a.click();
+                            URL.revokeObjectURL(url);
+                        }
+                    } else {
+                        alert('解析失败：' + (data.error || '未知错误'));
+                    }
+                }).catch(err => alert('服务器通信失败：' + err));
+        }
+
+        function confirmQuit() { document.getElementById('quit-modal').style.display = 'block'; }
+        function closeQuit() { document.getElementById('quit-modal').style.display = 'none'; }
+        function doQuit() { const name = document.getElementById('quit-name-input').value.trim(); if (!name) return alert('请输入昵称确认'); ws.emit('PLAYER_QUIT', { playerId: myPlayerId, confirmName: name }); document.getElementById('quit-modal').style.display = 'none'; }
+
+        window.handleCellClick = function (cellId) {
+            document.querySelectorAll('.task-cell').forEach(el => el.classList.remove('selected'));
+            document.getElementById('cell-' + cellId)?.classList.add('selected');
+            document.getElementById('selected-cell').textContent = `【格子 ${cellId}】`;
+            window.selectedCellId = cellId;
+            updateButtonStates();
+        };
+        window.markComplete = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'MARK_COMPLETE', cellId }); };
+        window.undoComplete = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'UNDO_COMPLETE', cellId }); };
+        window.abandonTask = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'ABANDON', cellId }); };
+        window.requestHint = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REQUEST_HINT', cellId }); };
+        window.replaceTask = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REPLACE', cellId }); };
+        window.changeN = function (action) {
+            const cellId = window.selectedCellId;
+            if (!cellId) return alert('请先点击一个带N的格子');
+            let nValue = undefined;
+            if (action === 'N_SET') {
+                const n = prompt('请输入准确的 N 值 (整数):');
+                if (n === null) return;
+                nValue = parseInt(n);
+                if (isNaN(nValue)) return alert('请输入有效数字');
+            }
+            ws.emit('TASK_ACTION', { playerId: myPlayerId, action: action, cellId, nValue });
+        };
+
+        // ========== 真·可视化模板编辑器相关 ==========
+        function openTemplateModal() {
+            if (!window._currentTaskTemplate) return alert("模板尚未加载完成，请稍后再试...");
+            window._editingTemplate = JSON.parse(JSON.stringify(window._currentTaskTemplate));
+            document.getElementById('template-json-textarea').value = JSON.stringify(window._editingTemplate, null, 4);
+
+            // 默认选中 A1
+            switchTemplateTab('visual');
+            document.getElementById('template-modal').style.display = 'block';
+            selectTplCell('A1');
+        }
+
+        function closeTemplateModal() {
+            document.getElementById('template-modal').style.display = 'none';
+        }
+
+        function switchTemplateTab(tab) {
+            if (tab === 'visual') {
+                document.getElementById('template-visual-tab').style.display = 'block';
+                document.getElementById('template-json-tab').style.display = 'none';
+                document.getElementById('btn-tab-visual').style.background = '#e0e0e0';
+                document.getElementById('btn-tab-json').style.background = '#fff';
+            } else {
+                document.getElementById('template-visual-tab').style.display = 'none';
+                document.getElementById('template-json-tab').style.display = 'block';
+                document.getElementById('template-json-textarea').value = JSON.stringify(window._editingTemplate, null, 4);
+                document.getElementById('btn-tab-visual').style.background = '#fff';
+                document.getElementById('btn-tab-json').style.background = '#e0e0e0';
+            }
+        }
+
+        // 渲染编辑器左侧九宫格
+        function renderTplPreview() {
+            if (!window._editingTemplate) return;
+            const container = document.getElementById('tpl-preview-grid');
+            let html = '';
+            ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'].forEach(id => {
+                const cell = window._editingTemplate.cells[id] || {};
+                const isSelected = window._editingCellId === id;
+                const border = isSelected ? 'border: 3px solid #f44336; transform:scale(1.05); z-index:10;' : 'border: 2px solid #ccc;';
+
+                let titleHtml = '';
+                if (cell.levelLabel) {
+                    const color = getLevelColor(cell.levelLabel);
+                    titleHtml = `<div style="color:${color}; font-weight:900; font-size:16px; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${cell.levelLabel}】</div>`;
+                }
+                const nInfo = (cell.nType && cell.nType !== 'none') ? `<div style="color:#d32f2f; font-size:14px; margin-top:8px; font-weight:bold;">[带N任务体系]</div>` : '';
+
+                // 由于任务描述含有HTML标签，直接渲染
+                html += `<div class="task-cell" style="${border} position:relative;" onclick="selectTplCell('${id}')">
+                                ${titleHtml}
+                                <div class="task-desc" style="flex:1; display:flex; align-items:center;"><div>${cell.description || ''}</div></div>
+                                ${nInfo}
+                                <div style="position:absolute; top:2px; left:5px; font-size:12px; color:#aaa; font-weight:bold;">${id}</div>
+                             </div>`;
+            });
+            container.innerHTML = html;
+
+            const rep = window._editingTemplate.replacementTask || {};
+            const isRepSelected = window._editingCellId === 'rep';
+            document.getElementById('tpl-preview-replacement').style.borderColor = isRepSelected ? '#f44336' : '#aaa';
+            document.getElementById('tpl-preview-replacement').style.background = isRepSelected ? '#ffebee' : '#fff';
+            document.getElementById('tpl-prev-rep-desc').innerHTML = `<span class="task-desc">${rep.description || ''}</span> <span style="color:#888;">(等级 ${rep.level || 4})</span>`;
+        }
+
+        function setTplSelectValue(id, value, fallback) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.value = String(value ?? fallback ?? '');
+            if (el.value === '') el.value = String(fallback ?? '');
+        }
+
+        function syncTplEditorVisibility() {
+            const id = window._editingCellId;
+            const type = document.getElementById('tpl-edit-ntype')?.value || 'none';
+            const isReplacement = id === 'rep';
+            const isSimpleN = type === '3N_multi' || type === '3N_single';
+            const isStreakN = type === '5_4N_single';
+
+            document.getElementById('tpl-edit-basic-row').style.display = 'flex';
+            document.getElementById('tpl-edit-ntype').parentElement.style.display = isReplacement ? 'none' : 'block';
+            document.getElementById('tpl-edit-level-group').style.display = isStreakN ? 'none' : 'block';
+            document.getElementById('tpl-edit-n-simple').style.display = (!isReplacement && isSimpleN) ? 'block' : 'none';
+            document.getElementById('tpl-edit-nfields').style.display = (!isReplacement && isStreakN) ? 'block' : 'none';
+        }
+
+        // 选择格子以编辑
+        window.selectTplCell = function (id) {
+            window._editingCellId = id;
+            renderTplPreview();
+
+            document.getElementById('tpl-edit-fields').style.display = 'block';
+
+            if (id === 'rep') {
+                const rep = window._editingTemplate.replacementTask;
+                document.getElementById('tpl-edit-title').innerHTML = `🔄 正在配置：<b style="color:#7030a0;">备用任务</b>`;
+                document.getElementById('tpl-edit-desc').value = rep.description || '';
+                setTplSelectValue('tpl-edit-level', rep.level || 4, 4);
+                setTplSelectValue('tpl-edit-ntype', 'none', 'none');
+                document.getElementById('tpl-edit-nmax').value = '';
+                document.getElementById('tpl-edit-baseLevel').value = '';
+                document.getElementById('tpl-edit-extraLevel').value = '';
+                document.getElementById('tpl-edit-streak-nmax').value = '';
+            } else {
+                const cell = window._editingTemplate.cells[id];
+                document.getElementById('tpl-edit-title').innerHTML = `📝 正在编辑：<b style="color:#1976d2;">格子 ${id}</b>`;
+                document.getElementById('tpl-edit-desc').value = cell.description || '';
+                const type = cell.nType || 'none';
+                setTplSelectValue('tpl-edit-ntype', type, 'none');
+                setTplSelectValue('tpl-edit-level', cell.level || 1, 1);
+                document.getElementById('tpl-edit-nmax').value = cell.nMax || cell.nValue || 3;
+                document.getElementById('tpl-edit-baseLevel').value = cell.baseLevel || cell.level || 5;
+                document.getElementById('tpl-edit-extraLevel').value = cell.extraLevel || 4;
+                document.getElementById('tpl-edit-streak-nmax').value = cell.nMax || cell.nValue || 3;
+            }
+            syncTplEditorVisibility();
+        };
+
+        // 处理编辑框输入
+        window.handleTplInput = function () {
+            if (!window._editingCellId) return;
+            const id = window._editingCellId;
+
+            if (id === 'rep') {
+                window._editingTemplate.replacementTask.description = document.getElementById('tpl-edit-desc').value;
+                window._editingTemplate.replacementTask.level = parseInt(document.getElementById('tpl-edit-level').value) || 4;
+            } else {
+                const cell = window._editingTemplate.cells[id];
+                const type = document.getElementById('tpl-edit-ntype').value;
+                const level = parseInt(document.getElementById('tpl-edit-level').value) || 1;
+                cell.description = document.getElementById('tpl-edit-desc').value;
+                cell.nType = type;
+
+                if (type === 'none') {
+                    cell.level = level;
+                    cell.levelLabel = String(level);
+                    cell.nMin = undefined;
+                    cell.nMax = undefined;
+                    cell.baseLevel = undefined;
+                    cell.extraLevel = undefined;
+                } else if (type === '3N_multi' || type === '3N_single') {
+                    const maxN = parseInt(document.getElementById('tpl-edit-nmax').value) || 3;
+                    cell.level = level;
+                    cell.levelLabel = `${level}N`;
+                    cell.nMin = 1;
+                    cell.nMax = maxN;
+                    cell.baseLevel = undefined;
+                    cell.extraLevel = undefined;
+                } else if (type === '5_4N_single') {
+                    const base = parseInt(document.getElementById('tpl-edit-baseLevel').value) || 5;
+                    const extra = parseInt(document.getElementById('tpl-edit-extraLevel').value) || 4;
+                    const maxN = parseInt(document.getElementById('tpl-edit-streak-nmax').value) || 3;
+                    cell.level = base;
+                    cell.levelLabel = `${base}/${extra}N`;
+                    cell.nMin = 1;
+                    cell.nMax = maxN;
+                    cell.baseLevel = base;
+                    cell.extraLevel = extra;
+                }
+                syncTplEditorVisibility();
+            }
+            renderTplPreview(); // 实时更新预览
+        };
+
+        // 注入富文本样式工具
+        window.applyTplFormat = function (type, valStr) {
+            const ta = document.getElementById('tpl-edit-desc');
+            const start = ta.selectionStart;
+            const end = ta.selectionEnd;
+            const text = ta.value;
+            const selectedText = text.substring(start, end) || '替换文字';
+
+            let openTag = '', closeTag = '';
+            if (type === 'b') { openTag = '<b>'; closeTag = '</b>'; }
+            else if (type === 'u') { openTag = '<u>'; closeTag = '</u>'; }
+            else if (type === 'color') { openTag = `<span style="color:${valStr};">`; closeTag = '</span>'; }
+
+            const newText = text.substring(0, start) + openTag + selectedText + closeTag + text.substring(end);
+            ta.value = newText;
+
+            // 恢复焦点及光标位置
+            ta.focus();
+            ta.setSelectionRange(start + openTag.length, start + openTag.length + selectedText.length);
+
+            handleTplInput(); // 触发保存与预览更新
+        };
+
+        function getTemplateExportTarget() {
+            return window._editingTemplate || window._currentTaskTemplate;
+        }
+
+        function downloadTemplateJson() {
+            const data = getTemplateExportTarget();
+            if (!data) return alert('当前没有可导出的模板。');
+            const blob = new Blob([JSON.stringify(data, null, 4)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const now = new Date();
+            const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+            a.href = url;
+            a.download = `caoren-task-template_${stamp}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        async function copyTemplateJson() {
+            const data = getTemplateExportTarget();
+            if (!data) return alert('当前没有可复制的模板。');
+            const json = JSON.stringify(data, null, 4);
+            try {
+                await navigator.clipboard.writeText(json);
+                alert('模板 JSON 已复制到剪贴板。');
+            } catch (err) {
+                document.getElementById('template-json-textarea').value = json;
+                alert('浏览器未授权剪贴板，已将 JSON 填入文本框，请手动复制。');
+            }
+        }
+
+        function saveTemplateToLocal() {
+            const data = getTemplateExportTarget();
+            if (!data) return alert('当前没有可保存的模板。');
+            localStorage.setItem('caorenCupTaskTemplateBackup', JSON.stringify(data));
+            localStorage.setItem('caorenCupTaskTemplateBackupAt', new Date().toLocaleString());
+            alert('模板已保存到当前浏览器本地。');
+        }
+
+        function loadTemplateFromLocal() {
+            const raw = localStorage.getItem('caorenCupTaskTemplateBackup');
+            if (!raw) return alert('当前浏览器没有本地备份。');
+            try {
+                const parsed = JSON.parse(raw);
+                window._editingTemplate = parsed;
+                document.getElementById('template-json-textarea').value = JSON.stringify(parsed, null, 4);
+                if (document.getElementById('template-visual-tab').style.display !== 'none') {
+                    if (!window._editingCellId) window._editingCellId = 'A1';
+                    renderTplPreview();
+                    selectTplCell(window._editingCellId || 'A1');
+                }
+                const savedAt = localStorage.getItem('caorenCupTaskTemplateBackupAt') || '未知时间';
+                alert('已读取本地模板备份。保存时间：' + savedAt);
+            } catch (e) {
+                alert('本地备份读取失败：' + e.message);
+            }
+        }
+
+        function saveTemplate() {
+            if (!confirm("确定要将当前模板应用到服务器吗？如果已有玩家正在查看任务面板，界面会立即刷新。")) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_TASK_TEMPLATE', payload: { taskTemplate: window._editingTemplate } });
+            closeTemplateModal();
+        }
+
+        function saveTemplateFromJson() {
+            try {
+                const text = document.getElementById('template-json-textarea').value;
+                const parsed = JSON.parse(text);
+                if (!parsed.cells || !parsed.lines || !parsed.replacementTask) throw new Error("JSON 结构不完整：缺少 cells / lines / replacementTask");
+                if (!confirm("JSON 校验通过，确定要用这份内容覆盖当前模板吗？")) return;
+                ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_TASK_TEMPLATE', payload: { taskTemplate: parsed } });
+                closeTemplateModal();
+            } catch (e) {
+                alert("JSON 语法在哭泣，请仔细排查标点符号与格式！\n\n异常回溯：\n" + e.message);
+            }
+        }
+
+        // 须知弹窗 (省略不重要的文案，保持原样逻辑即可)
+        let rulesCurrentPage = 0;
+        function showRules() {
+            const identityText = document.getElementById('my-identity').textContent;
+            let role = 'Soldier';
+            if (identityText.includes('Undercover')) role = 'Undercover';
+            else if (identityText.includes('Detective')) role = 'Detective';
+            let rules = [];
+
+            if (role === 'Undercover') {
+                rules = [
+                    '<b style="color:#d32f2f;font-size:20px;">【卧底说明 1/2】</b><br/><br/>' +
+                    '1. 目标：在尽量不暴露身份的前提下完成个人任务，并尽可能影响本队表现。<br/>' +
+                    '2. 完成任务格可获得分数（分值会随任务等级变化）；达成横、竖、斜三连线时会有额外奖励。<br/>' +
+                    '3. 格子状态说明（最新状态显示在最外层）：<br/>' +
+                    ' - <b style="color:green">绿色包边</b>：已完成 / N值已达成<br/>' +
+                    ' - <b style="color:orange">橙色包边</b>：N任务正在推进(进度未满)<br/>' +
+                    ' - <b style="color:blue">蓝色包边</b>：已使用提示<br/>' +
+                    ' - <b style="color:purple">紫色包边</b>：已使用替换任务<br/>' +
+                    ' - 灰暗色调：该任务已放弃',
+                    '<b style="color:#d32f2f;font-size:20px;">【卧底说明 2/2】</b><br/><br/>' +
+                    '4. N 类任务说明：<br/>' +
+                    ' - [多回合累计]：在多回合内累计完成即可。<br/>' +
+                    ' - [单回合达成]：必须在同一回合内完成。<br/>' +
+                    '5. 替换任务说明：<br/>' +
+                    '你有一次机会可以使用备用任务替换当前任务（仅限符合等级条件的格子），替换后无法撤销。'
+                ];
+            } else if (role === 'Detective') {
+                rules = [
+                    '<b style="color:#1976d2;font-size:20px;">【侦探说明】</b><br/><br/>' +
+                    '1. 你的职责是在关键阶段识别双方队伍中的卧底。<br/>' +
+                    '2. 在指定阶段，你有 45 秒时间向裁判提出最多 2 个问题。<br/>' +
+                    '3. 如果裁判回答“是”或“部分是”，问答会立即结束。<br/>' +
+                    '4. 指认任务时，只要指出核心行为方向即可，不需要完全还原数字细节。'
+                ];
+            } else {
+                rules = [
+                    '<b style="color:#388e3c;font-size:20px;">【士兵说明】</b><br/><br/>' +
+                    '1. 你的主要职责是正常比赛并帮助队伍取胜。<br/>' +
+                    '2. 回合胜利是你的首要目标。<br/>' +
+                    '3. 比赛结束后，你可以根据观察结果参与指认。'
+                ];
+            }
+
+            rulesCurrentPage = 0;
+            const content = document.getElementById('rules-content');
+            const nav = document.getElementById('rules-navigation');
+            const readyBtn = document.getElementById('rules-ready');
+            const renderPage = function () {
+                content.innerHTML = '<div style="font-size:16px; line-height:1.6;">' + rules[rulesCurrentPage] + '</div>';
+                nav.innerHTML = '';
+                if (rulesCurrentPage > 0) nav.innerHTML += '<button onclick="changeRulesPage(-1)" style="font-size:16px;">⬅️ 翻回上一页</button> ';
+                if (rulesCurrentPage < rules.length - 1) nav.innerHTML += '<button onclick="changeRulesPage(1)" style="font-size:16px; background:#e0e0e0;">下一页 ➡️</button>';
+                else readyBtn.style.display = 'block';
+            };
+            window.changeRulesPage = function (delta) {
+                rulesCurrentPage += delta;
+                renderPage();
+                if (rulesCurrentPage < rules.length - 1) readyBtn.style.display = 'none';
+            };
+            renderPage();
+            document.getElementById('rules-modal').style.display = 'block';
+        }
+        function closeRules() { document.getElementById('rules-modal').style.display = 'none'; }
+    </script>
+    </div>
+</body>
+</html>

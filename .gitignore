@@ -1,0 +1,53 @@
+# IDE / editor
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# .NET build outputs
+bin/
+obj/
+*.dll
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+build/
+coverage/
+*.out
+
+# Archives / backups
+*.zip
+*.rar
+*.7z
+*.bak
+*.backup
+backup_*/
+backup-*/
+*_backup*/
+*.bak_*
+*.broken*
+
+# Local config / secrets
+.env
+.env.*
+!.env.example
+caoren_config.json
+ecosystem.config.cjs
+!ecosystem.config.cjs.example
+
+# OS files
+.DS_Store
+Thumbs.db

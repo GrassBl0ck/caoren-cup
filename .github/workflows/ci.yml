@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  web-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web-command-center/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web-command-center
+        run: npm ci
+
+      - name: Typecheck web
+        working-directory: web-command-center
+        run: npm run typecheck
+
+  dotnet-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore game plugin
+        working-directory: game-plugin
+        run: dotnet restore
+
+      - name: Build game plugin
+        working-directory: game-plugin
+        run: dotnet build -c Release --no-restore
+
+      - name: Restore bridge plugin
+        working-directory: web-command-center/CaorenCupPlugin
+        run: dotnet restore
+
+      - name: Build bridge plugin
+        working-directory: web-command-center/CaorenCupPlugin
+        run: dotnet build -c Release --no-restore
