@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
 
       - name: Install web dependencies
         working-directory: web-command-center
-        run: npm ci
+        run: npm install --no-audit
 
       - name: Typecheck web
         working-directory: web-command-center
@@ -50,3 +50,4 @@ jobs:
       - name: Build bridge plugin
         working-directory: web-command-center/CaorenCupPlugin
         run: dotnet build -c Release --no-restore
+
