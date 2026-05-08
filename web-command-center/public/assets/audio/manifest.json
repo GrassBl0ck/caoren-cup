@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "description": "Caoren Cup 网页端音乐/音效清单。你只需要把自己的音频文件放到对应目录，并修改这里的 src。",
+  "defaults": {
+    "masterVolume": 0.75,
+    "bgmVolume": 0.42,
+    "sfxVolume": 0.85,
+    "phaseBgm": {
+      "PlayerDraft": "draft_tension_01",
+      "MapBan": "map_bp_01",
+      "SidePick": "side_pick_01"
+    }
+  },
+  "musicByPhase": {
+    "PlayerDraft": [
+      {
+        "id": "draft_tension_01",
+        "title": "人员选择 BGM 01",
+        "src": "/assets/audio/music/player-draft-01.mp3",
+        "loop": true
+      },
+      {
+        "id": "draft_tension_02",
+        "title": "人员选择 BGM 02",
+        "src": "/assets/audio/music/player-draft-02.mp3",
+        "loop": true
+      }
+    ],
+    "MapBan": [
+      {
+        "id": "map_bp_01",
+        "title": "地图 BP BGM 01",
+        "src": "/assets/audio/music/map-ban-01.mp3",
+        "loop": true
+      },
+      {
+        "id": "map_bp_02",
+        "title": "地图 BP BGM 02",
+        "src": "/assets/audio/music/map-ban-02.mp3",
+        "loop": true
+      }
+    ],
+    "SidePick": [
+      {
+        "id": "side_pick_01",
+        "title": "最终选边 BGM 01",
+        "src": "/assets/audio/music/side-pick-01.mp3",
+        "loop": true
+      },
+      {
+        "id": "side_pick_02",
+        "title": "最终选边 BGM 02",
+        "src": "/assets/audio/music/side-pick-02.mp3",
+        "loop": true
+      }
+    ]
+  },
+  "sfx": {
+    "phaseChange": {
+      "title": "阶段切换",
+      "src": "/assets/audio/sfx/phase-change.mp3"
+    },
+    "draftPick": {
+      "title": "完成一次选人",
+      "src": "/assets/audio/sfx/draft-pick.mp3"
+    },
+    "mapBan": {
+      "title": "完成一次地图 Ban",
+      "src": "/assets/audio/sfx/map-ban.mp3"
+    },
+    "sidePick": {
+      "title": "完成最终选边",
+      "src": "/assets/audio/sfx/side-pick.mp3"
+    },
+    "roleReveal": {
+      "title": "身份公布",
+      "src": "/assets/audio/sfx/role-reveal.mp3"
+    },
+    "matchEnd": {
+      "title": "比赛结束",
+      "src": "/assets/audio/sfx/match-end.mp3"
+    },
+    "notification": {
+      "title": "普通提示",
+      "src": "/assets/audio/sfx/notification.mp3"
+    }
+  }
+}

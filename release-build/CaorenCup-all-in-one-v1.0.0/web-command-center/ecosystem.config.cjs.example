@@ -1,0 +1,20 @@
+module.exports = {
+  apps: [
+    {
+      name: "caoren-cup-web",
+      cwd: "/opt/caoren-cup-web",
+      script: "npm",
+      args: "run start",
+      env: {
+        NODE_ENV: "production",
+        PORT: "3000",
+        ADMIN_PASSWORD: "CHANGE_ME_ADMIN_PASSWORD",
+        PLUGIN_TOKEN: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET",
+        DRAFT_PICK_SECONDS: "20",
+        MAP_BAN_VOTE_SECONDS: "20",
+        SIDE_PICK_VOTE_SECONDS: "15",
+        MAP_BAN_COUNT_PER_TURN: "1"
+      }
+    }
+  ]
+};

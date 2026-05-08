@@ -122,19 +122,7 @@ const clearAllFlowTimers = () => { clearDraftPickTimer(); clearMapVoteTimer(); c
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static('public', {
-    setHeaders: (res, filePath) => {
-        const normalizedFilePath = filePath.replace(/\\/g, '/');
-
-        if (normalizedFilePath.endsWith('.html')) {
-            res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        }
-
-        if (normalizedFilePath.includes('/assets/audio/')) {
-            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        } else {
-            res.setHeader('Cache-Control', 'no-cache');
-        }
-    }
+    setHeaders: (res) => { res.setHeader('Content-Type', 'text/html; charset=utf-8'); }
 }));
 const upload = multer({ storage: multer.memoryStorage() });
 
