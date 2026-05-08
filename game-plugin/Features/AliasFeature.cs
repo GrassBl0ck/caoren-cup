@@ -1,4 +1,4 @@
-ï»¿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -18,22 +18,22 @@ public class AliasFeature : ICaorenFeature
     {
         _plugin = plugin;
 
-        // åŠ¨æ€æ³¨å†Œé…ç½®æ–‡ä»¶é‡Œçš„æ‰€æœ‰æŒ‡ä»¤
+        // ¶¯Ì¬×¢²áÅäÖÃÎÄ¼şÀïµÄËùÓĞÖ¸Áî
         foreach (var kvp in _settings.CommandMap)
         {
-            // === å…³é”®ï¼šè§£å†³é—­åŒ…é™·é˜± ===
+            // === ¹Ø¼ü£º½â¾ö±Õ°üÏİÚå ===
             string currentChatCmd = kvp.Key;
             string currentConsoleCmd = kvp.Value;
 
-            plugin.AddCommand(currentChatCmd, $"æ‰§è¡Œ: {currentConsoleCmd}", (player, info) =>
+            plugin.AddCommand(currentChatCmd, $"Ö´ĞĞ: {currentConsoleCmd}", (player, info) =>
             {
                 ExecuteAlias(player, currentChatCmd, currentConsoleCmd);
             });
         }
 
-        // æ³¨å†Œè°ƒè¯•æŒ‡ä»¤
-        plugin.AddCommand("alias_list", "åˆ—å‡ºå½“å‰æ‰€æœ‰åˆ«å", OnCommandList);
-        plugin.AddCommand("alias_reload", "æç¤ºé‡è½½æ–¹æ³•", OnCommandReload);
+        // ×¢²áµ÷ÊÔÖ¸Áî
+        plugin.AddCommand("alias_list", "ÁĞ³öµ±Ç°ËùÓĞ±ğÃû", OnCommandList);
+        plugin.AddCommand("alias_reload", "ÌáÊ¾ÖØÔØ·½·¨", OnCommandReload);
     }
 
     public void OnConfigParsed(CaorenCup.CaorenCupConfig config)
@@ -51,38 +51,38 @@ public class AliasFeature : ICaorenFeature
 
     public string? GetPublicConfigInfo() => null;
 
-    public string GetHelpEntry() => $" {ChatColors.Green}/alias_list{ChatColors.Default} æŸ¥çœ‹å·²åŠ è½½çš„å¿«æ·æŒ‡ä»¤";
+    public string GetHelpEntry() => $" {ChatColors.Green}/alias_list{ChatColors.Default} ²é¿´ÒÑ¼ÓÔØµÄ¿ì½İÖ¸Áî";
 
-    public string GetStatusInfo() => $" {ChatColors.Olive}Alias{ChatColors.Default}: {_settings.Enabled} | åŠ è½½æ•°: {_settings.CommandMap.Count}";
+    public string GetStatusInfo() => $" {ChatColors.Olive}Alias{ChatColors.Default}: {_settings.Enabled} | ¼ÓÔØÊı: {_settings.CommandMap.Count}";
 
     public string GetFeatureDescription()
     {
-        return " [æŒ‡ä»¤åˆ«å] è‡ªå®šä¹‰å¿«æ·æŒ‡ä»¤ç³»ç»Ÿã€‚\n" +
-               " å…è®¸é€šè¿‡é…ç½®æ–‡ä»¶å°†å¤æ‚çš„æ§åˆ¶å°æŒ‡ä»¤æ˜ å°„ä¸ºç®€å•çš„èŠå¤©å‘½ä»¤ã€‚";
+        return " [Ö¸Áî±ğÃû] ×Ô¶¨Òå¿ì½İÖ¸ÁîÏµÍ³¡£\n" +
+               " ÔÊĞíÍ¨¹ıÅäÖÃÎÄ¼ş½«¸´ÔÓµÄ¿ØÖÆÌ¨Ö¸ÁîÓ³ÉäÎª¼òµ¥µÄÁÄÌìÃüÁî¡£";
     }
 
-    // --- æ ¸å¿ƒé€»è¾‘ ---
+    // --- ºËĞÄÂß¼­ ---
 
     private void OnCommandList(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null) return;
 
-        CaorenCupUtils.PrintToChat(player, $"=== å½“å‰åŠ è½½çš„åˆ«å ({_settings.CommandMap.Count}ä¸ª) ===");
+        CaorenCupUtils.PrintToChat(player, $"=== µ±Ç°¼ÓÔØµÄ±ğÃû ({_settings.CommandMap.Count}¸ö) ===");
 
         if (!_settings.Enabled)
         {
-            CaorenCupUtils.PrintToChat(player, $"{ChatColors.Red}è­¦å‘Šï¼šAlias æ¨¡å—å½“å‰å¤„äºå…³é—­çŠ¶æ€ï¼");
+            CaorenCupUtils.PrintToChat(player, $"{ChatColors.Red}¾¯¸æ£ºAlias Ä£¿éµ±Ç°´¦ÓÚ¹Ø±Õ×´Ì¬£¡");
         }
 
         foreach (var kvp in _settings.CommandMap)
         {
-            // æ‰“å°æ ¼å¼ï¼š p1 -> mp_pause_match...
+            // ´òÓ¡¸ñÊ½£º p1 -> mp_pause_match...
             CaorenCupUtils.PrintToChat(player, $" {ChatColors.Green}/{kvp.Key}{ChatColors.Default} -> {kvp.Value}");
         }
 
         if (_settings.CommandMap.Count == 0)
         {
-            CaorenCupUtils.PrintToChat(player, $"{ChatColors.Red}åˆ—è¡¨ä¸ºç©ºï¼è¯·æ£€æŸ¥ CaorenCup.json çš„ Alias.CommandMap é…ç½®ã€‚");
+            CaorenCupUtils.PrintToChat(player, $"{ChatColors.Red}ÁĞ±íÎª¿Õ£¡Çë¼ì²é CaorenCup.json µÄ Alias.CommandMap ÅäÖÃ¡£");
         }
     }
 
@@ -90,31 +90,30 @@ public class AliasFeature : ICaorenFeature
     {
         if (!_settings.Enabled)
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "Alias æ¨¡å—å·²ç¦ç”¨ã€‚");
+            if (player != null) CaorenCupUtils.PrintToChat(player, "Alias Ä£¿éÒÑ½ûÓÃ¡£");
             return;
         }
 
-        // æƒé™æ£€æŸ¥
+        // È¨ÏŞ¼ì²é
         if (player != null && !string.IsNullOrEmpty(_settings.Permission))
         {
             if (!AdminManager.PlayerHasPermissions(player, _settings.Permission))
             {
-                CaorenCupUtils.PrintToChat(player, $"{ChatColors.Red}ä½ æ²¡æœ‰æƒé™æ‰§è¡Œæ­¤æŒ‡ä»¤ã€‚");
+                CaorenCupUtils.PrintToChat(player, $"{ChatColors.Red}ÄãÃ»ÓĞÈ¨ÏŞÖ´ĞĞ´ËÖ¸Áî¡£");
                 return;
             }
         }
-        w
-        // æ‰§è¡Œ
+        // Ö´ĞĞ
         Server.ExecuteCommand(consoleCmd);
 
         if (player != null)
         {
-            CaorenCupUtils.PrintToChat(player, $"å·²æ‰§è¡Œ: {ChatColors.Green}{chatKey}");
+            CaorenCupUtils.PrintToChat(player, $"ÒÑÖ´ĞĞ: {ChatColors.Green}{chatKey}");
         }
     }
 
     private void OnCommandReload(CCSPlayerController? player, CommandInfo info)
     {
-        if (player != null) CaorenCupUtils.PrintToChat(player, "ä¿®æ”¹ json åï¼Œè¯·é‡å¯æœåŠ¡å™¨ä»¥åŠ è½½æ–°æŒ‡ä»¤ã€‚");
+        if (player != null) CaorenCupUtils.PrintToChat(player, "ĞŞ¸Ä json ºó£¬ÇëÖØÆô·şÎñÆ÷ÒÔ¼ÓÔØĞÂÖ¸Áî¡£");
     }
 }
