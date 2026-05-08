@@ -1,30 +1,37 @@
-# Caoren Cup
+﻿# Caoren Cup / 草人杯 CS2 自定义娱乐赛事系统
 
-草人杯 CS2 自定义赛事系统。
+Caoren Cup 是一个面向 CS2 自定义娱乐赛的赛事系统。
 
-本项目包含三部分：
+项目包含三部分：
 
 1. **CS2 娱乐玩法插件**
-2. **网页赛事指挥台**
+2. **网页赛事指挥台 / 网页端**
 3. **CS2 与网页后端通信的桥接插件**
 
 适用于 CS2 自定义娱乐赛、队长选人、地图 Ban/Pick、阵营选择、卧底玩法、赛后指认、战绩同步和积分结算等场景。
 
 ---
 
+## 项目仓库
 
-## 项目组成
+```text
+https://github.com/GrassBl0ck/caoren-cup
+```
+
+---
+
+## 项目结构
 
 ```text
 caoren-cup/
 ├─ game-plugin/
-│  └─ CS2 娱乐玩法插件
+│  └─ CS2 娱乐玩法插件本体
 │
 ├─ web-command-center/
 │  ├─ src/
 │  ├─ public/
 │  └─ CaorenCupPlugin/
-│     └─ CS2 网页桥接插件
+│     └─ CS2 网页端服务器插件 / 网页桥接插件
 │
 ├─ docs/
 │  └─ 项目文档
@@ -40,9 +47,9 @@ caoren-cup/
 
 ---
 
-## 功能简介
+## 三个核心模块
 
-### 1. CS2 娱乐玩法插件
+### 1. CS2 娱乐玩法插件本体
 
 目录：
 
@@ -50,7 +57,19 @@ caoren-cup/
 game-plugin/
 ```
 
-该插件基于 CounterStrikeSharp 开发，主要用于在 CS2 服务器中开启各种自定义娱乐玩法。
+Release 包名：
+
+```text
+CaorenCup-修改插件本体-vX.X.X.zip
+```
+
+服务器部署目录：
+
+```text
+/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
+```
+
+主要用于在 CS2 服务器内开启各种自定义娱乐玩法。
 
 主要功能包括：
 
@@ -72,12 +91,24 @@ game-plugin/
 
 ---
 
-### 2. 网页赛事指挥台
+### 2. 网页赛事指挥台 / 网页端
 
 目录：
 
 ```text
 web-command-center/
+```
+
+Release 包名：
+
+```text
+CaorenCupWeb-网页端-vX.X.X.zip
+```
+
+服务器部署目录：
+
+```text
+/opt/caoren-cup/web-command-center/
 ```
 
 网页赛事指挥台用于管理一场完整的草人杯比赛流程。
@@ -98,12 +129,24 @@ web-command-center/
 
 ---
 
-### 3. CS2 网页桥接插件
+### 3. CS2 网页端服务器插件 / 网页桥接插件
 
 目录：
 
 ```text
 web-command-center/CaorenCupPlugin/
+```
+
+Release 包名：
+
+```text
+CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
+```
+
+服务器部署目录：
+
+```text
+/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
 ```
 
 该插件负责把 CS2 游戏服务器内的数据同步到网页赛事指挥台。
@@ -146,7 +189,7 @@ PostGameAccusation
 Scoreboard
 ```
 
-对应中文流程为：
+对应中文流程：
 
 1. 玩家进入大厅
 2. 管理员选择队长
@@ -163,17 +206,17 @@ Scoreboard
 
 ## 身份系统
 
-系统支持三类身份：
+系统支持三类身份。
 
-### Soldier 士兵
+### Soldier / 士兵
 
 普通玩家身份，主要目标是正常完成比赛并争取胜利。
 
-### Undercover 卧底
+### Undercover / 卧底
 
 卧底玩家会获得特殊任务，需要在比赛过程中尽量完成任务，同时避免被其他玩家发现。
 
-### Detective 侦探
+### Detective / 侦探
 
 侦探负责观察局势，并在赛后指认阶段帮助队伍判断卧底身份。
 
@@ -294,10 +337,16 @@ dotnet restore
 dotnet build -c Release
 ```
 
-构建产物位于：
+发布插件：
+
+```bash
+dotnet publish -c Release -o ./publish
+```
+
+发布产物位于：
 
 ```text
-game-plugin/bin/Release/net8.0/
+game-plugin/publish/
 ```
 
 ---
@@ -322,10 +371,16 @@ dotnet restore
 dotnet build -c Release
 ```
 
-构建产物位于：
+发布插件：
+
+```bash
+dotnet publish -c Release -o ./publish
+```
+
+发布产物位于：
 
 ```text
-web-command-center/CaorenCupPlugin/bin/Release/net8.0/
+web-command-center/CaorenCupPlugin/publish/
 ```
 
 ---
@@ -400,29 +455,159 @@ EnableDebugLog
 
 ---
 
-## 安装到 CS2 服务器
+## 服务器部署路径
 
-不同服务器环境的插件目录可能不同，请根据你的 CounterStrikeSharp 安装方式调整。
+当前维护者使用的服务器路径如下。
 
-通常需要把构建后的插件文件放入 CounterStrikeSharp 插件目录中，例如：
-
-```text
-csgo/addons/counterstrikesharp/plugins/
-```
-
-建议分别放置：
+CS2 插件根目录：
 
 ```text
-plugins/CaorenCup/
-plugins/CaorenCupPlugin/
+/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/
 ```
 
-其中：
+娱乐插件本体部署目录：
 
-- `CaorenCup` 是 CS2 娱乐玩法插件
-- `CaorenCupPlugin` 是 CS2 网页桥接插件
+```text
+/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
+```
 
-请在对应插件目录中放置需要的配置文件。
+网页端服务器插件 / 桥接插件部署目录：
+
+```text
+/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
+```
+
+网页端部署目录：
+
+```text
+/opt/caoren-cup/web-command-center/
+```
+
+---
+
+## 国内服务器部署原则
+
+国内服务器不要默认依赖 GitHub 拉取更新。
+
+推荐部署流程：
+
+```text
+本地开发
+→ 本地 push GitHub
+→ 本地打包 zip
+→ WinSCP / SFTP 上传服务器
+→ 服务器解压覆盖
+→ 重启对应服务
+→ 执行验证命令
+```
+
+不要默认在服务器执行：
+
+```bash
+git pull
+```
+
+原因是国内服务器访问 GitHub 可能不稳定，容易导致部署中断或版本状态混乱。
+
+---
+
+## 网页端静态资源路径
+
+网页端音频与前端控制文件的正确位置是：
+
+```text
+web-command-center/public/js/caoren-audio-controller.js
+web-command-center/public/assets/audio/manifest.json
+web-command-center/public/assets/audio/music/
+web-command-center/public/assets/audio/sfx/
+```
+
+服务器上对应路径应为：
+
+```text
+/opt/caoren-cup/web-command-center/public/js/caoren-audio-controller.js
+/opt/caoren-cup/web-command-center/public/assets/audio/manifest.json
+/opt/caoren-cup/web-command-center/public/assets/audio/music/
+/opt/caoren-cup/web-command-center/public/assets/audio/sfx/
+```
+
+不要错误解压到：
+
+```text
+/opt/caoren-cup/caoren-audio-controller.js
+/opt/caoren-cup/audio/manifest.json
+```
+
+---
+
+## PM2 检查
+
+网页端服务必须从正确目录启动。
+
+正确 cwd 应为：
+
+```text
+/opt/caoren-cup/web-command-center
+```
+
+检查命令：
+
+```bash
+pm2 describe caoren-cup-web
+```
+
+重点查看：
+
+```text
+exec cwd
+```
+
+如果 cwd 不是 `/opt/caoren-cup/web-command-center`，即使文件存在，也可能出现静态资源 404。
+
+---
+
+## 网页服务端口
+
+网页服务实际监听端口为：
+
+```text
+3000
+```
+
+服务器上的 `23333` 和 `24444` 是 MCSManager 相关端口，不是草人杯网页端口。
+
+检查静态文件：
+
+```bash
+curl -I http://127.0.0.1:3000/js/caoren-audio-controller.js
+curl -I http://127.0.0.1:3000/assets/audio/manifest.json
+```
+
+正确结果应包含：
+
+```text
+HTTP/1.1 200 OK
+```
+
+---
+
+## Content-Type 注意事项
+
+`web-command-center/src/server.ts` 中的 `express.static` 不要把所有静态资源都强制设置为 `text/html`。
+
+否则会导致以下资源的 `Content-Type` 错误：
+
+- `.js`
+- `.json`
+- `.mp3`
+- `.ogg`
+- `.wav`
+
+正确逻辑是：
+
+- 只给 `.html` 设置 `text/html`
+- 音频目录可以单独设置缓存
+- 其他静态资源交给 Express 自动识别类型
 
 ---
 
@@ -457,6 +642,7 @@ npm run typecheck
 cd game-plugin
 dotnet restore
 dotnet build -c Release
+dotnet publish -c Release -o ./publish
 ```
 
 ---
@@ -467,6 +653,7 @@ dotnet build -c Release
 cd web-command-center/CaorenCupPlugin
 dotnet restore
 dotnet build -c Release
+dotnet publish -c Release -o ./publish
 ```
 
 ---
@@ -497,6 +684,8 @@ dotnet build -c Release
 请勿提交以下文件或目录：
 
 ```text
+release-build/
+release-output/
 node_modules/
 bin/
 obj/
@@ -505,8 +694,8 @@ obj/
 *.pdb
 *.zip
 .env
-caoren_config.json
 ecosystem.config.cjs
+caoren_config.json
 ```
 
 这些内容可能包含：
@@ -517,47 +706,189 @@ ecosystem.config.cjs
 - 私有配置
 - 管理员密码
 - 插件 Token
+- 服务器真实路径或部署信息
 
 请只提交示例配置：
 
 ```text
-caoren_config.example.json
 ecosystem.config.cjs.example
+caoren_config.example.json
 ```
+
+公开仓库与公开 Release 中不得包含真实服务器配置、真实 Token、真实管理员密码或生产环境 `.env`。
 
 ---
 
 ## Release 下载说明
 
-如果你只是想查看源码，请直接克隆仓库。
+如果只是查看源码，可以直接克隆仓库。
 
-如果你想直接使用编译好的插件，请到 GitHub Releases 页面下载对应版本的压缩包。
+如果要直接部署，请到 GitHub Releases 页面下载对应版本压缩包。
 
-建议 Release 包包含：
+Release 包和源码仓库是两回事：
+
+- `game-plugin/` 中有源码，不代表 Release 里有可直接部署的 `CaorenCup.dll`
+- 如果要给别人直接部署 CS2 插件，必须先执行 `dotnet publish`，再单独打插件包
+- GitHub Release 不会因为 `main` 分支更新而自动更新
+- 更新代码后，如果要发版，需要创建新的 tag 和 Release，例如 `v1.1.1`、`v1.1.2`
+
+---
+
+## Release 包命名规则
+
+以后 Release 必须拆成三个包：
 
 ```text
+CaorenCup-修改插件本体-vX.X.X.zip
+CaorenCupWeb-网页端-vX.X.X.zip
+CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
+```
+
+不要再使用以下旧名称：
+
+```text
+CaorenCup-EntertainmentPlugin
+CaorenCup-WebBridgePlugin
+caoren-cup-source
 CaorenCup-game-plugin-vX.X.X.zip
 CaorenCup-web-bridge-plugin-vX.X.X.zip
 CaorenCup-web-command-center-vX.X.X.zip
 CaorenCup-all-in-one-vX.X.X.zip
 ```
 
-其中：
+---
 
-- `CaorenCup-game-plugin-vX.X.X.zip` 是 CS2 娱乐玩法插件
-- `CaorenCup-web-bridge-plugin-vX.X.X.zip` 是 CS2 与网页通信的桥接插件
-- `CaorenCup-web-command-center-vX.X.X.zip` 是网页赛事指挥台
-- `CaorenCup-all-in-one-vX.X.X.zip` 是整合包
+## 三个 Release 包说明
+
+### 1. CS2 娱乐插件本体
+
+包名：
+
+```text
+CaorenCup-修改插件本体-vX.X.X.zip
+```
+
+来源目录：
+
+```text
+game-plugin/
+```
+
+打包方式：
+
+```bash
+dotnet publish -c Release
+```
+
+包内应包含：
+
+```text
+CaorenCup.dll
+CaorenCup.deps.json
+CaorenCup.pdb
+CaorenCup.json
+以及运行所需依赖文件
+```
+
+部署目标：
+
+```text
+/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
+```
+
+---
+
+### 2. 网页端 / 网页指挥台
+
+包名：
+
+```text
+CaorenCupWeb-网页端-vX.X.X.zip
+```
+
+来源目录：
+
+```text
+web-command-center/
+```
+
+包内应包含：
+
+```text
+public/
+src/
+package.json
+package-lock.json
+tsconfig.json
+ecosystem.config.cjs.example
+其他网页端运行所需源码文件
+```
+
+不应包含：
+
+```text
+node_modules/
+.env
+ecosystem.config.cjs
+真实 token
+真实密码配置
+```
+
+部署目标：
+
+```text
+/opt/caoren-cup/web-command-center/
+```
+
+---
+
+### 3. CS2 网页端服务器插件 / 桥接插件
+
+包名：
+
+```text
+CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
+```
+
+来源目录：
+
+```text
+web-command-center/CaorenCupPlugin/
+```
+
+打包方式：
+
+```bash
+dotnet publish -c Release
+```
+
+包内应包含：
+
+```text
+CaorenCupPlugin.dll
+CaorenCupPlugin.deps.json
+Tomlyn.dll
+Serilog.dll
+Microsoft.Extensions.*.dll
+以及运行所需依赖文件
+```
+
+部署目标：
+
+```text
+/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
+```
 
 ---
 
 ## 如何发布 Release
 
-维护者可以按照以下流程发布一个新版本。
+下面以 `v1.1.1` 为例。
 
-### 1. 确认代码已提交
+### 1. 确认本地分支状态
 
-```bash
+```powershell
+cd D:\OpenSourcework\caoren-cup-open-source
 git status
 ```
 
@@ -567,80 +898,155 @@ git status
 nothing to commit, working tree clean
 ```
 
-说明本地代码已经干净。
+说明本地代码已经提交干净。
 
----
+如果还有修改，请先提交：
 
-### 2. 本地构建
-
-构建 CS2 娱乐玩法插件：
-
-```bash
-cd game-plugin
-dotnet build -c Release
-```
-
-构建 CS2 网页桥接插件：
-
-```bash
-cd ../web-command-center/CaorenCupPlugin
-dotnet build -c Release
-```
-
-检查网页端：
-
-```bash
-cd ../
-npm run typecheck
+```powershell
+git add .
+git commit -m "docs: update README release and deployment guide"
 ```
 
 ---
 
-### 3. 打包 Release 文件
+### 2. 推送 main 分支
 
-建议发布以下压缩包：
+```powershell
+git push origin main
+```
 
-```text
-CaorenCup-game-plugin-v1.0.0.zip
-CaorenCup-web-bridge-plugin-v1.0.0.zip
-CaorenCup-web-command-center-v1.0.0.zip
-CaorenCup-all-in-one-v1.0.0.zip
+如果提示 `rejected` 或 `fetch first`，说明远程有本地没有的提交。
+
+优先使用：
+
+```powershell
+git pull --rebase origin main
+git push origin main
+```
+
+如果出现 rebase 冲突，解决冲突后执行：
+
+```powershell
+git add .
+git rebase --continue
+```
+
+不要随便使用：
+
+```powershell
+git push --force
+```
+
+如果遇到 `START_HERE.md` 的 `modify/delete` 冲突，且该文件只是初始化说明文件，通常可以选择删除：
+
+```powershell
+git rm START_HERE.md
+git rebase --continue
 ```
 
 ---
 
-### 4. 在 GitHub 创建 Release
+### 3. 本地打包 Release
 
-进入仓库页面：
-
-```text
-https://github.com/GrassBl0ck/caoren-cup
-```
-
-点击右侧：
+建议 Release 输出目录：
 
 ```text
-Releases
+D:\OpenSourcework\release-output
 ```
 
-然后点击：
+临时 stage 目录：
 
 ```text
-Create a new release
+D:\OpenSourcework\release-output\stage
 ```
 
-填写：
+打包时必须排除：
 
 ```text
-Tag: v1.0.0
-Title: Caoren Cup v1.0.0
+.git
+.vs
+node_modules
+release-build
+release-output
+bin
+obj
+.env
+ecosystem.config.cjs
+caoren_config.json
 ```
 
-上传打包好的 zip 文件，然后点击：
+CS2 插件必须使用：
+
+```powershell
+dotnet publish -c Release -o 指定输出目录
+```
+
+不要只用 `dotnet build` 后直接打源码包。
+
+---
+
+### 4. 创建 tag
+
+```powershell
+cd D:\OpenSourcework\caoren-cup-open-source
+git tag v1.1.1
+git push origin v1.1.1
+```
+
+如果 tag 写错，可以先本地删除：
+
+```powershell
+git tag -d v1.1.1
+```
+
+远程 tag 删除需谨慎操作。
+
+---
+
+### 5. 创建 GitHub Release
+
+进入仓库 Releases 页面，新建 Release：
 
 ```text
-Publish release
+Tag: v1.1.1
+Title: Caoren Cup v1.1.1
 ```
+
+上传三个 zip：
+
+```text
+CaorenCup-修改插件本体-v1.1.1.zip
+CaorenCupWeb-网页端-v1.1.1.zip
+CaorenCupWebPlugin-网页端服务器插件-v1.1.1.zip
+```
+
+然后点击发布。
+
+---
+
+### 6. 服务器部署原则
+
+国内服务器不要默认执行 `git pull`。
+
+推荐流程：
+
+```text
+本地打包 zip
+→ WinSCP / SFTP 上传到服务器 /tmp
+→ 服务器解压覆盖对应目录
+→ 重启 PM2 或 CS2 服务
+→ 执行验证命令
+```
+
+网页端验证：
+
+```bash
+pm2 describe caoren-cup-web
+curl -I http://127.0.0.1:3000/js/caoren-audio-controller.js
+curl -I http://127.0.0.1:3000/assets/audio/manifest.json
+```
+
+插件端验证应根据 CounterStrikeSharp、CS2 控制台日志或服务器插件加载日志确认。
 
 ---
 
