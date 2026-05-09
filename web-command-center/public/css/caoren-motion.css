@@ -1,0 +1,478 @@
+﻿/*
+ * Caoren Cup motion layer
+ * 轻量级页面动效增强，不参与比赛状态计算。
+ */
+
+:root {
+    --cc-motion-fast: 160ms;
+    --cc-motion-normal: 240ms;
+    --cc-motion-slow: 420ms;
+    --cc-motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html:not(.cc-reduce-motion) body {
+    scroll-behavior: smooth;
+}
+
+html:not(.cc-reduce-motion) button,
+html:not(.cc-reduce-motion) .format-btn,
+html:not(.cc-reduce-motion) .map-card,
+html:not(.cc-reduce-motion) .draft-player-card,
+html:not(.cc-reduce-motion) .draft-team-panel,
+html:not(.cc-reduce-motion) .map-bp-summary-card,
+html:not(.cc-reduce-motion) .task-cell,
+html:not(.cc-reduce-motion) .panel,
+html:not(.cc-reduce-motion) .soft-block,
+html:not(.cc-reduce-motion) .modal-content {
+    transition:
+        transform var(--cc-motion-normal) var(--cc-motion-ease),
+        opacity var(--cc-motion-normal) var(--cc-motion-ease),
+        box-shadow var(--cc-motion-normal) var(--cc-motion-ease),
+        border-color var(--cc-motion-normal) var(--cc-motion-ease),
+        background-color var(--cc-motion-normal) var(--cc-motion-ease),
+        filter var(--cc-motion-normal) var(--cc-motion-ease);
+}
+
+html:not(.cc-reduce-motion) button:not(:disabled):hover,
+html:not(.cc-reduce-motion) .format-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14);
+}
+
+html:not(.cc-reduce-motion) button:not(:disabled):active,
+html:not(.cc-reduce-motion) .format-btn:not(:disabled):active {
+    transform: translateY(0) scale(0.98);
+    box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
+}
+
+html:not(.cc-reduce-motion) button:disabled {
+    opacity: 0.52;
+    filter: grayscale(0.3);
+}
+
+html:not(.cc-reduce-motion) .map-card.clickable:hover,
+html:not(.cc-reduce-motion) .draft-player-card.available:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.18);
+}
+
+html:not(.cc-reduce-motion) .map-card.banned {
+    opacity: 0.68;
+    filter: grayscale(0.72) saturate(0.75);
+    transform: scale(0.985);
+}
+
+html:not(.cc-reduce-motion) .map-card.banned .map-card-image {
+    filter: grayscale(0.9) brightness(0.78);
+}
+
+html:not(.cc-reduce-motion) .map-card-status {
+    transition:
+        background-color var(--cc-motion-normal) var(--cc-motion-ease),
+        color var(--cc-motion-normal) var(--cc-motion-ease),
+        border-color var(--cc-motion-normal) var(--cc-motion-ease),
+        transform var(--cc-motion-normal) var(--cc-motion-ease),
+        opacity var(--cc-motion-normal) var(--cc-motion-ease);
+}
+
+html:not(.cc-reduce-motion) .cc-phase-pulse {
+    animation: cc-phase-pulse 360ms var(--cc-motion-ease) both;
+}
+
+html:not(.cc-reduce-motion) .cc-newly-banned {
+    position: relative;
+    overflow: hidden;
+    animation: cc-map-ban-in 520ms var(--cc-motion-ease) both;
+}
+
+html:not(.cc-reduce-motion) .cc-newly-banned::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background: linear-gradient(
+        115deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.08) 32%,
+        rgba(255, 255, 255, 0.36) 48%,
+        rgba(255, 255, 255, 0.08) 64%,
+        transparent 100%
+    );
+    transform: translateX(-120%);
+    animation: cc-ban-sweep 520ms var(--cc-motion-ease) both;
+}
+
+html:not(.cc-reduce-motion) .cc-newly-banned .map-card-overlay {
+    animation: cc-overlay-pop 260ms var(--cc-motion-ease) both;
+}
+
+html:not(.cc-reduce-motion) .cc-newly-banned .map-card-status.banned {
+    animation: cc-status-pop 260ms var(--cc-motion-ease) both;
+}
+
+html:not(.cc-reduce-motion) .map-bp-turn,
+html:not(.cc-reduce-motion) .draft-turn-card,
+html:not(.cc-reduce-motion) .bp-inline-timer {
+    transition:
+        transform var(--cc-motion-normal) var(--cc-motion-ease),
+        box-shadow var(--cc-motion-normal) var(--cc-motion-ease),
+        background-color var(--cc-motion-normal) var(--cc-motion-ease);
+}
+
+html:not(.cc-reduce-motion) .map-bp-turn:hover,
+html:not(.cc-reduce-motion) .draft-turn-card:hover {
+    transform: translateY(-1px);
+}
+
+/* SidePick final map layout */
+.sidepick-final-map-wrap {
+    max-width: 900px;
+    margin: 18px auto 24px;
+    padding: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 22px;
+    background:
+        radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 46%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
+    text-align: center;
+}
+
+.sidepick-final-map-kicker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 112px;
+    height: 26px;
+    padding: 0 12px;
+    margin-bottom: 8px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.88);
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+}
+
+.sidepick-final-map-title {
+    margin: 0 0 14px;
+    color: #0f172a;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+}
+
+.sidepick-final-map-card {
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.sidepick-final-map-card .map-card {
+    cursor: default !important;
+    transform: none !important;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+}
+
+.sidepick-final-map-card .map-card-image {
+    min-height: 300px;
+}
+
+.sidepick-final-map-card .map-card-body {
+    text-align: left;
+}
+
+.sidepick-final-map-card .map-card-voters {
+    display: none;
+}
+
+.sidepick-final-map-empty {
+    padding: 42px 20px;
+    border-radius: 18px;
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 800;
+}
+
+.sidepick-side-grid {
+    max-width: 1120px;
+    margin: 10px auto 0;
+}
+
+.sidepick-side-grid .map-card-image {
+    min-height: 240px;
+}
+
+html:not(.cc-reduce-motion) .cc-sidepick-hero-enter {
+    animation: cc-sidepick-hero-in 360ms var(--cc-motion-ease) both;
+}
+
+@keyframes cc-map-ban-in {
+    0% {
+        opacity: 1;
+        filter: grayscale(0) saturate(1.05);
+        transform: translateY(-4px) scale(1.025);
+        box-shadow: 0 0 0 rgba(220, 38, 38, 0);
+    }
+
+    42% {
+        opacity: 0.92;
+        filter: grayscale(0.35) saturate(0.95);
+        transform: translateY(0) scale(1.01);
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.18), 0 16px 36px rgba(15, 23, 42, 0.2);
+    }
+
+    100% {
+        opacity: 0.68;
+        filter: grayscale(0.72) saturate(0.75);
+        transform: scale(0.985);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+    }
+}
+
+@keyframes cc-ban-sweep {
+    0% {
+        transform: translateX(-120%);
+        opacity: 0;
+    }
+
+    25% {
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateX(120%);
+        opacity: 0;
+    }
+}
+
+@keyframes cc-overlay-pop {
+    0% {
+        opacity: 0;
+        transform: scale(1.06);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes cc-status-pop {
+    0% {
+        transform: translateY(3px) scale(0.96);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes cc-phase-pulse {
+    0% {
+        opacity: 0.72;
+        transform: translateY(6px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes cc-sidepick-hero-in {
+    0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.985);
+        filter: blur(1px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@media (max-width: 900px) {
+    .sidepick-final-map-wrap {
+        margin: 14px auto 18px;
+        padding: 14px;
+        border-radius: 18px;
+    }
+
+    .sidepick-final-map-title {
+        font-size: 20px;
+    }
+
+    .sidepick-final-map-card .map-card-image {
+        min-height: 210px;
+    }
+
+    .sidepick-side-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 1ms !important;
+    }
+}
+
+/* SidePick DOM hero layout */
+.sidepick-final-map-wrap {
+    max-width: 900px;
+    margin: 18px auto 24px;
+    padding: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    border-radius: 22px;
+    background:
+        radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 46%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92));
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.10);
+    text-align: center;
+}
+
+.sidepick-final-map-kicker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 112px;
+    height: 26px;
+    padding: 0 12px;
+    margin-bottom: 8px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.88);
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+}
+
+.sidepick-final-map-title {
+    margin: 0 0 14px;
+    color: #0f172a;
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+}
+
+.sidepick-final-map-card {
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.sidepick-final-map-card .map-card {
+    cursor: default !important;
+    transform: none !important;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+}
+
+.sidepick-final-map-card .map-card-image {
+    min-height: 300px;
+}
+
+.sidepick-final-map-card .map-card-voters {
+    display: none;
+}
+
+.sidepick-side-grid {
+    max-width: 1120px;
+    margin: 10px auto 0;
+}
+
+.sidepick-side-grid .map-card-image {
+    min-height: 240px;
+}
+
+.sidepick-map-hero-fallback {
+    overflow: hidden;
+    border-radius: 20px;
+    background: #0f172a;
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+}
+
+.sidepick-map-hero-image {
+    min-height: 300px;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #1e293b;
+}
+
+.sidepick-map-hero-name {
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
+    font-size: 34px;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+}
+
+.sidepick-map-hero-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    background: #fff;
+    color: #0f172a;
+}
+
+.sidepick-map-hero-body span {
+    color: #64748b;
+    font-size: 13px;
+}
+
+html:not(.cc-reduce-motion) .cc-sidepick-hero-enter {
+    animation: cc-sidepick-hero-in 360ms var(--cc-motion-ease) both;
+}
+
+@keyframes cc-sidepick-hero-in {
+    0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.985);
+        filter: blur(1px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@media (max-width: 900px) {
+    .sidepick-final-map-wrap {
+        margin: 14px auto 18px;
+        padding: 14px;
+        border-radius: 18px;
+    }
+
+    .sidepick-final-map-title {
+        font-size: 20px;
+    }
+
+    .sidepick-final-map-card .map-card-image,
+    .sidepick-map-hero-image {
+        min-height: 210px;
+    }
+
+    .sidepick-side-grid {
+        grid-template-columns: 1fr !important;
+    }
+}
