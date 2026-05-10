@@ -1,4 +1,4 @@
-﻿using System.Runtime;
+using System.Runtime;
 using System.Text.Json.Serialization;
 using CounterStrikeSharp.API.Core;
 
@@ -283,18 +283,23 @@ public class FriendlyFireSettings
 
 public class AliasSettings
 {
-    [JsonPropertyName("Enabled")] public bool Enabled { get; set; } = true;
+    [JsonPropertyName("Enabled")]
+    public bool Enabled { get; set; } = true;
 
-    // 权限标记 (默认只有管理员能用这些别名)
-    // 如果你想让普通玩家也能用，可以改成 "" (空字符串) 或者 "@css/chat"
-    [JsonPropertyName("Permission")] public string Permission { get; set; } = "@css/changemap";
+    // 默认只有具备换图权限的管理员可用。
+    // 如果希望普通玩家也能用，改成 ""，但只建议暴露绝对安全的控制台命令。
+    [JsonPropertyName("Permission")]
+    public string Permission { get; set; } = "@css/changemap";
 
-    // 映射表: "聊天指令" : "控制台指令"
+    // 映射表：
+    // key 是聊天栏输入的别名，不要写 /、!、css_。
+    // value 是服务器控制台可执行命令，不要写 /、!、. 这种聊天触发符。
+    // 示例：聊天输入 /p1 -> 服务器控制台执行 mp_pause_match
     [JsonPropertyName("CommandMap")]
-    public Dictionary<string, string> CommandMap { get; set; } = new()
+    public Dictionary<string, string> CommandMap { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
-        { "p1", ".p1" },
-        { "un", ".un" }
+        { "p1", "mp_pause_match" },
+        { "un", "mp_unpause_match" }
     };
 }
 public class ForceRoundEndSettings

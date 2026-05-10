@@ -1078,3 +1078,24 @@ curl -I http://127.0.0.1:3000/assets/audio/manifest.json
 本项目是社区自定义赛事工具，与 Valve、Counter-Strike、Counter-Strike 2、Steam 或 CounterStrikeSharp 官方无直接关联。
 
 使用本项目时，请自行确认服务器规则、插件兼容性以及第三方依赖许可。
+
+## 游戏内插件：Alias 指令别名
+
+CaorenCup 游戏内娱乐插件支持在 `CaorenCup.json` 的 `Alias.CommandMap` 中配置聊天别名到服务器控制台命令的映射。
+
+示例配置：
+
+    "Alias": {
+      "Enabled": true,
+      "Permission": "@css/changemap",
+      "CommandMap": {
+        "p1": "mp_pause_match",
+        "un": "mp_unpause_match",
+        "rr": "mp_restartgame 1"
+      }
+    }
+
+玩家在聊天栏输入 `/p1` 或 `!p1` 后，插件会以服务器控制台身份执行 `mp_pause_match`。
+
+注意：`CommandMap` 的 key 不要带 `/`、`!`、`.` 或 `css_`；value 必须是服务器控制台可执行命令，不要写聊天触发符。
+
