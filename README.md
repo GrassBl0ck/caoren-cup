@@ -1099,4 +1099,48 @@ CaorenCup 游戏内娱乐插件支持在 `CaorenCup.json` 的 `Alias.CommandMap`
 
 注意：`CommandMap` 的 key 不要带 `/`、`!`、`.` 或 `css_`；value 必须是服务器控制台可执行命令，不要写聊天触发符。
 
+## 娱乐插件本体分模块配置
+
+娱乐插件本体不再把全部模块配置都写进一个 `CaorenCup.json`。
+
+插件加载时仍会兼容读取 DLL 旁边的旧版：
+
+```text
+CaorenCup.json
+```
+
+然后会在 DLL 旁边创建新的分模块配置目录：
+
+```text
+module-configs/
+```
+
+每个顶层模块一个 JSON 文件，例如：
+
+```text
+module-configs/BombQuiz.json
+module-configs/FireHeal.json
+module-configs/FOV.json
+module-configs/KillHeal.json
+module-configs/HpCap.json
+```
+
+运行优先级：
+
+```text
+module-configs/*.json
+> 旧版 CaorenCup.json
+> 插件默认值
+```
+
+升级老服务器时不用立刻手动拆旧配置。首次运行新版插件后，旧 `CaorenCup.json` 会作为迁移种子，缺失的模块文件会自动创建；之后请优先修改 `module-configs/` 下的模块文件。
+
+服务器上的实际目录示例：
+
+```text
+/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/module-configs/
+```
+
+注意：不要把服务器真实配置打进公开 Release。公开包只应包含默认配置或示例配置。
+
 

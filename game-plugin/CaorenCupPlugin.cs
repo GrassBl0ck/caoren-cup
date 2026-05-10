@@ -7,6 +7,8 @@ using CounterStrikeSharp.API.Modules.Admin;
 using System.Linq;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Encodings.Web;
 using CaorenCup.Features;
 
 namespace CaorenCup;
@@ -25,7 +27,15 @@ public class CaorenCupPlugin : BasePlugin
     // 强制锁定配置文件路径：永远在 DLL 旁边
     private string ConfigFilePath => Path.Combine(ModuleDirectory, "CaorenCup.json");
 
-    public override void Load(bool hotReload)
+ private string ConfigModulesDirectory => Path.Combine(ModuleDirectory, "module-configs");
+
+ private static readonly JsonSerializerOptions ConfigJsonOptions = new()
+ {
+  WriteIndented = true,
+  PropertyNameCaseInsensitive = true,
+  Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+ };
+public override void Load(bool hotReload)
     {
         // 1. 手动加载配置 (这是最关键的一步！)
         LoadConfig();
@@ -194,51 +204,163 @@ public class CaorenCupPlugin : BasePlugin
             CaorenCupUtils.PrintToChatAll(" \x10===========================================\x01");
         }
     }
+ private void LoadConfig()
+ {
+  try
+  {
+   Config = new CaorenCupConfig();
 
-    private void LoadConfig()
+   if (File.Exists(ConfigFilePath))
+   {
+    try
     {
-        try
-        {
-            if (File.Exists(ConfigFilePath))
-            {
-                string json = File.ReadAllText(ConfigFilePath);
-                var loaded = JsonSerializer.Deserialize<CaorenCupConfig>(json);
-                if (loaded != null)
-                {
-                    Config = loaded;
-                    Config.HpCap ??= new HpCapSettings();
-                    Console.WriteLine("[CaorenCup] ✅ 成功读取配置文件！");
-                }
-            }
-            else
-            {
-                Console.WriteLine("[CaorenCup] ⚠️ 配置文件不存在，正在创建默认文件...");
-                SaveConfig(); // 创建一个新的
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[CaorenCup] ❌ 读取配置严重错误: {ex.Message}");
-            Console.WriteLine("[CaorenCup] 将使用默认配置运行。");
-        }
+     string json = File.ReadAllText(ConfigFilePath);
+     var loaded = JsonSerializer.Deserialize<CaorenCupConfig>(json, ConfigJsonOptions);
+     if (loaded != null)
+     {
+      Config = loaded;
+      Console.WriteLine("[CaorenCup] Loaded legacy CaorenCup.json as migration seed.");
+     }
     }
-
-    public void SaveConfig()
+    catch (Exception ex)
     {
-        try
-        {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(Config, options);
-            File.WriteAllText(ConfigFilePath, json);
-            Console.WriteLine($"[CaorenCup] ✅ 配置已保存到: {ConfigFilePath}");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[CaorenCup] ❌ 保存配置失败: {ex.Message}");
-        }
+     Console.WriteLine($"[CaorenCup] Failed to read legacy CaorenCup.json, continuing with module configs: {ex.Message}");
     }
+   }
+   else
+   {
+    Console.WriteLine("[CaorenCup] Legacy CaorenCup.json not found. Using module configs or defaults.");
+   }
 
-    public override void Unload(bool hotReload)
+   LoadModuleConfigFiles();
+   EnsureConfigObjects();
+
+   Console.WriteLine($"[CaorenCup] Config loaded. Module config directory: {ConfigModulesDirectory}");
+  }
+  catch (Exception ex)
+  {
+   Console.WriteLine($"[CaorenCup] Fatal config load error: {ex.Message}");
+   Console.WriteLine("[CaorenCup] Falling back to default config.");
+   Config = new CaorenCupConfig();
+   EnsureConfigObjects();
+  }
+ }
+
+ private void LoadModuleConfigFiles()
+ {
+  Directory.CreateDirectory(ConfigModulesDirectory);
+
+  foreach (var item in GetModuleConfigItems())
+  {
+   object? currentValue = item.Property.GetValue(Config);
+   if (currentValue == null)
+   {
+    currentValue = Activator.CreateInstance(item.Property.PropertyType);
+    item.Property.SetValue(Config, currentValue);
+   }
+
+   if (!File.Exists(item.FilePath))
+   {
+    SaveModuleConfigFile(item.Property, item.JsonName, item.FilePath);
+    Console.WriteLine($"[CaorenCup] Created module config: {Path.GetFileName(item.FilePath)}");
+    continue;
+   }
+
+   try
+   {
+    string moduleJson = File.ReadAllText(item.FilePath);
+    object? moduleValue = JsonSerializer.Deserialize(moduleJson, item.Property.PropertyType, ConfigJsonOptions);
+    if (moduleValue != null)
+    {
+     item.Property.SetValue(Config, moduleValue);
+     Console.WriteLine($"[CaorenCup] Loaded module config: {Path.GetFileName(item.FilePath)}");
+    }
+   }
+   catch (Exception ex)
+   {
+    Console.WriteLine($"[CaorenCup] Failed to read module config, keeping legacy/default value: {Path.GetFileName(item.FilePath)} | {ex.Message}");
+   }
+  }
+ }
+
+ public void SaveConfig()
+ {
+  try
+  {
+   Directory.CreateDirectory(ConfigModulesDirectory);
+
+   foreach (var item in GetModuleConfigItems())
+   {
+    SaveModuleConfigFile(item.Property, item.JsonName, item.FilePath);
+   }
+
+   Console.WriteLine($"[CaorenCup] Config saved by modules: {ConfigModulesDirectory}");
+   Console.WriteLine("[CaorenCup] Legacy CaorenCup.json is only used as a migration seed. Runtime config is module-configs/*.json.");
+  }
+  catch (Exception ex)
+  {
+   Console.WriteLine($"[CaorenCup] Failed to save config: {ex.Message}");
+  }
+ }
+
+ private void SaveModuleConfigFile(System.Reflection.PropertyInfo property, string jsonName, string filePath)
+ {
+  object? value = property.GetValue(Config);
+  if (value == null)
+  {
+   value = Activator.CreateInstance(property.PropertyType);
+   property.SetValue(Config, value);
+  }
+
+  string json = JsonSerializer.Serialize(value, property.PropertyType, ConfigJsonOptions);
+  File.WriteAllText(filePath, json);
+ }
+
+ private IEnumerable<(System.Reflection.PropertyInfo Property, string JsonName, string FilePath)> GetModuleConfigItems()
+ {
+  var properties = typeof(CaorenCupConfig).GetProperties(
+   System.Reflection.BindingFlags.Instance |
+   System.Reflection.BindingFlags.Public |
+   System.Reflection.BindingFlags.DeclaredOnly
+  );
+
+  foreach (var property in properties)
+  {
+   if (!property.CanRead || !property.CanWrite) continue;
+
+   var jsonNameAttribute = property
+    .GetCustomAttributes(typeof(JsonPropertyNameAttribute), false)
+    .OfType<JsonPropertyNameAttribute>()
+    .FirstOrDefault();
+
+   string jsonName = jsonNameAttribute?.Name ?? property.Name;
+   string safeFileName = MakeSafeConfigFileName(jsonName) + ".json";
+   string filePath = Path.Combine(ConfigModulesDirectory, safeFileName);
+
+   yield return (property, jsonName, filePath);
+  }
+ }
+
+ private static string MakeSafeConfigFileName(string jsonName)
+ {
+  var invalidChars = Path.GetInvalidFileNameChars();
+  return new string(jsonName.Select(c => invalidChars.Contains(c) ? '_' : c).ToArray());
+ }
+
+ private void EnsureConfigObjects()
+ {
+  foreach (var item in GetModuleConfigItems())
+  {
+   if (item.Property.GetValue(Config) != null) continue;
+
+   object? value = Activator.CreateInstance(item.Property.PropertyType);
+   if (value != null)
+   {
+    item.Property.SetValue(Config, value);
+   }
+  }
+ }
+ public override void Unload(bool hotReload)
     {
         foreach (var feature in _features) feature.OnUnload();
         _features.Clear();
