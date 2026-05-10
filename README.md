@@ -1099,3 +1099,4 @@ CaorenCup 游戏内娱乐插件支持在 `CaorenCup.json` 的 `Alias.CommandMap`
 
 注意：`CommandMap` 的 key 不要带 `/`、`!`、`.` 或 `css_`；value 必须是服务器控制台可执行命令，不要写聊天触发符。
 
+
