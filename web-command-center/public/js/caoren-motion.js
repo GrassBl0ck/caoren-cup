@@ -110,11 +110,25 @@
     }
 
     function getSidePickMapName() {
+        // 优先从主页面保存的完整 GAME_STATE 里读取服务端真实 selectedMap。
+        // 这里拿到的是 "Dust II"，不会被页面文字正则误截成 "Dust"。
+        if (window._currentGameState && window._currentGameState.selectedMap) {
+            return String(window._currentGameState.selectedMap).trim();
+        }
+
+        // 兼容旧页面：如果主页面只暴露了当前地图名，也优先使用它。
+        if (window._currentSelectedMap) {
+            return String(window._currentSelectedMap).trim();
+        }
+
+        // 兜底：从页面文案里提取“本局地图：xxx”。
+        // 注意 Dust II 中间有空格，所以不能使用旧版“遇到空格就停止”的正则。
         const bodyText = textOf(document.body);
 
         const patterns = [
-            /本局地图[：:]\s*([A-Za-z0-9_\-\u4e00-\u9fa5]+)/,
-            /地图[：:]\s*([A-Za-z0-9_\-\u4e00-\u9fa5]+)/
+            /本局地图\s*[：:]\s*([^。；;，,\n]+?)(?=\s*[。；;，,\n]|$)/,
+            /最终地图\s*[：:]\s*([^。；;，,\n]+?)(?=\s*[。；;，,\n]|$)/,
+            /地图\s*[：:]\s*([^。；;，,\n]+?)(?=\s*[。；;，,\n]|$)/,
         ];
 
         for (const pattern of patterns) {
@@ -189,13 +203,23 @@
     function getMapImagePath(mapName) {
         const safeName = String(mapName || "").trim();
 
-        let slug = safeName
+        const normalized = safeName
             .toLowerCase()
             .replace(/^de_/, "")
-            .replace(/\s+/g, "")
+            .replace(/\s+/g, "_")
             .replace(/[^a-z0-9_]/g, "");
 
-        if (slug === "dustii" || slug === "dusttwo") slug = "dust2";
+        let slug = normalized;
+
+        if (
+            normalized === "dust_ii" ||
+            normalized === "dustii" ||
+            normalized === "dust2" ||
+            normalized === "dust_two" ||
+            normalized === "dusttwo"
+        ) {
+            slug = "dust2";
+        }
 
         return `/assets/maps/de_${slug}.jpg`;
     }
@@ -218,23 +242,24 @@
     }
 
     function buildHeroCard(mapName) {
+        const displayMapName = String(mapName || "").trim() || "待定";
         let cardHtml = "";
 
         try {
-            if (typeof window.renderMapCard === "function" && mapName) {
-                cardHtml = window.renderMapCard(mapName, { canVote: false });
+            if (typeof window.renderMapCard === "function" && displayMapName !== "待定") {
+                cardHtml = window.renderMapCard(displayMapName, { canVote: false });
             }
         } catch (error) {
             cardHtml = "";
         }
 
         if (!cardHtml) {
-            cardHtml = buildFallbackMapCard(mapName);
+            cardHtml = buildFallbackMapCard(displayMapName);
         }
 
         return `
             <div class="sidepick-final-map-kicker">FINAL MAP</div>
-            <h3 class="sidepick-final-map-title">最终地图：${mapName || "待定"}</h3>
+            <h3 class="sidepick-final-map-title">最终地图：${displayMapName}</h3>
             <div class="sidepick-final-map-card">${cardHtml}</div>
         `;
     }
@@ -349,5 +374,3 @@
         boot();
     }
 })();
-
-

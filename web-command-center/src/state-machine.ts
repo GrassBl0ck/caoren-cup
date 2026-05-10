@@ -8,8 +8,16 @@ const PHASE_TRANSITIONS: Partial<Record<GamePhase, GamePhase[]>> = {
     [GamePhase.MapBan]: [GamePhase.SidePick],
     [GamePhase.SidePick]: [GamePhase.PreGameSetup],
     [GamePhase.PreGameSetup]: [GamePhase.LiveGame],
-    [GamePhase.LiveGame]: [GamePhase.MidGameQA, GamePhase.PostGameAccusation],
-    [GamePhase.MidGameQA]: [GamePhase.PostGameAccusation],
+
+    // 第一阶段新增：
+    // 卧底模式关闭时，LiveGame 允许直接进入 Scoreboard。
+    [GamePhase.LiveGame]: [
+        GamePhase.MidGameQA,
+        GamePhase.PostGameAccusation,
+        GamePhase.Scoreboard,
+    ],
+
+    [GamePhase.MidGameQA]: [GamePhase.PostGameAccusation, GamePhase.Scoreboard],
     [GamePhase.PostGameAccusation]: [GamePhase.Scoreboard],
     [GamePhase.Scoreboard]: [GamePhase.Lobby],
 };

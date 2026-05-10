@@ -1445,9 +1445,89 @@
             font-size: 13px;
             line-height: 1.6;
         }
+
+
+        /* 第一阶段：本局模式设置（固定在管理员控制区） */
+        .match-options-panel {
+            margin: 12px 0 16px;
+            padding: 14px 16px;
+            border: 1px solid #dbe5ef;
+            border-radius: 12px;
+            background: #f8fbff;
+        }
+
+        .match-options-panel h4 {
+            margin: 0 0 10px;
+            color: #102a43;
+        }
+
+        .match-options-status {
+            margin: 8px 0 12px;
+            padding: 8px 10px;
+            border-radius: 10px;
+            background: #eef4ff;
+            color: #334155;
+            font-size: 13px;
+        }
+
+        .match-options-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #dbe5ef;
+            border-radius: 10px;
+            background: #fff;
+        }
+
+        .match-options-row input[type="checkbox"] {
+            margin-top: 5px;
+            transform: scale(1.18);
+        }
+
+        .match-options-title {
+            font-weight: 900;
+            color: #243447;
+        }
+
+        .match-options-desc {
+            margin-top: 4px;
+            color: #6b7b8c;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .match-options-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .match-options-actions button {
+            margin-left: 0;
+            color: #fff;
+            border: 0;
+        }
+
+        .match-options-actions .primary-btn {
+            background: #2563eb;
+        }
+
+        .match-options-actions .secondary-btn {
+            background: #64748b;
+        }
+
+        .match-options-warning {
+            margin-top: 8px;
+            color: #b45309;
+            font-size: 13px;
+        }
+
     </style>
     <link rel="stylesheet" href="/css/caoren-motion.css">
-    <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-1"></script>
+    <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
 <body>
     <div class="page-shell">
@@ -1468,8 +1548,39 @@
         <div class="player-list" id="player-list"></div>
         <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
             <h3 style="margin-top:0;">管理员控制区</h3>
-            <button onclick="advancePhase()" style="font-weight:bold; background-color:#ffeb3b; border-color:#fbc02d; font-size: 16px; padding: 10px 20px;">推进阶段 (当前: Lobby)</button>
-            <button onclick="openTemplateModal()" style="font-weight:bold; background-color:#bbdefb; border-color:#90caf9; font-size: 16px; padding: 10px 20px;">配置任务模板</button>
+
+            <div id="match-options-panel" class="match-options-panel">
+                <h4>本局模式设置</h4>
+                <div id="match-options-status" class="match-options-status">当前阶段：读取中……</div>
+
+                <label class="match-options-row">
+                    <input type="checkbox" id="match-option-undercover" checked>
+                    <div>
+                        <div class="match-options-title">启用卧底模式</div>
+                        <div class="match-options-desc">
+                            开启：照常分配 Soldier / Undercover / Detective，并启用卧底任务、侦探问答、赛后指认和卧底相关计分。<br>
+                            关闭：本局所有玩家按普通比赛处理，不分配卧底/侦探，不生成卧底任务，比赛结束后直接进入积分结算。
+                        </div>
+                    </div>
+                </label>
+
+                <label class="match-options-row">
+                    <input type="checkbox" id="match-option-caoren">
+                    <div>
+                        <div class="match-options-title">启用 CaorenCup 修改</div>
+                        <div class="match-options-desc">第一阶段只记录本局是否启用。第二阶段再接入网页可视化修改面板和游戏内插件下发。</div>
+                    </div>
+                </label>
+
+                <div class="match-options-actions">
+                    <button type="button" class="primary-btn" id="save-match-options-btn" onclick="saveMatchOptions()">保存本局模式</button>
+                    <button type="button" class="secondary-btn" id="refresh-match-options-btn" onclick="refreshMatchOptions()">刷新状态</button>
+                </div>
+                <div class="match-options-warning">只能在大厅阶段修改；进入队长选择后，本局模式会锁定。</div>
+            </div>
+
+            <button id="advance-phase-btn" onclick="advancePhase()" style="font-weight:bold; background-color:#ffeb3b; border-color:#fbc02d; font-size: 16px; padding: 10px 20px;">推进阶段 (当前: Lobby)</button>
+            <button id="template-config-btn" onclick="openTemplateModal()" style="font-weight:bold; background-color:#bbdefb; border-color:#90caf9; font-size: 16px; padding: 10px 20px;">配置任务模板</button>
             <button onclick="terminateGame()" style="font-weight:bold; background-color:#d32f2f; color:#fff; border-color:#b71c1c; font-size: 16px; padding: 10px 20px;">终止本局游戏</button>
         </div>
     </div>
@@ -1660,6 +1771,104 @@
             if (message) alert(message);
         }
 
+
+        function isUndercoverModeEnabledFromState(state) {
+            return state?.matchOptions?.undercoverModeEnabled !== false;
+        }
+
+        function phaseDisplayName(phase) {
+            const map = {
+                Lobby: '大厅',
+                CaptainSelection: '队长选择',
+                Roll: 'Roll 点',
+                PlayerDraft: '队长选人',
+                MapBan: '地图 Ban/Pick',
+                SidePick: '选边',
+                PreGameSetup: '赛前配置',
+                LiveGame: '比赛中',
+                MidGameQA: '侦探问答',
+                PostGameAccusation: '赛后指认',
+                Scoreboard: '积分结算'
+            };
+            return map[phase] || phase || '未知';
+        }
+
+        function getAdminPasswordForRequest() {
+            return document.getElementById('extra-input')?.value || prompt('请输入管理员密码：') || '';
+        }
+
+        function syncMatchOptionsPanel(state, isAdmin) {
+            const panel = document.getElementById('match-options-panel');
+            if (!panel) return;
+            panel.style.display = isAdmin ? 'block' : 'none';
+            if (!isAdmin) return;
+
+            const phase = state?.phase || 'Lobby';
+            const editable = phase === 'Lobby';
+            const undercoverEnabled = isUndercoverModeEnabledFromState(state);
+            const caorenEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
+
+            const status = document.getElementById('match-options-status');
+            const undercoverInput = document.getElementById('match-option-undercover');
+            const caorenInput = document.getElementById('match-option-caoren');
+            const saveBtn = document.getElementById('save-match-options-btn');
+
+            if (status) {
+                status.innerHTML = `当前阶段：<b>${phaseDisplayName(phase)}</b>，${editable ? '可以修改本局模式。' : '本局模式已锁定。'}`;
+            }
+            if (undercoverInput) {
+                undercoverInput.checked = undercoverEnabled;
+                undercoverInput.disabled = !editable;
+            }
+            if (caorenInput) {
+                caorenInput.checked = caorenEnabled;
+                caorenInput.disabled = !editable;
+            }
+            if (saveBtn) saveBtn.disabled = !editable;
+        }
+
+        async function refreshMatchOptions() {
+            try {
+                const res = await fetch('/api/match-options', { headers: { Accept: 'application/json' } });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || '读取本局模式失败');
+                const pseudoState = { phase: data.phase, matchOptions: data.matchOptions };
+                syncMatchOptionsPanel(pseudoState, window._currentPlayer?.role === 'Admin');
+            } catch (err) {
+                alert(err.message || '读取本局模式失败');
+            }
+        }
+
+        async function saveMatchOptions() {
+            const phase = window._currentGamePhase || 'Lobby';
+            if (phase !== 'Lobby') {
+                alert('只能在大厅阶段修改本局模式。');
+                return;
+            }
+
+            const adminPassword = getAdminPasswordForRequest();
+            if (!adminPassword) return;
+
+            const matchOptions = {
+                undercoverModeEnabled: !!document.getElementById('match-option-undercover')?.checked,
+                caorenModifiersEnabled: !!document.getElementById('match-option-caoren')?.checked
+            };
+
+            try {
+                const res = await fetch('/api/admin/match-options', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ adminPassword, matchOptions })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || '保存本局模式失败');
+                alert('本局模式已保存。');
+                syncMatchOptionsPanel({ phase: data.phase, matchOptions: data.matchOptions }, true);
+            } catch (err) {
+                alert(err.message || '保存本局模式失败');
+            }
+        }
+
         ws.on('LOGIN_RESPONSE', (data) => {
             if (data.success) {
                 myPlayerId = data.playerId;
@@ -1678,6 +1887,7 @@
         });
 
         ws.on('GAME_STATE', (state) => {
+            window._currentGameState = state;
             if (typeof state.serverNow === 'number') serverClockOffset = state.serverNow - Date.now();
             window._currentGamePhase = state.phase;
             if (state.liveGameData) window._liveGameData = state.liveGameData;
@@ -1698,6 +1908,8 @@
             const currentPlayer = state.players[myPlayerId];
             window._currentPlayer = currentPlayer || null;
             const isAdmin = currentPlayer?.role === 'Admin';
+            const undercoverEnabled = isUndercoverModeEnabledFromState(state);
+            window._undercoverModeEnabled = undercoverEnabled;
 
             if (currentPlayer) {
                 let identityHtml = '你是：<b>' + currentPlayer.name + '</b>';
@@ -1739,10 +1951,14 @@
 
             if (isAdmin) {
                 document.getElementById('admin-controls').style.display = 'block';
-                const btn = document.querySelector('#admin-controls button');
+                const btn = document.getElementById('advance-phase-btn');
                 if (btn) btn.textContent = '推进阶段 (当前: ' + state.phase + ')';
+                const templateBtn = document.getElementById('template-config-btn');
+                if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
+                syncMatchOptionsPanel(state, true);
             } else {
                 document.getElementById('admin-controls').style.display = 'none';
+                syncMatchOptionsPanel(state, false);
             }
 
             const lobbyArea = document.getElementById('lobby-area');
@@ -1769,10 +1985,14 @@
             if (state.phase === 'Lobby') {
                 let html = '';
                 if (isAdmin) {
-                    html += '<div style="background:#e3f2fd; padding:15px; border-radius:5px; border:1px solid #90caf9;"><b>游戏人员配置：</b><br><br>' +
-                        '卧底数量(每边)：<input id="undercover-count" type="number" value="' + state.undercoverCount + '" min="0" style="width:80px;"> &nbsp;&nbsp;' +
-                        '侦探数量(每边)：<input id="detective-count" type="number" value="' + state.detectiveCount + '" min="0" style="width:80px;"> &nbsp;' +
-                        '<button onclick="updateRoleCounts()" style="background:#2196f3; color:#fff;">更新数量</button></div>';
+                    if (undercoverEnabled) {
+                        html += '<div style="background:#e3f2fd; padding:15px; border-radius:5px; border:1px solid #90caf9;"><b>游戏人员配置：</b><br><br>' +
+                            '卧底数量(每边)：<input id="undercover-count" type="number" value="' + state.undercoverCount + '" min="0" style="width:80px;"> &nbsp;&nbsp;' +
+                            '侦探数量(每边)：<input id="detective-count" type="number" value="' + state.detectiveCount + '" min="0" style="width:80px;"> &nbsp;' +
+                            '<button onclick="updateRoleCounts()" style="background:#2196f3; color:#fff;">更新数量</button></div>';
+                    } else {
+                        html += '<div style="background:#e8f5e9; padding:15px; border-radius:5px; border:1px solid #a5d6a7;"><b>普通比赛模式：</b>卧底模式已关闭，本局不会配置卧底/侦探数量，也不会出现任务、侦探问答或赛后指认。</div>';
+                    }
                 }
                 html += '<hr><button onclick="confirmQuit()" style="color:#d32f2f; border-color:#d32f2f;">退出房间</button>';
                 extraDiv.innerHTML = html;
@@ -1989,41 +2209,60 @@
             if (state.phase === 'PreGameSetup') {
                 const role = currentPlayer?.gameRole;
                 let html = '';
-                if (isAdmin) {
-                    html += '<div style="background:#f3e5f5; padding:15px; border:1px solid #ce93d8;"><h4>🛠️ 裁判面板：分配身份</h4>';
-                    html += '<table border=1 cellpadding=6 style="width:100%; border-collapse:collapse; background:#fff; text-align:center;"><tr><th>玩家</th><th>阵容</th><th>当前阵营</th><th>绑定</th><th>分配身份</th><th>操作</th></tr>';
-                    Object.values(state.players).forEach(p => {
-                        if (p.role === 'Spectator' || p.role === 'Admin') return;
-                        const curRole = p.gameRole || '<span style="color:red">未分配</span>';
-                        html += `<tr><td><b>${p.name}</b></td><td>${p.rosterTeam || '-'}</td><td>${p.team || '-'}</td><td>${p.steamIdBound ? '已绑定' : '未绑定'}</td><td>${curRole}</td>`;
-                        html += `<td><select id="role-select-${p.playerId}">
-                                <option value="Undercover" ${p.gameRole === 'Undercover' ? 'selected' : ''}>卧底</option>
-                                <option value="Detective" ${p.gameRole === 'Detective' ? 'selected' : ''}>侦探</option>
-                                <option value="Soldier" ${p.gameRole === 'Soldier' ? 'selected' : ''}>士兵</option>
-                                </select> <button onclick="setPlayerRole('${p.playerId}')">确认</button></td></tr>`;
-                    });
-                    html += '</table>';
-                    html += `<p style="margin-top:10px;">目标名额(单边)：${state.undercoverCount} 卧底, ${state.detectiveCount} 侦探</p>`;
-                    html += '<button onclick="randomRemainingRoles()" style="background:#7c3aed; color:#fff; font-weight:bold;">随机补齐剩余身份（仅管理员可见）</button> ';
-                    html += '<button onclick="releaseRoles()" style="background:#d32f2f; color:#fff; font-weight:bold;">发放身份给玩家</button>';
-                    html += `<p style="font-size:13px;color:#6b7280;margin-bottom:0;">发放状态：${state.rolesReleased ? '<b style="color:#2e7d32;">已发放</b>' : '<b style="color:#d32f2f;">未发放</b>'}。未发放前，普通玩家看不到任何人的身份。</p></div><hr>`;
-                }
-                if (role) {
-                    let roleStyle = role === 'Undercover' ? 'color:#d32f2f' : (role === 'Detective' ? 'color:#1976d2' : 'color:#388e3c');
-                    html += `<h2 style="text-align:center;">你的真实身份是：<span style="${roleStyle}; font-size:32px;">${role}</span></h2>`;
-                    html += '<div style="text-align:center;"><button onclick="showRules()" style="font-size:18px; padding:10px 20px;">📜 查看此身份的专属说明书</button></div>';
-                } else {
-                    html += '<h3 style="text-align:center; color:#666;">身份尚未由管理员发放，请先完成准备并等待裁判操作。</h3>';
-                }
 
-                html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
-                if (currentPlayer?.role !== 'Admin' && !currentPlayer?.isReady) {
-                    html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">✔️ 我已准备，等待发放身份</button>';
+                if (!undercoverEnabled) {
+                    if (isAdmin) {
+                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">确认玩家准备和选边无误后，可以直接推进进入正式比赛。</p></div><hr>';
+                    }
+
+                    html += '<h3 style="text-align:center; color:#2e7d32;">本局为普通比赛模式</h3>';
+                    html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；比赛结束后直接进入积分结算。</p>';
+
+                    html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
+                    if (currentPlayer?.role !== 'Admin' && !currentPlayer?.isReady) {
+                        html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">✔️ 我已准备，等待正式比赛</button>';
+                    } else {
+                        html += '<h3 style="color:#4caf50;">✅ 您已准备就绪，等待全员就位</h3>';
+                    }
+                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
+                    extraDiv.innerHTML = html;
                 } else {
-                    html += '<h3 style="color:#4caf50;">✅ 您已准备就绪，等待全员就位</h3>';
+                    if (isAdmin) {
+                        html += '<div style="background:#f3e5f5; padding:15px; border:1px solid #ce93d8;"><h4>🛠️ 裁判面板：分配身份</h4>';
+                        html += '<table border=1 cellpadding=6 style="width:100%; border-collapse:collapse; background:#fff; text-align:center;"><tr><th>玩家</th><th>阵容</th><th>当前阵营</th><th>绑定</th><th>分配身份</th><th>操作</th></tr>';
+                        Object.values(state.players).forEach(p => {
+                            if (p.role === 'Spectator' || p.role === 'Admin') return;
+                            const curRole = p.gameRole || '<span style="color:red">未分配</span>';
+                            html += `<tr><td><b>${p.name}</b></td><td>${p.rosterTeam || '-'}</td><td>${p.team || '-'}</td><td>${p.steamIdBound ? '已绑定' : '未绑定'}</td><td>${curRole}</td>`;
+                            html += `<td><select id="role-select-${p.playerId}">
+                                    <option value="Undercover" ${p.gameRole === 'Undercover' ? 'selected' : ''}>卧底</option>
+                                    <option value="Detective" ${p.gameRole === 'Detective' ? 'selected' : ''}>侦探</option>
+                                    <option value="Soldier" ${p.gameRole === 'Soldier' ? 'selected' : ''}>士兵</option>
+                                    </select> <button onclick="setPlayerRole('${p.playerId}')">确认</button></td></tr>`;
+                        });
+                        html += '</table>';
+                        html += `<p style="margin-top:10px;">目标名额(单边)：${state.undercoverCount} 卧底, ${state.detectiveCount} 侦探</p>`;
+                        html += '<button onclick="randomRemainingRoles()" style="background:#7c3aed; color:#fff; font-weight:bold;">随机补齐剩余身份（仅管理员可见）</button> ';
+                        html += '<button onclick="releaseRoles()" style="background:#d32f2f; color:#fff; font-weight:bold;">发放身份给玩家</button>';
+                        html += `<p style="font-size:13px;color:#6b7280;margin-bottom:0;">发放状态：${state.rolesReleased ? '<b style="color:#2e7d32;">已发放</b>' : '<b style="color:#d32f2f;">未发放</b>'}。未发放前，普通玩家看不到任何人的身份。</p></div><hr>`;
+                    }
+                    if (role) {
+                        let roleStyle = role === 'Undercover' ? 'color:#d32f2f' : (role === 'Detective' ? 'color:#1976d2' : 'color:#388e3c');
+                        html += `<h2 style="text-align:center;">你的真实身份是：<span style="${roleStyle}; font-size:32px;">${role}</span></h2>`;
+                        html += '<div style="text-align:center;"><button onclick="showRules()" style="font-size:18px; padding:10px 20px;">📜 查看此身份的专属说明书</button></div>';
+                    } else {
+                        html += '<h3 style="text-align:center; color:#666;">身份尚未由管理员发放，请先完成准备并等待裁判操作。</h3>';
+                    }
+
+                    html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
+                    if (currentPlayer?.role !== 'Admin' && !currentPlayer?.isReady) {
+                        html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">✔️ 我已准备，等待发放身份</button>';
+                    } else {
+                        html += '<h3 style="color:#4caf50;">✅ 您已准备就绪，等待全员就位</h3>';
+                    }
+                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
+                    extraDiv.innerHTML = html;
                 }
-                html += '<p style="color:#888; font-size:14px; margin-top:15px;">已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
-                extraDiv.innerHTML = html;
             }
 
             if (state.phase === 'LiveGame') {
@@ -2031,10 +2270,17 @@
             }
 
             if (state.phase === 'MidGameQA') {
-                extraDiv.innerHTML = '<div style="background:#e3f2fd; padding:20px; border:1px solid #90caf9; border-radius:8px;"><h2 style="margin-top:0;color:#1565c0;">中场问答已改为游戏内语音</h2><p>网页不再提交问题或记录回答。侦探可以在 LiveGame 阶段的“侦探语音问答草稿”中记录想问的问题；管理员在自己的 LiveGame 页面记录每名侦探被回答的问题数量，用于结算 -12 规则。</p></div>';
+                if (!undercoverEnabled) {
+                    extraDiv.innerHTML = '<div style="background:#e8f5e9; padding:20px; border:1px solid #a5d6a7; border-radius:8px;"><h2 style="margin-top:0;color:#2e7d32;">卧底模式已关闭</h2><p>本局不进行侦探问答。请管理员推进到积分结算；服务器正常情况下会自动跳过此阶段。</p></div>';
+                } else {
+                    extraDiv.innerHTML = '<div style="background:#e3f2fd; padding:20px; border:1px solid #90caf9; border-radius:8px;"><h2 style="margin-top:0;color:#1565c0;">中场问答已改为游戏内语音</h2><p>网页不再提交问题或记录回答。侦探可以在 LiveGame 阶段的“侦探语音问答草稿”中记录想问的问题；管理员在自己的 LiveGame 页面记录每名侦探被回答的问题数量，用于结算 -12 规则。</p></div>';
+                }
             }
 
             if (state.phase === 'PostGameAccusation') {
+                if (!undercoverEnabled) {
+                    extraDiv.innerHTML = '<div style="background:#e8f5e9; padding:20px; border:1px solid #a5d6a7; border-radius:8px;"><h2 style="margin-top:0;color:#2e7d32;">卧底模式已关闭</h2><p>本局不进行赛后指认。请管理员推进到积分结算；服务器正常情况下会自动跳过此阶段。</p></div>';
+                } else {
                 let html = '<div style="background:#fff8e1; padding:20px; border:2px solid #ffa000; border-radius:8px;">';
                 html += '<h2 style="color:#e65100; margin-top:0;">🫵 终局指认时刻</h2>';
                 html += '<p style="font-size:16px;">请仔细回想整场比赛的蛛丝马迹，投出你神圣的两票：</p>';
@@ -2080,6 +2326,8 @@
                 }
                 html += '</div>';
                 extraDiv.innerHTML = html;
+
+                }
             }
 
             if (state.phase === 'Scoreboard') {
@@ -2093,7 +2341,11 @@
                         .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0));
 
                     html += '<div class="score-detail-wrap">';
-                    html += '<table class="score-detail-table"><tr><th>玩家</th><th>阵容</th><th>身份</th><th>击杀</th><th>死亡</th><th>助攻</th><th>游戏胜负</th><th>回合胜负</th><th>伤害</th><th>指认 / 问答</th><th>任务 / 暴露</th><th>最终得分</th></tr>';
+                    if (undercoverEnabled) {
+                        html += '<table class="score-detail-table"><tr><th>玩家</th><th>阵容</th><th>身份</th><th>击杀</th><th>死亡</th><th>助攻</th><th>游戏胜负</th><th>回合胜负</th><th>伤害</th><th>指认 / 问答</th><th>任务 / 暴露</th><th>最终得分</th></tr>';
+                    } else {
+                        html += '<table class="score-detail-table"><tr><th>玩家</th><th>阵容</th><th>身份</th><th>击杀</th><th>死亡</th><th>助攻</th><th>游戏胜负</th><th>回合胜负</th><th>伤害</th><th>最终得分</th></tr>';
+                    }
 
                     sortedPlayers.forEach(p => {
                         html += renderScoreboardRow(p, state);
@@ -2118,7 +2370,7 @@
                     html += '</div>';
                 }
 
-                if (state.accusations && Object.keys(state.accusations).length > 0) {
+                if (undercoverEnabled && state.accusations && Object.keys(state.accusations).length > 0) {
                     html += '<h4 style="margin-top:20px;">🕵️ 赛后复盘：全员指认记录</h4><div style="background:#fafafa; padding:15px; border:1px solid #ddd; border-radius:5px; column-count:2; font-size:13px;">';
                     for (const [pId, acc] of Object.entries(state.accusations)) {
                         const p = state.players[pId];
@@ -2231,6 +2483,29 @@
             const assists = Number(stats.assists || 0);
             const damage = Number(stats.damage || 0);
             const damageUnits = Math.floor(damage / 100);
+            const undercoverEnabled = isUndercoverModeEnabledFromState(state);
+
+            if (!undercoverEnabled) {
+                const killCell = formulaTerm('', 5, kills, getScoreBreakdownValue(p, '击杀'));
+                const deathCell = formulaTerm('', -2, deaths, getScoreBreakdownValue(p, '死亡'));
+                const assistCell = formulaTerm('', 2, assists, getScoreBreakdownValue(p, '助攻'));
+                const gameCell = singleScoreTerm('', getScoreBreakdownValue(p, '游戏胜负'));
+                const roundCell = renderRoundScoreTerms('Soldier', p, state);
+                const damageCell = formulaTerm('', 1, damageUnits, getScoreBreakdownValue(p, '伤害')) + scoreTerm('原始伤害', countSpan(damage));
+
+                return `<tr class="soldier">
+                    <td><b>${htmlEscape(p.name)}</b></td>
+                    <td>${p.rosterTeam || '-'}</td>
+                    <td>普通</td>
+                    <td>${killCell}</td>
+                    <td>${deathCell}</td>
+                    <td>${assistCell}</td>
+                    <td>${gameCell}</td>
+                    <td>${roundCell}</td>
+                    <td>${damageCell}</td>
+                    <td><span class="score-final ${scoreClass(p.finalScore || 0)}">${fmtResult(p.finalScore || 0)}</span></td>
+                </tr>`;
+            }
 
             let killCell = emptyScoreTerm();
             let deathCell = emptyScoreTerm();
@@ -2431,6 +2706,7 @@
         function renderLiveGame(state) {
             const live = state.liveGameData || window._liveGameData || {};
             const currentPlayer = window._currentPlayer;
+            const undercoverEnabled = isUndercoverModeEnabledFromState(state);
             let html = '<div class="live-header" style="background:#263238; color:#fff;">' +
                 '<span style="font-size:24px;">赛况：A队 <span style="color:#64b5f6;">' + (live.scoreA || 0) + '</span> - <span style="color:#ffb74d;">' + (live.scoreB || 0) + '</span> B队</span> ' +
                 '<span style="font-size:16px; color:#b0bec5;">CT/T参考：' + (live.scoreCT || 0) + ':' + (live.scoreT || 0) + '</span> ' +
@@ -2440,7 +2716,7 @@
                 html += '<div style="background:#fff8e1; border:1px solid #fbc02d; padding:12px; border-radius:6px; margin-bottom:12px; font-weight:bold; color:#e65100;">比赛已自动判定结束：' + (live.winnerTeam || '?') + '队获胜。请等待进入结算/指认流程。</div>';
             }
 
-            if (currentPlayer?.gameRole === 'Undercover') {
+            if (undercoverEnabled && currentPlayer?.gameRole === 'Undercover') {
                 html += '<h3 style="color:#d32f2f;">你的任务面板</h3><div class="task-grid" style="background:#fafafa; border-radius:8px; border:1px solid #ddd;">';
                 const grid = currentPlayer.taskGrid || {};
                 ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'].forEach(cellId => {
@@ -2477,7 +2753,7 @@
                     '<button id="btn-n-set" onclick="changeN(\'N_SET\')" style="background:#607d8b; color:#fff;">精准录入 N 值</button></p>';
                 html += '<hr style="border-top:1px dashed #ffb74d;"><p style="font-size:16px; margin-bottom:0;">当前操作焦点：<span id="selected-cell" style="color:#d32f2f; font-weight:bold; font-size:20px;">未锁定格子</span></p>';
                 html += '</div>';
-            } else if (currentPlayer?.gameRole === 'Detective') {
+            } else if (undercoverEnabled && currentPlayer?.gameRole === 'Detective') {
                 html += '<div style="background:#e3f2fd; padding:20px; border-radius:8px; border:1px solid #90caf9;">';
                 html += '<h3 style="color:#1565c0; margin-top:0;">侦探语音问答草稿</h3>';
                 html += '<p style="color:#455a64; line-height:1.7;">中场问答不再通过网页提交。请在这里临时记录你想通过游戏内语音询问管理员的问题；实际提问和回答以游戏内语音交流为准。</p>';
@@ -2498,7 +2774,8 @@
                 html += '<button onclick="resetFormalMatchCounters()" style="background:#d32f2f; color:#fff;">现在是第一回合（重置正式赛数据）</button>';
                 html += '<p style="font-size:13px;color:#64748b;margin:8px 0 0;">若正式赛前插件已经记录过娱乐回合，请在正式开赛第一回合时点此按钮，避免回合数、伤害和战绩被赛前数据污染。</p></div>';
 
-                html += '<div style="margin-top:15px; padding:15px; background:#e8f5e9; border:1px solid #a5d6a5; border-radius:6px;">';
+                if (undercoverEnabled) {
+                    html += '<div style="margin-top:15px; padding:15px; background:#e8f5e9; border:1px solid #a5d6a5; border-radius:6px;">';
                 html += '<h4 style="margin-top:0; color:#2e7d32;">侦探语音问答记录</h4>';
                 html += '<p style="color:#455a64; line-height:1.7; margin-top:0;">中场问答现在通过游戏内语音完成。请管理员只记录每名侦探“被管理员回答的问题数量”。若记录为 2，结算时该侦探自动 -12 分。</p>';
                 const detectives = Object.values(window._allPlayers || {}).filter(p => p.gameRole === 'Detective');
@@ -2539,6 +2816,7 @@
                 }
                 html += '</div>';
             }
+                }
             document.getElementById('extra-info').innerHTML = html;
 
             updateButtonStates();
@@ -2985,7 +3263,7 @@
                     '<b style="color:#388e3c;font-size:20px;">【士兵说明】</b><br/><br/>' +
                     '1. 你的主要职责是正常比赛并帮助队伍取胜。<br/>' +
                     '2. 回合胜利是你的首要目标。<br/>' +
-                    '3. 比赛结束后，你可以根据观察结果参与指认。'
+                    (window._undercoverModeEnabled === false ? '3. 本局关闭卧底模式，比赛结束后直接进入积分结算。' : '3. 比赛结束后，你可以根据观察结果参与指认。')
                 ];
             }
 
@@ -3011,6 +3289,7 @@
         function closeRules() { document.getElementById('rules-modal').style.display = 'none'; }
     </script>
     </div>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"7939e04a4baf43c8b86a560f74aac60e","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
 

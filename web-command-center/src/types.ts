@@ -132,11 +132,16 @@ export interface LiveGameData {
     roundBaseOffset?: number;
     [key: string]: any;
 }
+export interface MatchOptions {
+    undercoverModeEnabled: boolean;
+    caorenModifiersEnabled: boolean;
+}
 
 export interface GameSession {
     sessionId: string;
     phase: GamePhase;
     matchId: string;
+    matchOptions: MatchOptions;
     players: Record<string, Player>;
     playerOrder: string[];
     teams: {

@@ -1,4 +1,4 @@
-import { createServer } from 'http';
+﻿import { createServer } from 'http';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
@@ -52,6 +52,10 @@ const createInitialSession = (): GameSession => {
         sessionId: uuidv4(),
         phase: GamePhase.Lobby,
         matchId: uuidv4(),
+        matchOptions: {
+            undercoverModeEnabled: true,
+            caorenModifiersEnabled: false,
+        },
         players: {},
         playerOrder: [],
         teams: {
@@ -159,6 +163,97 @@ const findPlayerByName = (name: unknown): Player | undefined => {
 };
 const getGamePlayers = (): Player[] => Object.values(gameSession.players).filter(p => p.role !== 'Spectator' && p.role !== 'Admin');
 const hasAnyDetective = (): boolean => Object.values(gameSession.players).some(p => p.gameRole === 'Detective' && p.role !== 'Spectator' && p.role !== 'Admin');
+const getDefaultMatchOptions = () => ({
+    undercoverModeEnabled: true,
+    caorenModifiersEnabled: false,
+});
+
+const ensureMatchOptions = () => {
+    if (!gameSession.matchOptions) {
+        gameSession.matchOptions = getDefaultMatchOptions();
+    }
+
+    gameSession.matchOptions.undercoverModeEnabled = gameSession.matchOptions.undercoverModeEnabled !== false;
+    gameSession.matchOptions.caorenModifiersEnabled = gameSession.matchOptions.caorenModifiersEnabled === true;
+
+    return gameSession.matchOptions;
+};
+
+const isUndercoverModeEnabled = (): boolean => {
+    return ensureMatchOptions().undercoverModeEnabled !== false;
+};
+const isUndercoverOnlyPhase = (phase: GamePhase): boolean => {
+    return phase === GamePhase.MidGameQA || phase === GamePhase.PostGameAccusation;
+};
+
+const resolveNextPhaseByMatchOptions = (from: GamePhase, requestedTo: GamePhase): GamePhase => {
+    if (isUndercoverModeEnabled()) {
+        return requestedTo;
+    }
+
+    // 卧底模式关闭后，侦探问答和赛后指认都是非法阶段。
+    if (isUndercoverOnlyPhase(requestedTo)) {
+        return GamePhase.Scoreboard;
+    }
+
+    // 卧底模式关闭后，比赛结束只能直接去积分结算。
+    if (from === GamePhase.LiveGame) {
+        return GamePhase.Scoreboard;
+    }
+
+    return requestedTo;
+};
+
+const forceSkipUndercoverOnlyPhaseIfNeeded = () => {
+    if (isUndercoverModeEnabled()) return;
+
+    if (!isUndercoverOnlyPhase(gameSession.phase)) return;
+
+    try {
+        calculateScores();
+    } catch (err) {
+        console.error('[MatchOptions] calculateScores failed while force skipping undercover-only phase:', err);
+    }
+
+    gameSession.phase = GamePhase.Scoreboard;
+    gameSession.timerEndAt = null;
+    gameSession.timerPhase = null;
+    broadcastState();
+};
+
+const clearUndercoverModeState = () => {
+    gameSession.undercoverCount = 0;
+    gameSession.detectiveCount = 0;
+    gameSession.rolesReleased = false;
+    gameSession.questionsUsed = 0;
+    gameSession.currentQuestion = null;
+    gameSession.questionAnswer = null;
+    gameSession.secondQuestionAnswered = false;
+    gameSession.accusations = {};
+
+    for (const player of getGamePlayers()) {
+        player.gameRole = 'Soldier';
+        delete player.taskGrid;
+        player.abandonCount = 0;
+        player.replaceCount = 0;
+        player.hintUsedCount = 0;
+        player.detectiveQuestionCount = 0;
+    }
+};
+
+const applyMatchOptions = (rawOptions: any) => {
+    gameSession.matchOptions = {
+        undercoverModeEnabled: rawOptions?.undercoverModeEnabled !== false,
+        caorenModifiersEnabled: rawOptions?.caorenModifiersEnabled === true,
+    };
+
+    if (!gameSession.matchOptions.undercoverModeEnabled) {
+        clearUndercoverModeState();
+        forceSkipUndercoverOnlyPhaseIfNeeded();
+    }
+
+    return gameSession.matchOptions;
+};
 const isPlayerOnline = (playerId: string): boolean => !!io.sockets.adapter.rooms.get(playerId)?.size;
 
 const shouldRevealRoleToViewer = (viewer: Player | undefined, target: Player): boolean => {
@@ -204,6 +299,48 @@ const broadcastState = () => {
         socket.emit(WsEvents.GAME_STATE, sanitizeForPublic(gameSession, viewerId));
     }
 };
+// ========== 第一阶段：赛前本局模式设置 ==========
+
+app.get('/api/match-options', (_req, res) => {
+    res.json({
+        success: true,
+        phase: gameSession.phase,
+        matchOptions: ensureMatchOptions(),
+    });
+});
+
+app.post('/api/admin/match-options', (req, res) => {
+    const adminPassword = String(req.body?.adminPassword || '');
+
+    if (!ADMIN_PASSWORD || adminPassword !== ADMIN_PASSWORD) {
+        return res.status(401).json({
+            success: false,
+            error: '管理员密码错误',
+        });
+    }
+
+    if (gameSession.phase !== GamePhase.Lobby) {
+        return res.status(400).json({
+            success: false,
+            error: '只能在大厅阶段修改本局模式',
+            phase: gameSession.phase,
+        });
+    }
+
+    const matchOptions = applyMatchOptions(req.body?.matchOptions || {});
+
+    io.emit(WsEvents.NOTIFICATION, {
+        message: `本局模式已更新：卧底模式${matchOptions.undercoverModeEnabled ? '开启' : '关闭'}，CaorenCup 修改${matchOptions.caorenModifiersEnabled ? '开启' : '关闭'}`,
+    });
+
+    broadcastState();
+
+    res.json({
+        success: true,
+        phase: gameSession.phase,
+        matchOptions,
+    });
+});
 
 const sendPrivateData = (socketId: string, playerId: string) => {
     const player = findPlayerById(playerId);
@@ -452,7 +589,10 @@ const applyPluginRoundEndEvent = (payload: any) => {
     if (live.matchFinished && gameSession.phase === GamePhase.LiveGame) {
         const winnerLabel = live.winnerTeam === 'A' ? 'A队' : 'B队';
         io.emit(WsEvents.NOTIFICATION, { message: `比赛结束：${winnerLabel} 获胜，比分 ${live.scoreA}:${live.scoreB}` });
-        advancePhase(GamePhase.LiveGame, GamePhase.PostGameAccusation);
+        advancePhase(
+            GamePhase.LiveGame,
+            isUndercoverModeEnabled() ? GamePhase.PostGameAccusation : GamePhase.Scoreboard
+        );
     }
 };
 const updateLivePlayersFromSnapshot = (players: any[]) => {
@@ -729,6 +869,24 @@ const finishSideVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
 
 // ========== 角色分配 ==========
 const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
+    if (!isUndercoverModeEnabled()) {
+        const teamsToAssign: RosterTeam[] = onlyTeam ? [onlyTeam] : ['A', 'B'];
+
+        for (const team of teamsToAssign) {
+            for (const player of getTeamPlayers(team)) {
+                player.gameRole = 'Soldier';
+                delete player.taskGrid;
+                player.detectiveQuestionCount = 0;
+            }
+        }
+
+        gameSession.undercoverCount = 0;
+        gameSession.detectiveCount = 0;
+        gameSession.rolesReleased = false;
+        broadcastState();
+        return;
+    }
+
     const teamsToAssign: RosterTeam[] = onlyTeam ? [onlyTeam] : ['A', 'B'];
     for (const team of teamsToAssign) {
         const players = getTeamPlayers(team);
@@ -748,6 +906,8 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
 };
 
 const assignTaskGridToPlayer = (player: Player) => {
+
+    if (!isUndercoverModeEnabled()) return;
     if (!gameSession.taskTemplate) return;
     const grid: Record<string, any> = {};
     for (const [cellId, cell] of Object.entries(gameSession.taskTemplate.cells)) {
@@ -927,6 +1087,27 @@ const calculateScores = () => {
         const didWin = !!winnerRoster && player.rosterTeam === winnerRoster;
         const gameResultScore = winnerRoster ? (didWin ? 1 : -1) : 0;
         let score = 0;
+
+        if (!isUndercoverModeEnabled()) {
+            breakdown['击杀'] = kills * 5;
+            breakdown['死亡'] = deaths * -2;
+            breakdown['助攻'] = assists * 2;
+            breakdown['游戏胜负'] = gameResultScore > 0 ? 30 : (gameResultScore < 0 ? -10 : 0);
+            breakdown['回合胜负'] = roundRecord.won * 10 + roundRecord.lost * -4;
+            breakdown['伤害'] = Math.floor(damage / 100) * 1;
+
+            score =
+                breakdown['击杀'] +
+                breakdown['死亡'] +
+                breakdown['助攻'] +
+                breakdown['游戏胜负'] +
+                breakdown['回合胜负'] +
+                breakdown['伤害'];
+
+            player.finalScore = Math.round(score * 100) / 100;
+            player.scoreBreakdown = breakdown;
+            continue;
+        }
 
         if (role === 'Soldier') {
             breakdown['击杀'] = kills * 5;
@@ -1142,8 +1323,8 @@ const performPhaseTransition = (to: GamePhase) => {
         for (let i = 0; i < totalPicks; i++) gameSession.draftOrder.push(pickSequence[i % 4]);
         gameSession.draftIndex = 0;
 
-        gameSession.teams.A.players = [gameSession.captains.A!];
-        gameSession.teams.B.players = [gameSession.captains.B!];
+        gameSession.teams.A.players = [gameSession.captains.A!].filter(Boolean);
+        gameSession.teams.B.players = [gameSession.captains.B!].filter(Boolean);
         const pA = findPlayerById(gameSession.captains.A!); if (pA) { pA.rosterTeam = 'A'; pA.team = undefined; }
         const pB = findPlayerById(gameSession.captains.B!); if (pB) { pB.rosterTeam = 'B'; pB.team = undefined; }
 
@@ -1156,34 +1337,71 @@ const performPhaseTransition = (to: GamePhase) => {
         banSequence.length = gameSession.mapPool.length - 1;
         gameSession.banSequence = banSequence;
         startDraftPickTimer(false);
-
     } else if (to === GamePhase.MapBan) {
-        gameSession.bannedMaps = []; gameSession.selectedMap = null;
+        gameSession.bannedMaps = [];
+        gameSession.selectedMap = null;
         startMapVote(gameSession.banSequence[0]);
     } else if (to === GamePhase.SidePick) {
         startSideVote(gameSession.sidePickTeam || 'A');
     } else if (to === GamePhase.PreGameSetup) {
         if (gameSession.selectedSide) setRosterLiveSides(gameSession.selectedSide);
-        gameSession.rolesReleased = false;
-        Object.values(gameSession.players).forEach(p => p.gameRole = undefined);
+
+        if (isUndercoverModeEnabled()) {
+            gameSession.rolesReleased = false;
+            Object.values(gameSession.players).forEach(p => p.gameRole = undefined);
+        } else {
+            gameSession.undercoverCount = 0;
+            gameSession.detectiveCount = 0;
+            gameSession.rolesReleased = true;
+            gameSession.questionsUsed = 0;
+            gameSession.currentQuestion = null;
+            gameSession.questionAnswer = null;
+            gameSession.secondQuestionAnswered = false;
+            gameSession.accusations = {};
+            Object.values(gameSession.players).forEach(p => {
+                if (p.role !== 'Spectator' && p.role !== 'Admin') p.gameRole = 'Soldier';
+                delete p.taskGrid;
+                p.detectiveQuestionCount = 0;
+                p.abandonCount = 0;
+                p.replaceCount = 0;
+                p.hintUsedCount = 0;
+            });
+        }
     } else if (to === GamePhase.LiveGame) {
         gameSession.matchId = uuidv4();
         gameSession.rolesReleased = true;
-        const unassigned = getGamePlayers().filter(p => !p.gameRole);
-        if (unassigned.length > 0) randomRemainingRoles();
+
+        if (isUndercoverModeEnabled()) {
+            const unassigned = getGamePlayers().filter(p => !p.gameRole);
+            if (unassigned.length > 0) randomRemainingRoles();
+        } else {
+            clearUndercoverModeState();
+            gameSession.rolesReleased = true;
+        }
+
         Object.values(gameSession.players).forEach(p => {
             p.stats = { kills: 0, deaths: 0, assists: 0, damage: 0 };
             p.finalScore = undefined;
             p.scoreBreakdown = undefined;
-            p.detectiveQuestionCount = p.gameRole === 'Detective' ? 0 : undefined;
-            if (p.gameRole === 'Undercover') assignTaskGridToPlayer(p);
+            p.detectiveQuestionCount = isUndercoverModeEnabled() && p.gameRole === 'Detective' ? 0 : undefined;
+            if (isUndercoverModeEnabled() && p.gameRole === 'Undercover') assignTaskGridToPlayer(p);
+            if (!isUndercoverModeEnabled()) delete p.taskGrid;
         });
         gameSession.liveGameData = createEmptyLiveGameData();
     } else if (to === GamePhase.MidGameQA) {
-        // Stage 3.13：中场问答改为游戏内语音进行，网页不再进入该流程。
+        // Stage 3.13：中场问答改为游戏内语音进行，网页不再停留该流程。
         advancePhase(GamePhase.MidGameQA, GamePhase.PostGameAccusation);
         return;
     } else if (to === GamePhase.PostGameAccusation) {
+        if (!isUndercoverModeEnabled()) {
+            calculateScores();
+            gameSession.phase = GamePhase.Scoreboard;
+            gameSession.timerEndAt = null;
+            gameSession.timerPhase = null;
+            broadcastState();
+            return;
+        }
+
         const newAccusations: Record<string, { own: string | null; enemy: string | null }> = {};
         for (const p of getGamePlayers()) newAccusations[p.playerId] = { own: null, enemy: null };
         gameSession.accusations = newAccusations;
@@ -1192,26 +1410,31 @@ const performPhaseTransition = (to: GamePhase) => {
     }
 
     let timerEnd: number | null = null;
-let timerPhase: GamePhase | null = null;
+    let timerPhase: GamePhase | null = null;
 
-if (to === GamePhase.PlayerDraft && gameSession.draftPickTimeoutAt) {
-    timerEnd = gameSession.draftPickTimeoutAt;
-    timerPhase = GamePhase.PlayerDraft;
-} else if (to === GamePhase.MapBan && gameSession.mapVote?.timeoutAt) {
-    timerEnd = gameSession.mapVote.timeoutAt;
-    timerPhase = GamePhase.MapBan;
-} else if (to === GamePhase.SidePick && gameSession.sideVote?.timeoutAt) {
-    timerEnd = gameSession.sideVote.timeoutAt;
-    timerPhase = GamePhase.SidePick;
-}
+    if (to === GamePhase.PlayerDraft && gameSession.draftPickTimeoutAt) {
+        timerEnd = gameSession.draftPickTimeoutAt;
+        timerPhase = GamePhase.PlayerDraft;
+    } else if (to === GamePhase.MapBan && gameSession.mapVote?.timeoutAt) {
+        timerEnd = gameSession.mapVote.timeoutAt;
+        timerPhase = GamePhase.MapBan;
+    } else if (to === GamePhase.SidePick && gameSession.sideVote?.timeoutAt) {
+        timerEnd = gameSession.sideVote.timeoutAt;
+        timerPhase = GamePhase.SidePick;
+    }
 
-gameSession.timerEndAt = timerEnd;
-gameSession.timerPhase = timerPhase;
+    gameSession.timerEndAt = timerEnd;
+    gameSession.timerPhase = timerPhase;
 
-broadcastState();};
+    broadcastState();
+};
 
 // ========== 阶段推进核心 ==========
+
 const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
+    to = resolveNextPhaseByMatchOptions(from, to);
+
+    if (gameSession.phase !== from) return;
     if (!canTransition(from, to)) return;
 
     if (from === GamePhase.Roll) {
@@ -1329,34 +1552,137 @@ io.on('connection', (socket) => {
         if (data.action === 'ADVANCE_PHASE') {
             const current = gameSession.phase;
             let nextPhase: GamePhase | null = null;
+
             switch (current) {
-                case GamePhase.Lobby: nextPhase = GamePhase.CaptainSelection; break;
-                case GamePhase.CaptainSelection: nextPhase = GamePhase.Roll; break;
-                case GamePhase.Roll: nextPhase = GamePhase.PlayerDraft; break;
-                case GamePhase.PlayerDraft: nextPhase = GamePhase.MapBan; break;
-                case GamePhase.MapBan: nextPhase = GamePhase.SidePick; break;
-                case GamePhase.SidePick: nextPhase = GamePhase.PreGameSetup; break;
-                case GamePhase.PreGameSetup: nextPhase = GamePhase.LiveGame; break;
-                case GamePhase.LiveGame: nextPhase = GamePhase.PostGameAccusation; break;
-                case GamePhase.MidGameQA: nextPhase = GamePhase.PostGameAccusation; break;
-                case GamePhase.PostGameAccusation: nextPhase = GamePhase.Scoreboard; break;
-                case GamePhase.Scoreboard: resetCurrentGame('管理员开启新一轮'); return;
-                default: break;
+                case GamePhase.Lobby:
+                    nextPhase = GamePhase.CaptainSelection;
+                    break;
+
+                case GamePhase.CaptainSelection:
+                    nextPhase = GamePhase.Roll;
+                    break;
+
+                case GamePhase.Roll:
+                    nextPhase = GamePhase.PlayerDraft;
+                    break;
+
+                case GamePhase.PlayerDraft:
+                    nextPhase = GamePhase.MapBan;
+                    break;
+
+                case GamePhase.MapBan:
+                    nextPhase = GamePhase.SidePick;
+                    break;
+
+                case GamePhase.SidePick:
+                    nextPhase = GamePhase.PreGameSetup;
+                    break;
+
+                case GamePhase.PreGameSetup:
+                    nextPhase = GamePhase.LiveGame;
+                    break;
+
+                case GamePhase.LiveGame:
+                    // 关键修改：
+                    // 卧底模式开启：比赛结束后进入赛后指认。
+                    // 卧底模式关闭：比赛结束后直接进入积分结算。
+                    nextPhase = isUndercoverModeEnabled()
+                        ? GamePhase.PostGameAccusation
+                        : GamePhase.Scoreboard;
+                    break;
+
+                case GamePhase.MidGameQA:
+                    // 卧底模式关闭时，理论上不应该进入 MidGameQA。
+                    // 如果因为旧状态已经进来了，直接去积分结算。
+                    nextPhase = isUndercoverModeEnabled()
+                        ? GamePhase.PostGameAccusation
+                        : GamePhase.Scoreboard;
+                    break;
+
+                case GamePhase.PostGameAccusation:
+                    nextPhase = GamePhase.Scoreboard;
+                    break;
+
+                case GamePhase.Scoreboard:
+                    resetCurrentGame('管理员开启新一轮');
+                    return;
+
+                default:
+                    break;
             }
+
+            if (!nextPhase) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '当前阶段无法继续推进。' });
+                return;
+            }
+
+            nextPhase = resolveNextPhaseByMatchOptions(current, nextPhase);
+
+            // 进入正式比赛前的检查。
             if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame) {
-                const unassigned = getGamePlayers().filter(p => !p.gameRole);
-                if (unassigned.length > 0) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${unassigned.length} 名玩家未分配身份，请先由管理员分配/随机补齐。` });
-                    return;
-                }
-                if (!gameSession.rolesReleased) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '身份尚未发放给玩家。请先点击“发放身份给玩家”，再进入正式对局。' });
-                    return;
+                if (isUndercoverModeEnabled()) {
+                    const unassigned = getGamePlayers().filter(p => !p.gameRole);
+
+                    if (unassigned.length > 0) {
+                        socket.emit(WsEvents.NOTIFICATION, {
+                            message: `还有 ${unassigned.length} 名玩家未分配身份，请先由管理员分配/随机补齐。`,
+                        });
+                        return;
+                    }
+
+                    if (!gameSession.rolesReleased) {
+                        socket.emit(WsEvents.NOTIFICATION, {
+                            message: '身份尚未发放给玩家。请先点击“发放身份给玩家”，再进入正式对局。',
+                        });
+                        return;
+                    }
+                } else {
+                    // 卧底模式关闭时，不要求卧底/侦探身份，也不要求发布身份。
+                    // 所有人都按普通 Soldier 处理。
+                    gameSession.undercoverCount = 0;
+                    gameSession.detectiveCount = 0;
+                    gameSession.rolesReleased = true;
+                    gameSession.questionsUsed = 0;
+                    gameSession.currentQuestion = null;
+                    gameSession.questionAnswer = null;
+                    gameSession.secondQuestionAnswered = false;
+                    gameSession.accusations = {};
+
+                    for (const player of getGamePlayers()) {
+                        player.gameRole = 'Soldier';
+                        delete player.taskGrid;
+                        player.abandonCount = 0;
+                        player.replaceCount = 0;
+                        player.hintUsedCount = 0;
+                        player.detectiveQuestionCount = 0;
+                    }
                 }
             }
-            if (nextPhase && canTransition(current, nextPhase)) advancePhase(current, nextPhase, admin.playerId);
-            else socket.emit(WsEvents.NOTIFICATION, { message: `无法从 ${current} 推进` });
-        } else if (data.action === 'TERMINATE_GAME') {
+
+            // 卧底模式关闭时，禁止进入侦探问答和赛后指认。
+            if (
+                !isUndercoverModeEnabled() &&
+                (nextPhase === GamePhase.MidGameQA || nextPhase === GamePhase.PostGameAccusation)
+            ) {
+                nextPhase = GamePhase.Scoreboard;
+            }
+
+            // 进入积分结算前，先计算分数。
+            if (nextPhase === GamePhase.Scoreboard) {
+                try {
+                    calculateScores();
+                } catch (err) {
+                    console.error('[ADVANCE_PHASE] calculateScores failed:', err);
+                }
+            }
+
+            advancePhase(current, nextPhase, admin.name);
+            return;
+        }
+
+
+
+        else if (data.action === 'TERMINATE_GAME') {
             terminateCurrentGameAndKickAll('管理员强制终止本局游戏');
         } else if (data.action === 'FORCE_READY') {
             if (gameSession.phase === GamePhase.PreGameSetup) { Object.values(gameSession.players).forEach(p => p.isReady = true); broadcastState(); }
@@ -1385,6 +1711,10 @@ io.on('connection', (socket) => {
                 }
             }
         } else if (data.action === 'SET_ROLES_COUNT') {
+            if (!isUndercoverModeEnabled()) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '卧底模式已关闭，本局不需要设置卧底/侦探数量。' });
+                return;
+            }
             if (gameSession.phase === GamePhase.Lobby) {
                 const u = data.payload?.undercoverCount, d = data.payload?.detectiveCount;
                 if (typeof u === 'number' && u >= 0) gameSession.undercoverCount = u;
@@ -1392,14 +1722,17 @@ io.on('connection', (socket) => {
                 broadcastState();
             }
         } else if (data.action === 'SET_PLAYER_ROLE') {
+            if (!isUndercoverModeEnabled()) return;
             if (gameSession.phase === GamePhase.PreGameSetup) {
                 const { playerId: targetId, gameRole } = data.payload || {};
                 const player = findPlayerById(targetId);
                 if (player && ['Undercover', 'Detective', 'Soldier'].includes(gameRole)) { player.gameRole = gameRole; broadcastState(); }
             }
         } else if (data.action === 'RANDOM_REMAINING_ROLES') {
+            if (!isUndercoverModeEnabled()) return;
             if (gameSession.phase === GamePhase.PreGameSetup) randomRemainingRoles();
         } else if (data.action === 'RELEASE_ROLES') {
+            if (!isUndercoverModeEnabled()) return;
             if (gameSession.phase !== GamePhase.PreGameSetup) return;
             const unassigned = getGamePlayers().filter(p => !p.gameRole);
             if (unassigned.length > 0) {
@@ -1459,6 +1792,7 @@ io.on('connection', (socket) => {
             if (gameSession.phase === GamePhase.Scoreboard) calculateScores();
             broadcastState();
         } else if (data.action === 'SET_DETECTIVE_QUESTION_COUNT') {
+            if (!isUndercoverModeEnabled()) return;
             if (![GamePhase.LiveGame, GamePhase.PostGameAccusation, GamePhase.Scoreboard].includes(gameSession.phase)) return;
             const target = findPlayerById(data.payload?.playerId);
             const count = Math.max(0, Math.min(2, Math.floor(Number(data.payload?.count ?? 0))));
@@ -1641,6 +1975,7 @@ io.on('connection', (socket) => {
     // Stage 3.13：中场问答改为游戏内语音交流，网页不再接收问题和回答。
     // 指认投票
     socket.on('ACCUSE', (data: { playerId: string; targetId: string; type: 'own' | 'enemy' }) => {
+        if (!isUndercoverModeEnabled()) return;
         if (gameSession.phase !== GamePhase.PostGameAccusation) return;
         const accuser = findPlayerById(data.playerId);
         if (!accuser || accuser.role === 'Spectator' || accuser.role === 'Admin') return;
