@@ -29,6 +29,31 @@ public sealed class CaorenCupPlugin : BasePlugin
     private int _scoreCt;
     private int _scoreT;
     private DateTime _lastPlayerHurtWarningUtc = DateTime.MinValue;
+    private static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "css_ammo",
+        "css_armor",
+        "css_aura",
+        "css_cash",
+        "css_dj",
+        "css_fov",
+        "css_hpcap",
+        "reset_plu",
+        "css_dmg",
+        "css_incdmg",
+        "css_bleed",
+        "css_kh",
+        "css_kb",
+        "css_lhimm",
+        "css_smoke",
+        "css_esp",
+        "css_ffire",
+        "css_fh",
+        "css_wspd",
+        "css_tag",
+        "css_magic",
+        "css_bq"
+};
 
     public override void Load(bool hotReload)
     {
@@ -384,6 +409,24 @@ public sealed class CaorenCupPlugin : BasePlugin
                 Logger.LogInformation("CaorenCup official stats reset. Current round is now {Round}.", _currentRound);
                 await SendSnapshotAsync();
             }
+            else if (string.Equals(command.Type, "EXECUTE_SERVER_COMMAND", StringComparison.OrdinalIgnoreCase))
+            {
+                if (command.Payload.ValueKind != JsonValueKind.Object ||
+                    !command.Payload.TryGetProperty("command", out var serverCommandElement))
+                {
+                    Logger.LogWarning("EXECUTE_SERVER_COMMAND missing payload.command");
+                    return;
+                }
+
+                var serverCommand = serverCommandElement.GetString()?.Trim() ?? string.Empty;
+                var label = serverCommand;
+                if (command.Payload.TryGetProperty("label", out var labelElement))
+                {
+                    label = labelElement.GetString()?.Trim() ?? serverCommand;
+                }
+
+                ExecuteAllowedServerCommand(serverCommand, label);
+            }
             else
             {
                 Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
@@ -395,7 +438,36 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
     }
 
-    private void ResetLiveMatchStats(int currentRound)
+
+    private void ExecuteAllowedServerCommand(string serverCommand, string label)
+    {
+        if (string.IsNullOrWhiteSpace(serverCommand))
+        {
+            Logger.LogWarning("Rejected empty web command from CaorenCup command center.");
+            return;
+        }
+
+        var commandName = serverCommand.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+        if (!AllowedBridgeServerCommands.Contains(commandName))
+        {
+            Logger.LogWarning("Rejected web command because it is not in bridge allowlist: {Command}", serverCommand);
+            return;
+        }
+
+        Logger.LogInformation("Executing CaorenCup web command: {Command}", serverCommand);
+        Server.NextFrame(() =>
+        {
+            try
+            {
+                Server.ExecuteCommand(serverCommand);
+                Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页修改已下发：{label}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to execute CaorenCup web command: {Command}", serverCommand);
+            }
+        });
+    }    private void ResetLiveMatchStats(int currentRound)
     {
         _stats.Clear();
         _currentRound = Math.Max(0, currentRound);

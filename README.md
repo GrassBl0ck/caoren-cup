@@ -1,4 +1,4 @@
-﻿# Caoren Cup / 草人杯 CS2 自定义娱乐赛事系统
+# Caoren Cup / 草人杯 CS2 自定义娱乐赛事系统
 
 Caoren Cup 是一个面向 CS2 自定义娱乐赛的赛事系统。
 
@@ -611,6 +611,35 @@ HTTP/1.1 200 OK
 
 ---
 
+
+
+<!-- CAOREN_MOD_PANEL_BATCH2_START -->
+## CaorenCup 修改可视化面板：第二批模块
+
+网页指挥台的 CaorenCup 修改面板已扩展第二批常用娱乐模块。网页端仍然只是把可视化配置转换为游戏内已有命令，并通过桥接插件下发到 CS2 服务器；游戏内原指令继续保留。
+
+第二批模块包括：
+
+| 模块 | 下发命令 | 说明 |
+| --- | --- | --- |
+| 伤害倍率/锁血上限 | `css_dmg` | `<t/ct/all/0> <倍率/-> <伤害上限> <窗口秒>` |
+| 动态时间伤害 | `css_incdmg` | `<t/ct/all/0> [每5秒倍率变化]` |
+| 持续流血/回血 | `css_bleed` | `<t/ct/all/0> <秒> <正回负扣>`，上下限由 `css_hpcap` 控制 |
+| 击杀回血/扣血 | `css_kh` | `<t/ct/all/vip/0> [变动数值]`，上下限由 `css_hpcap` 控制 |
+| 动能击退 | `css_kb` | `<t/ct/all/0> [水平力] [垂直力] [友军1/0] [伤害倍数]` |
+| 名刀无敌 | `css_lhimm` | `<t/ct/all/0> <无敌秒数> <额外速度%>` |
+| 烟雾弹控制 | `css_smoke` | `<t/ct/all/0> <持续时间/-> <每秒血量变化>` |
+| ESP 透视 | `css_esp` | `<t/ct/all/0> [最远距离] [模式]`，模式 0=持续透视，1=准星指向 |
+| 友伤倍率 | `css_ffire` | `<t/ct/all/0> <倍率> <1/0是否允许击杀>` |
+| 火疗/火焰伤害 | `css_fh` | `<t/ct/all/0> <倍率>`，0=免疫，负数=回血 |
+| 武器速度 | `css_wspd` | `<t/ct/all/0> <切枪速度%> <射击速度%>` |
+| 受击速度控制 | `css_tag` | `<t/ct/all/0> <0.0~1.0/df>` |
+| 魔法弹道吸附 | `css_magic` | `<t/ct/all/0> [吸附半径] [单次伤害]` |
+| 黑客攻防 | `css_bq` | `<题型组合/0> [强制秒数/0] [CT延迟秒数]` |
+
+注意：`css_sp`、`css_ps`、`oma_*` 等复杂玩法模块暂不放入第二批，后续应单独设计页面交互，避免一个按钮面板变得过重。
+<!-- CAOREN_MOD_PANEL_BATCH2_END -->
+
 ## 常用命令
 
 ### 网页端
@@ -1143,4 +1172,43 @@ module-configs/*.json
 
 注意：不要把服务器真实配置打进公开 Release。公开包只应包含默认配置或示例配置。
 
+---
 
+## 第二阶段：CaorenCup 修改可视化面板
+
+网页指挥台支持在赛前通过可视化按钮下发部分 CaorenCup 娱乐插件修改。该功能用于把原本需要管理员在游戏内手动输入的复杂指令，转为网页端白名单按钮操作。
+
+当前 MVP 接入模块包括：
+
+- `css_ammo`：弹药 / 道具消耗概率
+- `css_armor`：防弹衣耐久
+- `css_aura`：剑气效果
+- `css_cash`：经济倍率
+- `css_fov`：玩家 FOV
+- `css_dj`：二段跳 / 多段跳
+- `css_hpcap`：全局血量上下限
+- `reset_plu`：重置 CaorenCup 修改
+
+设计原则：
+
+1. 网页端不开放任意命令输入，只能提交白名单模块。
+2. 网页后端负责参数校验，并生成安全的服务器命令。
+3. CS2 网页桥接插件再次校验命令白名单后，才会调用 `Server.ExecuteCommand(...)`。
+4. 游戏内原有指令仍然保留，网页面板只是更方便的赛前管理入口。
+5. 当前网页按钮只允许在 `Lobby` 或 `PreGameSetup` 阶段下发，避免正式比赛中误操作。
+
+部署时至少需要更新：
+
+- `CaorenCupWeb-网页端-vX.X.X.zip`
+- `CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip`
+
+如果本次没有改动 `game-plugin/`，服务器本地部署可以不覆盖娱乐插件本体；但 GitHub Release 仍按统一版本号上传三个包。
+
+### Phase 2 note: live CaorenCup visual modifier dispatch
+
+After the per-match CaorenCup modifier option is enabled, admins can dispatch visual modifier commands from the web panel in any match phase, including live games. The command panel remains whitelist-based and the original in-game commands are still preserved. The bridge plugin pulls queued commands via heartbeat and executes only approved server commands.
+
+
+### Phase 2 CaorenCup modifier panel phase policy
+
+The web visual CaorenCup modifier panel can dispatch whitelisted modifier commands in every match phase, including LiveGame. The panel still requires the per-match CaorenCup modifier switch to be enabled, and the backend still validates requests against the module whitelist instead of accepting arbitrary command text.
