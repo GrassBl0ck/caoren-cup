@@ -1212,3 +1212,9 @@ After the per-match CaorenCup modifier option is enabled, admins can dispatch vi
 ### Phase 2 CaorenCup modifier panel phase policy
 
 The web visual CaorenCup modifier panel can dispatch whitelisted modifier commands in every match phase, including LiveGame. The panel still requires the per-match CaorenCup modifier switch to be enabled, and the backend still validates requests against the module whitelist instead of accepting arbitrary command text.
+
+
+<!-- phase2-full-param-audit -->
+### CaorenCup 修改模块参数对齐说明
+
+网页端 `web-command-center/src/caoren-modules.ts` 必须与 `game-plugin/Features/*Feature.cs` 的真实指令签名保持一致。不要只下发部分参数让游戏插件吃默认值。例如 `css_dj` 应下发 `<目标> <跳跃次数> <高度力度> <上升期起跳true/false>`，`css_dmg` 应下发 `<目标> <倍率/-> <上限Cap> <时间窗口秒>`，`css_wspd` 应下发 `<目标> <switchSpeed> <fireSpeed>`。
