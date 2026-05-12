@@ -1228,6 +1228,7 @@ The web visual CaorenCup modifier panel can dispatch whitelisted modifier comman
 - 目标下拉菜单不再显示“禁用模块”，禁用仍统一通过模块卡片下方的禁用按钮下发。
 - 新增第三批可视化模块定义：`css_acc` 武器精准/后坐力、`css_hp_set` 伤害查询 HP 模块、`css_1hp` 秽土转生/亡语、`css_sp` 技能点系统。
 - 新增模块的命令生成逻辑必须继续与 `game-plugin/Features/*.cs` 中的真实命令签名对齐。
+- 前端在未启用 CaorenCup 修改时，只保留面板标题和状态提示，不再显示搜索框、模块卡片、当前模块列表等操作内容；取消勾选时会立即隐藏这些内容。
 
 验证命令：
 
