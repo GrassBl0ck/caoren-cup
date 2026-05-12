@@ -11,10 +11,6 @@
 // License:
 //   MIT License
 //
-// Related notice files:
-//   THIRD_PARTY_NOTICES.md
-//   licenses/cs2-DoubleJump-LICENSE.txt
-//
 // The original copyright and license notice are preserved according to the
 // MIT License. CaorenCup sincerely thanks the original author for their work.
 // -----------------------------------------------------------------------------
