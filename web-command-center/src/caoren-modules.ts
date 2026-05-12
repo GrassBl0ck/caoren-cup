@@ -66,7 +66,6 @@ const TEAM_OPTIONS: CaorenModOption[] = [
   { label: 'T 阵营', value: 't' },
   { label: 'CT 阵营', value: 'ct' },
   { label: '全体玩家', value: 'all' },
-  { label: '禁用模块', value: '0' },
 ];
 
 const TEAM_OPTIONS_WITH_VIP: CaorenModOption[] = [
@@ -74,7 +73,6 @@ const TEAM_OPTIONS_WITH_VIP: CaorenModOption[] = [
   { label: 'CT 阵营', value: 'ct' },
   { label: '全体玩家', value: 'all' },
   { label: 'VIP 玩家', value: 'vip' },
-  { label: '禁用模块', value: '0' },
 ];
 
 const ESP_MODE_OPTIONS: CaorenModOption[] = [
@@ -297,7 +295,61 @@ export const CAOREN_MOD_MODULES: CaorenModModule[] = [
     examples: ['css_bq 147', 'css_bq 147 10 2', 'css_bq 0'],
     buildCommand: (v) => { const quizTypes = s(v, 'quizTypes', '147').replace(/[^0-7]/g, '') || '1'; if (quizTypes === '0') return 'css_bq 0'; const over = n(v, 'overrideTime', 0); const ctRaw = s(v, 'ctDelay', 'auto').toLowerCase(); if (ctRaw === 'auto' || ctRaw === '动态' || ctRaw === 'default' || ctRaw === '') return cmd(['css_bq', quizTypes, over]); return cmd(['css_bq', quizTypes, over, ctRaw]); },
   }),
-  makeModule({
+  
+ makeModule({
+  id: 'accuracy', name: 'ACC / Accuracy', title: '武器精准/后坐力', command: 'css_acc', aliases: ['acc', 'accuracy', 'recoil', '精准', '后坐力'], category: '武器修改',
+  description: '控制指定阵营武器移动精准惩罚和后坐力倍率。命令：css_acc <t/ct/all/0> <移动惩罚倍数> <后坐力倍数>。',
+  warning: '该模块修改武器 Schema 字段，属于高风险玩法；不同 CS2 / CounterStrikeSharp 版本需要实测。',
+  params: [pTeam(), pNum('movePenalty', '移动惩罚倍数', 1, 0, 20, 0.1, '1=原版；0.5=减半；0=尽量清除移动精准惩罚；2=放大惩罚。'), pNum('recoil', '后坐力倍数', 1, 0, 20, 0.1, '1=原版；0.5=减半；0=尽量清除后坐力索引。')],
+  examples: ['css_acc all 0 0', 'css_acc ct 0.5 0.5', 'css_acc 0'],
+  buildCommand: (v) => { const t = target(v); return isOffTarget(t) ? 'css_acc 0' : cmd(['css_acc', t, n(v, 'movePenalty', 1), n(v, 'recoil', 1)]); },
+ }),
+ makeModule({
+  id: 'simple_hp', name: 'HP_SET / SimpleHP', title: '伤害查询 HP 模块', command: 'css_hp_set', aliases: ['hp_set', 'simplehp', 'crhp', 'damagequery', '伤害查询'], category: '生命修改',
+  description: '开启或关闭玩家本回合伤害查询模块，并控制是否必须死亡后才能查询。命令：css_hp_set <t/ct/all/0> [1/0必须死亡]。',
+  params: [pTeam(), pBool('mustBeDead', '必须死亡后才能查询', true, '开启后玩家死亡后才能查询；关闭后可随时查询。')],
+  examples: ['css_hp_set all 1', 'css_hp_set ct 0', 'css_hp_set 0'],
+  buildCommand: (v) => { const t = target(v); return isOffTarget(t) ? 'css_hp_set 0' : cmd(['css_hp_set', t, b01(v, 'mustBeDead', true)]); },
+ }),
+ makeModule({
+  id: 'onehp', name: '1HP / OneHp', title: '秽土转生/亡语', command: 'css_1hp', aliases: ['1hp', 'onehp', 'revive', 'deathbomb', '秽土转生', '亡语'], category: '玩法修改',
+  description: '控制死亡触发效果。模式 1=秽土转生；模式 2=死后自爆。命令：css_1hp <t/ct/all/0> <模式1/2> [值1] [值2] [值3] [值4]。',
+  params: [
+   pTeam(),
+   { key: 'mode', label: '模式', type: 'select', options: [{ label: '1 转生：死亡后复活', value: 1 }, { label: '2 自爆：死亡后爆炸', value: 2 }], defaultValue: 1, default: 1, required: true },
+   pNum('arg1', '值1：复活位置/爆炸伤害', 0, 0, 5000, 1, '模式1：0原地/1己家/2敌家；模式2：爆炸伤害。'),
+   pNum('arg2', '值2：延迟秒数/爆炸半径', 1, 0, 5000, 0.1, '模式1：复活延迟秒数；模式2：爆炸半径。'),
+   pNum('arg3', '值3：复活血量', 100, 1, 5000, 1, '仅模式1使用。'),
+   pNum('arg4', '值4：无敌秒数', 3, 0, 300, 0.1, '仅模式1使用。')
+  ],
+  examples: ['css_1hp t 1 0 1 100 3', 'css_1hp ct 2 100 350', 'css_1hp 0'],
+  buildCommand: (v) => {
+   const t = target(v);
+   if (isOffTarget(t)) return 'css_1hp 0';
+   const mode = Math.round(n(v, 'mode', 1));
+   if (mode === 2) return cmd(['css_1hp', t, 2, n(v, 'arg1', 100), n(v, 'arg2', 350)]);
+   return cmd(['css_1hp', t, 1, n(v, 'arg1', 0), n(v, 'arg2', 1), n(v, 'arg3', 100), n(v, 'arg4', 3)]);
+  },
+ }),
+ makeModule({
+  id: 'skill_points', name: 'SP / SkillPoints', title: '技能点系统', command: 'css_sp', aliases: ['sp', 'skillpoints', 'skill_points', '技能点'], category: '玩法修改',
+  description: '控制 T/CT 技能点：启用、禁用、交换、绝对设置或相对增减。命令：css_sp <t/ct/all/swap/0/1> [数值或+加-减]。',
+  params: [
+   { key: 'operation', label: '目标/操作', type: 'select', options: [{ label: 'T 方点数', value: 't' }, { label: 'CT 方点数', value: 'ct' }, { label: '双方点数', value: 'all' }, { label: '仅启用系统', value: '1' }, { label: '交换双方点数', value: 'swap' }], defaultValue: 'all', default: 'all', required: true },
+   pText('value', '数值或增减量', '+10', '目标为 T/CT/双方时使用；例如 50 为设置到 50，+10 为增加 10，-5 为减少 5。')
+  ],
+  examples: ['css_sp 1', 'css_sp t 50', 'css_sp ct +10', 'css_sp all -5', 'css_sp swap', 'css_sp 0'],
+  buildCommand: (v) => {
+   const directTarget = s(v, 'target', '').toLowerCase();
+   if (isOffTarget(directTarget)) return 'css_sp 0';
+   const op = s(v, 'operation', 'all').toLowerCase();
+   if (isOffTarget(op)) return 'css_sp 0';
+   if (op === '1' || op === 'on' || op === 'true') return 'css_sp 1';
+   if (op === 'swap') return 'css_sp swap';
+   return cmd(['css_sp', op, s(v, 'value', '+10')]);
+  },
+ }),
+ makeModule({
     id: 'reset_all', name: 'RESET', title: '重置所有 CaorenCup 修改', command: 'reset_plu', aliases: ['reset', 'reset_plu'], category: '重置',
     description: '调用娱乐插件本体的重置命令，恢复当前一组修改。', warning: '会影响多个娱乐模块，请确认当前对局允许重置。',
     params: [], examples: ['reset_plu'], buildCommand: () => 'reset_plu',

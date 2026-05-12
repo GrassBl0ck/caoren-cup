@@ -6,7 +6,8 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx src/server.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:caoren-modules": "node scripts/check-caoren-modules.cjs"
   },
   "dependencies": {
     "express": "^4.18.3",
