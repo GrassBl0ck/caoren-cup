@@ -1,4 +1,24 @@
-﻿using CounterStrikeSharp.API;
+// -----------------------------------------------------------------------------
+// Third-party notice
+// -----------------------------------------------------------------------------
+// This module contains code, logic, or implementation ideas adapted from:
+//
+//   oqyh/cs2-ESP-Players-GoldKingZ
+//
+// Original author:
+//   oqyh / GoldKingZ
+//
+// Permission:
+//   Used/adapted with explicit permission from the original author.
+//
+// Related notice files:
+//   THIRD_PARTY_NOTICES.md
+//   licenses/GoldKingZ-PERMISSION.md
+//
+// CaorenCup sincerely thanks the original author for their work and contribution
+// to the CS2 plugin community.
+// -----------------------------------------------------------------------------
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
