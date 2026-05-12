@@ -1,4 +1,24 @@
-﻿using CounterStrikeSharp.API;
+// -----------------------------------------------------------------------------
+// Third-party notice
+// -----------------------------------------------------------------------------
+// This module contains code, logic, or implementation ideas adapted from:
+//
+//   fidarit/cs2-DoubleJump
+//
+// Original author:
+//   fidarit
+//
+// License:
+//   MIT License
+//
+// Related notice files:
+//   THIRD_PARTY_NOTICES.md
+//   licenses/cs2-DoubleJump-LICENSE.txt
+//
+// The original copyright and license notice are preserved according to the
+// MIT License. CaorenCup sincerely thanks the original author for their work.
+// -----------------------------------------------------------------------------
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
