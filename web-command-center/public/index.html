@@ -1548,6 +1548,13 @@
             line-height: 1.6;
         }
 
+        body.caoren-modifiers-disabled .caoren-unified-mod-shell,
+        body.caoren-modifiers-disabled .caoren-batch2-wrapper,
+        body.caoren-modifiers-disabled #caoren-mod-panel .caoren-mod-grid {
+            display: none !important;
+        }
+
+
         .caoren-mod-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -1614,7 +1621,7 @@
     <link rel="stylesheet" href="/css/caoren-motion.css">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
-<body>
+<body class="caoren-modifiers-disabled">
     <div class="page-shell">
     <h1>草人杯对局指挥台</h1>
     <p class="page-subtitle">用于管理草人杯比赛流程、玩家绑定、身份分配、实时比分与最终结算。</p>
@@ -1954,6 +1961,52 @@
             return document.getElementById('extra-input')?.value || prompt('请输入管理员密码：') || '';
         }
 
+        function getPendingMatchOptions() {
+
+
+            return window._pendingMatchOptions || null;
+
+
+        }
+
+
+
+        function setPendingMatchOption(key, value) {
+
+
+            const pending = getPendingMatchOptions() || {};
+
+
+            window._pendingMatchOptions = {
+
+
+                ...pending,
+
+
+                [key]: value,
+
+
+                updatedAt: Date.now()
+
+
+            };
+
+
+        }
+
+
+
+        function clearPendingMatchOptions() {
+
+
+            window._pendingMatchOptions = null;
+
+
+        }
+
+
+
+
         function syncMatchOptionsPanel(state, isAdmin) {
             const panel = document.getElementById('match-options-panel');
             if (!panel) return;
@@ -1962,8 +2015,23 @@
 
             const phase = state?.phase || 'Lobby';
             const editable = phase === 'Lobby';
-            const undercoverEnabled = isUndercoverModeEnabledFromState(state);
-            const caorenEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
+            const serverUndercoverEnabled = isUndercoverModeEnabledFromState(state);
+
+            const serverCaorenEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
+
+            const pendingMatchOptions = isAdmin ? getPendingMatchOptions() : null;
+
+            const undercoverEnabled = pendingMatchOptions && typeof pendingMatchOptions.undercoverModeEnabled === 'boolean'
+
+                ? pendingMatchOptions.undercoverModeEnabled
+
+                : serverUndercoverEnabled;
+
+            const caorenEnabled = pendingMatchOptions && typeof pendingMatchOptions.caorenModifiersEnabled === 'boolean'
+
+                ? pendingMatchOptions.caorenModifiersEnabled
+
+                : serverCaorenEnabled;
 
             const status = document.getElementById('match-options-status');
             const undercoverInput = document.getElementById('match-option-undercover');
@@ -1974,8 +2042,17 @@
                 status.innerHTML = `当前阶段：<b>${phaseDisplayName(phase)}</b>，${editable ? '可以修改本局模式。' : '本局模式已锁定。'}`;
             }
             if (undercoverInput) {
+
                 undercoverInput.checked = undercoverEnabled;
+
                 undercoverInput.disabled = !editable;
+
+                undercoverInput.onchange = () => {
+
+                    setPendingMatchOption('undercoverModeEnabled', undercoverInput.checked === true);
+
+                };
+
             }
             if (caorenInput) {
 
@@ -1986,6 +2063,8 @@
                 caorenInput.onchange = () => {
 
                     const previewEnabled = caorenInput.checked === true;
+                    setCaorenModContentVisibility(previewEnabled);
+                    setPendingMatchOption('caorenModifiersEnabled', previewEnabled);
 
                     syncCaorenModPanel({
 
@@ -2009,6 +2088,7 @@
         }
 
         async function refreshMatchOptions() {
+            clearPendingMatchOptions();
             try {
                 const res = await fetch('/api/match-options', { headers: { Accept: 'application/json' } });
                 const data = await res.json();
@@ -2043,6 +2123,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '保存本局模式失败');
+                clearPendingMatchOptions();
                 alert('本局模式已保存。');
                 syncMatchOptionsPanel({ phase: data.phase, matchOptions: data.matchOptions }, true);
             } catch (err) {
@@ -2056,6 +2137,16 @@
 
 
             const visible = caorenEnabled === true;
+
+
+
+
+            window._caorenModifiersEnabled = visible;
+
+
+
+
+            document.body.classList.toggle('caoren-modifiers-disabled', !visible);
 
 
 
@@ -2095,7 +2186,11 @@
 
 
 
-                el.style.display = visible ? '' : 'none';
+                if (visible) {
+                    el.style.removeProperty('display');
+                } else {
+                    el.style.setProperty('display', 'none', 'important');
+                }
 
 
 
@@ -4736,7 +4831,32 @@ if (window._caorenModifiersEnabled !== true) {
   }
 
   async function init() {
-    document.querySelectorAll('.caoren-unified-mod-shell').forEach(function(el) { el.remove(); });
+
+
+    const existingShells = Array.from(document.querySelectorAll('.caoren-unified-mod-shell'));
+
+
+    if (existingShells.length) {
+
+
+      existingShells.slice(1).forEach(function(el) { el.remove(); });
+
+
+      if (typeof setCaorenModContentVisibility === 'function') {
+
+
+        setCaorenModContentVisibility(window._caorenModifiersEnabled === true);
+
+
+      }
+
+
+      return;
+
+
+    }
+
+
     document.querySelectorAll('.caoren-batch2-wrapper').forEach(function(el) { el.remove(); });
     const panel = findCaorenPanel();
     if (!panel) {
