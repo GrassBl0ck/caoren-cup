@@ -1218,3 +1218,20 @@ The web visual CaorenCup modifier panel can dispatch whitelisted modifier comman
 ### CaorenCup 修改模块参数对齐说明
 
 网页端 `web-command-center/src/caoren-modules.ts` 必须与 `game-plugin/Features/*Feature.cs` 的真实指令签名保持一致。不要只下发部分参数让游戏插件吃默认值。例如 `css_dj` 应下发 `<目标> <跳跃次数> <高度力度> <上升期起跳true/false>`，`css_dmg` 应下发 `<目标> <倍率/-> <上限Cap> <时间窗口秒>`，`css_wspd` 应下发 `<目标> <switchSpeed> <fireSpeed>`。
+
+---
+
+## v1.3.0 开发记录（CaorenCup 修改 Phase 3）
+
+本阶段在 v1.2.0 的网页端 CaorenCup 修改可视化面板基础上继续扩展：
+
+- 目标下拉菜单不再显示“禁用模块”，禁用仍统一通过模块卡片下方的禁用按钮下发。
+- 新增第三批可视化模块定义：`css_acc` 武器精准/后坐力、`css_hp_set` 伤害查询 HP 模块、`css_1hp` 秽土转生/亡语、`css_sp` 技能点系统。
+- 新增模块的命令生成逻辑必须继续与 `game-plugin/Features/*.cs` 中的真实命令签名对齐。
+
+验证命令：
+
+```powershell
+Set-Location -LiteralPath "D:\OpenSourcework\caoren-cup-open-source\web-command-center"
+npm run typecheck
+```
