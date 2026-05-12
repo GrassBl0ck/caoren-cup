@@ -1204,46 +1204,28 @@ module-configs/*.json
 
 如果本次没有改动 `game-plugin/`，服务器本地部署可以不覆盖娱乐插件本体；但 GitHub Release 仍按统一版本号上传三个包。
 
-### Phase 2 note: live CaorenCup visual modifier dispatch
+## Credits / Third-party Code / 第三方代码说明
 
-After the per-match CaorenCup modifier option is enabled, admins can dispatch visual modifier commands from the web panel in any match phase, including live games. The command panel remains whitelist-based and the original in-game commands are still preserved. The bridge plugin pulls queued commands via heartbeat and executes only approved server commands.
+CaorenCup includes code, implementation ideas, or adapted logic from the following third-party projects.  
+We sincerely thank the original authors for their work and contributions to the CS2 plugin community.
 
+CaorenCup 项目中的部分功能参考、改写或使用了以下第三方项目的代码或实现思路。  
+我们真诚感谢原作者对 CS2 插件社区的贡献。
 
-### Phase 2 CaorenCup modifier panel phase policy
+### cs2-DoubleJump
 
-The web visual CaorenCup modifier panel can dispatch whitelisted modifier commands in every match phase, including LiveGame. The panel still requires the per-match CaorenCup modifier switch to be enabled, and the backend still validates requests against the module whitelist instead of accepting arbitrary command text.
+- Original repository: `fidarit/cs2-DoubleJump`
+- Original author: `fidarit`
+- Related module in CaorenCup: Double Jump / 二段跳模块
+- License: MIT License
+- Notes: Some double-jump logic and state management ideas were adapted for CaorenCup. The original copyright and license notice are preserved according to the MIT License.
 
+### cs2-ESP-Players-GoldKingZ
 
-<!-- phase2-full-param-audit -->
-### CaorenCup 修改模块参数对齐说明
+- Original repository: `oqyh/cs2-ESP-Players-GoldKingZ`
+- Original author: `oqyh / GoldKingZ`
+- Related module in CaorenCup: ESP / Glow / 透视发光模块
+- Permission: Used/adapted with explicit permission from the original author.
+- Notes: Some ESP/glow implementation ideas or related logic were adapted for CaorenCup with permission from the original author.
 
-网页端 `web-command-center/src/caoren-modules.ts` 必须与 `game-plugin/Features/*Feature.cs` 的真实指令签名保持一致。不要只下发部分参数让游戏插件吃默认值。例如 `css_dj` 应下发 `<目标> <跳跃次数> <高度力度> <上升期起跳true/false>`，`css_dmg` 应下发 `<目标> <倍率/-> <上限Cap> <时间窗口秒>`，`css_wspd` 应下发 `<目标> <switchSpeed> <fireSpeed>`。
-
----
-
-## v1.3.0 开发记录（CaorenCup 修改 Phase 3）
-
-本阶段在 v1.2.0 的网页端 CaorenCup 修改可视化面板基础上继续扩展：
-
-- 目标下拉菜单不再显示“禁用模块”，禁用仍统一通过模块卡片下方的禁用按钮下发。
-- 新增第三批可视化模块定义：`css_acc` 武器精准/后坐力、`css_hp_set` 伤害查询 HP 模块、`css_1hp` 秽土转生/亡语、`css_sp` 技能点系统。
-- 新增模块的命令生成逻辑必须继续与 `game-plugin/Features/*.cs` 中的真实命令签名对齐。
-- 前端在未启用 CaorenCup 修改时，只保留面板标题和状态提示，不再显示搜索框、模块卡片、当前模块列表等操作内容；取消勾选时会立即隐藏这些内容。
-- 将网页端 CaorenCup 修改路由拆分到 `web-command-center/src/routes/caoren-mod-routes.ts`，并将桥接插件命令队列拆分到 `web-command-center/src/plugin-command-queue.ts`，减少 `server.ts` 职责。
-- 新增 `npm run test:caoren-modules`，用于回归验证 CaorenCup 可视化模块定义、target 下拉禁用项移除、以及关键命令生成输出。
-
-验证命令：
-
-```powershell
-Set-Location -LiteralPath "D:\OpenSourcework\caoren-cup-open-source\web-command-center"
-npm run typecheck
-```
-
-
----
-
-## v1.3.1 热修复记录（网页端 UI）
-
-- 修复 CaorenCup 修改模块面板在周期刷新时被重复删除并重建，导致模块区域闪烁、页面滚动位置跳回顶部的问题。
-- 修复“本局模式设置”里的复选框在未保存前被服务端周期状态刷新覆盖的问题；现在本地勾选/取消勾选会保留为待保存状态，保存成功或手动刷新后再清除。
-- 强化“未启用 CaorenCup 修改时隐藏模块操作区”的前端保护：通过 body class 和 `display:none!important` 同时隐藏统一模块面板、旧模块卡片和批次 wrapper，避免复选框取消后模块内容仍显示。
+If any attribution is incomplete or inaccurate, please contact the maintainer and it will be corrected as soon as possible.
