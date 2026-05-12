@@ -1230,6 +1230,7 @@ The web visual CaorenCup modifier panel can dispatch whitelisted modifier comman
 - 新增模块的命令生成逻辑必须继续与 `game-plugin/Features/*.cs` 中的真实命令签名对齐。
 - 前端在未启用 CaorenCup 修改时，只保留面板标题和状态提示，不再显示搜索框、模块卡片、当前模块列表等操作内容；取消勾选时会立即隐藏这些内容。
 - 将网页端 CaorenCup 修改路由拆分到 `web-command-center/src/routes/caoren-mod-routes.ts`，并将桥接插件命令队列拆分到 `web-command-center/src/plugin-command-queue.ts`，减少 `server.ts` 职责。
+- 新增 `npm run test:caoren-modules`，用于回归验证 CaorenCup 可视化模块定义、target 下拉禁用项移除、以及关键命令生成输出。
 
 验证命令：
 
