@@ -1238,3 +1238,12 @@ The web visual CaorenCup modifier panel can dispatch whitelisted modifier comman
 Set-Location -LiteralPath "D:\OpenSourcework\caoren-cup-open-source\web-command-center"
 npm run typecheck
 ```
+
+
+---
+
+## v1.3.1 热修复记录（网页端 UI）
+
+- 修复 CaorenCup 修改模块面板在周期刷新时被重复删除并重建，导致模块区域闪烁、页面滚动位置跳回顶部的问题。
+- 修复“本局模式设置”里的复选框在未保存前被服务端周期状态刷新覆盖的问题；现在本地勾选/取消勾选会保留为待保存状态，保存成功或手动刷新后再清除。
+- 强化“未启用 CaorenCup 修改时隐藏模块操作区”的前端保护：通过 body class 和 `display:none!important` 同时隐藏统一模块面板、旧模块卡片和批次 wrapper，避免复选框取消后模块内容仍显示。
