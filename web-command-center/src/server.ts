@@ -16,8 +16,13 @@ import {
     LiveGameData,
 } from './types';
 import { canTransition, startTimer, getPhaseDuration, getAutoNextPhase } from './state-machine';
-import { getCaorenModuleDefinitions, buildCaorenCommandFromRequest } from './caoren-modules';
-
+import {
+  enqueuePluginCommand,
+  takeQueuedPluginCommands,
+  ackPluginCommand,
+  getPluginCommandQueueSummary,
+} from './plugin-command-queue';
+import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
 // ========== 默认任务模板生成 ==========
 const getDefaultTaskTemplate = (): TaskTemplate => {
     return {
@@ -301,81 +306,8 @@ const broadcastState = () => {
     }
 };
 // ========== 第二阶段：网页 CaorenCup 修改命令队列 ==========
-type BridgeCommandStatus = 'queued' | 'sent' | 'acked';
-interface BridgeCommand {
-    id: string;
-    type: string;
-    payload: Record<string, any>;
-    status: BridgeCommandStatus;
-    createdAt: number;
-    sentAt?: number;
-    ackedAt?: number;
-}
+// 已拆分到 ./plugin-command-queue.ts
 
-const PLUGIN_COMMAND_TTL_MS = Math.max(30_000, Number(process.env.PLUGIN_COMMAND_TTL_MS || 5 * 60 * 1000));
-const pluginCommandQueue: BridgeCommand[] = [];
-
-const prunePluginCommandQueue = () => {
-    const now = Date.now();
-    for (let i = pluginCommandQueue.length - 1; i >= 0; i--) {
-        const cmd = pluginCommandQueue[i];
-        const maxAge = cmd.status === 'acked' ? 30_000 : PLUGIN_COMMAND_TTL_MS;
-        if (now - cmd.createdAt > maxAge) pluginCommandQueue.splice(i, 1);
-    }
-};
-
-const enqueuePluginCommand = (type: string, payload: Record<string, any>): BridgeCommand => {
-    prunePluginCommandQueue();
-    const cmd: BridgeCommand = {
-        id: uuidv4(),
-        type,
-        payload,
-        status: 'queued',
-        createdAt: Date.now(),
-    };
-    pluginCommandQueue.push(cmd);
-    return cmd;
-};
-
-const takeQueuedPluginCommands = () => {
-    prunePluginCommandQueue();
-    const now = Date.now();
-    const commands = pluginCommandQueue.filter(cmd => cmd.status === 'queued');
-    for (const cmd of commands) {
-        cmd.status = 'sent';
-        cmd.sentAt = now;
-    }
-    return commands.map(cmd => ({
-        id: cmd.id,
-        type: cmd.type,
-        payload: cmd.payload,
-    }));
-};
-
-const ackPluginCommand = (commandId: unknown): boolean => {
-    prunePluginCommandQueue();
-    const id = String(commandId || '').trim();
-    if (!id) return false;
-    const cmd = pluginCommandQueue.find(item => item.id === id);
-    if (!cmd) return false;
-    cmd.status = 'acked';
-    cmd.ackedAt = Date.now();
-    return true;
-};
-
-const getPluginCommandQueueSummary = () => {
-    prunePluginCommandQueue();
-    return pluginCommandQueue.map(cmd => ({
-        id: cmd.id,
-        type: cmd.type,
-        status: cmd.status,
-        label: cmd.payload?.label,
-        moduleId: cmd.payload?.moduleId,
-        createdAt: cmd.createdAt,
-        sentAt: cmd.sentAt,
-        ackedAt: cmd.ackedAt,
-    }));
-};
 // ========== 第一阶段：赛前本局模式设置 ==========
 
 app.get('/api/match-options', (_req, res) => {
@@ -421,64 +353,18 @@ app.post('/api/admin/match-options', (req, res) => {
 
 
 // ========== 第二阶段：CaorenCup 修改可视化面板 API ==========
-app.get('/api/caoren-modules', (_req, res) => {
-    res.json({
-        success: true,
-        modules: getCaorenModuleDefinitions(),
-        queue: getPluginCommandQueueSummary(),
-        phase: gameSession.phase,
-        matchOptions: ensureMatchOptions(),
-        allowedPhases: Object.values(GamePhase),
-    });
+// 已拆分到 ./routes/caoren-mod-routes.ts
+registerCaorenModRoutes(app, {
+  adminPassword: ADMIN_PASSWORD,
+  getPhase: () => gameSession.phase,
+  ensureMatchOptions,
+  enqueuePluginCommand,
+  getPluginCommandQueueSummary,
+  notify: (message: string) => io.emit(WsEvents.NOTIFICATION, { message }),
+  broadcastState,
 });
 
-app.post('/api/admin/caoren-mod-command', (req, res) => {
-    const adminPassword = String(req.body?.adminPassword || '');
-
-    if (!ADMIN_PASSWORD || adminPassword !== ADMIN_PASSWORD) {
-        return res.status(401).json({
-            success: false,
-            error: '管理员密码错误',
-        });
-    }
-if (ensureMatchOptions().caorenModifiersEnabled !== true) {
-        return res.status(400).json({
-            success: false,
-            error: '本局未启用 CaorenCup 修改。请先在本局模式设置中开启。',
-            phase: gameSession.phase,
-            matchOptions: ensureMatchOptions(),
-        });
-    }
-
-    try {
-        const built = buildCaorenCommandFromRequest(req.body || {});
-        const queued = enqueuePluginCommand('EXECUTE_SERVER_COMMAND', {
-            command: built.command,
-            label: built.label,
-            moduleId: built.moduleId,
-            moduleTitle: built.moduleTitle,
-            action: built.action,
-            requestedAt: Date.now(),
-        });
-
-        io.emit(WsEvents.NOTIFICATION, {
-            message: `CaorenCup 修改已加入下发队列：${built.label}`,
-        });
-        broadcastState();
-
-        res.json({
-            success: true,
-            commandId: queued.id,
-            queuedAt: queued.createdAt,
-            command: built.command,
-            label: built.label,
-            queue: getPluginCommandQueueSummary(),
-        });
-    } catch (err) {
-        const message = err instanceof Error ? err.message : 'CaorenCup 修改命令生成失败';
-        res.status(400).json({ success: false, error: message });
-    }
-});const sendPrivateData = (socketId: string, playerId: string) => {
+const sendPrivateData = (socketId: string, playerId: string) => {
     const player = findPlayerById(playerId);
     if (!player) return;
     const socket = io.sockets.sockets.get(socketId);
