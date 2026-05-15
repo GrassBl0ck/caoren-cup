@@ -1617,7 +1617,16 @@
             background: #dc2626;
         }
 
-    </style>
+    
+/* CAOREN_V1_3_2_HIDE_DISABLED_MOD_PANEL_PATCH: 未启用 CaorenCup 修改时，强制隐藏所有模块配置内容，只保留状态提示 */
+body.caoren-modifiers-disabled #caoren-mod-panel .caoren-mod-grid,
+body.caoren-modifiers-disabled #caoren-mod-panel .caoren-unified-mod-shell,
+body.caoren-modifiers-disabled #caoren-mod-panel .caoren-batch2-wrapper,
+body.caoren-modifiers-disabled .caoren-unified-mod-shell,
+body.caoren-modifiers-disabled .caoren-batch2-wrapper {
+    display: none !important;
+}
+</style>
     <link rel="stylesheet" href="/css/caoren-motion.css">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
@@ -2133,108 +2142,40 @@
 
 
         function setCaorenModContentVisibility(caorenEnabled) {
-
-
-
             const visible = caorenEnabled === true;
-
-
-
-
             window._caorenModifiersEnabled = visible;
 
-
-
-
             document.body.classList.toggle('caoren-modifiers-disabled', !visible);
-
-
+            document.documentElement.classList.toggle('caoren-modifiers-disabled', !visible);
 
             const panel = document.getElementById('caoren-mod-panel');
-
-
-
-            const selectors = [
-
-
-
-                '#caoren-mod-panel .caoren-mod-grid',
-
-
-
-                '#caoren-mod-panel .caoren-unified-mod-shell',
-
-
-
-                '#caoren-mod-panel .caoren-batch2-wrapper',
-
-
-
-                '.caoren-unified-mod-shell',
-
-
-
-                '.caoren-batch2-wrapper'
-
-
-
-            ];
-
-
-
-            document.querySelectorAll(selectors.join(',')).forEach(el => {
-
-
-
-                if (visible) {
-                    el.style.removeProperty('display');
-                } else {
-                    el.style.setProperty('display', 'none', 'important');
-                }
-
-
-
-                if (visible) {
-
-
-
-                    el.removeAttribute('aria-hidden');
-
-
-
-                } else {
-
-
-
-                    el.setAttribute('aria-hidden', 'true');
-
-
-
-                }
-
-
-
-            });
-
-
-
             if (panel) {
-
-
-
                 panel.classList.toggle('caoren-mod-disabled', !visible);
-
-
-
             }
 
+            const selectors = [
+                '#caoren-mod-panel .caoren-mod-grid',
+                '#caoren-mod-panel .caoren-unified-mod-shell',
+                '#caoren-mod-panel .caoren-batch2-wrapper',
+                '.caoren-unified-mod-shell',
+                '.caoren-batch2-wrapper'
+            ];
 
+            selectors.forEach((selector) => {
+                document.querySelectorAll(selector).forEach((el) => {
+                    if (visible) {
+                        el.style.removeProperty('display');
+                    } else {
+                        el.style.setProperty('display', 'none', 'important');
+                    }
+                });
+            });
 
+            const status = document.getElementById('caoren-mod-status');
+            if (status && !visible) {
+                status.textContent = '本局未启用 CaorenCup 修改。请先在上方“本局模式设置”中开启；未启用时不显示模块配置。';
+            }
         }
-
-
-
-
 
         function syncCaorenModPanel(state, isAdmin, caorenEnabled) {
             const panel = document.getElementById('caoren-mod-panel');
