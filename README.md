@@ -614,6 +614,15 @@ HTTP/1.1 200 OK
 
 
 <!-- CAOREN_MOD_PANEL_BATCH2_START -->
+
+## v1.3.2 维护说明
+
+本版本主要是网页端维护更新，不改变游戏插件本体命令签名，也不改变桥接插件真实配置。
+
+- 网页端：未启用 CaorenCup 修改时，隐藏修改模块配置区，只保留状态提示，避免页面误导管理员。
+- 网页端：拆分 `match-options` 路由，减少 `web-command-center/src/server.ts` 体积，后续继续按路由模块拆分。
+- 部署注意：本版本仍需保护服务器真实 `.env`、`ecosystem.config.cjs` 和 `caoren_config.json`，不要打进公开 Release 包。
+
 ## CaorenCup 修改可视化面板：第二批模块
 
 网页指挥台的 CaorenCup 修改面板已扩展第二批常用娱乐模块。网页端仍然只是把可视化配置转换为游戏内已有命令，并通过桥接插件下发到 CS2 服务器；游戏内原指令继续保留。
