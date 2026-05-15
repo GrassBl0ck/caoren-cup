@@ -23,6 +23,7 @@ import {
   getPluginCommandQueueSummary,
 } from './plugin-command-queue';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
+import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 // ========== 默认任务模板生成 ==========
 const getDefaultTaskTemplate = (): TaskTemplate => {
     return {
@@ -310,45 +311,13 @@ const broadcastState = () => {
 
 // ========== 第一阶段：赛前本局模式设置 ==========
 
-app.get('/api/match-options', (_req, res) => {
-    res.json({
-        success: true,
-        phase: gameSession.phase,
-        matchOptions: ensureMatchOptions(),
-    });
-});
-
-app.post('/api/admin/match-options', (req, res) => {
-    const adminPassword = String(req.body?.adminPassword || '');
-
-    if (!ADMIN_PASSWORD || adminPassword !== ADMIN_PASSWORD) {
-        return res.status(401).json({
-            success: false,
-            error: '管理员密码错误',
-        });
-    }
-
-    if (gameSession.phase !== GamePhase.Lobby) {
-        return res.status(400).json({
-            success: false,
-            error: '只能在大厅阶段修改本局模式',
-            phase: gameSession.phase,
-        });
-    }
-
-    const matchOptions = applyMatchOptions(req.body?.matchOptions || {});
-
-    io.emit(WsEvents.NOTIFICATION, {
-        message: `本局模式已更新：卧底模式${matchOptions.undercoverModeEnabled ? '开启' : '关闭'}，CaorenCup 修改${matchOptions.caorenModifiersEnabled ? '开启' : '关闭'}`,
-    });
-
-    broadcastState();
-
-    res.json({
-        success: true,
-        phase: gameSession.phase,
-        matchOptions,
-    });
+registerMatchOptionsRoutes(app, {
+  adminPassword: ADMIN_PASSWORD,
+  getPhase: () => gameSession.phase,
+  ensureMatchOptions,
+  applyMatchOptions,
+  notify: (message: string) => io.emit(WsEvents.NOTIFICATION, { message }),
+  broadcastState,
 });
 
 
