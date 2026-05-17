@@ -52,6 +52,21 @@
             --shadow: 0 10px 30px rgba(31, 41, 55, 0.08);
         }
 
+        body[data-theme="dark"] {
+            --bg: #0f172a;
+            --panel: #172033;
+            --panel-soft: #111827;
+            --border: #334155;
+            --text: #e5edf8;
+            --muted: #9fb0c6;
+            --primary: #60a5fa;
+            --primary-soft: #1e3a5f;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --success: #4ade80;
+            --shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+        }
+
         * {
             box-sizing: border-box;
         }
@@ -62,6 +77,71 @@
             padding: 24px;
             color: var(--text);
             background: linear-gradient(180deg, #eef4ff 0%, #f7f9fc 180px, #f4f7fb 100%);
+        }
+
+        body[data-theme="dark"] {
+            background: linear-gradient(180deg, #0b1120 0%, #111827 220px, #0f172a 100%);
+        }
+
+        body[data-theme="dark"] .panel,
+        body[data-theme="dark"] .toolbar-row,
+        body[data-theme="dark"] #admin-controls,
+        body[data-theme="dark"] .modal-content,
+        body[data-theme="dark"] .match-options-panel,
+        body[data-theme="dark"] .score-detail-table,
+        body[data-theme="dark"] .postmatch-panel,
+        body[data-theme="dark"] .task-grid,
+        body[data-theme="dark"] .task-cell {
+            background: var(--panel) !important;
+            color: var(--text) !important;
+            border-color: var(--border) !important;
+        }
+
+        body[data-theme="dark"] input,
+        body[data-theme="dark"] select,
+        body[data-theme="dark"] textarea {
+            background: #0f172a;
+            color: var(--text);
+            border-color: #475569;
+        }
+
+        body[data-theme="dark"] .page-subtitle,
+        body[data-theme="dark"] .score-rule-note,
+        body[data-theme="dark"] .match-options-desc,
+        body[data-theme="dark"] .match-options-status {
+            color: var(--muted) !important;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            right: 18px;
+            top: 18px;
+            z-index: 90;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--border);
+            background: var(--panel);
+            color: var(--text);
+            box-shadow: var(--shadow);
+            border-radius: 999px;
+            padding: 8px 12px;
+            font-weight: 800;
+        }
+
+        .login-steps {
+            margin-top: 14px;
+            padding: 14px 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--panel-soft);
+        }
+
+        .login-steps ol {
+            margin: 8px 0 0 22px;
+            padding: 0;
+            font-size: 17px;
+            line-height: 1.85;
         }
 
         .player-list {
@@ -1475,6 +1555,108 @@
             line-height: 1.6;
         }
 
+        .postmatch-panel {
+            margin-top: 18px;
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--panel);
+            box-shadow: var(--shadow);
+        }
+
+        .postmatch-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0 14px;
+        }
+
+        .postmatch-tabs button {
+            border: 1px solid var(--border);
+            background: var(--panel-soft);
+            color: var(--text);
+            font-weight: 800;
+        }
+
+        .postmatch-tabs button.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+        }
+
+        .hl-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .hl-table th,
+        .hl-table td {
+            padding: 10px 9px;
+            border-bottom: 1px solid var(--border);
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .hl-table th:first-child,
+        .hl-table td:first-child {
+            text-align: left;
+        }
+
+        .matrix-wrap {
+            overflow-x: auto;
+        }
+
+        .matrix-table {
+            border-collapse: separate;
+            border-spacing: 0;
+            min-width: 720px;
+            width: 100%;
+            font-size: 12px;
+        }
+
+        .matrix-table th,
+        .matrix-table td {
+            border-right: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 8px;
+            text-align: center;
+        }
+
+        .matrix-table th {
+            background: var(--panel-soft);
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .matrix-table th:first-child {
+            left: 0;
+            z-index: 2;
+        }
+
+        .task-grid.compact-task-grid {
+            grid-template-columns: repeat(3, minmax(132px, 1fr));
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .compact-task-grid .task-cell {
+            width: auto;
+            min-height: 150px;
+            height: auto;
+            margin: 0 !important;
+            padding: 10px;
+            font-size: 12px;
+        }
+
+        .task-round-note {
+            margin-top: 6px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 800;
+        }
+
 
         /* 第一阶段：本局模式设置（固定在管理员控制区） */
         .match-options-panel {
@@ -1660,6 +1842,7 @@ body.caoren-modifiers-disabled .caoren-batch2-wrapper {
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
 <body class="caoren-modifiers-disabled">
+    <button id="theme-toggle" class="theme-toggle" type="button" onclick="toggleTheme()">深色模式</button>
     <div class="page-shell">
     <h1>草人杯对局指挥台</h1>
     <p class="page-subtitle">用于管理草人杯比赛流程、玩家绑定、身份分配、实时比分与最终结算。</p>
@@ -1675,15 +1858,22 @@ body.caoren-modifiers-disabled .caoren-batch2-wrapper {
                 <input id="v1333-game-login-code-input" type="text" placeholder="输入游戏内返回的码或管理员密码" style="width:min(460px,100%);box-sizing:border-box;" autocomplete="one-time-code" />
                 <button id="v1335-enter-lobby-btn" type="button">加入大厅</button>
             </div>
-            <p style="margin:10px 0 0;color:#64748b;font-size:13px;line-height:1.75;">
-                玩家点击上方按钮进入 CS2 服务器后，在游戏内输入 <code>!cclogin</code> 获取网页码；把码填回这里后点击“加入大厅”或按 Enter。网页掉线后可继续使用这个码恢复。管理员在同一输入框输入管理员密码即可直接进入。
-            </p>
+            <div class="login-steps">
+                <strong style="font-size:18px;">玩家进入步骤</strong>
+                <ol>
+                    <li>点击“连接至草人杯服务器”，进入 CS2 服务器。</li>
+                    <li>在游戏聊天框输入 <code>!cclogin</code>。</li>
+                    <li>复制游戏内显示的 <b>6 位网页登录码</b>。</li>
+                    <li>回到这里输入网页登录码，点击“加入大厅”或按 Enter。</li>
+                </ol>
+                <p style="margin:8px 0 0;color:#64748b;font-size:14px;line-height:1.7;">管理员在同一输入框输入管理员密码即可直接进入。旧 4 位绑定码只作为兼容信息，不再作为玩家登录主入口。</p>
+            </div>
         </div>
         <input id="name-input" type="hidden" />
         <input id="extra-input" type="hidden" />
     </div>
     <div id="lobby-area" style="display:none;">
-        <div class="toolbar-row panel" style="margin-bottom:14px;"><div><div class="status-chip">当前身份信息</div><p style="margin:10px 0 0; font-size:16px;">欢迎，<span id="my-name"></span>。你的网页码：<strong id="my-bindcode"></strong></p><div style="margin-top:8px; color:#334155; font-size:13px; line-height:1.7; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;"><b>请牢记网页码！</b> 玩家从游戏内 <code>!cclogin</code> 获取的码可用于进入大厅，也可在网页掉线后恢复。管理员使用管理员密码进入。</div></div><div id="timer-display"></div></div>
+        <div class="toolbar-row panel" style="margin-bottom:14px;"><div><div class="status-chip">当前身份信息</div><p style="margin:10px 0 0; font-size:16px;">欢迎，<span id="my-name"></span>。你的网页登录码：<strong id="my-bindcode"></strong></p><div style="margin-top:8px; color:#334155; font-size:13px; line-height:1.7; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;"><b>请牢记 6 位网页登录码。</b> 玩家从游戏内 <code>!cclogin</code> 获取的码可用于进入大厅，也可在网页掉线后恢复。管理员使用管理员密码进入。</div></div><div id="timer-display"></div></div>
         <p id="my-identity" style="font-weight:bold; color: #0056b3; font-size: 18px;"></p>
         <div class="player-list" id="player-list"></div>
         <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
@@ -1943,6 +2133,22 @@ body.caoren-modifiers-disabled .caoren-batch2-wrapper {
         window._currentTaskTemplate = null;
         window._editingTemplate = null;
         window._editingCellId = null;
+        window._postmatchStatsMode = 'all';
+        window._postmatchMatrixMode = 'all';
+
+        function applyTheme(theme) {
+            const value = theme === 'dark' ? 'dark' : 'light';
+            document.body.dataset.theme = value;
+            localStorage.setItem('caoren-theme', value);
+            const btn = document.getElementById('theme-toggle');
+            if (btn) btn.textContent = value === 'dark' ? '浅色模式' : '深色模式';
+        }
+
+        function toggleTheme() {
+            applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
+        }
+
+        applyTheme(localStorage.getItem('caoren-theme') || 'light');
 
 
         function syncedNow() {
@@ -2358,6 +2564,10 @@ if (window._caorenModifiersEnabled !== true) {
                 const displayName = data.name || data.player?.name || (data.message || '').split('，')[0].replace('欢迎，', '').replace('！已恢复你的房间身份。', '').replace('！你的绑定码是:', '').trim();
                 document.getElementById('my-name').textContent = displayName || document.getElementById('name-input').value.trim() || '未命名玩家';
                 document.getElementById('my-bindcode').textContent = data.loginCode || data.bindCode || '未分配';
+                const codeLine = document.getElementById('my-bindcode')?.parentElement;
+                if (codeLine && !data.loginCode && data.bindCode) {
+                    codeLine.childNodes[2].textContent = '。你的旧绑定码：';
+                }
             } else {
                 if (data.resetClient || data.message === '你已退出游戏' || String(data.message || '').includes('终止')) {
                     resetToLogin(data.message || '你已退出房间，请重新进入');
@@ -2852,6 +3062,8 @@ if (window._caorenModifiersEnabled !== true) {
                     html += '</div>';
                 }
 
+                html += '<div id="postmatch-panels"></div>';
+
                 if (undercoverEnabled && state.accusations && Object.keys(state.accusations).length > 0) {
                     html += '<h4 style="margin-top:20px;">🕵️ 赛后复盘：全员指认记录</h4><div style="background:#fafafa; padding:15px; border:1px solid #ddd; border-radius:5px; column-count:2; font-size:13px;">';
                     for (const [pId, acc] of Object.entries(state.accusations)) {
@@ -2864,6 +3076,7 @@ if (window._caorenModifiersEnabled !== true) {
                     html += '</div>';
                 }
                 extraDiv.innerHTML = html;
+                renderPostmatchPanels(state);
             }
         });
 
@@ -3185,6 +3398,140 @@ if (window._caorenModifiersEnabled !== true) {
             return `<span style="display:inline-block;min-width:86px;text-align:center;padding:2px 8px;border-radius:999px;background:${item.bg};color:${item.fg};border:1px solid ${item.border};font-weight:800;">${item.text}</span>`;
         }
 
+        function renderTaskCell(cellId, cell, options = {}) {
+            const clickable = options.clickable === true;
+            const compact = options.compact === true;
+            const bgClass = cell?.status === 'Abandoned' ? 'background:#e0e0e0;' : 'background:#fff;';
+            let boxShadow = '';
+            if (cell && cell.borderHistory && cell.borderHistory.length > 0) {
+                boxShadow = cell.borderHistory.map((color, idx) => `0 0 0 ${(idx + 1) * 4}px ${color}`).join(', ');
+            }
+            let titleHtml = '';
+            if (cell && cell.levelLabel) {
+                const color = getLevelColor(cell.levelLabel);
+                titleHtml = `<div style="color:${color}; font-weight:900; font-size:${compact ? '13px' : '16px'}; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${htmlEscape(cell.levelLabel)}】</div>`;
+            }
+            const desc = cell ? htmlEscape(cell.description) : '无';
+            const hasN = cell && cell.nType !== 'none' && Number(cell.nValue || 0) > 0;
+            const nInfo = hasN ? `<div style="color:#d32f2f; font-size:${compact ? '12px' : '15px'}; margin-top:8px; font-weight:bold; background:#ffebee; padding:4px; border-radius:4px; width:100%;">当前 N = ${cell.nValue}</div>` : '';
+            const roundInfo = cell?.completedRound ? `<div class="task-round-note">完成回合：第 ${cell.completedRound} 回合</div>` : '';
+            const status = cell ? `<div style="margin-top:6px;">${getTaskStatusBadge(cell.status || 'Incomplete')}</div>` : '';
+            const click = clickable ? ` id="cell-${cellId}" onclick="handleCellClick('${cellId}')"` : '';
+            return `<div class="task-cell" ${click} style="${bgClass} box-shadow: ${boxShadow}; margin: 8px;">${titleHtml}<div class="task-desc" style="flex:1; display:flex; align-items:center; justify-content:center; font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${nInfo}${status}${roundInfo}</div>`;
+        }
+
+        function renderTaskGrid(taskGrid, options = {}) {
+            const cls = options.compact ? 'task-grid compact-task-grid' : 'task-grid';
+            let html = `<div class="${cls}" style="background:#fafafa; border-radius:8px; border:1px solid #ddd;">`;
+            ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'].forEach(cellId => {
+                html += renderTaskCell(cellId, taskGrid?.[cellId], options);
+            });
+            html += '</div>';
+            return html;
+        }
+
+        function setPostmatchStatsMode(mode) {
+            window._postmatchStatsMode = mode || 'all';
+            if (window._currentGameState) renderPostmatchPanels(window._currentGameState);
+        }
+
+        function setPostmatchMatrixMode(mode) {
+            window._postmatchMatrixMode = mode || 'all';
+            if (window._currentGameState) renderPostmatchPanels(window._currentGameState);
+        }
+
+        function statSourceForMode(player, mode) {
+            if (mode === 'CT' || mode === 'T') return player.sideStats?.[mode] || { kills: 0, deaths: 0, assists: 0, damage: 0 };
+            return player.stats || { kills: 0, deaths: 0, assists: 0, damage: 0 };
+        }
+
+        function renderHltvStatsTable(state) {
+            const mode = window._postmatchStatsMode || 'all';
+            const players = Object.values(state.players || {}).filter(p => p.role !== 'Admin');
+            const rows = players.map(p => {
+                const stats = statSourceForMode(p, mode);
+                const kills = Number(stats.kills || 0);
+                const deaths = Number(stats.deaths || 0);
+                const assists = Number(stats.assists || 0);
+                const damage = Number(stats.damage || 0);
+                const adrRounds = Math.max(1, Number(state.liveGameData?.currentRound || 1));
+                const kd = deaths > 0 ? kills / deaths : kills;
+                const adr = damage / adrRounds;
+                return { p, kills, deaths, assists, damage, kd, adr };
+            }).sort((a, b) => b.kills - a.kills || b.adr - a.adr);
+            let html = '<div class="postmatch-tabs">';
+            [['all', '总'], ['CT', 'CT'], ['T', 'T']].forEach(([key, label]) => {
+                html += `<button type="button" class="${mode === key ? 'active' : ''}" onclick="setPostmatchStatsMode('${key}')">${label}</button>`;
+            });
+            html += '</div><div class="score-detail-wrap"><table class="hl-table"><tr><th>玩家</th><th>阵容</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>伤害</th><th>ADR</th></tr>';
+            rows.forEach(row => {
+                html += `<tr><td><b>${htmlEscape(row.p.name)}</b></td><td>${row.p.rosterTeam || '-'}</td><td>${row.kills}</td><td>${row.deaths}</td><td>${row.assists}</td><td>${trimFixed(row.kd, 2)}</td><td>${row.damage}</td><td>${trimFixed(row.adr, 1)}</td></tr>`;
+            });
+            html += '</table></div>';
+            return html;
+        }
+
+        function matrixForMode(live, mode) {
+            if (mode === 'opening') return live.openingKillMatrix || {};
+            if (mode === 'awp') return live.awpKillMatrix || {};
+            return live.killMatrix || {};
+        }
+
+        function playerSteamId(player) {
+            return String(player.steamId || '').replace(/[^0-9]/g, '');
+        }
+
+        function renderKillMatrixTable(state) {
+            const live = state.liveGameData || {};
+            const mode = window._postmatchMatrixMode || 'all';
+            const matrix = matrixForMode(live, mode);
+            const players = Object.values(state.players || {}).filter(p => p.role !== 'Admin' && playerSteamId(p));
+            let html = '<div class="postmatch-tabs">';
+            [['all', '总'], ['opening', 'Opening'], ['awp', 'AWP']].forEach(([key, label]) => {
+                html += `<button type="button" class="${mode === key ? 'active' : ''}" onclick="setPostmatchMatrixMode('${key}')">${label}</button>`;
+            });
+            html += '</div><div class="matrix-wrap"><table class="matrix-table"><tr><th>击杀者 \\ 被击杀者</th>';
+            players.forEach(p => { html += `<th>${htmlEscape(p.name)}</th>`; });
+            html += '<th>合计</th></tr>';
+            players.forEach(attacker => {
+                const aId = playerSteamId(attacker);
+                let total = 0;
+                html += `<tr><th>${htmlEscape(attacker.name)}</th>`;
+                players.forEach(victim => {
+                    const vId = playerSteamId(victim);
+                    const value = aId === vId ? '' : Number(matrix?.[aId]?.[vId] || 0);
+                    if (typeof value === 'number') total += value;
+                    html += `<td>${value || ''}</td>`;
+                });
+                html += `<td><b>${total || ''}</b></td></tr>`;
+            });
+            html += '</table></div>';
+            if (!players.length) html += '<p style="color:#64748b;">暂无可匹配 SteamID 的玩家，无法生成对位矩阵。</p>';
+            return html;
+        }
+
+        function renderUndercoverTaskReview(state) {
+            const undercovers = Object.values(state.players || {}).filter(p => p.gameRole === 'Undercover');
+            if (!undercovers.length) return '';
+            let html = '<div class="postmatch-panel"><h3 style="margin-top:0;">卧底任务复盘</h3>';
+            undercovers.forEach(p => {
+                html += `<div style="margin-top:14px;"><b>${htmlEscape(p.name)} [${p.rosterTeam || '-'}队]</b>`;
+                html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                html += '</div>';
+            });
+            html += '</div>';
+            return html;
+        }
+
+        function renderPostmatchPanels(state) {
+            const host = document.getElementById('postmatch-panels');
+            if (!host) return;
+            let html = '<div class="postmatch-panel"><h3 style="margin-top:0;">赛后战绩</h3>' + renderHltvStatsTable(state) + '</div>';
+            html += '<div class="postmatch-panel"><h3 style="margin-top:0;">对位矩阵</h3>' + renderKillMatrixTable(state) + '</div>';
+            if (isUndercoverModeEnabledFromState(state)) html += renderUndercoverTaskReview(state);
+            host.innerHTML = html;
+        }
+
         function renderLiveGame(state) {
             const live = state.liveGameData || window._liveGameData || {};
             const currentPlayer = window._currentPlayer;
@@ -3199,28 +3546,8 @@ if (window._caorenModifiersEnabled !== true) {
             }
 
             if (undercoverEnabled && currentPlayer?.gameRole === 'Undercover') {
-                html += '<h3 style="color:#d32f2f;">你的任务面板</h3><div class="task-grid" style="background:#fafafa; border-radius:8px; border:1px solid #ddd;">';
-                const grid = currentPlayer.taskGrid || {};
-                ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'].forEach(cellId => {
-                    const cell = grid[cellId];
-                    let bgClass = cell?.status === 'Abandoned' ? 'background:#e0e0e0;' : 'background:#fff;';
-
-                    let boxShadow = '';
-                    if (cell && cell.borderHistory && cell.borderHistory.length > 0) {
-                        boxShadow = cell.borderHistory.map((color, idx) => `0 0 0 ${(idx + 1) * 4}px ${color}`).join(', ');
-                    }
-
-                    let titleHtml = '';
-                    if (cell && cell.levelLabel) {
-                        const color = getLevelColor(cell.levelLabel);
-                        titleHtml = `<div style="color:${color}; font-weight:900; font-size:16px; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${cell.levelLabel}】</div>`;
-                    }
-                    const desc = cell ? cell.description : '无';
-                    const nInfo = (cell && cell.nType !== 'none' && cell.nValue > 0) ? `<div style="color:#d32f2f; font-size:15px; margin-top:8px; font-weight:bold; background:#ffebee; padding:4px; border-radius:4px; width:100%;">当前 N = ${cell.nValue}</div>` : '';
-
-                    html += `<div class="task-cell" id="cell-${cellId}" onclick="handleCellClick('${cellId}')" style="${bgClass} box-shadow: ${boxShadow}; margin: 8px;">${titleHtml} <div class="task-desc" style="flex:1; display:flex; align-items:center; font-size:15px;"><div>${desc}</div></div> ${nInfo}</div>`;
-                });
-                html += '</div>';
+                html += '<h3 style="color:#d32f2f;">你的任务面板</h3>';
+                html += renderTaskGrid(currentPlayer.taskGrid || {}, { clickable: true });
 
                 html += '<div style="background:#fff3e0; padding:15px; border-radius:6px; border:1px solid #ffcc80; margin-top:20px;">';
                 html += '<p><b>基础状态干预：</b> ' +
@@ -3285,15 +3612,9 @@ if (window._caorenModifiersEnabled !== true) {
                     html += '<p style="color:#777;">当前没有卧底玩家</p>';
                 } else {
                     undercovers.forEach(p => {
-                        html += `<b>玩家：${p.name} [${p.rosterTeam || '-'}队 / 当前${p.team || '-'}]</b><ul style="margin:8px 0 15px 0; font-size:14px; background:#fff; padding:10px 10px 10px 30px; border-radius:4px; border:1px solid #ddd;">`;
-                        if (p.taskGrid) {
-                            for (const [cellId, cell] of Object.entries(p.taskGrid)) {
-                                const statusBadge = getTaskStatusBadge(cell.status || 'Incomplete');
-                                const rowBg = cell.status === 'Complete' ? '#f1f8e9' : (cell.status === 'Abandoned' ? '#f5f5f5' : (cell.nValue && cell.nValue > 0 ? '#fff8e1' : '#fff'));
-                                html += `<li style="margin-bottom:6px;padding:6px 8px;border-radius:8px;background:${rowBg};border:1px solid #eee;"><b>${cellId}</b>: ${cell.levelLabel ? `【${cell.levelLabel}】` : ''} <span class="task-desc">${cell.description}</span> | 状态: ${statusBadge} | N=<b>${cell.nValue || 0}</b></li>`;
-                            }
-                        }
-                        html += `</ul>`;
+                        html += `<div style="margin:12px 0 18px;"><b>玩家：${htmlEscape(p.name)} [${p.rosterTeam || '-'}队 / 当前${p.team || '-'}]</b>`;
+                        html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                        html += '</div>';
                     });
                 }
                 html += '</div>';

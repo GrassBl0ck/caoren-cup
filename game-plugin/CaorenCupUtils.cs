@@ -25,6 +25,26 @@ public static class CaorenCupUtils
         }
     }
 
+    public static string FormatHelpMenuLine(string message)
+    {
+        string cleanMessage = StripChatColors(message).Trim();
+        return $" {ChatColors.Green}{cleanMessage}{ChatColors.Default}";
+    }
+
+    private static string StripChatColors(string message)
+    {
+        if (string.IsNullOrEmpty(message)) return string.Empty;
+
+        var builder = new StringBuilder(message.Length);
+        foreach (char ch in message)
+        {
+            if (ch >= '\x01' && ch <= '\x10') continue;
+            builder.Append(ch);
+        }
+
+        return builder.ToString();
+    }
+
     // 统一目标解析器 (解析 0/1/2/3/ID/all/ct/t)
     // 返回: 目标玩家列表。如果列表为空，且 out description 为 "功能已关闭"，则说明用户输入了 0
     public static List<CCSPlayerController> GetTargetPlayers(string arg, out string description)

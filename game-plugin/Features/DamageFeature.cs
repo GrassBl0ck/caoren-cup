@@ -15,8 +15,14 @@ public class DamageFeature : ICaorenFeature
     private CaorenCupPlugin _plugin = null!;
     private DamageSettings _settings = null!;
 
-    // 记录玩家在窗口期内的累计受击数据：SteamID -> (最后受击时间, 累计伤害)
-    private Dictionary<ulong, (float Time, float TotalDmg)> _damageWindow = new();
+    private sealed class DamageWindowEntry
+    {
+        public float Time { get; set; }
+        public float Damage { get; set; }
+    }
+
+    // 记录玩家最近 N 秒内的真实受击数据：SteamID -> [(受击时间, 真实扣血)]
+    private readonly Dictionary<ulong, List<DamageWindowEntry>> _damageWindow = new();
 
     public void Init(CaorenCupPlugin plugin)
     {
@@ -178,34 +184,35 @@ public class DamageFeature : ICaorenFeature
             info.Damage = scaledDamage;
         }
 
-        // 2. 防爆头致死保护 (仅处理 Cap > 0 的情况)
+        // 2. 伤害窗口保护 (仅处理 Cap > 0 的情况)
         if (_settings.Cap > 0)
         {
             ulong steamId = controller.SteamID;
             float now = Server.CurrentTime;
 
-            var (lastTime, accumDmg) = _damageWindow.GetValueOrDefault(steamId);
-            if (now - lastTime > _settings.CapWindow) accumDmg = 0; // 超出窗口期，重置累积
-
-            float remainingQuota = _settings.Cap - accumDmg;
+            float recentDamage = GetRecentDamageTotal(steamId, now);
+            float remainingQuota = _settings.Cap - recentDamage;
 
             if (remainingQuota <= 0)
             {
-                // 额度已用完，基础伤害直接抹零
                 info.Damage = 0;
             }
-            else if (remainingQuota < pawn.Health)
+            else
             {
-                // 核心修复逻辑：玩家的剩余额度不足以致死(意味着他本不该死)
-                // 但是 CS2 的引擎在这一步之后可能会乘上最高 4 倍的爆头系数。
-                // 如果当前的基础伤害 * 4 可能会把他秒了，我们就把基础伤害压低，确保他剩 1 滴血。
-                if (info.Damage * 4.0f >= pawn.Health)
+                int minHp = CaorenCupUtils.GetHpCapMin(_plugin, 1);
+                float maxHealthLoss = Math.Max(0, pawn.Health - minHp);
+                float allowedFinalDamage = Math.Min(remainingQuota, maxHealthLoss);
+
+                if (allowedFinalDamage <= 0)
                 {
-                    int minHp = CaorenCupUtils.GetHpCapMin(_plugin, 1);
-                    float safeDamage = (pawn.Health - minHp) / 4.0f;
-                    if (safeDamage < 0) safeDamage = 0;
-                    info.Damage = safeDamage;
-                    // 后续在 PlayerHurt 里，我们会通过补血补回精准的数值。
+                    info.Damage = 0;
+                }
+                else
+                {
+                    if (info.Damage > allowedFinalDamage)
+                    {
+                        info.Damage = allowedFinalDamage;
+                    }
                 }
             }
         }
@@ -230,10 +237,8 @@ public class DamageFeature : ICaorenFeature
         ulong steamId = victim.SteamID;
         float now = Server.CurrentTime;
 
-        var (lastTime, accumDmg) = _damageWindow.GetValueOrDefault(steamId);
-        if (now - lastTime > _settings.CapWindow) accumDmg = 0;
-
-        float newAccum = accumDmg + dmg;
+        float recentDamage = GetRecentDamageTotal(steamId, now);
+        float newAccum = recentDamage + dmg;
 
         // 如果本次伤害导致总伤害超出了设定的上限 Cap
         if (newAccum > _settings.Cap)
@@ -242,19 +247,58 @@ public class DamageFeature : ICaorenFeature
             int excess = (int)Math.Round(newAccum - _settings.Cap);
             if (excess > dmg) excess = dmg; // 最多只能返还本次扣除的血量
 
-            if (excess > 0 && pawn.Health > 0) // 必须确保玩家还活着才能补血
+            if (excess > 0 && pawn.Health > 0)
             {
                 CaorenCupUtils.ApplyModuleHealth(_plugin, pawn, pawn.Health + excess);
             }
 
             // 累积量封顶
-            newAccum = _settings.Cap;
+            dmg -= excess;
         }
 
-        // 更新时间窗口记录
-        _damageWindow[steamId] = (now, newAccum);
+        if (dmg > 0)
+        {
+            AddDamageWindowEntry(steamId, now, dmg);
+        }
 
         return HookResult.Continue;
+    }
+
+    private float GetRecentDamageTotal(ulong steamId, float now)
+    {
+        if (!_damageWindow.TryGetValue(steamId, out var entries)) return 0;
+
+        PruneDamageWindow(entries, now);
+        if (entries.Count == 0)
+        {
+            _damageWindow.Remove(steamId);
+            return 0;
+        }
+
+        float total = 0;
+        foreach (var entry in entries)
+        {
+            total += entry.Damage;
+        }
+
+        return total;
+    }
+
+    private void AddDamageWindowEntry(ulong steamId, float now, float damage)
+    {
+        if (!_damageWindow.TryGetValue(steamId, out var entries))
+        {
+            entries = new List<DamageWindowEntry>();
+            _damageWindow[steamId] = entries;
+        }
+
+        PruneDamageWindow(entries, now);
+        entries.Add(new DamageWindowEntry { Time = now, Damage = damage });
+    }
+
+    private void PruneDamageWindow(List<DamageWindowEntry> entries, float now)
+    {
+        entries.RemoveAll(entry => now - entry.Time > _settings.CapWindow);
     }
 
     private bool IsTarget(CCSPlayerController player)

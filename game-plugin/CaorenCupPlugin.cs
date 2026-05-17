@@ -388,12 +388,12 @@ public override void Load(bool hotReload)
     private void OnCommandHelpPlu(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null) return;
-        CaorenCupUtils.PrintToChat(player, "=== 功能模块列表 ===");
+        player.PrintToChat($" {ChatColors.Green}{CaorenCupUtils.Tag}=== 功能模块列表 ==={ChatColors.Default}");
 
         // 只有在这里才遍历显示各个插件的入口
         foreach (var feature in _features)
         {
-            player.PrintToChat(feature.GetHelpEntry());
+            player.PrintToChat(CaorenCupUtils.FormatHelpMenuLine(feature.GetHelpEntry()));
         }
     }
 

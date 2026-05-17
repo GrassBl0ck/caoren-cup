@@ -14,6 +14,7 @@ import {
     Team,
     RosterTeam,
     LiveGameData,
+    MatchStats,
 } from './types';
 import { canTransition, startTimer, getPhaseDuration, getAutoNextPhase } from './state-machine';
 import {
@@ -290,8 +291,10 @@ const sanitizeForPublic = (session: GameSession, viewerId?: string | null): any 
             gameRole: revealRole ? p.gameRole : undefined,
             rosterTeam: p.rosterTeam, team: p.team, isReady: p.isReady,
             steamIdBound: !!p.steamId,
+            steamId: p.steamId,
             finalScore: p.finalScore, scoreBreakdown: p.scoreBreakdown,
             stats: p.stats,
+            sideStats: p.sideStats,
             detectiveQuestionCount: viewer?.role === 'Admin' || p.playerId === viewerId ? p.detectiveQuestionCount : undefined,
             taskGrid: revealTaskGrid ? p.taskGrid : undefined,
         };
@@ -385,7 +388,20 @@ const createEmptyLiveGameData = (): LiveGameData => ({
     lastScoredRound: 0,
     rawPluginRound: 0,
     roundBaseOffset: undefined as number | undefined,
+    killMatrix: {},
+    openingKillMatrix: {},
+    awpKillMatrix: {},
+    firstKillRounds: {},
 });
+
+const enqueueLiveStatsResetCommand = (rawRound: number) => {
+    enqueuePluginCommand('RESET_LIVE_MATCH_STATS', {
+        currentRound: rawRound,
+        label: 'Reset live match stats',
+        moduleId: 'live-match-stats',
+    });
+};
+
 const normalizePluginRound = (rawRound: unknown): number => {
     if (!gameSession.liveGameData) gameSession.liveGameData = createEmptyLiveGameData();
     const live = gameSession.liveGameData;
@@ -412,11 +428,28 @@ const resetFormalMatchCounters = () => {
     gameSession.liveGameData.mapName = keepMap;
     gameSession.liveGameData.pluginConnected = keepPluginConnected;
     gameSession.liveGameData.lastPluginHeartbeatAt = keepHeartbeatAt;
+    gameSession.liveGameData.suppressSnapshotStatsUntil = Date.now() + 15000;
     for (const p of getGamePlayers()) {
         p.stats = { kills: 0, deaths: 0, assists: 0, damage: 0 };
+        p.sideStats = createEmptySideStats();
         p.finalScore = undefined;
         p.scoreBreakdown = undefined;
     }
+    enqueueLiveStatsResetCommand(raw);
+};
+
+const otherRoster = (team: RosterTeam): RosterTeam => team === 'A' ? 'B' : 'A';
+const createEmptyStats = (): MatchStats => ({ kills: 0, deaths: 0, assists: 0, damage: 0 });
+const createEmptySideStats = () => ({ CT: createEmptyStats(), T: createEmptyStats() });
+const ensureSideStats = (player: Player) => {
+    if (!player.sideStats) player.sideStats = createEmptySideStats();
+    if (!player.sideStats.CT) player.sideStats.CT = createEmptyStats();
+    if (!player.sideStats.T) player.sideStats.T = createEmptyStats();
+    return player.sideStats;
+};
+const ensureMatrixBucket = (matrix: Record<string, Record<string, number>>, attackerSteamId: string) => {
+    if (!matrix[attackerSteamId]) matrix[attackerSteamId] = {};
+    return matrix[attackerSteamId];
 };
 
 const getTeamPlayers = (team: RosterTeam): Player[] => getGamePlayers().filter(p => p.rosterTeam === team || gameSession.teams[team].players.includes(p.playerId));
@@ -539,9 +572,45 @@ const applyPluginKillEvent = (payload: any) => {
     const attacker = findPlayerBySteamId(payload.attackerSteamId);
     const victim = findPlayerBySteamId(payload.victimSteamId);
     const assister = findPlayerBySteamId(payload.assisterSteamId);
-    if (attacker && attacker.playerId !== victim?.playerId) ensureStats(attacker).kills += 1;
-    if (victim) ensureStats(victim).deaths += 1;
-    if (assister && assister.playerId !== attacker?.playerId && assister.playerId !== victim?.playerId) ensureStats(assister).assists += 1;
+    const attackerSteamId = normalizeSteamId(payload.attackerSteamId);
+    const victimSteamId = normalizeSteamId(payload.victimSteamId);
+    const attackerSide = normalizeTeam(payload.attackerTeam);
+    const victimSide = normalizeTeam(payload.victimTeam);
+    const weapon = String(payload.weapon || '').toLowerCase();
+    const round = normalizePluginRound(payload.round);
+    if (!gameSession.liveGameData) gameSession.liveGameData = createEmptyLiveGameData();
+    const live = gameSession.liveGameData;
+
+    if (attacker && attacker.playerId !== victim?.playerId) {
+        ensureStats(attacker).kills += 1;
+        if (attackerSide === 'CT' || attackerSide === 'T') ensureSideStats(attacker)[attackerSide].kills += 1;
+    }
+    if (victim) {
+        ensureStats(victim).deaths += 1;
+        if (victimSide === 'CT' || victimSide === 'T') ensureSideStats(victim)[victimSide].deaths += 1;
+    }
+    if (assister && assister.playerId !== attacker?.playerId && assister.playerId !== victim?.playerId) {
+        ensureStats(assister).assists += 1;
+        const assisterSide = normalizeTeam(payload.assisterTeam);
+        if (assisterSide === 'CT' || assisterSide === 'T') ensureSideStats(assister)[assisterSide].assists += 1;
+    }
+
+    if (attackerSteamId && victimSteamId && attackerSteamId !== victimSteamId) {
+        const allBucket = ensureMatrixBucket(live.killMatrix || (live.killMatrix = {}), attackerSteamId);
+        allBucket[victimSteamId] = (allBucket[victimSteamId] || 0) + 1;
+
+        if (!live.firstKillRounds) live.firstKillRounds = {};
+        if (round && !live.firstKillRounds[String(round)]) {
+            live.firstKillRounds[String(round)] = true;
+            const openingBucket = ensureMatrixBucket(live.openingKillMatrix || (live.openingKillMatrix = {}), attackerSteamId);
+            openingBucket[victimSteamId] = (openingBucket[victimSteamId] || 0) + 1;
+        }
+
+        if (weapon.includes('awp')) {
+            const awpBucket = ensureMatrixBucket(live.awpKillMatrix || (live.awpKillMatrix = {}), attackerSteamId);
+            awpBucket[victimSteamId] = (awpBucket[victimSteamId] || 0) + 1;
+        }
+    }
 };
 const applyPluginDamageEvent = (payload: any) => {
     const attacker = findPlayerBySteamId(payload.attackerSteamId);
@@ -549,6 +618,8 @@ const applyPluginDamageEvent = (payload: any) => {
     const damage = Math.max(0, Number(payload.damage || 0));
     if (!attacker || damage <= 0 || attacker.playerId === victim?.playerId) return;
     ensureStats(attacker).damage += damage;
+    const attackerSide = normalizeTeam(payload.attackerTeam);
+    if (attackerSide === 'CT' || attackerSide === 'T') ensureSideStats(attacker)[attackerSide].damage += damage;
 };
 const applyPluginRoundEndEvent = (payload: any) => {
     if (!gameSession.liveGameData) gameSession.liveGameData = createEmptyLiveGameData();
@@ -588,6 +659,7 @@ const applyPluginRoundEndEvent = (payload: any) => {
 };
 const updateLivePlayersFromSnapshot = (players: any[]) => {
     if (!gameSession.liveGameData) return;
+    const suppressStats = Date.now() < Number(gameSession.liveGameData.suppressSnapshotStatsUntil || 0);
     const livePlayers: Record<string, PluginLivePlayer> = {};
     for (const raw of players || []) {
         const steamId = normalizeSteamId(raw.steamId);
@@ -606,13 +678,15 @@ const updateLivePlayersFromSnapshot = (players: any[]) => {
         const player = findPlayerBySteamId(steamId);
         if (player) {
             if (livePlayer.team) player.team = livePlayer.team;
-            player.stats = {
-                ...(player.stats || {}),
-                kills: livePlayer.kills,
-                deaths: livePlayer.deaths,
-                assists: livePlayer.assists,
-                damage: livePlayer.damage,
-            };
+            if (!suppressStats) {
+                player.stats = {
+                    ...(player.stats || {}),
+                    kills: livePlayer.kills,
+                    deaths: livePlayer.deaths,
+                    assists: livePlayer.assists,
+                    damage: livePlayer.damage,
+                };
+            }
         }
     }
     gameSession.liveGameData.players = livePlayers;
@@ -788,6 +862,7 @@ const finishMapVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     const votes = gameSession.mapVote.votes ?? {};
     const banCount = Math.min(gameSession.mapVote.banCount || 1, Math.max(1, available.length - 1));
     const banMaps = pickTopVotedMaps(available, votes, banCount);
+    const banTeam = gameSession.mapVote.team;
 
     for (const map of banMaps) {
         if (!gameSession.bannedMaps.includes(map) && getAvailableMaps().length > 1) {
@@ -806,6 +881,7 @@ const finishMapVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
 
     if (getAvailableMaps().length === 1) {
         gameSession.selectedMap = getAvailableMaps()[0];
+        gameSession.sidePickTeam = otherRoster(banTeam);
         advancePhase(GamePhase.MapBan, GamePhase.SidePick);
     } else {
         const nextIdx = gameSession.bannedMaps.length;
@@ -813,6 +889,7 @@ const finishMapVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
         else {
             const remaining = getAvailableMaps();
             gameSession.selectedMap = remaining[Math.floor(Math.random() * remaining.length)];
+            gameSession.sidePickTeam = otherRoster(banTeam);
             advancePhase(GamePhase.MapBan, GamePhase.SidePick);
             return;
         }
@@ -1909,6 +1986,7 @@ io.on('connection', (socket) => {
             case 'MARK_COMPLETE':
                 if (cell.status === 'Abandoned' || cell.nType !== 'none') return;
                 cell.status = 'Complete';
+                cell.completedRound = gameSession.liveGameData?.currentRound || undefined;
                 if (!cell.borderHistory) cell.borderHistory = [];
                 if (!cell.borderHistory.includes('green')) cell.borderHistory.push('green');
                 break;
@@ -1917,6 +1995,8 @@ io.on('connection', (socket) => {
                 cell.status = 'Incomplete';
                 if (cell.borderHistory) cell.borderHistory = cell.borderHistory.filter((c: string) => c !== 'green' && c !== 'orange');
                 cell.nValue = 0;
+                delete cell.completedRound;
+                cell.progressRounds = [];
                 break;
             case 'ABANDON':
                 if (cell.status === 'Complete' || cell.status === 'Abandoned') return;
@@ -1963,12 +2043,19 @@ io.on('connection', (socket) => {
 
                 if (cell.nValue > 0 && cell.nValue === cell.nMax) {
                     cell.status = 'Complete';
+                    cell.completedRound = gameSession.liveGameData?.currentRound || undefined;
                     cell.borderHistory.push('green');
                 } else if (cell.nValue > 0 && cell.nValue < (cell.nMax || 99)) {
                     cell.status = 'Incomplete';
+                    delete cell.completedRound;
+                    if (!cell.progressRounds) cell.progressRounds = [];
+                    const currentRound = gameSession.liveGameData?.currentRound || 0;
+                    if (currentRound > 0 && !cell.progressRounds.includes(currentRound)) cell.progressRounds.push(currentRound);
                     cell.borderHistory.push('orange');
                 } else {
                     cell.status = 'Incomplete';
+                    delete cell.completedRound;
+                    cell.progressRounds = [];
                 }
                 break;
         }

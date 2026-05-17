@@ -42,6 +42,8 @@ export interface TaskCell {
     borderHistory?: string[];
 
     requiresN?: boolean;
+    completedRound?: number;
+    progressRounds?: number[];
 }
 
 export interface MatchStats {
@@ -50,6 +52,11 @@ export interface MatchStats {
     assists: number;
     damage: number;
     [key: string]: any;
+}
+
+export interface SideMatchStats {
+    CT: MatchStats;
+    T: MatchStats;
 }
 
 export interface Player {
@@ -64,6 +71,7 @@ export interface Player {
     team?: Team;
     isReady: boolean;
     stats?: MatchStats;
+    sideStats?: SideMatchStats;
     taskGrid?: Record<string, TaskCell>;
     abandonCount?: number;
     replaceCount?: number;
@@ -128,6 +136,11 @@ export interface LiveGameData {
     lastScoredRound: number;
     mapName?: string;
     players?: Record<string, PluginLivePlayer>;
+    killMatrix?: Record<string, Record<string, number>>;
+    openingKillMatrix?: Record<string, Record<string, number>>;
+    awpKillMatrix?: Record<string, Record<string, number>>;
+    firstKillRounds?: Record<string, boolean>;
+    suppressSnapshotStatsUntil?: number;
     rawPluginRound?: number;
     roundBaseOffset?: number;
     [key: string]: any;

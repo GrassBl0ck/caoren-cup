@@ -47,6 +47,8 @@ public class WeaponSpeedFeature : ICaorenFeature
         public int LastCompensatedRecoilToken { get; set; } = 0;
     }
 
+    private const int MaxScalableAttackDelayTicks = 192;
+
     public void Init(CaorenCupPlugin plugin)
     {
         _plugin = plugin;
@@ -348,7 +350,12 @@ public class WeaponSpeedFeature : ICaorenFeature
             var active = pawn.WeaponServices?.ActiveWeapon.Value;
             if (active == null || !active.IsValid) return;
 
-            ApplyAttackDelayScaleOnce(active, multiplier, state, force: true);
+            string activeWeaponName = NormalizeWeaponName(active.DesignerName);
+            if (activeWeaponName != weaponName)
+                return;
+
+            bool includeSecondary = IsKnifeWeapon(activeWeaponName);
+            ApplyAttackDelayScaleOnce(active, multiplier, state, force: true, includeSecondary);
         });
     }
 
@@ -370,31 +377,23 @@ public class WeaponSpeedFeature : ICaorenFeature
          * 每 Tick 检查武器的下一次可开火时间。
          * 只要发现游戏刚写入了一段新的开火冷却，就立刻按倍率缩放。
          */
-        ApplyAttackDelayScaleOnce(weapon, multiplier, state, force: false);
+        ApplyAttackDelayScaleOnce(weapon, multiplier, state, force: false, includeSecondary: false);
     }
 
     private void ApplyAttackDelayScaleOnce(
         CBasePlayerWeapon weapon,
         float multiplier,
         PlayerWeaponSpeedState state,
-        bool force)
+        bool force,
+        bool includeSecondary)
     {
         if (weapon == null || !weapon.IsValid) return;
 
         int nowTick = Server.TickCount;
 
         ScalePrimaryAttackTick(weapon, nowTick, multiplier, state, force);
-        ScaleSecondaryAttackTick(weapon, nowTick, multiplier, state, force);
-
-        try
-        {
-            weapon.NextPrimaryAttackTickRatio = 0.0f;
-            weapon.NextSecondaryAttackTickRatio = 0.0f;
-        }
-        catch
-        {
-            // 部分 API 版本可能没有 Ratio 字段。
-        }
+        if (includeSecondary)
+            ScaleSecondaryAttackTick(weapon, nowTick, multiplier, state, force);
 
         NotifyAttackTickChanged(weapon);
     }
@@ -419,6 +418,7 @@ public class WeaponSpeedFeature : ICaorenFeature
 
         int remaining = oldNextTick - nowTick;
         if (remaining <= 1) return;
+        if (remaining > MaxScalableAttackDelayTicks) return;
 
         // 不是强制模式，并且这个冷却已经是本插件刚写过的，就不要重复缩放。
         if (!force && oldNextTick == state.LastAppliedPrimaryTick)
@@ -460,6 +460,7 @@ public class WeaponSpeedFeature : ICaorenFeature
 
         int remaining = oldNextTick - nowTick;
         if (remaining <= 1) return;
+        if (remaining > MaxScalableAttackDelayTicks) return;
 
         if (!force && oldNextTick == state.LastAppliedSecondaryTick)
             return;
