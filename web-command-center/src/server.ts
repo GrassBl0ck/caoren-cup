@@ -2018,3 +2018,229 @@ setInterval(() => {
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => console.log(`草人杯指挥台已启动: http://localhost:${PORT}`));
+
+// v1.3.3 game-code-login start
+type V1333GameLoginTicket = {
+  code: string;
+  steamId: string;
+  name: string;
+  expiresAt: number;
+};
+
+const v1333NormalizeConnectUrl = (raw: unknown): string => {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  if (/^steam:\/\//i.test(value)) return value;
+  if (/^connect\s+/i.test(value)) return `steam://connect/${value.replace(/^connect\s+/i, '').trim()}`;
+  if (/^[a-z0-9.-]+:\d+(?:\/.*)?$/i.test(value) || /^\d{1,3}(?:\.\d{1,3}){3}:\d+(?:\/.*)?$/.test(value)) {
+    return `steam://connect/${value}`;
+  }
+  return value;
+};
+
+const v1333NumberEnv = (raw: unknown, fallback: number, min: number): number => {
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.max(min, value) : fallback;
+};
+
+const V1333_GAME_SERVER_CONNECT_URL = v1333NormalizeConnectUrl(process.env.GAME_SERVER_CONNECT_URL || process.env.GAME_SERVER_ADDRESS || '');
+const V1333_GAME_LOGIN_CODE_TTL_SECONDS = v1333NumberEnv(process.env.GAME_LOGIN_CODE_TTL_SECONDS, 21600, 300);
+const V1333_PLUGIN_ONLINE_TTL_MS = v1333NumberEnv(process.env.PLUGIN_ONLINE_TTL_MS, 15000, 3000);
+const v1333GameLoginTickets = new Map<string, V1333GameLoginTicket>();
+
+const v1333MakeGameLoginCode = (): string => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (let attempt = 0; attempt < 20; attempt++) {
+    let code = '';
+    for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    if (!v1333GameLoginTickets.has(code)) return code;
+  }
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const v1333CleanupGameLoginTickets = () => {
+  const now = Date.now();
+  for (const [code, ticket] of v1333GameLoginTickets.entries()) {
+    if (ticket.expiresAt <= now) v1333GameLoginTickets.delete(code);
+  }
+};
+
+const v1333IssueGameLoginCode = (steamIdRaw: unknown, nameRaw: unknown): V1333GameLoginTicket => {
+  v1333CleanupGameLoginTickets();
+
+  const steamId = normalizeSteamId(steamIdRaw);
+  if (!steamId) throw new Error('invalid steamId');
+
+  const name = normalizeLoginText(nameRaw) || `Steam ${steamId.slice(-6)}`;
+
+  for (const [oldCode, ticket] of v1333GameLoginTickets.entries()) {
+    if (ticket.steamId === steamId) v1333GameLoginTickets.delete(oldCode);
+  }
+
+  const ticket: V1333GameLoginTicket = {
+    code: v1333MakeGameLoginCode(),
+    steamId,
+    name,
+    expiresAt: Date.now() + V1333_GAME_LOGIN_CODE_TTL_SECONDS * 1000,
+  };
+
+  v1333GameLoginTickets.set(ticket.code, ticket);
+  return ticket;
+};
+
+const v1333GetGameLoginTicket = (codeRaw: unknown): V1333GameLoginTicket | undefined => {
+  v1333CleanupGameLoginTickets();
+
+  const code = normalizeLoginText(codeRaw).toUpperCase();
+  if (!code) return undefined;
+
+  const ticket = v1333GameLoginTickets.get(code);
+  if (!ticket) return undefined;
+
+  if (ticket.expiresAt <= Date.now()) {
+    v1333GameLoginTickets.delete(code);
+    return undefined;
+  }
+
+  return ticket;
+};
+
+const v1333EnsurePlayerFromGameLoginTicket = (ticket: V1333GameLoginTicket): Player => {
+  const existing = findPlayerBySteamId(ticket.steamId);
+  if (existing) {
+    existing.name = ticket.name || existing.name;
+    existing.steamId = ticket.steamId;
+    return existing;
+  }
+
+  const playerId = uuidv4();
+  const player: Player = {
+    playerId,
+    name: ticket.name || `Steam ${ticket.steamId.slice(-6)}`,
+    role: gameSession.phase === GamePhase.Lobby ? 'Player' : 'Spectator',
+    steamId: ticket.steamId,
+    bindCode: generateBindCode(),
+    isReady: false,
+  };
+
+  gameSession.players[playerId] = player;
+  gameSession.playerOrder.push(playerId);
+  return player;
+};
+
+const v1333CreateAdminPlayer = (): Player => {
+  const existing = getGamePlayers().find(p => p.role === 'Admin' && p.name === 'Admin');
+  if (existing) return existing;
+
+  const playerId = uuidv4();
+  const player: Player = {
+    playerId,
+    name: 'Admin',
+    role: 'Admin',
+    bindCode: generateBindCode(),
+    isReady: true,
+  };
+
+  gameSession.players[playerId] = player;
+  gameSession.playerOrder.push(playerId);
+  return player;
+};
+
+const v1333AttachPlayerToSocket = (socket: any, player: Player, message: string, loginCode?: string) => {
+  socket.data.playerId = player.playerId;
+  socket.join(player.playerId);
+
+  socket.emit(WsEvents.LOGIN_RESPONSE, {
+    success: true,
+    playerId: player.playerId,
+    player,
+    role: player.role,
+    name: player.name,
+    bindCode: loginCode || player.bindCode,
+    loginCode,
+    message,
+  });
+
+  sendPrivateData(socket.id, player.playerId);
+  broadcastState();
+};
+
+app.get('/api/public/server-status', (_req, res) => {
+  const live = gameSession.liveGameData;
+  const lastHeartbeatAt = live?.lastPluginHeartbeatAt || null;
+  const heartbeatFresh = !!lastHeartbeatAt && Date.now() - Number(lastHeartbeatAt) < V1333_PLUGIN_ONLINE_TTL_MS;
+  const online = live?.pluginConnected === true && heartbeatFresh;
+
+  res.json({
+    success: true,
+    online,
+    pluginConnected: live?.pluginConnected === true,
+    lastHeartbeatAt,
+    mapName: live?.mapName || '',
+    connectUrl: V1333_GAME_SERVER_CONNECT_URL,
+    connectUrlConfigured: !!V1333_GAME_SERVER_CONNECT_URL,
+  });
+});
+
+app.post('/api/plugin/game-login-code', requirePluginAuth, (req, res) => {
+  try {
+    const ticket = v1333IssueGameLoginCode(req.body?.steamId, req.body?.name);
+
+    return res.json({
+      success: true,
+      code: ticket.code,
+      expiresInSeconds: V1333_GAME_LOGIN_CODE_TTL_SECONDS,
+      steamId: ticket.steamId,
+      name: ticket.name,
+    });
+  } catch (err: any) {
+    return res.status(400).json({
+      success: false,
+      error: err?.message || 'failed to create game login code',
+    });
+  }
+});
+
+io.on('connection', (socket) => {
+  socket.on('GAME_CODE_LOGIN', (payload: any) => {
+    const credentialRaw = normalizeLoginText(payload?.credential);
+    const credential = credentialRaw.toUpperCase();
+
+    if (!credential) {
+      socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '请输入游戏内返回的码或管理员密码。' });
+      return;
+    }
+
+    if (credentialRaw === ADMIN_PASSWORD) {
+      const admin = v1333CreateAdminPlayer();
+      v1333AttachPlayerToSocket(socket, admin, '管理员登录成功。');
+      return;
+    }
+
+    if (credential === 'SPEC') {
+      const playerId = uuidv4();
+      const spectator: Player = {
+        playerId,
+        name: 'Spectator',
+        role: 'Spectator',
+        bindCode: generateBindCode(),
+        isReady: false,
+      };
+      gameSession.players[playerId] = spectator;
+      gameSession.playerOrder.push(playerId);
+      v1333AttachPlayerToSocket(socket, spectator, '旁观者登录成功。');
+      return;
+    }
+
+    const ticket = v1333GetGameLoginTicket(credential);
+    if (!ticket) {
+      socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '游戏内返回的码无效或已过期，请回到游戏里重新输入 !cclogin 获取新码。' });
+      return;
+    }
+
+    const player = v1333EnsurePlayerFromGameLoginTicket(ticket);
+    v1333AttachPlayerToSocket(socket, player, `欢迎，${player.name}！已进入草人杯大厅。`, ticket.code);
+  });
+});
+// v1.3.3 game-code-login end
+

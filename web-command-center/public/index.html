@@ -6,6 +6,35 @@
     <title>草人杯 - 大厅</title>
     <!-- Stage 3.14.1: voice QA scoring records + map voters shown on BP cards -->
     <script src="/socket.io/socket.io.js"></script>
+<script>
+/* v1.3.3 socket capture start */
+(function () {
+  if (window.__v1333SocketCaptureInstalled) return;
+  window.__v1333SocketCaptureInstalled = true;
+
+  function rememberSocket(sock) {
+    if (sock && typeof sock.emit === 'function') {
+      window.__caorenCupSocket = sock;
+    }
+    return sock;
+  }
+
+  window.__v1333RememberSocket = rememberSocket;
+
+  if (typeof window.io === 'function' && !window.io.__v1333Wrapped) {
+    var originalIo = window.io;
+    var wrappedIo = function () {
+      return rememberSocket(originalIo.apply(this, arguments));
+    };
+    for (var key in originalIo) {
+      try { wrappedIo[key] = originalIo[key]; } catch (_err) {}
+    }
+    wrappedIo.__v1333Wrapped = true;
+    window.io = wrappedIo;
+  }
+})();
+/* v1.3.3 socket capture end */
+</script>
     <script defer src="/js/caoren-audio-controller.js"></script>
     <style>
         :root {
@@ -1635,16 +1664,26 @@ body.caoren-modifiers-disabled .caoren-batch2-wrapper {
     <h1>草人杯对局指挥台</h1>
     <p class="page-subtitle">用于管理草人杯比赛流程、玩家绑定、身份分配、实时比分与最终结算。</p>
     <div id="login-area">
-        <input id="name-input" type="text" placeholder="输入昵称；恢复时填原昵称" style="width:230px;" />
-        <input id="extra-input" type="text" placeholder="管理员密码 / 绑定码 / spec（可选）" style="width:260px;" />
-        <button onclick="login()">进入/恢复大厅</button>
-        <div style="color:#475569; font-size:13px; margin-top:10px; line-height:1.8; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
-            <b>第二个输入框填写说明：</b><br>
-            管理员输入管理员密码；重连玩家输入绑定码；旁观玩家输入 <code>spec</code>；普通玩家请留空。
+        <div id="v1333-game-code-login-panel" class="panel" style="margin-bottom:16px;">
+            <h2 style="margin:0 0 12px;">进入草人杯大厅</h2>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 14px;">
+                <span id="v1333-server-dot" aria-hidden="true" style="display:inline-block;width:12px;height:12px;border-radius:999px;background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18);"></span>
+                <strong id="v1333-server-status">正在读取服务器状态...</strong>
+                <button id="v1333-connect-server-btn" type="button" disabled>连接至草人杯服务器</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <input id="v1333-game-login-code-input" type="text" placeholder="输入游戏内返回的码或管理员密码" style="width:min(460px,100%);box-sizing:border-box;" autocomplete="one-time-code" />
+                <button id="v1335-enter-lobby-btn" type="button">加入大厅</button>
+            </div>
+            <p style="margin:10px 0 0;color:#64748b;font-size:13px;line-height:1.75;">
+                玩家点击上方按钮进入 CS2 服务器后，在游戏内输入 <code>!cclogin</code> 获取网页码；把码填回这里后点击“加入大厅”或按 Enter。网页掉线后可继续使用这个码恢复。管理员在同一输入框输入管理员密码即可直接进入。
+            </p>
         </div>
+        <input id="name-input" type="hidden" />
+        <input id="extra-input" type="hidden" />
     </div>
     <div id="lobby-area" style="display:none;">
-        <div class="toolbar-row panel" style="margin-bottom:14px;"><div><div class="status-chip">当前身份信息</div><p style="margin:10px 0 0; font-size:16px;">欢迎，<span id="my-name"></span>。你的绑定码：<strong id="my-bindcode"></strong></p><div style="margin-top:8px; color:#334155; font-size:13px; line-height:1.7; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;"><b>请牢记绑定码！</b> 绑定码用于与游戏内玩家绑定，也可用于网页掉线后重连。<br>绑定方式：在游戏内打开聊天栏，输入 <code>!ccbind &lt;绑定码&gt;</code>，例如 <code>!ccbind 1145</code>。</div></div><div id="timer-display"></div></div>
+        <div class="toolbar-row panel" style="margin-bottom:14px;"><div><div class="status-chip">当前身份信息</div><p style="margin:10px 0 0; font-size:16px;">欢迎，<span id="my-name"></span>。你的网页码：<strong id="my-bindcode"></strong></p><div style="margin-top:8px; color:#334155; font-size:13px; line-height:1.7; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;"><b>请牢记网页码！</b> 玩家从游戏内 <code>!cclogin</code> 获取的码可用于进入大厅，也可在网页掉线后恢复。管理员使用管理员密码进入。</div></div><div id="timer-display"></div></div>
         <p id="my-identity" style="font-weight:bold; color: #0056b3; font-size: 18px;"></p>
         <div class="player-list" id="player-list"></div>
         <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
@@ -1941,6 +1980,8 @@ body.caoren-modifiers-disabled .caoren-batch2-wrapper {
             window._currentPlayer = null;
             document.getElementById('name-input').value = '';
             document.getElementById('extra-input').value = '';
+            const gameLoginInput = document.getElementById('v1333-game-login-code-input');
+            if (gameLoginInput) gameLoginInput.value = '';
             if (message) alert(message);
         }
 
@@ -2314,9 +2355,9 @@ if (window._caorenModifiersEnabled !== true) {
                 myPlayerId = data.playerId;
                 document.getElementById('login-area').style.display = 'none';
                 document.getElementById('lobby-area').style.display = 'block';
-                const displayName = (data.message || '').split('，')[0].replace('欢迎，', '').replace('！已恢复你的房间身份。', '').replace('！你的绑定码是:', '').trim();
-                document.getElementById('my-name').textContent = displayName || document.getElementById('name-input').value.trim();
-                document.getElementById('my-bindcode').textContent = data.bindCode || '未分配';
+                const displayName = data.name || data.player?.name || (data.message || '').split('，')[0].replace('欢迎，', '').replace('！已恢复你的房间身份。', '').replace('！你的绑定码是:', '').trim();
+                document.getElementById('my-name').textContent = displayName || document.getElementById('name-input').value.trim() || '未命名玩家';
+                document.getElementById('my-bindcode').textContent = data.loginCode || data.bindCode || '未分配';
             } else {
                 if (data.resetClient || data.message === '你已退出游戏' || String(data.message || '').includes('终止')) {
                     resetToLogin(data.message || '你已退出房间，请重新进入');
@@ -4974,8 +5015,119 @@ if (window._caorenModifiersEnabled !== true) {
 </script>
 <!-- PHASE2_SAFE_ADMIN_VISIBILITY_V3_END -->
 
+
+<script>
+/* v1.3.5 game-code-login client start */
+(function () {
+  function byId(id) { return document.getElementById(id); }
+
+  function getLoginSocket() {
+    try {
+      if (typeof ws !== 'undefined' && ws && ws.emit) return ws;
+      if (typeof socket !== 'undefined' && socket && socket.emit) return socket;
+    } catch (_err) {}
+    if (window.__caorenCupSocket && window.__caorenCupSocket.emit) return window.__caorenCupSocket;
+    if (window.socket && window.socket.emit) return window.socket;
+    return null;
+  }
+
+  function setStatus(text, online, hasConnectUrl) {
+    var dot = byId('v1333-server-dot');
+    var label = byId('v1333-server-status');
+    var btn = byId('v1333-connect-server-btn');
+    if (dot) {
+      dot.style.background = online ? '#16a34a' : '#dc2626';
+      dot.style.boxShadow = online ? '0 0 0 3px rgba(22,163,74,.18)' : '0 0 0 3px rgba(220,38,38,.16)';
+    }
+    if (label) label.textContent = text;
+    if (btn) {
+      btn.disabled = !(online && hasConnectUrl);
+      btn.title = hasConnectUrl
+        ? (online ? '通过 Steam 协议连接服务器' : '服务器离线或桥接插件未连接')
+        : '未配置 GAME_SERVER_CONNECT_URL 或 GAME_SERVER_ADDRESS';
+    }
+  }
+
+  function bootGameCodeLogin() {
+    var loginArea = byId('login-area') || document.body;
+    var panel = byId('v1333-game-code-login-panel');
+    if (!panel) return;
+
+    Array.prototype.forEach.call(loginArea.querySelectorAll('button'), function (el) {
+      if (el.id !== 'v1333-connect-server-btn' && el.id !== 'v1335-enter-lobby-btn') el.style.display = 'none';
+    });
+
+    var input = byId('v1333-game-login-code-input');
+    var connectBtn = byId('v1333-connect-server-btn');
+    var enterBtn = byId('v1335-enter-lobby-btn');
+    var lastStatus = null;
+
+    function refreshStatus() {
+      fetch('/api/public/server-status', { cache: 'no-store' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          lastStatus = data || {};
+          var hasConnectUrl = !!lastStatus.connectUrl;
+          if (lastStatus.online) {
+            setStatus('草人杯服务器在线', true, hasConnectUrl);
+          } else {
+            setStatus('草人杯服务器离线或插件未连接', false, hasConnectUrl);
+          }
+        })
+        .catch(function () {
+          lastStatus = null;
+          setStatus('无法读取服务器状态', false, false);
+        });
+    }
+
+    if (connectBtn) {
+      connectBtn.addEventListener('click', function () {
+        var url = lastStatus && lastStatus.connectUrl;
+        if (!url) {
+          alert('服务器连接地址未配置。请在网页端环境变量里设置 GAME_SERVER_CONNECT_URL，推荐使用 steam://connect/IP:端口。');
+          return;
+        }
+        window.location.href = url;
+      });
+    }
+
+    function enterLobby() {
+      var credential = input ? input.value.trim() : '';
+      if (!credential) {
+        alert('请输入游戏内返回的码或管理员密码。');
+        if (input) input.focus();
+        return;
+      }
+      var loginSocket = getLoginSocket();
+      if (!loginSocket) {
+        alert('网页 Socket 尚未初始化，请按 Ctrl+F5 强制刷新后重试。');
+        return;
+      }
+      loginSocket.emit('GAME_CODE_LOGIN', { credential: credential });
+    }
+
+    if (input) {
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') enterLobby();
+      });
+    }
+
+    if (enterBtn) {
+      enterBtn.addEventListener('click', enterLobby);
+    }
+
+    refreshStatus();
+    setInterval(refreshStatus, 5000);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootGameCodeLogin);
+  else bootGameCodeLogin();
+})();
+/* v1.3.5 game-code-login client end */
+</script>
 </body>
 </html>
+
 
 
 
