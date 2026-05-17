@@ -16,7 +16,7 @@ namespace CaorenCupPlugin;
 public sealed class CaorenCupPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Command Center Bridge";
-    public override string ModuleVersion => "0.3.5";
+    public override string ModuleVersion => "0.3.8";
     public override string ModuleAuthor => "CaorenCup";
     public override string ModuleDescription => "Bridge CS2 score, player binding and match stats to the CaorenCup web command center.";
 
@@ -63,6 +63,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         _http.DefaultRequestHeaders.Add("x-caoren-plugin-token", _config.PluginToken);
 
         AddCommand("css_ccbind", "绑定草人杯网页身份。用法：!ccbind 1234", OnBindCommand);
+        AddCommand("css_cclogin", "获取草人杯网页登录码。用法：!cclogin", OnGameLoginCommand);
+        AddCommand("css_cccode", "获取草人杯网页登录码。用法：!cccode", OnGameLoginCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
 
@@ -113,6 +115,57 @@ public sealed class CaorenCupPlugin : BasePlugin
         var name = player.PlayerName;
         ReplyToPlayer(player, "[草人杯] 已收到绑定请求，正在连接网页指挥台...");
         _ = BindAsync(player, bindCode, steamId, name);
+    }
+
+    private void OnGameLoginCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!IsRealPlayer(player))
+        {
+            command.ReplyToCommand("这条指令只能由玩家在游戏内执行。");
+            return;
+        }
+
+        var steamId = player!.SteamID.ToString();
+        var name = player.PlayerName;
+        ReplyToPlayer(player, "[草人杯] 正在生成网页登录码...");
+        _ = RequestGameLoginCodeAsync(player, steamId, name);
+    }
+
+    private async Task RequestGameLoginCodeAsync(CCSPlayerController player, string steamId, string name)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("api/plugin/game-login-code", new { steamId, name }, _jsonOptions);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = JsonSerializer.Deserialize<PluginGameLoginCodeResponse>(body, _jsonOptions);
+
+                if (result?.Success == true && !string.IsNullOrWhiteSpace(result.Code))
+                {
+                    var minutes = Math.Max(1, result.ExpiresInSeconds / 60);
+                    var validText = minutes >= 60 ? $"约 {Math.Max(1, minutes / 60)} 小时" : $"约 {minutes} 分钟";
+                    ShowGameLoginCodeNotice(player, result.Code, validText);
+                }
+                else
+                {
+                    var error = string.IsNullOrWhiteSpace(result?.Error) ? "网页指挥台没有返回登录码。" : result!.Error;
+                    ReplyToPlayer(player, $"[草人杯] 获取网页登录码失败：{error}");
+                }
+            }
+            else
+            {
+                var error = ExtractErrorMessage(body);
+                ReplyToPlayer(player, $"[草人杯] 获取网页登录码失败：{error}");
+                Logger.LogWarning("Game login code failed: {Body}", body);
+            }
+        }
+        catch (Exception ex)
+        {
+            ReplyToPlayer(player, "[草人杯] 获取网页登录码失败：无法连接网页指挥台。");
+            Logger.LogError(ex, "Game login code failed: cannot connect to command center");
+        }
     }
 
     private void OnStateCommand(CCSPlayerController? player, CommandInfo command)
@@ -543,6 +596,35 @@ public sealed class CaorenCupPlugin : BasePlugin
         });
     }
 
+    private void ShowGameLoginCodeNotice(CCSPlayerController player, string code, string validText)
+    {
+        var displayCode = code.Trim().ToUpperInvariant();
+
+        ReplyToPlayer(player, "[草人杯] =================================");
+        ReplyToPlayer(player, $"[草人杯]  你的网页登录码： {displayCode}");
+        ReplyToPlayer(player, "[草人杯]  请立即回网页输入这个码进入大厅");
+        ReplyToPlayer(player, "[草人杯]  网页掉线后也可继续使用这个码恢复");
+        ReplyToPlayer(player, $"[草人杯]  有效期：{validText}；重新获取新码后旧码失效");
+        ReplyToPlayer(player, "[草人杯] =================================");
+        ReplyToPlayerCenter(player, $"网页登录码：{displayCode}\n请回网页输入");
+    }
+
+    private void ReplyToPlayerCenter(CCSPlayerController? player, string message)
+    {
+        if (player == null) return;
+        Server.NextFrame(() =>
+        {
+            try
+            {
+                if (player.IsValid) player.PrintToCenter(message);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Failed to print center message to player");
+            }
+        });
+    }
+
     private static string ExtractErrorMessage(string body)
     {
         if (string.IsNullOrWhiteSpace(body)) return "服务器没有返回错误信息";
@@ -591,6 +673,28 @@ public sealed class PluginBindResponse
 
     [JsonPropertyName("steamId")]
     public string? SteamId { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+
+public sealed class PluginGameLoginCodeResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("code")]
+    public string? Code { get; set; }
+
+    [JsonPropertyName("expiresInSeconds")]
+    public int ExpiresInSeconds { get; set; }
+
+    [JsonPropertyName("steamId")]
+    public string? SteamId { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }
