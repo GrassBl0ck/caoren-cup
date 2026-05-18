@@ -1,0 +1,561 @@
+﻿// socket-handlers.ts
+import { Server as SocketIOServer } from 'socket.io';
+import { v4 as uuidv4 } from 'uuid';
+import { GamePhase, LiveGameData, Player, PlayerRole, RosterTeam, WsEvents } from './types';
+import { getSession, resetSessionWithPlayers, terminateAndClear } from './session-manager';
+import {
+    findPlayerById,
+    findPlayerByName,
+    findPlayerByBindCode,
+    normalizeLoginText,
+    generateBindCode,
+    getGamePlayers,
+} from './player-utils';
+import { calculateScores } from './scoring';
+import {
+    advancePhase,
+    applyDraftPick,
+    finishDraftPick,
+    getAvailableMaps,
+    isDraftComplete,
+    assignPlayerToRoster,
+    removePlayerFromRosterTeams,
+    randomRemainingRoles,
+    resetFormalMatchCounters,
+    updateMatchFinishState,
+    clearUndercoverModeState,
+    startMapVote,
+    setRosterLiveSides,
+} from './game-flow-manager';
+import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
+import { ADMIN_PASSWORD } from './game-constants';
+
+const createEmptyLiveGameData = (): LiveGameData => ({
+    scoreCT: 0,
+    scoreT: 0,
+    scoreA: 0,
+    scoreB: 0,
+    currentRound: 0,
+    pluginConnected: false,
+    winnerTeam: null,
+    matchFinished: false,
+    winTarget: 13,
+    lastScoredRound: 0,
+    rawPluginRound: 0,
+    roundBaseOffset: undefined,
+    killMatrix: {},
+    openingKillMatrix: {},
+    awpKillMatrix: {},
+    firstKillRounds: {},
+});
+
+const isUndercoverModeEnabled = () => getSession().matchOptions?.undercoverModeEnabled !== false;
+
+export function registerSocketHandlers(io: SocketIOServer, deps: {
+    broadcastState: () => void;
+    notifyMessage: (msg: string) => void;
+}) {
+    const { broadcastState, notifyMessage } = deps;
+
+    const sendPrivateData = (socketId: string, playerId: string) => {
+        const session = getSession();
+        const player = findPlayerById(session, playerId);
+        if (!player) return;
+        const socket = io.sockets.sockets.get(socketId);
+        if (!socket) return;
+        const reveal = player.role === 'Admin' || !!session.rolesReleased;
+        socket.emit(WsEvents.PRIVATE_DATA, {
+            bindCode: player.bindCode,
+            taskGrid: reveal ? player.taskGrid : undefined,
+            gameRole: reveal ? player.gameRole : undefined,
+        });
+    };
+
+    const resetCurrentGame = (reason: string) => {
+        clearAllFlowTimers();
+        resetSessionWithPlayers(reason);
+        notifyMessage(reason);
+        broadcastState();
+    };
+
+    const terminateCurrentGameAndKickAll = (reason: string) => {
+        clearAllFlowTimers();
+        const oldSession = getSession();
+        for (const playerId of Object.keys(oldSession.players)) {
+            io.to(playerId).emit(WsEvents.LOGIN_RESPONSE, { success: false, resetClient: true, message: reason });
+        }
+        terminateAndClear();
+        notifyMessage(reason);
+        broadcastState();
+    };
+
+    io.on('connection', (socket) => {
+        console.log(`客户端连接: ${socket.id}`);
+        socket.data.playerId = null;
+
+        socket.on(WsEvents.LOGIN, (data: { name: string; extraParam?: string }) => {
+            const session = getSession();
+            const name = normalizeLoginText(data.name);
+            const extraParam = normalizeLoginText(data.extraParam);
+            const existingByBind = findPlayerByBindCode(session, extraParam);
+            const existingByName = findPlayerByName(session, name);
+            const existing = existingByBind || existingByName;
+
+            if (existing) {
+                if (existing.role === 'Admin' && extraParam !== ADMIN_PASSWORD && extraParam !== existing.bindCode) {
+                    socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员恢复身份需要输入管理员密码，或输入该管理员账号的绑定码' });
+                    return;
+                }
+                socket.data.playerId = existing.playerId;
+                socket.join(existing.playerId);
+                socket.emit(WsEvents.LOGIN_RESPONSE, {
+                    success: true,
+                    playerId: existing.playerId,
+                    bindCode: existing.bindCode,
+                    message: `欢迎，${existing.name}！已恢复你的房间身份。`,
+                });
+                sendPrivateData(socket.id, existing.playerId);
+                broadcastState();
+                return;
+            }
+
+            if (!name) {
+                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '请输入昵称；如果要恢复身份，也可以输入原昵称或绑定码' });
+                return;
+            }
+
+            let role: PlayerRole = 'Player';
+            if (extraParam === 'spec') role = 'Spectator';
+            else if (extraParam === ADMIN_PASSWORD) role = 'Admin';
+            if (session.phase !== GamePhase.Lobby && role !== 'Admin') role = 'Spectator';
+
+            const playerId = uuidv4();
+            const bindCode = generateBindCode();
+            const newPlayer: Player = { playerId, name, role, bindCode, isReady: false };
+            session.players[playerId] = newPlayer;
+            session.playerOrder.push(playerId);
+            socket.data.playerId = playerId;
+            socket.join(playerId);
+            socket.emit(WsEvents.LOGIN_RESPONSE, {
+                success: true,
+                playerId,
+                bindCode,
+                message: role === 'Spectator' && session.phase !== GamePhase.Lobby
+                    ? `欢迎，${name}！当前对局已经开始，你已作为旁观者加入。你的绑定码是: ${bindCode}`
+                    : `欢迎，${name}！你的绑定码是: ${bindCode}`,
+            });
+            sendPrivateData(socket.id, playerId);
+            broadcastState();
+        });
+
+        socket.on(WsEvents.ADMIN_ACTION, (data: { playerId: string; action: string; payload?: any }) => {
+            const session = getSession();
+            const admin = findPlayerById(session, data.playerId);
+            if (!admin || admin.role !== 'Admin') {
+                socket.emit(WsEvents.NOTIFICATION, { message: '只有管理员才能执行此操作' });
+                return;
+            }
+
+            if (data.action === 'ADVANCE_PHASE') {
+                const current = session.phase;
+                let nextPhase: GamePhase | null = null;
+                switch (current) {
+                    case GamePhase.Lobby: nextPhase = GamePhase.CaptainSelection; break;
+                    case GamePhase.CaptainSelection: nextPhase = GamePhase.Roll; break;
+                    case GamePhase.Roll: nextPhase = GamePhase.PlayerDraft; break;
+                    case GamePhase.PlayerDraft: nextPhase = GamePhase.MapBan; break;
+                    case GamePhase.MapBan: nextPhase = GamePhase.SidePick; break;
+                    case GamePhase.SidePick: nextPhase = GamePhase.PreGameSetup; break;
+                    case GamePhase.PreGameSetup: nextPhase = GamePhase.LiveGame; break;
+                    case GamePhase.LiveGame: nextPhase = isUndercoverModeEnabled() ? GamePhase.PostGameAccusation : GamePhase.Scoreboard; break;
+                    case GamePhase.MidGameQA: nextPhase = isUndercoverModeEnabled() ? GamePhase.PostGameAccusation : GamePhase.Scoreboard; break;
+                    case GamePhase.PostGameAccusation: nextPhase = GamePhase.Scoreboard; break;
+                    case GamePhase.Scoreboard:
+                        resetCurrentGame('管理员开启新一轮');
+                        return;
+                }
+
+                if (!nextPhase) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '当前阶段无法继续推进。' });
+                    return;
+                }
+
+                if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame) {
+                    if (isUndercoverModeEnabled()) {
+                        const unassigned = getGamePlayers(session).filter(p => !p.gameRole);
+                        if (unassigned.length > 0) {
+                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${unassigned.length} 名玩家未分配身份，请先由管理员分配/随机补齐。` });
+                            return;
+                        }
+                        if (!session.rolesReleased) {
+                            socket.emit(WsEvents.NOTIFICATION, { message: '身份尚未发放给玩家。请先点击“发放身份给玩家”，再进入正式对局。' });
+                            return;
+                        }
+                    } else {
+                        clearUndercoverModeState();
+                        session.rolesReleased = true;
+                    }
+                }
+
+                if (nextPhase === GamePhase.Scoreboard) {
+                    try { calculateScores(session); } catch (err) { console.error('[ADVANCE_PHASE] calculateScores failed:', err); }
+                }
+                advancePhase(current, nextPhase, admin.name);
+                return;
+            }
+
+            if (data.action === 'TERMINATE_GAME') {
+                terminateCurrentGameAndKickAll('管理员强制终止本局游戏');
+            } else if (data.action === 'FORCE_READY') {
+                if (session.phase === GamePhase.PreGameSetup) {
+                    Object.values(session.players).forEach(p => p.isReady = true);
+                    broadcastState();
+                }
+            } else if (data.action === 'RERANDOM_CAPTAIN') {
+                if (session.phase !== GamePhase.CaptainSelection) return;
+                const target = data.payload?.team;
+                const candidates = getGamePlayers(session).filter(p => p.playerId !== session.captains.A && p.playerId !== session.captains.B);
+                if ((target === 'A' || target === 'B') && candidates.length > 0) {
+                    session.captains[target] = candidates[Math.floor(Math.random() * candidates.length)].playerId;
+                    broadcastState();
+                }
+            } else if (data.action === 'SET_CAPTAIN') {
+                if (session.phase !== GamePhase.CaptainSelection) return;
+                const { team, playerId: newId } = data.payload || {};
+                const targetPlayer = findPlayerById(session, newId);
+                if ((team === 'A' || team === 'B') && targetPlayer && targetPlayer.role !== 'Admin') {
+                    session.captains[team as RosterTeam] = newId;
+                    broadcastState();
+                }
+            } else if (data.action === 'ADMIN_BAN_MAP') {
+                if (session.phase === GamePhase.MapBan && session.mapVote) {
+                    const map = data.payload?.map;
+                    if (getAvailableMaps().includes(map)) {
+                        clearMapVoteTimer();
+                        session.bannedMaps.push(map);
+                        session.mapVote = undefined;
+                        session.currentBanTeam = null;
+                        session.timerEndAt = null;
+                        session.timerPhase = null;
+                        if (getAvailableMaps().length === 1) {
+                            session.selectedMap = getAvailableMaps()[0];
+                            advancePhase(GamePhase.MapBan, GamePhase.SidePick);
+                        } else {
+                            const nextIdx = session.bannedMaps.length;
+                            if (nextIdx < session.banSequence.length) startMapVote(session.banSequence[nextIdx]);
+                            broadcastState();
+                        }
+                    }
+                }
+            } else if (data.action === 'SET_ROLES_COUNT') {
+                if (!isUndercoverModeEnabled()) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '卧底模式已关闭，本局不需要设置卧底/侦探数量。' });
+                    return;
+                }
+                if (session.phase === GamePhase.Lobby) {
+                    const u = data.payload?.undercoverCount;
+                    const d = data.payload?.detectiveCount;
+                    if (typeof u === 'number' && u >= 0) session.undercoverCount = u;
+                    if (typeof d === 'number' && d >= 0) session.detectiveCount = d;
+                    broadcastState();
+                }
+            } else if (data.action === 'SET_PLAYER_ROLE') {
+                if (!isUndercoverModeEnabled() || session.phase !== GamePhase.PreGameSetup) return;
+                const { playerId: targetId, gameRole } = data.payload || {};
+                const player = findPlayerById(session, targetId);
+                if (player && ['Undercover', 'Detective', 'Soldier'].includes(gameRole)) {
+                    player.gameRole = gameRole;
+                    broadcastState();
+                }
+            } else if (data.action === 'RANDOM_REMAINING_ROLES') {
+                if (isUndercoverModeEnabled() && session.phase === GamePhase.PreGameSetup) randomRemainingRoles();
+            } else if (data.action === 'RELEASE_ROLES') {
+                if (!isUndercoverModeEnabled() || session.phase !== GamePhase.PreGameSetup) return;
+                const unassigned = getGamePlayers(session).filter(p => !p.gameRole);
+                if (unassigned.length > 0) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${unassigned.length} 名玩家未分配身份，不能发放。` });
+                    return;
+                }
+                session.rolesReleased = true;
+                notifyMessage('管理员已发放身份。玩家现在只能看到自己的身份。');
+                broadcastState();
+            } else if (data.action === 'ASSIGN_ROSTER_TEAM') {
+                if (session.phase !== GamePhase.PlayerDraft) return;
+                const targetId = String(data.payload?.playerId || '');
+                const team = data.payload?.team as RosterTeam;
+                if (team !== 'A' && team !== 'B') return;
+                if (!assignPlayerToRoster(targetId, team)) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '无法分配该玩家：队长、管理员或旁观者不能在这里直接改队。' });
+                    return;
+                }
+                notifyMessage(`管理员已将 ${findPlayerById(session, targetId)?.name || '玩家'} 分入 ${team} 队。`);
+                if (isDraftComplete()) finishDraftPick('manual');
+                else broadcastState();
+            } else if (data.action === 'KICK_PLAYER') {
+                const targetId = String(data.payload?.playerId || '');
+                const target = findPlayerById(session, targetId);
+                if (!target || target.role === 'Admin') return;
+                removePlayerFromRosterTeams(targetId);
+                if (session.captains.A === targetId) session.captains.A = null;
+                if (session.captains.B === targetId) session.captains.B = null;
+                delete session.accusations[targetId];
+                delete session.players[targetId];
+                session.playerOrder = session.playerOrder.filter(id => id !== targetId);
+                io.to(targetId).emit(WsEvents.LOGIN_RESPONSE, { success: false, resetClient: true, message: '你已被管理员移出房间。' });
+                notifyMessage(`管理员已踢出玩家：${target.name}`);
+                broadcastState();
+            } else if (data.action === 'RESET_FORMAL_MATCH_COUNTERS') {
+                if (session.phase !== GamePhase.LiveGame) return;
+                resetFormalMatchCounters();
+                notifyMessage('管理员已将当前插件回合视为正式第 1 回合，并重置比分与战绩。');
+                broadcastState();
+            } else if (data.action === 'UPDATE_LIVE_DATA') {
+                if (![GamePhase.LiveGame, GamePhase.PostGameAccusation, GamePhase.Scoreboard].includes(session.phase)) return;
+                if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
+                const { scoreA, scoreB, scoreCT, scoreT, round } = data.payload || {};
+                if (typeof scoreA === 'number') session.liveGameData.scoreA = scoreA;
+                if (typeof scoreB === 'number') session.liveGameData.scoreB = scoreB;
+                if (typeof scoreCT === 'number') session.liveGameData.scoreCT = scoreCT;
+                if (typeof scoreT === 'number') session.liveGameData.scoreT = scoreT;
+                if (typeof round === 'number') session.liveGameData.currentRound = round;
+                updateMatchFinishState();
+                if (session.phase === GamePhase.Scoreboard) calculateScores(session);
+                broadcastState();
+            } else if (data.action === 'SET_DETECTIVE_QUESTION_COUNT') {
+                if (!isUndercoverModeEnabled()) return;
+                if (![GamePhase.LiveGame, GamePhase.PostGameAccusation, GamePhase.Scoreboard].includes(session.phase)) return;
+                const target = findPlayerById(session, data.payload?.playerId);
+                const count = Math.max(0, Math.min(2, Math.floor(Number(data.payload?.count ?? 0))));
+                if (!target || target.gameRole !== 'Detective') return;
+                target.detectiveQuestionCount = count;
+                if (session.phase === GamePhase.Scoreboard) calculateScores(session);
+                broadcastState();
+            } else if (data.action === 'UPDATE_TASK_TEMPLATE') {
+                if (data.payload?.taskTemplate) {
+                    session.taskTemplate = data.payload.taskTemplate;
+                    broadcastState();
+                    socket.emit(WsEvents.NOTIFICATION, { message: '任务模板已更新！' });
+                }
+            } else if (data.action === 'SET_ROSTER_LIVE_SIDES') {
+                if (data.payload?.teamASide === 'CT' || data.payload?.teamASide === 'T') {
+                    setRosterLiveSides(data.payload.teamASide);
+                    broadcastState();
+                }
+            }
+        });
+
+        socket.on('ROLL', (data: { playerId: string; value: number }) => {
+            const session = getSession();
+            const player = findPlayerById(session, data.playerId);
+            if (!player || session.phase !== GamePhase.Roll) return;
+            const isCapA = session.captains.A === data.playerId;
+            const isCapB = session.captains.B === data.playerId;
+            if (!isCapA && !isCapB) return;
+            if (isCapA && session.rollValues.A !== null) return;
+            if (isCapB && session.rollValues.B !== null) return;
+            if (isCapA) session.rollValues.A = data.value;
+            if (isCapB) session.rollValues.B = data.value;
+            broadcastState();
+            if (session.rollValues.A !== null && session.rollValues.B !== null) {
+                if (session.rollTimeout) clearTimeout(session.rollTimeout);
+                session.rollTimeout = setTimeout(() => {
+                    advancePhase(GamePhase.Roll, GamePhase.PlayerDraft);
+                }, 3000);
+            }
+        });
+
+        socket.on(WsEvents.DRAFT_PICK, (data: { playerId: string; pickedId: string }) => {
+            const session = getSession();
+            const drafter = findPlayerById(session, data.playerId);
+            if (!drafter || session.phase !== GamePhase.PlayerDraft) return;
+            if (session.draftIndex >= session.draftOrder.length) return;
+            const currentTeam = session.draftOrder[session.draftIndex];
+            const isCapA = session.captains.A === data.playerId && currentTeam === 'A';
+            const isCapB = session.captains.B === data.playerId && currentTeam === 'B';
+            if (!isCapA && !isCapB) return;
+
+            const picked = applyDraftPick(data.pickedId, 'manual');
+            if (!picked) {
+                broadcastState();
+                return;
+            }
+
+            if (isDraftComplete()) {
+                clearDraftPickTimer();
+                session.draftPickTimeoutAt = null;
+                session.timerEndAt = null;
+                session.timerPhase = null;
+                finishDraftPick('manual');
+            } else if (session.draftOrder[session.draftIndex] === currentTeam) {
+                broadcastState();
+            } else {
+                finishDraftPick('manual');
+            }
+        });
+
+        socket.on(WsEvents.VOTE, (data: { playerId: string; map: string }) => {
+            const session = getSession();
+            if (session.phase !== GamePhase.MapBan || !session.mapVote) return;
+            const player = findPlayerById(session, data.playerId);
+            if (!player || player.role === 'Spectator' || player.role === 'Admin') return;
+            if (!player.rosterTeam || player.rosterTeam !== session.mapVote.team) return;
+            if (!getAvailableMaps().includes(data.map)) return;
+            session.mapVote.votes[data.playerId] = data.map;
+            broadcastState();
+        });
+
+        socket.on(WsEvents.SIDE_PICK, (data: { playerId: string; side: 'CT' | 'T' }) => {
+            const session = getSession();
+            if (session.phase !== GamePhase.SidePick || !session.sideVote) return;
+            const player = findPlayerById(session, data.playerId);
+            if (!player || player.role === 'Spectator' || player.role === 'Admin') return;
+            if (player.rosterTeam !== session.sideVote.team) return;
+            if (data.side !== 'CT' && data.side !== 'T') return;
+            session.sideVote.votes[data.playerId] = data.side;
+            broadcastState();
+        });
+
+        socket.on('PLAYER_READY', (data: { playerId: string }) => {
+            const session = getSession();
+            if (session.phase !== GamePhase.PreGameSetup) return;
+            const player = findPlayerById(session, data.playerId);
+            if (!player || player.role === 'Admin' || player.role === 'Spectator') return;
+            player.isReady = true;
+            broadcastState();
+            if (getGamePlayers(session).every(p => p.isReady)) {
+                notifyMessage('所有参赛玩家已准备，等待管理员分配并发放身份。');
+            }
+        });
+
+        socket.on(WsEvents.TASK_ACTION, (data: { playerId: string; action: string; cellId: string; nValue?: number }) => {
+            const session = getSession();
+            const player = findPlayerById(session, data.playerId);
+            if (!player || !player.taskGrid) return;
+            const cell = player.taskGrid[data.cellId];
+            if (!cell) return;
+
+            switch (data.action) {
+                case 'MARK_COMPLETE':
+                    if (cell.status === 'Abandoned' || cell.nType !== 'none') return;
+                    cell.status = 'Complete';
+                    cell.completedRound = session.liveGameData?.currentRound || undefined;
+                    if (!cell.borderHistory) cell.borderHistory = [];
+                    if (!cell.borderHistory.includes('green')) cell.borderHistory.push('green');
+                    break;
+                case 'UNDO_COMPLETE':
+                    if (cell.status === 'Abandoned' || cell.isReplaced) return;
+                    cell.status = 'Incomplete';
+                    if (cell.borderHistory) cell.borderHistory = cell.borderHistory.filter(c => c !== 'green' && c !== 'orange');
+                    cell.nValue = 0;
+                    delete cell.completedRound;
+                    cell.progressRounds = [];
+                    break;
+                case 'ABANDON':
+                    if (cell.status === 'Complete' || cell.status === 'Abandoned') return;
+                    player.abandonCount = player.abandonCount || 0;
+                    if (player.abandonCount >= 1) return;
+                    cell.status = 'Abandoned';
+                    player.abandonCount++;
+                    break;
+                case 'REQUEST_HINT':
+                    if (cell.status === 'Complete' || cell.status === 'Abandoned' || cell.isHintUsed) return;
+                    cell.isHintUsed = true;
+                    if (!cell.borderHistory) cell.borderHistory = [];
+                    if (!cell.borderHistory.includes('blue')) cell.borderHistory.push('blue');
+                    break;
+                case 'REPLACE': {
+                    if (cell.status === 'Complete' || cell.status === 'Abandoned') return;
+                    player.replaceCount = player.replaceCount || 0;
+                    if (player.replaceCount >= 1) return;
+                    const repTask = session.taskTemplate?.replacementTask as any;
+                    if (!repTask || cell.level > repTask.level) {
+                        socket.emit(WsEvents.NOTIFICATION, { message: '目标任务等级过高，无法替换' });
+                        return;
+                    }
+                    cell.status = 'Incomplete';
+                    cell.isReplaced = true;
+                    cell.description = repTask.description;
+                    cell.level = repTask.level;
+                    cell.levelLabel = repTask.level.toString();
+                    if (!cell.borderHistory) cell.borderHistory = [];
+                    if (!cell.borderHistory.includes('purple')) cell.borderHistory.push('purple');
+                    player.replaceCount++;
+                    break;
+                }
+                case 'N_ADD':
+                case 'N_SUB':
+                case 'N_SET': {
+                    if (cell.nType === 'none' || cell.status === 'Abandoned' || cell.status === 'Complete') return;
+                    let newVal = cell.nValue || 0;
+                    if (data.action === 'N_ADD') newVal++;
+                    if (data.action === 'N_SUB') newVal--;
+                    if (data.action === 'N_SET' && data.nValue !== undefined) newVal = data.nValue;
+                    if (newVal < 0) newVal = 0;
+                    if (cell.nMax && newVal > cell.nMax) newVal = cell.nMax;
+                    cell.nValue = newVal;
+                    if (!cell.borderHistory) cell.borderHistory = [];
+                    cell.borderHistory = cell.borderHistory.filter(c => c !== 'green' && c !== 'orange');
+                    if (cell.nValue > 0 && cell.nValue === cell.nMax) {
+                        cell.status = 'Complete';
+                        cell.completedRound = session.liveGameData?.currentRound || undefined;
+                        cell.borderHistory.push('green');
+                    } else if (cell.nValue > 0 && cell.nValue < (cell.nMax || 99)) {
+                        cell.status = 'Incomplete';
+                        delete cell.completedRound;
+                        if (!cell.progressRounds) cell.progressRounds = [];
+                        const currentRound = session.liveGameData?.currentRound || 0;
+                        if (currentRound > 0 && !cell.progressRounds.includes(currentRound)) cell.progressRounds.push(currentRound);
+                        cell.borderHistory.push('orange');
+                    } else {
+                        cell.status = 'Incomplete';
+                        delete cell.completedRound;
+                        cell.progressRounds = [];
+                    }
+                    break;
+                }
+            }
+            sendPrivateData(socket.id, player.playerId);
+            broadcastState();
+        });
+
+        socket.on('ACCUSE', (data: { playerId: string; targetId: string; type: 'own' | 'enemy' }) => {
+            const session = getSession();
+            if (!isUndercoverModeEnabled() || session.phase !== GamePhase.PostGameAccusation) return;
+            const accuser = findPlayerById(session, data.playerId);
+            const target = findPlayerById(session, data.targetId);
+            if (!accuser || accuser.role === 'Spectator' || accuser.role === 'Admin') return;
+            if (!target || target.role === 'Spectator' || target.role === 'Admin') return;
+            if (!session.accusations[data.playerId]) session.accusations[data.playerId] = { own: null, enemy: null };
+            if (data.type === 'own') session.accusations[data.playerId].own = data.targetId;
+            else session.accusations[data.playerId].enemy = data.targetId;
+            broadcastState();
+            if (getGamePlayers(session).every(p => {
+                const a = session.accusations[p.playerId];
+                return a && a.own && a.enemy;
+            })) {
+                advancePhase(GamePhase.PostGameAccusation, GamePhase.Scoreboard);
+            }
+        });
+
+        socket.on('PLAYER_QUIT', (data: { playerId: string; confirmName: string }) => {
+            const session = getSession();
+            const player = findPlayerById(session, data.playerId);
+            if (!player || player.name !== data.confirmName) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '名字不匹配，无法退出' });
+                return;
+            }
+            if (session.phase !== GamePhase.Lobby) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '只有在大厅阶段才能退出' });
+                return;
+            }
+            delete session.players[player.playerId];
+            session.playerOrder = session.playerOrder.filter(id => id !== player.playerId);
+            socket.leave(player.playerId);
+            socket.data.playerId = null;
+            broadcastState();
+            socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '你已退出游戏' });
+        });
+
+        socket.on('disconnect', () => console.log(`客户端断开: ${socket.id}`));
+    });
+}

@@ -430,7 +430,11 @@ public override void Load(bool hotReload)
 
     private void PerformReset()
     {
-        foreach (var f in _features) f.SetEnabled(false);
+        foreach (var f in _features)
+        {
+            if (f is Features.SkillPointsFeature) continue;
+            f.SetEnabled(false);
+        }
         Config.HpCap.Enabled = false;
         CaorenCupUtils.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 所有功能已重置为竞技状态。");
         SaveConfig(); // 重置后自动保存，防止重启后又变回去

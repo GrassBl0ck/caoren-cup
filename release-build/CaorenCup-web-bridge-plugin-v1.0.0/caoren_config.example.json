@@ -1,6 +1,0 @@
-{
-  "CommandCenterBaseUrl": "http://127.0.0.1:3000",
-  "PluginToken": "CHANGE_ME_TO_THE_SAME_VALUE_AS_BACKEND_PLUGIN_TOKEN",
-  "HeartbeatSeconds": 30,
-  "EnableDebugLog": false
-}

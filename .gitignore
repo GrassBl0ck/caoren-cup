@@ -17,6 +17,7 @@ obj/
 
 # Node.js
 node_modules/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -34,8 +35,10 @@ coverage/
 *.7z
 *.bak
 *.backup
+*.bak-*
 backup_*/
 backup-*/
+backup_before_*/
 *_backup*/
 *.bak_*
 *.broken*
