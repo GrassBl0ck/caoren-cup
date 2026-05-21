@@ -67,6 +67,7 @@ public class CaorenCupConfig : BasePluginConfig
     public AuraSettings Aura { get; set; } = new AuraSettings();
     public EcoGuessSettings EcoGuess { get; set; } = new EcoGuessSettings();
     public PlaySoundSettings PlaySound { get; set; } = new PlaySoundSettings();
+    public RadarColorSettings RadarColor { get; set; } = new RadarColorSettings();
 
     [JsonPropertyName("HpCap")]
     public HpCapSettings HpCap { get; set; } = new HpCapSettings();
@@ -80,6 +81,13 @@ public class HpCapSettings
     public bool Enabled { get; set; } = false;
     public int Min { get; set; } = 1;
     public int Max { get; set; } = 100;
+}
+
+public class RadarColorSettings
+{
+    public bool Enabled { get; set; } = true;
+    public bool ApplyOnRoundStart { get; set; } = true;
+    public bool ApplyOnSpawn { get; set; } = true;
 }
 
 public class PlaySoundSettings

@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CounterStrikeSharp.API;
@@ -29,6 +29,9 @@ public sealed class CaorenCupPlugin : BasePlugin
     private int _scoreCt;
     private int _scoreT;
     private DateTime _lastPlayerHurtWarningUtc = DateTime.MinValue;
+    private readonly Dictionary<string, CsTeam> _teamAssignments = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _teamAssignmentBypass = new(StringComparer.Ordinal);
+    private bool _teamLockEnabled;
     private static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "css_ammo",
@@ -67,9 +70,11 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_cccode", "获取草人杯网页登录码。用法：!cccode", OnGameLoginCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
+        AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
 
         AddTimer(Math.Max(3, _config.HeartbeatSeconds), () => _ = SendHeartbeatAsync(), TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
         AddTimer(Math.Max(5, _config.HeartbeatSeconds), () => _ = SendSnapshotAsync(), TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+        AddTimer(1.0f, EnforceTeamAssignments, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
 
         Logger.LogInformation("{Name} loaded. CommandCenter={BaseUrl}", ModuleName, _config.CommandCenterBaseUrl);
         _ = SendHeartbeatAsync();
@@ -77,6 +82,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     public override void Unload(bool hotReload)
     {
+        RemoveCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _http.Dispose();
     }
 
@@ -180,10 +186,48 @@ public sealed class CaorenCupPlugin : BasePlugin
         _ = SendSnapshotAsync(null);
     }
 
+    private static object PlayerEquipment(CCSPlayerController? player)
+    {
+        var pawn = player?.PlayerPawn?.Value;
+        var weaponServices = pawn?.WeaponServices;
+        var activeWeapon = weaponServices?.ActiveWeapon.Value;
+        var hasHelmet = false;
+        try
+        {
+            dynamic dynPawn = pawn!;
+            hasHelmet = dynPawn.HasHelmet;
+        }
+        catch
+        {
+            hasHelmet = false;
+        }
+        var weapons = Array.Empty<string>();
+        try
+        {
+            weapons = weaponServices?.MyWeapons
+                .Select(handle => handle.Value?.DesignerName ?? string.Empty)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .ToArray() ?? Array.Empty<string>();
+        }
+        catch
+        {
+            weapons = activeWeapon?.DesignerName is { Length: > 0 } name ? new[] { name } : Array.Empty<string>();
+        }
+
+        return new
+        {
+            activeWeapon = activeWeapon?.DesignerName ?? string.Empty,
+            weapons,
+            armor = pawn?.ArmorValue ?? 0,
+            hasHelmet
+        };
+    }
+
     [GameEventHandler]
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
         _currentRound++;
+        EnforceTeamAssignments();
         _ = PostEventAsync("round_start", new
         {
             round = _currentRound,
@@ -220,6 +264,9 @@ public sealed class CaorenCupPlugin : BasePlugin
             EnsureLocalStats(assisterSteamId, assister.PlayerName).Assists++;
         }
 
+        var attackerEquipment = PlayerEquipment(attacker);
+        var victimEquipment = PlayerEquipment(victim);
+
         _ = PostEventAsync("player_death", new
         {
             round = _currentRound,
@@ -230,6 +277,8 @@ public sealed class CaorenCupPlugin : BasePlugin
             assisterSteamId,
             headshot = @event.Headshot,
             weapon = @event.Weapon,
+            attackerEquipment,
+            victimEquipment,
             mapName = SafeMapName()
         });
         return HookResult.Continue;
@@ -480,6 +529,14 @@ public sealed class CaorenCupPlugin : BasePlugin
 
                 ExecuteAllowedServerCommand(serverCommand, label);
             }
+            else if (string.Equals(command.Type, "APPLY_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyTeamAssignments(command.Payload);
+            }
+            else if (string.Equals(command.Type, "CLEAR_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
+            {
+                ClearTeamAssignments();
+            }
             else
             {
                 Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
@@ -489,6 +546,120 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             await AckCommandAsync(command.Id);
         }
+    }
+
+    private void ApplyTeamAssignments(JsonElement payload)
+    {
+        if (payload.ValueKind != JsonValueKind.Object ||
+            !payload.TryGetProperty("assignments", out var assignmentsElement) ||
+            assignmentsElement.ValueKind != JsonValueKind.Array)
+        {
+            Logger.LogWarning("APPLY_TEAM_ASSIGNMENTS missing payload.assignments");
+            return;
+        }
+
+        var nextAssignments = new Dictionary<string, CsTeam>(StringComparer.Ordinal);
+        foreach (var item in assignmentsElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object) continue;
+            var steamId = item.TryGetProperty("steamId", out var steamIdElement)
+                ? steamIdElement.GetString()?.Trim()
+                : string.Empty;
+            var side = item.TryGetProperty("side", out var sideElement)
+                ? sideElement.GetString()?.Trim()
+                : string.Empty;
+            var team = ParseTeam(side);
+            if (string.IsNullOrWhiteSpace(steamId) || team == null) continue;
+            nextAssignments[steamId] = team.Value;
+        }
+
+        _teamAssignments.Clear();
+        foreach (var assignment in nextAssignments)
+        {
+            _teamAssignments[assignment.Key] = assignment.Value;
+        }
+
+        _teamLockEnabled = payload.TryGetProperty("lockTeams", out var lockElement)
+            ? lockElement.ValueKind != JsonValueKind.False
+            : true;
+
+        Logger.LogInformation("Applied {Count} CaorenCup team assignments. Lock={Lock}", _teamAssignments.Count, _teamLockEnabled);
+        Server.NextFrame(() =>
+        {
+            EnforceTeamAssignments();
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页强制分队已同步：{_teamAssignments.Count} 名玩家。");
+        });
+    }
+
+    private void ClearTeamAssignments()
+    {
+        _teamAssignments.Clear();
+        _teamAssignmentBypass.Clear();
+        _teamLockEnabled = false;
+        Logger.LogInformation("Cleared CaorenCup team assignments.");
+        Server.NextFrame(() =>
+        {
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页强制分队已解除。");
+        });
+    }
+
+    private void EnforceTeamAssignments()
+    {
+        if (!_teamLockEnabled || _teamAssignments.Count == 0) return;
+
+        foreach (var player in Utilities.GetPlayers().Where(IsRealPlayer))
+        {
+            var steamId = player.SteamID.ToString();
+            if (!_teamAssignments.TryGetValue(steamId, out var targetTeam)) continue;
+            if (player.Team == targetTeam || player.TeamNum == (int)targetTeam) continue;
+
+            try
+            {
+                _teamAssignmentBypass.Add(steamId);
+                player.ChangeTeam(targetTeam);
+                player.PrintToChat($" {ChatColors.Green}[草人杯]{ChatColors.Default} 已按网页分队将你调整到 {TeamLabel(targetTeam)}。");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to enforce team assignment for {SteamId} to {Team}", steamId, targetTeam);
+            }
+            finally
+            {
+                _teamAssignmentBypass.Remove(steamId);
+            }
+        }
+    }
+
+    private HookResult OnJoinTeamCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!_teamLockEnabled || !IsRealPlayer(player)) return HookResult.Continue;
+
+        var steamId = player!.SteamID.ToString();
+        if (_teamAssignmentBypass.Contains(steamId)) return HookResult.Continue;
+        if (!_teamAssignments.TryGetValue(steamId, out var targetTeam)) return HookResult.Continue;
+
+        player.PrintToChat($" {ChatColors.Green}[草人杯]{ChatColors.Default} 本局已按网页分队锁定，不能自行换边。你应在 {TeamLabel(targetTeam)}。");
+        if (player.Team != targetTeam && player.TeamNum != (int)targetTeam)
+        {
+            Server.NextFrame(EnforceTeamAssignments);
+        }
+
+        return HookResult.Handled;
+    }
+
+    private static CsTeam? ParseTeam(string? side)
+    {
+        return side?.Trim().ToUpperInvariant() switch
+        {
+            "CT" => CsTeam.CounterTerrorist,
+            "T" => CsTeam.Terrorist,
+            _ => null
+        };
+    }
+
+    private static string TeamLabel(CsTeam team)
+    {
+        return team == CsTeam.CounterTerrorist ? "CT" : team == CsTeam.Terrorist ? "T" : team.ToString();
     }
 
 

@@ -6,15 +6,10 @@ import multer from 'multer';
 import {
     GamePhase,
     WsEvents,
-    TaskCell,
 } from './types';
 import { getSession } from './session-manager';
-import {
-    getGamePlayers,
-    normalizeSteamId,
-    sanitizeForPublic,
-} from './player-utils';
-import { calculateScores, parseCsv, csvRowToStats } from './scoring';
+import { restoreSessionSnapshot, scheduleSessionSnapshotSave } from './session-persistence';
+import { sanitizeForPublic } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
 import { registerPluginRoutes } from './plugin-api';
@@ -51,6 +46,8 @@ app.use(express.static('public', {
 }));
 const upload = multer({ storage: multer.memoryStorage() });
 
+restoreSessionSnapshot();
+
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
@@ -62,6 +59,7 @@ const broadcastState = () => {
         const viewerId = socket.data?.playerId || null;
         socket.emit(WsEvents.GAME_STATE, sanitizeForPublic(session, viewerId));
     }
+    scheduleSessionSnapshotSave();
 };
 
 const notifyMessage = (msg: string) => {
@@ -120,43 +118,12 @@ registerGameCodeLogin(app, io, {
     broadcastState,
 });
 
-// CSV 上传路由
-app.post('/api/upload-csv', upload.single('csvfile'), (req, res) => {
-    const session = getSession();
-    if (session.phase !== GamePhase.Scoreboard) return res.status(400).json({ error: '只能在结算阶段上传CSV' });
-    if (!req.file) return res.status(400).json({ error: '没有上传文件' });
-    try {
-        const csvText = req.file.buffer.toString('utf-8');
-        const rows = parseCsv(csvText);
-        let matchedCount = 0;
-        const players = getGamePlayers(session);
-        for (const player of players) {
-            let csvRow = player.steamId
-                ? rows.find(r => normalizeSteamId(r.steamid64) === normalizeSteamId(player.steamId))
-                : undefined;
-            if (!csvRow) csvRow = rows.find(r => String(r.name) === player.name);
-            if (csvRow) {
-                player.stats = csvRowToStats(csvRow);
-                matchedCount++;
-            }
-        }
-        calculateScores(session);
-        broadcastState();
-
-        let txtReport = "=== 草人杯 卧底任务战报 ===\n\n";
-        for (const p of players) {
-            if (p.gameRole === 'Undercover' && p.taskGrid) {
-                txtReport += `[卧底] ${p.name} 的任务完成情况:\n`;
-                for (const cell of Object.values(p.taskGrid) as TaskCell[]) {
-                    txtReport += `  - ${cell.cellId}: ${cell.description} | 状态: ${cell.status} | N值: ${cell.nValue || 0}\n`;
-                }
-                txtReport += `  最终总分: ${p.finalScore}\n\n`;
-            }
-        }
-        res.json({ success: true, matchedPlayers: matchedCount, report: txtReport });
-    } catch (e) {
-        res.status(500).json({ error: 'CSV 解析失败' });
-    }
+// MatchZy CSV import is intentionally disabled. Official stats now come from the bridge plugin.
+app.post('/api/upload-csv', upload.single('csvfile'), (_req, res) => {
+    res.status(410).json({
+        success: false,
+        error: 'MatchZy CSV ' + '\u5df2\u505c\u7528\uff0c\u5f53\u524d\u7248\u672c\u4f7f\u7528\u63d2\u4ef6\u5b9e\u65f6\u6570\u636e\u7edf\u8ba1\u3002',
+    });
 });
 
 // 定时器轮询
