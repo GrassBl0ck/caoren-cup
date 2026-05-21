@@ -10,6 +10,8 @@ export interface BridgeCommand {
   createdAt: number;
   sentAt?: number;
   ackedAt?: number;
+  sendAttempts: number;
+  lastSentAt?: number;
 }
 
 export interface PluginCommandQueueSummaryItem {
@@ -21,6 +23,7 @@ export interface PluginCommandQueueSummaryItem {
   createdAt: number;
   sentAt?: number;
   ackedAt?: number;
+  sendAttempts: number;
 }
 
 const PLUGIN_COMMAND_TTL_MS = Math.max(
@@ -28,10 +31,32 @@ const PLUGIN_COMMAND_TTL_MS = Math.max(
   Number(process.env.PLUGIN_COMMAND_TTL_MS || 5 * 60 * 1000)
 );
 
+const PLUGIN_COMMAND_RESEND_AFTER_MS = Math.max(
+  1_000,
+  Number(process.env.PLUGIN_COMMAND_RESEND_AFTER_MS || 10_000)
+);
+
+const PLUGIN_COMMAND_MAX_SEND_ATTEMPTS = Math.max(
+  1,
+  Number(process.env.PLUGIN_COMMAND_MAX_SEND_ATTEMPTS || 3)
+);
+
 const pluginCommandQueue: BridgeCommand[] = [];
+
+const refreshRetryableCommands = (now: number) => {
+  for (const cmd of pluginCommandQueue) {
+    if (cmd.status !== 'sent') continue;
+    if (cmd.sendAttempts >= PLUGIN_COMMAND_MAX_SEND_ATTEMPTS) continue;
+    const lastSentAt = cmd.lastSentAt || cmd.sentAt || cmd.createdAt;
+    if (now - lastSentAt >= PLUGIN_COMMAND_RESEND_AFTER_MS) {
+      cmd.status = 'queued';
+    }
+  }
+};
 
 export const prunePluginCommandQueue = () => {
   const now = Date.now();
+  refreshRetryableCommands(now);
 
   for (let i = pluginCommandQueue.length - 1; i >= 0; i--) {
     const cmd = pluginCommandQueue[i];
@@ -53,6 +78,7 @@ export const enqueuePluginCommand = (
     payload,
     status: 'queued',
     createdAt: Date.now(),
+    sendAttempts: 0,
   };
 
   pluginCommandQueue.push(cmd);
@@ -67,7 +93,9 @@ export const takeQueuedPluginCommands = () => {
 
   for (const cmd of commands) {
     cmd.status = 'sent';
-    cmd.sentAt = now;
+    cmd.sentAt = cmd.sentAt || now;
+    cmd.lastSentAt = now;
+    cmd.sendAttempts += 1;
   }
 
   return commands.map(cmd => ({
@@ -103,5 +131,6 @@ export const getPluginCommandQueueSummary = (): PluginCommandQueueSummaryItem[] 
     createdAt: cmd.createdAt,
     sentAt: cmd.sentAt,
     ackedAt: cmd.ackedAt,
+    sendAttempts: cmd.sendAttempts,
   }));
 };

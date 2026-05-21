@@ -143,6 +143,7 @@ export interface LiveGameData {
     suppressSnapshotStatsUntil?: number;
     rawPluginRound?: number;
     roundBaseOffset?: number;
+    formalStatsStarted?: boolean;
     [key: string]: any;
 }
 export interface MatchOptions {

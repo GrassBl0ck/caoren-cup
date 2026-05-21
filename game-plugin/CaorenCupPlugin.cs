@@ -75,6 +75,7 @@ public override void Load(bool hotReload)
         _features.Add(new LhImmFeature()); //32 名刀无敌
         _features.Add(new WeaponSpeedFeature()); // 33 武器速度控制
         _features.Add(new AccuracyFeature()); // 34 acc 武器精准与后坐力控制
+        _features.Add(new RadarColorFeature()); // 35 小地图/头像框颜色修复
 
         // 3. 注入配置并初始化。先给配置，再 Init，保证 Alias 等模块能按 JSON 注册指令。
         foreach (var feature in _features)

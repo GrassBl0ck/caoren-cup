@@ -35,14 +35,14 @@ import {
     MAP_BAN_COUNT_PER_TURN,
 } from './game-constants';
 
-// ========== ¹ã²¥ÓëÍ¨Öª×¢Èë ==========
+// ========== ï¿½ã²¥ï¿½ï¿½Í¨Öª×¢ï¿½ï¿½ ==========
 let broadcast: (() => void) | null = null;
 let notifyMessage: ((msg: string) => void) | null = null;
 
 export const injectFlowBroadcast = (fn: () => void) => { broadcast = fn; };
 export const injectNotify = (fn: (msg: string) => void) => { notifyMessage = fn; };
 
-// ========== ÄÚ²¿¹¤¾ßº¯Êý ==========
+// ========== ï¿½Ú²ï¿½ï¿½ï¿½ï¿½ßºï¿½ï¿½ï¿½ ==========
 const randomizeCaptainForTeam = (team: 'A' | 'B') => {
     const session = getSession();
     const candidates = getGamePlayers(session).filter(
@@ -131,7 +131,7 @@ const getMapBanVoteDurationSeconds = (): number => {
     return Math.max(1, MAP_BAN_LATER_SECONDS);
 };
 
-// ========== Ñ¡ÈËÁ÷³Ì ==========
+// ========== Ñ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ==========
 const scheduleDraftToMapBan = () => {
     clearDraftPickTimer();
     const session = getSession();
@@ -160,7 +160,7 @@ const applyDraftPick = (pickedId?: string, reason: 'manual' | 'timeout' = 'manua
     session.draftIndex++;
 
     if (reason === 'timeout') {
-        notifyMessage?.(`Ñ¡ÈËµ¹¼ÆÊ±½áÊø£¬ÏµÍ³Îª${currentTeam}¶Ó×Ô¶¯Ñ¡Ôñ£º${picked.name}`);
+        notifyMessage?.(`Ñ¡ï¿½Ëµï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÏµÍ³Îª${currentTeam}ï¿½ï¿½ï¿½Ô¶ï¿½Ñ¡ï¿½ï¿½${picked.name}`);
     }
     return picked;
 };
@@ -213,7 +213,7 @@ const finishDraftPick = (reason: 'timeout' | 'manual' = 'timeout') => {
     }
 };
 
-// ========== µØÍ¼BPÁ÷³Ì ==========
+// ========== ï¿½ï¿½Í¼BPï¿½ï¿½ï¿½ï¿½ ==========
 const startMapVoteFunc = (team: RosterTeam) => {
     clearMapVoteTimer();
     const session = getSession();
@@ -253,7 +253,7 @@ const finishMapVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
         }
     }
 
-    notifyMessage?.(`µØÍ¼Í¶Æ±½áÊø£¬ÒÑ Ban£º${banMaps.length > 0 ? banMaps.join('¡¢') : 'ÎÞ'}`);
+    notifyMessage?.(`ï¿½ï¿½Í¼Í¶Æ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Banï¿½ï¿½${banMaps.length > 0 ? banMaps.join('ï¿½ï¿½') : 'ï¿½ï¿½'}`);
 
     session.mapVote = undefined;
     session.currentBanTeam = null;
@@ -280,7 +280,7 @@ const finishMapVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     }
 };
 
-// ========== Ñ¡±ßÁ÷³Ì ==========
+// ========== Ñ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ==========
 const startSideVoteFunc = (team: RosterTeam = getSession().sidePickTeam || 'A') => {
     clearSideVoteTimer();
     const session = getSession();
@@ -318,7 +318,7 @@ const finishSideVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     session.timerEndAt = null;
     session.timerPhase = null;
     setRosterLiveSides(selectedSide);
-    notifyMessage?.(`Ñ¡±ßÍ¶Æ±½áÊø£¬${session.sidePickTeam || 'A'}¶ÓÑ¡Ôñ ${selectedSide}`);
+    notifyMessage?.(`Ñ¡ï¿½ï¿½Í¶Æ±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½${session.sidePickTeam || 'A'}ï¿½ï¿½Ñ¡ï¿½ï¿½ ${selectedSide}`);
     broadcast?.();
     advancePhase(GamePhase.SidePick, GamePhase.PreGameSetup);
 };
@@ -330,7 +330,7 @@ const setRosterLiveSides = (teamASide: Team) => {
     for (const p of getTeamPlayers(session, 'B')) p.team = teamBSide;
 };
 
-// ========== LiveGame Êý¾Ý¸¨Öú ==========
+// ========== LiveGame ï¿½ï¿½ï¿½Ý¸ï¿½ï¿½ï¿½ ==========
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
     scoreT: 0,
@@ -344,12 +344,49 @@ const createEmptyLiveGameData = (): LiveGameData => ({
     lastScoredRound: 0,
     rawPluginRound: 0,
     roundBaseOffset: undefined,
+    formalStatsStarted: false,
     killMatrix: {},
     openingKillMatrix: {},
     awpKillMatrix: {},
     firstKillRounds: {},
 });
 
+const createEmptyMatchStats = () => ({
+    kills: 0,
+    deaths: 0,
+    assists: 0,
+    damage: 0,
+    entryCount: 0,
+    entryWins: 0,
+    enemy2ks: 0,
+    enemy3ks: 0,
+    enemy4ks: 0,
+    enemy5ks: 0,
+    headShotKills: 0,
+    flashSuccesses: 0,
+    enemiesFlashed: 0,
+    utilityDamage: 0,
+    v1Count: 0,
+    v1Wins: 0,
+    v2Count: 0,
+    v2Wins: 0,
+    v3Count: 0,
+    v3Wins: 0,
+    v4Count: 0,
+    v4Wins: 0,
+    v5Count: 0,
+    v5Wins: 0,
+    v6Count: 0,
+    v6Wins: 0,
+    tradedDeaths: 0,
+    equipmentSwing: 0,
+    situationSwing: 0,
+});
+
+const createEmptySideStats = () => ({
+    CT: createEmptyMatchStats(),
+    T: createEmptyMatchStats(),
+});
 const normalizePluginRound = (rawRound: unknown): number => {
     const session = getSession();
     if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
@@ -408,19 +445,20 @@ const resetFormalMatchCounters = () => {
     session.liveGameData.rawPluginRound = raw;
     session.liveGameData.roundBaseOffset = Math.max(0, raw - 1);
     session.liveGameData.currentRound = 1;
+    session.liveGameData.formalStatsStarted = true;
     session.liveGameData.mapName = keepMap;
     session.liveGameData.pluginConnected = keepPluginConnected;
     session.liveGameData.lastPluginHeartbeatAt = keepHeartbeatAt;
     session.liveGameData.suppressSnapshotStatsUntil = Date.now() + 15000;
     for (const p of getGamePlayers(session)) {
-        p.stats = { kills: 0, deaths: 0, assists: 0, damage: 0 };
-        p.sideStats = { CT: { kills: 0, deaths: 0, assists: 0, damage: 0 }, T: { kills: 0, deaths: 0, assists: 0, damage: 0 } };
+        p.stats = createEmptyMatchStats();
+        p.sideStats = createEmptySideStats();
         p.finalScore = undefined;
         p.scoreBreakdown = undefined;
     }
 };
 
-// ========== ½ÇÉ«·ÖÅä ==========
+// ========== ï¿½ï¿½É«ï¿½ï¿½ï¿½ï¿½ ==========
 const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
     const session = getSession();
     const undercoverEnabled = session.matchOptions?.undercoverModeEnabled !== false;
@@ -457,7 +495,7 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
     broadcast?.();
 };
 
-// ========== ½×¶ÎÍÆ½øºËÐÄ ==========
+// ========== ï¿½×¶ï¿½ï¿½Æ½ï¿½ï¿½ï¿½ï¿½ï¿½ ==========
 const resolveNextPhaseByMatchOptions = (from: GamePhase, requestedTo: GamePhase): GamePhase => {
     const session = getSession();
     const undercoverEnabled = session.matchOptions?.undercoverModeEnabled !== false;
@@ -617,7 +655,8 @@ const performPhaseTransition = (to: GamePhase) => {
                 session.detectiveCount = 0;
             }
             Object.values(session.players).forEach(p => {
-                p.stats = { kills: 0, deaths: 0, assists: 0, damage: 0 };
+                p.stats = createEmptyMatchStats();
+                p.sideStats = createEmptySideStats();
                 p.finalScore = undefined;
                 p.scoreBreakdown = undefined;
                 p.detectiveQuestionCount = ue && p.gameRole === 'Detective' ? 0 : undefined;
@@ -659,7 +698,7 @@ const performPhaseTransition = (to: GamePhase) => {
     broadcast?.();
 };
 
-// ========== Æ¥ÅäÑ¡Ïî ==========
+// ========== Æ¥ï¿½ï¿½Ñ¡ï¿½ï¿½ ==========
 const clearUndercoverModeState = () => {
     const session = getSession();
     session.undercoverCount = 0;
@@ -703,35 +742,35 @@ const applyMatchOptions = (rawOptions: unknown) => {
     return session.matchOptions;
 };
 
-// ========== Í³Ò»µ¼³ö ==========
+// ========== Í³Ò»ï¿½ï¿½ï¿½ï¿½ ==========
 export {
-    // Á÷³Ì´¥·¢
+    // ï¿½ï¿½ï¿½Ì´ï¿½ï¿½ï¿½
     advancePhase,
     performPhaseTransition,
-    // Ñ¡ÈË
+    // Ñ¡ï¿½ï¿½
     applyDraftPick,
     finishDraftPick,
     startDraftPickTimerFunc as startDraftPickTimer,
-    // µØÍ¼
+    // ï¿½ï¿½Í¼
     finishMapVote,
     startMapVoteFunc as startMapVote,
     getAvailableMaps,
-    // Ñ¡±ß
+    // Ñ¡ï¿½ï¿½
     finishSideVote,
     startSideVoteFunc as startSideVote,
     setRosterLiveSides,
-    // ½ÇÉ«
+    // ï¿½ï¿½É«
     randomRemainingRoles,
     // LiveGame
     normalizePluginRound,
     updateMatchFinishState,
     resolveRosterTeamByInitialSide,
     resetFormalMatchCounters,
-    // Æ¥ÅäÑ¡Ïî
+    // Æ¥ï¿½ï¿½Ñ¡ï¿½ï¿½
     applyMatchOptions,
     clearUndercoverModeState,
     forceSkipUndercoverOnlyPhaseIfNeeded,
-    // ¶ÓÎé²Ù×÷
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     assignPlayerToRosterFlow as assignPlayerToRoster,
     removePlayerFromRosterTeams,
     getAvailableDraftPlayers,

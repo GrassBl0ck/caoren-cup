@@ -89,12 +89,16 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
         const live = session.liveGameData;
         const lastHeartbeatAt = live?.lastPluginHeartbeatAt || null;
         const heartbeatFresh = !!lastHeartbeatAt && Date.now() - Number(lastHeartbeatAt) < V1333_PLUGIN_ONLINE_TTL_MS;
-        const online = live?.pluginConnected === true && heartbeatFresh;
+        const pluginReady = live?.pluginConnected === true && heartbeatFresh;
+        const joinAllowed = !!V1333_GAME_SERVER_CONNECT_URL;
 
         res.json({
             success: true,
-            online,
+            online: pluginReady,
+            pluginReady,
+            joinAllowed,
             pluginConnected: live?.pluginConnected === true,
+            heartbeatFresh,
             lastHeartbeatAt,
             mapName: live?.mapName || '',
             connectUrl: V1333_GAME_SERVER_CONNECT_URL,

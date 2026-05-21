@@ -1,0 +1,109 @@
+/* v1.3.5 game-code-login client start */
+(function () {
+  function byId(id) { return document.getElementById(id); }
+
+  function getLoginSocket() {
+    try {
+      if (typeof ws !== 'undefined' && ws && ws.emit) return ws;
+      if (typeof socket !== 'undefined' && socket && socket.emit) return socket;
+    } catch (_err) {}
+    if (window.__caorenCupSocket && window.__caorenCupSocket.emit) return window.__caorenCupSocket;
+    if (window.socket && window.socket.emit) return window.socket;
+    return null;
+  }
+
+  function setStatus(text, online, hasConnectUrl, joinAllowed) {
+    var dot = byId('v1333-server-dot');
+    var label = byId('v1333-server-status');
+    var btn = byId('v1333-connect-server-btn');
+    if (dot) {
+      dot.style.background = online ? '#16a34a' : '#dc2626';
+      dot.style.boxShadow = online ? '0 0 0 3px rgba(22,163,74,.18)' : '0 0 0 3px rgba(220,38,38,.16)';
+    }
+    if (label) label.textContent = text;
+    if (btn) {
+      btn.disabled = !(joinAllowed && hasConnectUrl);
+      btn.title = hasConnectUrl
+        ? (joinAllowed ? (online ? '通过 Steam 协议连接服务器' : '服务器可连接，桥接插件未就绪，战绩可能暂不可用') : '服务器离线或桥接插件未连接')
+        : '未配置 GAME_SERVER_CONNECT_URL 或 GAME_SERVER_ADDRESS';
+    }
+  }
+
+  function bootGameCodeLogin() {
+    var loginArea = byId('login-area') || document.body;
+    var panel = byId('v1333-game-code-login-panel');
+    if (!panel) return;
+
+    Array.prototype.forEach.call(loginArea.querySelectorAll('button'), function (el) {
+      if (el.id !== 'v1333-connect-server-btn' && el.id !== 'v1335-enter-lobby-btn') el.style.display = 'none';
+    });
+
+    var input = byId('v1333-game-login-code-input');
+    var connectBtn = byId('v1333-connect-server-btn');
+    var enterBtn = byId('v1335-enter-lobby-btn');
+    var lastStatus = null;
+
+    function refreshStatus() {
+      fetch('/api/public/server-status', { cache: 'no-store' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          lastStatus = data || {};
+          var hasConnectUrl = !!lastStatus.connectUrl;
+          if (lastStatus.pluginReady || lastStatus.online) {
+            setStatus('草人杯服务器在线，战绩插件已连接', true, hasConnectUrl, true);
+          } else if (lastStatus.joinAllowed !== false && hasConnectUrl) {
+            setStatus('服务器可连接，桥接插件未就绪，战绩可能暂不可用', false, hasConnectUrl, true);
+          } else {
+            setStatus('草人杯服务器离线或插件未连接', false, hasConnectUrl, false);
+          }
+        })
+        .catch(function () {
+          lastStatus = null;
+          setStatus('无法读取服务器状态', false, false, false);
+        });
+    }
+
+    if (connectBtn) {
+      connectBtn.addEventListener('click', function () {
+        var url = lastStatus && lastStatus.connectUrl;
+        if (!url) {
+          alert('服务器连接地址未配置。请在网页端环境变量里设置 GAME_SERVER_CONNECT_URL，推荐使用 steam://connect/IP:端口。');
+          return;
+        }
+        window.location.href = url;
+      });
+    }
+
+    function enterLobby() {
+      var credential = input ? input.value.trim() : '';
+      if (!credential) {
+        alert('请输入游戏内返回的码或管理员密码。');
+        if (input) input.focus();
+        return;
+      }
+      var loginSocket = getLoginSocket();
+      if (!loginSocket) {
+        alert('网页 Socket 尚未初始化，请按 Ctrl+F5 强制刷新后重试。');
+        return;
+      }
+      loginSocket.emit('GAME_CODE_LOGIN', { credential: credential });
+    }
+
+    if (input) {
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') enterLobby();
+      });
+    }
+
+    if (enterBtn) {
+      enterBtn.addEventListener('click', enterLobby);
+    }
+
+    refreshStatus();
+    setInterval(refreshStatus, 5000);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootGameCodeLogin);
+  else bootGameCodeLogin();
+})();
+/* v1.3.5 game-code-login client end */
