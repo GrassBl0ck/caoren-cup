@@ -434,6 +434,7 @@ public override void Load(bool hotReload)
         foreach (var f in _features)
         {
             if (f is Features.SkillPointsFeature) continue;
+            if (f is Features.RadarColorFeature) continue;
             f.SetEnabled(false);
         }
         Config.HpCap.Enabled = false;
