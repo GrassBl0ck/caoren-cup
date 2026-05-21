@@ -63,10 +63,10 @@ Release 包名：
 CaorenCup-修改插件本体-vX.X.X.zip
 ```
 
-服务器部署目录：
+部署目录：
 
 ```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
 ```
 
 主要用于在 CS2 服务器内开启各种自定义娱乐玩法。
@@ -105,10 +105,10 @@ Release 包名：
 CaorenCupWeb-网页端-vX.X.X.zip
 ```
 
-服务器部署目录：
+部署目录：
 
 ```text
-/opt/caoren-cup/web-command-center/
+<web-command-center>/
 ```
 
 网页赛事指挥台用于管理一场完整的草人杯比赛流程。
@@ -143,10 +143,10 @@ Release 包名：
 CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
 ```
 
-服务器部署目录：
+部署目录：
 
 ```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
 ```
 
 该插件负责把 CS2 游戏服务器内的数据同步到网页赛事指挥台。
@@ -455,59 +455,46 @@ EnableDebugLog
 
 ---
 
-## 服务器部署路径
+## 通用部署路径
 
-当前维护者使用的服务器路径如下。
-
-CS2 插件根目录：
+实际路径取决于你的 CS2 服务器安装位置和网页端部署方式。下面使用占位符表示：
 
 ```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/
+<CS2>                 CS2 服务器根目录
+<plugins>             <CS2>/game/csgo/addons/counterstrikesharp/plugins
+<web-command-center>  网页端实际部署目录
 ```
 
-娱乐插件本体部署目录：
+对应部署目录：
 
 ```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
+<plugins>/CaorenCup/        CS2 娱乐玩法插件本体
+<plugins>/CaorenCupPlugin/  CS2 网页端服务器插件 / 桥接插件
+<web-command-center>/       网页赛事指挥台
 ```
 
-网页端服务器插件 / 桥接插件部署目录：
-
-```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
-```
-
-网页端部署目录：
-
-```text
-/opt/caoren-cup/web-command-center/
-```
+你可以选择任意适合自己环境的部署方式，例如直接在服务器上构建，或在本地打包后上传到服务器。无论采用哪种方式，都建议先备份旧版本，再覆盖新版本，并保留生产环境真实配置文件。
 
 ---
 
-## 国内服务器部署原则
+## 通用部署流程
 
-国内服务器不要默认依赖 GitHub 拉取更新。
-
-推荐部署流程：
+推荐流程：
 
 ```text
-本地开发
-→ 本地 push GitHub
-→ 本地打包 zip
-→ WinSCP / SFTP 上传服务器
-→ 服务器解压覆盖
-→ 重启对应服务
-→ 执行验证命令
+准备 Release 包或本地构建产物
+→ 备份当前线上目录
+→ 覆盖对应部署目录
+→ 安装或更新网页端依赖
+→ 重启网页服务和 CS2 插件
+→ 检查网页端、桥接插件和游戏内插件是否正常
 ```
 
-不要默认在服务器执行：
+注意：
 
-```bash
-git pull
-```
-
-原因是国内服务器访问 GitHub 可能不稳定，容易导致部署中断或版本状态混乱。
+- 不要覆盖生产环境真实 `.env`、`ecosystem.config.cjs` 和 `caoren_config.json`。
+- 如果使用 Git 部署，请确认服务器能稳定访问远程仓库，并在更新前检查当前分支和本地修改。
+- 如果使用压缩包部署，请确认解压后的文件直接位于对应目录内，不要多套一层目录。
 
 ---
 
@@ -522,35 +509,29 @@ web-command-center/public/assets/audio/music/
 web-command-center/public/assets/audio/sfx/
 ```
 
-服务器上对应路径应为：
+部署后对应路径应为：
 
 ```text
-/opt/caoren-cup/web-command-center/public/js/caoren-audio-controller.js
-/opt/caoren-cup/web-command-center/public/assets/audio/manifest.json
-/opt/caoren-cup/web-command-center/public/assets/audio/music/
-/opt/caoren-cup/web-command-center/public/assets/audio/sfx/
+<web-command-center>/public/js/caoren-audio-controller.js
+<web-command-center>/public/assets/audio/manifest.json
+<web-command-center>/public/assets/audio/music/
+<web-command-center>/public/assets/audio/sfx/
 ```
 
 不要错误解压到：
 
 ```text
-/opt/caoren-cup/caoren-audio-controller.js
-/opt/caoren-cup/audio/manifest.json
+<web-parent-dir>/caoren-audio-controller.js
+<web-parent-dir>/audio/manifest.json
 ```
 
 ---
 
-## PM2 检查
+## 网页服务检查
 
-网页端服务必须从正确目录启动。
+网页端服务必须从正确目录启动。如果使用 PM2，可以检查 `exec cwd` 是否指向网页端部署目录。
 
-正确 cwd 应为：
-
-```text
-/opt/caoren-cup/web-command-center
-```
-
-检查命令：
+示例：
 
 ```bash
 pm2 describe caoren-cup-web
@@ -562,19 +543,21 @@ pm2 describe caoren-cup-web
 exec cwd
 ```
 
-如果 cwd 不是 `/opt/caoren-cup/web-command-center`，即使文件存在，也可能出现静态资源 404。
+如果 `cwd` 不是网页端部署目录，静态资源可能会出现 404。
+
+如果不用 PM2，也可以用 systemd、Docker、screen、tmux 或其他进程管理方式运行网页服务。
 
 ---
 
 ## 网页服务端口
 
-网页服务实际监听端口为：
+网页服务默认监听端口为：
 
 ```text
 3000
 ```
 
-服务器上的 `23333` 和 `24444` 是 MCSManager 相关端口，不是草人杯网页端口。
+可在网页端配置中修改 `PORT`。
 
 检查静态文件：
 
@@ -774,7 +757,7 @@ Release 包和源码仓库是两回事：
 
 ## Release 包命名规则
 
-以后 Release 必须拆成三个包：
+项目 Release 拆成三个包：
 
 ```text
 CaorenCup-修改插件本体-vX.X.X.zip
@@ -831,7 +814,7 @@ CaorenCup.json
 部署目标：
 
 ```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
 ```
 
 ---
@@ -875,7 +858,7 @@ ecosystem.config.cjs
 部署目标：
 
 ```text
-/opt/caoren-cup/web-command-center/
+<web-command-center>/
 ```
 
 ---
@@ -914,19 +897,18 @@ Microsoft.Extensions.*.dll
 部署目标：
 
 ```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
 ```
 
 ---
 
 ## 如何发布 Release
 
-下面以 `v1.1.1` 为例。
+下面以 `vX.X.X` 为例。
 
 ### 1. 确认本地分支状态
 
 ```powershell
-cd D:\OpenSourcework\caoren-cup-open-source
 git status
 ```
 
@@ -975,27 +957,18 @@ git rebase --continue
 git push --force
 ```
 
-如果遇到 `START_HERE.md` 的 `modify/delete` 冲突，且该文件只是初始化说明文件，通常可以选择删除：
-
-```powershell
-git rm START_HERE.md
-git rebase --continue
-```
-
----
-
 ### 3. 本地打包 Release
 
-建议 Release 输出目录：
+建议使用仓库内的 Release 输出目录：
 
 ```text
-D:\OpenSourcework\release-output
+release-output/
 ```
 
 临时 stage 目录：
 
 ```text
-D:\OpenSourcework\release-output\stage
+release-build/
 ```
 
 打包时必须排除：
@@ -1016,7 +989,7 @@ caoren_config.json
 CS2 插件必须使用：
 
 ```powershell
-dotnet publish -c Release -o 指定输出目录
+dotnet publish -c Release -o <publish-dir>
 ```
 
 不要只用 `dotnet build` 后直接打源码包。
@@ -1026,15 +999,14 @@ dotnet publish -c Release -o 指定输出目录
 ### 4. 创建 tag
 
 ```powershell
-cd D:\OpenSourcework\caoren-cup-open-source
-git tag v1.1.1
-git push origin v1.1.1
+git tag vX.X.X
+git push origin vX.X.X
 ```
 
 如果 tag 写错，可以先本地删除：
 
 ```powershell
-git tag -d v1.1.1
+git tag -d vX.X.X
 ```
 
 远程 tag 删除需谨慎操作。
@@ -1046,33 +1018,32 @@ git tag -d v1.1.1
 进入仓库 Releases 页面，新建 Release：
 
 ```text
-Tag: v1.1.1
-Title: Caoren Cup v1.1.1
+Tag: vX.X.X
+Title: Caoren Cup vX.X.X
 ```
 
 上传三个 zip：
 
 ```text
-CaorenCup-修改插件本体-v1.1.1.zip
-CaorenCupWeb-网页端-v1.1.1.zip
-CaorenCupWebPlugin-网页端服务器插件-v1.1.1.zip
+CaorenCup-修改插件本体-vX.X.X.zip
+CaorenCupWeb-网页端-vX.X.X.zip
+CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
 ```
 
 然后点击发布。
 
 ---
 
-### 6. 服务器部署原则
+### 6. 部署到服务器
 
-国内服务器不要默认执行 `git pull`。
-
-推荐流程：
+通用流程：
 
 ```text
-本地打包 zip
-→ WinSCP / SFTP 上传到服务器 /tmp
-→ 服务器解压覆盖对应目录
-→ 重启 PM2 或 CS2 服务
+准备 Release zip 或服务器本地构建产物
+→ 备份旧版本目录
+→ 覆盖对应部署目录
+→ 保留生产环境真实配置
+→ 重启网页服务或 CS2 服务器
 → 执行验证命令
 ```
 
@@ -1173,10 +1144,10 @@ module-configs/*.json
 
 升级老服务器时不用立刻手动拆旧配置。首次运行新版插件后，旧 `CaorenCup.json` 会作为迁移种子，缺失的模块文件会自动创建；之后请优先修改 `module-configs/` 下的模块文件。
 
-服务器上的实际目录示例：
+部署后的实际目录示例：
 
 ```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/module-configs/
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/module-configs/
 ```
 
 注意：不要把服务器真实配置打进公开 Release。公开包只应包含默认配置或示例配置。
