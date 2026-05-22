@@ -73,6 +73,42 @@
             color: var(--muted) !important;
         }
 
+        body[data-theme="dark"] .task-grid {
+            background: #10243a !important;
+        }
+
+        body[data-theme="dark"] .task-cell {
+            background: #132f4f !important;
+            border-color: #31577d !important;
+            color: #eaf4ff !important;
+        }
+
+        body[data-theme="dark"] .task-cell:hover {
+            background: #173a61 !important;
+        }
+
+        body[data-theme="dark"] .task-desc {
+            color: #eaf4ff !important;
+        }
+
+        body[data-theme="dark"] .task-action-log {
+            background: #0f2438 !important;
+            border-color: #3b638b !important;
+            color: #eaf4ff !important;
+        }
+
+        body[data-theme="dark"] .task-action-log h5,
+        body[data-theme="dark"] .task-action-log p,
+        body[data-theme="dark"] .task-action-log td,
+        body[data-theme="dark"] .task-action-log th {
+            color: #eaf4ff !important;
+        }
+
+        body[data-theme="dark"] .scoreboard-table th,
+        body[data-theme="dark"] .scoreboard-table td {
+            border-color: #3b526d !important;
+        }
+
         .theme-toggle {
             position: fixed;
             right: 18px;
@@ -199,7 +235,7 @@
             font-weight: bold;
         }
 
-        /* 放大并优化九宫格尺寸 */
+        /* ?????????? */
         .task-grid {
             display: grid;
             grid-template-columns: repeat(3, 180px);
@@ -255,7 +291,7 @@
                 outline-offset: 4px;
             }
 
-        /* 任务描述内允许使用的富文本基础样式 */
+        /* ????????????????? */
         .task-desc b {
             font-weight: 900;
         }
@@ -289,7 +325,7 @@
                 background: #c8e6c9;
             }
 
-        /* 可视化模板编辑器布局 */
+        /* ?????????? */
         .tpl-editor-layout {
             display: flex;
             gap: 20px;
@@ -331,7 +367,7 @@
                 box-sizing: border-box;
             }
 
-        /* 富文本工具栏 */
+        /* ?????? */
         .format-toolbar {
             display: flex;
             gap: 5px;
@@ -669,7 +705,7 @@
 
 
 
-        /* Stage 3.3：更接近旧版后台表格风格 */
+        /* Stage 3.3???????????? */
         body {
             background: #edf3f8;
             padding: 18px 22px;
@@ -842,7 +878,7 @@
         }
 
 
-        /* Stage 3.7 地图 BP 卡片 */
+        /* Stage 3.7 ?? BP ?? */
         .map-bp-board {
             background: #fff;
             border: 1px solid #dbe5ef;
@@ -1083,7 +1119,7 @@
         }
 
 
-        /* Stage 3.9：全局悬浮倒计时，滚动页面时仍可见 */
+        /* Stage 3.9????????????????? */
         #timer-display {
             position: fixed;
             top: 14px;
@@ -1117,7 +1153,7 @@
         }
 
 
-        /* Stage 3.10：更醒目的官匹式 BP 倒计时 */
+        /* Stage 3.10???????? BP ??? */
         #timer-display {
             position: fixed;
             top: 18px;
@@ -1140,7 +1176,7 @@
         }
 
             #timer-display::before {
-                content: "当前投票倒计时";
+                content: "???????";
                 display: block;
                 font-size: 12px;
                 line-height: 1;
@@ -1242,7 +1278,7 @@
         }
 
 
-        /* Stage 3.11：选人倒计时面板 */
+        /* Stage 3.11???????? */
         .draft-board {
             background: #fff;
             border: 1px solid #dbe5ef;
@@ -1352,7 +1388,7 @@
             }
 
 
-        /* Stage 3.12：地图卡片内显示本队投票人 */
+        /* Stage 3.12????????????? */
         .map-card-voters {
             margin-top: 10px;
             min-height: 32px;
@@ -1414,7 +1450,7 @@
         }
 
 
-        /* Stage 3.14：结算明细表 */
+        /* Stage 3.14?????? */
         .score-detail-table {
             border-collapse: separate;
             border-spacing: 0;
@@ -1577,16 +1613,18 @@
 
         .hltv-style-table {
             min-width: 960px;
-            background: #2f3d4b;
-            color: #aeb8c3;
-            border: 1px solid #455668;
+            background: #ffffff !important;
+            color: #334155 !important;
+            border: 1px solid #dbe5ef !important;
             border-collapse: collapse;
         }
 
         .hltv-style-table th,
         .hltv-style-table td {
-            border-right: 1px solid #455668;
-            border-bottom: 1px solid #455668;
+            background: #ffffff !important;
+            border-right: 1px solid #dbe5ef;
+            border-bottom: 1px solid #dbe5ef;
+            color: #334155;
             padding: 10px 12px;
             text-align: center;
         }
@@ -1598,14 +1636,15 @@
         }
 
         .hltv-style-table thead th {
-            background: #354657;
-            color: #aeb8c3;
+            background: #f8fafc !important;
+            color: #334155 !important;
             font-weight: 800;
         }
 
         .hltv-style-table .team-heading {
             font-size: 16px;
-            color: #d5dde6;
+            background: #eef4fb !important;
+            color: #0f172a !important;
         }
 
         .hltv-style-table th span {
@@ -1617,7 +1656,7 @@
 
         .hltv-style-table th.stat-tip {
             cursor: help;
-            text-decoration: underline dotted rgba(174, 184, 195, 0.65);
+            text-decoration: underline dotted rgba(100, 116, 139, 0.65);
             text-underline-offset: 3px;
         }
 
@@ -1632,12 +1671,21 @@
         }
 
         .hltv-style-table td.neutral {
-            color: #aeb8c3;
+            color: #475569;
             font-weight: 700;
         }
 
         .matrix-wrap {
             overflow-x: auto;
+        }
+
+        .matrix-direction {
+            margin-top: 12px;
+        }
+
+        .matrix-direction h4 {
+            margin: 0 0 8px;
+            color: var(--text);
         }
 
         .matrix-table {
@@ -1668,6 +1716,35 @@
             z-index: 2;
         }
 
+        .duel-matrix td {
+            white-space: nowrap;
+        }
+
+        .matrix-score {
+            display: inline-block;
+            min-width: 28px;
+            padding: 3px 7px;
+            border-radius: 4px;
+            color: #ffffff;
+            font-weight: 900;
+            line-height: 1.2;
+        }
+
+        .matrix-score-row {
+            background: #d6a000;
+        }
+
+        .matrix-score-col {
+            background: #2f75b5;
+        }
+
+        .matrix-separator {
+            display: inline-block;
+            padding: 0 5px;
+            color: var(--muted);
+            font-weight: 900;
+        }
+
         .task-grid.compact-task-grid {
             grid-template-columns: repeat(3, minmax(132px, 1fr));
             gap: 10px;
@@ -1691,7 +1768,7 @@
         }
 
 
-        /* 第一阶段：本局模式设置（固定在管理员控制区） */
+        /* ?????????????????????? */
         .match-options-panel {
             margin: 12px 0 16px;
             padding: 14px 16px;
@@ -1768,7 +1845,7 @@
             color: #b45309;
             font-size: 13px;
         }
-        /* 第二阶段：CaorenCup 修改可视化面板 */
+        /* ?????CaorenCup ??????? */
         .caoren-mod-panel {
             margin: 12px 0 16px;
             padding: 14px 16px;
@@ -1862,7 +1939,7 @@
         }
 
     
-/* CAOREN_V1_3_2_HIDE_DISABLED_MOD_PANEL_PATCH: 未启用 CaorenCup 修改时，强制隐藏所有模块配置内容，只保留状态提示 */
+/* CAOREN_V1_3_2_HIDE_DISABLED_MOD_PANEL_PATCH: ??? CaorenCup ???????????????????????? */
 body.caoren-modifiers-disabled #caoren-mod-panel .caoren-mod-grid,
 body.caoren-modifiers-disabled #caoren-mod-panel .caoren-unified-mod-shell,
 body.caoren-modifiers-disabled #caoren-mod-panel .caoren-batch2-wrapper,
@@ -2272,4 +2349,26 @@ body[data-theme="dark"] #extra-info .postmatch-note {
     background: rgba(15, 23, 42, 0.78) !important;
     border-color: #334155 !important;
     color: #cbd5e1 !important;
+}
+
+body[data-theme="dark"] .hltv-style-table {
+    background: #2f3d4b !important;
+    color: #aeb8c3 !important;
+    border-color: #455668 !important;
+}
+
+body[data-theme="dark"] .hltv-style-table th,
+body[data-theme="dark"] .hltv-style-table td {
+    background: #2f3d4b !important;
+    color: #aeb8c3 !important;
+    border-color: #455668 !important;
+}
+
+body[data-theme="dark"] .hltv-style-table thead th {
+    background: #354657 !important;
+    color: #aeb8c3 !important;
+}
+
+body[data-theme="dark"] .hltv-style-table .team-heading {
+    color: #d5dde6 !important;
 }
