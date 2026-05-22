@@ -39,13 +39,19 @@ interface TeamAssignmentBuildResult {
 }
 
 const isPluginLivePhase = (phase: GamePhase) =>
-    [GamePhase.LiveGame, GamePhase.MidGameQA, GamePhase.PostGameAccusation, GamePhase.Scoreboard].includes(phase);
+    [GamePhase.LiveGame, GamePhase.MidGameQA].includes(phase);
+
+const isPluginStatsLocked = (session: any): boolean =>
+    session.phase === GamePhase.PostGameAccusation ||
+    session.phase === GamePhase.Scoreboard ||
+    session.liveGameData?.matchFinished === true ||
+    session.liveGameData?.statsLocked === true;
 
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0, scoreT: 0, scoreA: 0, scoreB: 0,
     currentRound: 0, pluginConnected: false, winnerTeam: null, matchFinished: false,
     winTarget: 13, lastScoredRound: 0, rawPluginRound: 0, roundBaseOffset: undefined,
-    formalStatsStarted: false,
+    formalStatsStarted: false, statsLocked: false,
     killMatrix: {}, openingKillMatrix: {}, awpKillMatrix: {}, firstKillRounds: {},
 });
 
@@ -145,6 +151,8 @@ const enqueueTeamAssignments = (
 };
 
 const createEmptyMatchStats = () => ({
+    roundsPlayed: 0,
+    kastRounds: 0,
     kills: 0,
     deaths: 0,
     assists: 0,
@@ -205,6 +213,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
                 team: p.team,
                 gameRole: p.gameRole,
                 isReady: p.isReady,
+                undercoverTaskAckStage: p.undercoverTaskAckStage,
             })),
         });
     });
@@ -289,6 +298,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
         if (!isPluginLivePhase(session.phase)) return res.json({ success: true, ignored: true, reason: `当前阶段 ${session.phase} 不接收实时战绩` });
         if (req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
         if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
+        if (isPluginStatsLocked(session)) return res.json({ success: true, ignored: true, reason: '赛后战绩已锁定' });
         if (typeof req.body?.currentRound === 'number') session.liveGameData.currentRound = Math.max(session.liveGameData.currentRound || 0, normalizePluginRound(req.body.currentRound));
         if (req.body?.mapName) session.liveGameData.mapName = String(req.body.mapName);
         session.liveGameData.pluginConnected = true;
@@ -306,6 +316,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
         if (!isPluginLivePhase(session.phase)) return res.json({ success: true, ignored: true, reason: `当前阶段 ${session.phase} 不接收实时事件` });
         if (req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
         if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
+        if (isPluginStatsLocked(session)) return res.json({ success: true, ignored: true, reason: '赛后战绩已锁定' });
         session.liveGameData.pluginConnected = true;
         session.liveGameData.lastPluginHeartbeatAt = Date.now();
 
@@ -396,14 +407,22 @@ function applyRoundStartEvent(session: any, payload: any) {
     const roundStats = getRoundStats(live, round);
     roundStats.aliveBySide = { CT: {}, T: {} };
     roundStats.oneVsRecordedBySteamId = {};
+    if (!roundStats.sideBySteamId) roundStats.sideBySteamId = {};
+    if (!roundStats.roundStartedSteamIds) roundStats.roundStartedSteamIds = {};
     const players = Array.isArray(payload.players) ? payload.players : [];
     for (const raw of players) {
         const steamId = normalizeSteamId(raw.steamId);
         const side = normalizeTeam(raw.team);
         if (!steamId || (side !== 'CT' && side !== 'T')) continue;
         if (raw.isAlive !== false) roundStats.aliveBySide[side][steamId] = true;
+        roundStats.sideBySteamId[steamId] = side;
         const player = findPlayerBySteamId(session, steamId);
         if (player) player.team = side;
+        if (player && !roundStats.roundStartedSteamIds[steamId]) {
+            roundStats.roundStartedSteamIds[steamId] = true;
+            incrementStat(ensurePlayerStats(player), 'roundsPlayed');
+            incrementStat(ensureSideStats(player, side), 'roundsPlayed');
+        }
     }
 
     if (
@@ -500,6 +519,27 @@ function getRoundStats(live: any, round: number) {
     return live.roundStats[round];
 }
 
+function markKastContributor(roundStats: any, steamId: string | null | undefined) {
+    const normalized = normalizeSteamId(steamId);
+    if (!normalized) return;
+    if (!roundStats.kastContributors) roundStats.kastContributors = {};
+    roundStats.kastContributors[normalized] = true;
+}
+
+function finalizeKastRounds(session: any, roundStats: any) {
+    if (!roundStats || roundStats.kastFinalized) return;
+    roundStats.kastFinalized = true;
+    for (const steamId of Object.keys(roundStats.roundStartedSteamIds || {})) {
+        const side = roundStats.sideBySteamId?.[steamId] || (roundStats.aliveBySide?.CT?.[steamId] !== undefined ? 'CT' : (roundStats.aliveBySide?.T?.[steamId] !== undefined ? 'T' : undefined));
+        const survived = side === 'CT' || side === 'T' ? roundStats.aliveBySide?.[side]?.[steamId] === true : false;
+        if (!survived && !roundStats.kastContributors?.[steamId]) continue;
+        const player = findPlayerBySteamId(session, steamId);
+        if (!player) continue;
+        incrementStat(ensurePlayerStats(player), 'kastRounds');
+        incrementStat(ensureSideStats(player, side), 'kastRounds');
+    }
+}
+
 function recordKillMatrix(live: any, matrixKey: string, attackerSteamId: string | null | undefined, victimSteamId: string | null | undefined) {
     const attackerId = normalizeSteamId(attackerSteamId);
     const victimId = normalizeSteamId(victimSteamId);
@@ -507,6 +547,13 @@ function recordKillMatrix(live: any, matrixKey: string, attackerSteamId: string 
     if (!live[matrixKey]) live[matrixKey] = {};
     if (!live[matrixKey][attackerId]) live[matrixKey][attackerId] = {};
     live[matrixKey][attackerId][victimId] = Number(live[matrixKey][attackerId][victimId] || 0) + 1;
+}
+
+function shouldRecordOpponentMatrixKill(attacker: any, victim: any): boolean {
+    if (!attacker || !victim || attacker.playerId === victim.playerId) return false;
+    if (attacker.rosterTeam !== 'A' && attacker.rosterTeam !== 'B') return false;
+    if (victim.rosterTeam !== 'A' && victim.rosterTeam !== 'B') return false;
+    return attacker.rosterTeam !== victim.rosterTeam;
 }
 
 function markTradedDeaths(session: any, roundStats: any, payload: any, now: number) {
@@ -520,6 +567,7 @@ function markTradedDeaths(session: any, roundStats: any, payload: any, now: numb
     if (!tradedVictim) return;
     incrementStat(ensurePlayerStats(tradedVictim), 'tradedDeaths');
     incrementStat(ensureSideStats(tradedVictim, trade.victimSide), 'tradedDeaths');
+    markKastContributor(roundStats, trade.victimSteamId);
 }
 
 function addPendingTrade(roundStats: any, payload: any, now: number) {
@@ -670,12 +718,14 @@ function applyKillEvent(session: any, payload: any) {
                 incrementStat(attackerSideStats, 'entryWins');
             }
         }
-        recordKillMatrix(live, 'killMatrix', payload.attackerSteamId, payload.victimSteamId);
-        if (!roundStats.openingKillRecorded) {
+        markKastContributor(roundStats, payload.attackerSteamId);
+        const isOpponentKill = shouldRecordOpponentMatrixKill(attacker, victim);
+        if (isOpponentKill) recordKillMatrix(live, 'killMatrix', payload.attackerSteamId, payload.victimSteamId);
+        if (isOpponentKill && !roundStats.openingKillRecorded) {
             roundStats.openingKillRecorded = true;
             recordKillMatrix(live, 'openingKillMatrix', payload.attackerSteamId, payload.victimSteamId);
         }
-        if (String(payload.weapon || '').toLowerCase().includes('awp')) {
+        if (isOpponentKill && String(payload.weapon || '').toLowerCase().includes('awp')) {
             recordKillMatrix(live, 'awpKillMatrix', payload.attackerSteamId, payload.victimSteamId);
         }
     }
@@ -704,6 +754,7 @@ function applyKillEvent(session: any, payload: any) {
         const assisterStats = ensurePlayerStats(assister);
         incrementStat(assisterStats, 'assists');
         incrementStat(assisterSideStats, 'assists');
+        markKastContributor(roundStats, payload.assisterSteamId);
     }
 }
 
@@ -725,6 +776,7 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
     const alreadyProcessed = !!formalRound && live.lastScoredRound === formalRound;
     const roundStats = formalRound ? getRoundStats(live, formalRound) : null;
     if (winnerSide && !alreadyProcessed) {
+        if (roundStats) finalizeKastRounds(session, roundStats);
         if (roundStats) finalizeOneVsXWins(session, roundStats, winnerSide);
         if (winnerSide === 'CT') live.scoreCT += 1;
         else if (winnerSide === 'T') live.scoreT += 1;
@@ -754,6 +806,7 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
         if (formalRound) live.lastScoredRound = formalRound;
     }
     updateMatchFinishState();
+    if (live.matchFinished) live.statsLocked = true;
     if (live.matchFinished && session.phase === GamePhase.LiveGame) {
         const winnerLabel = live.winnerTeam === 'A' ? 'A队' : 'B队';
         notify(`比赛结束：${winnerLabel} 获胜，比分 ${live.scoreA}:${live.scoreB}`);

@@ -67,25 +67,36 @@ export const shouldRevealTaskGridToViewer = (viewer: Player | undefined, target:
     return false;
 };
 
+export const shouldRevealTaskActionLogToViewer = (viewer: Player | undefined, target: Player, rolesReleased: boolean): boolean => {
+    if (!target.taskActionLog) return false;
+    if (viewer?.role === 'Admin') return true;
+    if (viewer?.playerId === target.playerId && rolesReleased) return true;
+    return false;
+};
+
 export const sanitizeForPublic = (session: GameSession, viewerId?: string | null): any => {
     const viewer = viewerId ? session.players[viewerId] : undefined;
+    const revealAllPostgame = session.phase === 'Scoreboard';
     const s: any = { ...session };
     s.serverNow = Date.now();
     s.players = {};
     for (const [id, p] of Object.entries(session.players)) {
-        const revealRole = shouldRevealRoleToViewer(viewer, p, session.rolesReleased);
-        const revealTaskGrid = shouldRevealTaskGridToViewer(viewer, p, session.rolesReleased);
+        const revealRole = revealAllPostgame || shouldRevealRoleToViewer(viewer, p, session.rolesReleased);
+        const revealTaskGrid = revealAllPostgame || shouldRevealTaskGridToViewer(viewer, p, session.rolesReleased);
+        const revealTaskActionLog = revealAllPostgame || shouldRevealTaskActionLogToViewer(viewer, p, session.rolesReleased);
         s.players[id] = {
             playerId: p.playerId, name: p.name, role: p.role,
             gameRole: revealRole ? p.gameRole : undefined,
             rosterTeam: p.rosterTeam, team: p.team, isReady: p.isReady,
+            undercoverTaskAckStage: p.undercoverTaskAckStage,
             steamIdBound: !!p.steamId,
             steamId: p.steamId,
             finalScore: p.finalScore, scoreBreakdown: p.scoreBreakdown,
             stats: p.stats,
             sideStats: p.sideStats,
-            detectiveQuestionCount: viewer?.role === 'Admin' || p.playerId === viewerId ? p.detectiveQuestionCount : undefined,
+            detectiveQuestionCount: revealAllPostgame || viewer?.role === 'Admin' || p.playerId === viewerId ? p.detectiveQuestionCount : undefined,
             taskGrid: revealTaskGrid ? p.taskGrid : undefined,
+            taskActionLog: revealTaskActionLog ? p.taskActionLog : undefined,
         };
     }
     delete s.rollTimeout;

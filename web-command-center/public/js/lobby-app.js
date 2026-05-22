@@ -129,6 +129,38 @@ const ws = io();
             return { side, label: side, reason: 'ready' };
         }
 
+
+        function getUndercoverAckStage(player) {
+            const stage = player?.undercoverTaskAckStage;
+            return stage === 'received' || stage === 'read' ? stage : 'none';
+        }
+
+        function renderUndercoverAckTag(player) {
+            if (player?.gameRole !== 'Undercover') return '';
+            const stage = getUndercoverAckStage(player);
+            if (stage === 'read') return '<span class="tag tag-green">\u4efb\u52a1\u5df2\u8bfb</span>';
+            if (stage === 'received') return '<span class="tag tag-orange">\u5df2\u6536\u5230\u4efb\u52a1\u8868</span>';
+            return '<span class="tag tag-red">\u672a\u786e\u8ba4\u4efb\u52a1</span>';
+        }
+
+        function renderReadyTag(player) {
+            const base = player?.isReady ? '<span class="tag tag-green">\u5df2\u51c6\u5907</span>' : '<span class="tag tag-gray">-</span>';
+            const ack = renderUndercoverAckTag(player);
+            return ack ? base + '<br>' + ack : base;
+        }
+
+        function renderUndercoverAckControl(player) {
+            if (!player || player.role === 'Admin' || player.role === 'Spectator' || player.gameRole !== 'Undercover') return '';
+            const stage = getUndercoverAckStage(player);
+            if (stage === 'read') return '<h3 style="color:#4caf50;">\u5df2\u9605\u8bfb\u5b8c\u6210\u4efb\u52a1\uff0c\u7b49\u5f85\u5168\u5458\u5c31\u4f4d</h3>';
+            const label = stage === 'received' ? '\u5df2\u9605\u8bfb\u5b8c\u6210\u4efb\u52a1' : '\u6536\u5230\u4efb\u52a1\u8868';
+            const hint = stage === 'received'
+                ? '\u8bf7\u786e\u8ba4\u4f60\u5df2\u7ecf\u770b\u5b8c\u4efb\u52a1\u5185\u5bb9\uff0c\u518d\u70b9\u51fb\u5b8c\u6210\u51c6\u5907\u3002'
+                : '\u8bf7\u5148\u786e\u8ba4\u4f60\u5df2\u7ecf\u770b\u5230\u81ea\u5df1\u7684\u5367\u5e95\u4efb\u52a1\u8868\u3002';
+            return '<p style="color:#d32f2f;font-weight:bold;">' + hint + '</p>' +
+                '<button onclick="ackUndercoverTask()" style="font-size:24px; padding:15px 40px; background:#d32f2f; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">' + label + '</button>';
+        }
+
         function renderSideTag(side, emptyLabel = '未进队') {
             if (side === 'CT') return '<span class="tag tag-blue">CT</span>';
             if (side === 'T') return '<span class="tag tag-orange">T</span>';
@@ -617,7 +649,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const expectedSide = renderExpectedSideTag(p, state);
                 const bind = p.steamIdBound ? '<span class="tag tag-green">已绑定</span>' : '<span class="tag tag-red">未绑定</span>';
                 const roleText = p.role === 'Admin' ? '<span class="tag tag-purple">管理员</span>' : (p.gameRole ? `<span class="tag tag-gray">${p.gameRole}</span>` : '<span class="tag tag-gray">未分配</span>');
-                const ready = p.isReady ? '<span class="tag tag-green">已准备</span>' : '<span class="tag tag-gray">-</span>';
+                const ready = renderReadyTag(p);
                 const adminOps = isAdmin && p.role !== 'Admin' ? `<td><button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button></td>` : (isAdmin ? '<td>-</td>' : '');
                 playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${p.name}</b></td><td>${roster}</td><td>${side}</td><td>${expectedSide}</td><td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
             });
@@ -904,7 +936,7 @@ if (window._caorenModifiersEnabled !== true) {
                 } else {
                     if (isAdmin) {
                         html += '<div style="background:#f3e5f5; padding:15px; border:1px solid #ce93d8;"><h4>🛠️ 裁判面板：分配身份</h4>';
-                        html += '<table border=1 cellpadding=6 style="width:100%; border-collapse:collapse; background:#fff; text-align:center;"><tr><th>玩家</th><th>比赛队伍</th><th>当前边</th><th>应在边</th><th>绑定</th><th>分配身份</th><th>操作</th></tr>';
+                        html += '<table border=1 cellpadding=6 style="width:100%; border-collapse:collapse; background:#fff; text-align:center;"><tr><th>玩家</th><th>比赛队伍</th><th>当前边</th><th>应在边</th><th>绑定</th><th>分配身份</th><th>操作</th><th>\u4efb\u52a1\u786e\u8ba4</th></tr>';
                         Object.values(state.players).forEach(p => {
                             if (p.role === 'Spectator' || p.role === 'Admin') return;
                             const curRole = p.gameRole || '<span style="color:red">未分配</span>';
@@ -916,7 +948,7 @@ if (window._caorenModifiersEnabled !== true) {
                                     <option value="Undercover" ${p.gameRole === 'Undercover' ? 'selected' : ''}>卧底</option>
                                     <option value="Detective" ${p.gameRole === 'Detective' ? 'selected' : ''}>侦探</option>
                                     <option value="Soldier" ${p.gameRole === 'Soldier' ? 'selected' : ''}>士兵</option>
-                                    </select> <button onclick="setPlayerRole('${p.playerId}')">确认</button></td></tr>`;
+                                    </select> <button onclick="setPlayerRole('${p.playerId}')">确认</button></td><td>${p.gameRole === 'Undercover' ? renderUndercoverAckTag(p) : '-'}</td></tr>`;
                         });
                         html += '</table>';
                         html += `<p style="margin-top:10px;">目标名额(单边)：${state.undercoverCount} 卧底, ${state.detectiveCount} 侦探</p>`;
@@ -928,15 +960,22 @@ if (window._caorenModifiersEnabled !== true) {
                         let roleStyle = role === 'Undercover' ? 'color:#d32f2f' : (role === 'Detective' ? 'color:#1976d2' : 'color:#388e3c');
                         html += `<h2 style="text-align:center;">你的真实身份是：<span style="${roleStyle}; font-size:32px;">${role}</span></h2>`;
                         html += '<div style="text-align:center;"><button onclick="showRules()" style="font-size:18px; padding:10px 20px;">📜 查看此身份的专属说明书</button></div>';
+                        if (role === 'Undercover' && currentPlayer?.taskGrid) {
+                            html += '<div style="margin:20px 0;"><h3 style="color:#d32f2f;">\u4f60\u7684\u4efb\u52a1\u9762\u677f</h3>';
+                            html += renderTaskGrid(currentPlayer.taskGrid || {}, { compact: true });
+                            html += '</div>';
+                        }
                     } else {
                         html += '<h3 style="text-align:center; color:#666;">身份尚未由管理员发放，请先完成准备并等待裁判操作。</h3>';
                     }
 
                     html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
-                    if (currentPlayer?.role !== 'Admin' && !currentPlayer?.isReady) {
-                        html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">✔️ 我已准备，等待发放身份</button>';
+                    if (currentPlayer?.role !== 'Admin' && currentPlayer?.gameRole === 'Undercover') {
+                        html += renderUndercoverAckControl(currentPlayer);
+                    } else if (currentPlayer?.role !== 'Admin' && !currentPlayer?.isReady) {
+                        html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">\u2714\ufe0f \u6211\u5df2\u51c6\u5907\uff0c\u7b49\u5f85\u53d1\u653e\u8eab\u4efd</button>';
                     } else {
-                        html += '<h3 style="color:#4caf50;">✅ 您已准备就绪，等待全员就位</h3>';
+                        html += '<h3 style="color:#4caf50;">\u2705 \u60a8\u5df2\u51c6\u5907\u5c31\u7eea\uff0c\u7b49\u5f85\u5168\u5458\u5c31\u4f4d</h3>';
                     }
                     html += '<p style="color:#888; font-size:14px; margin-top:15px;">已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
                     extraDiv.innerHTML = html;
@@ -1408,6 +1447,49 @@ if (window._caorenModifiersEnabled !== true) {
             return html;
         }
 
+        function formatTaskLogTime(timestamp) {
+            const date = new Date(Number(timestamp || 0));
+            if (Number.isNaN(date.getTime())) return '-';
+            return date.toLocaleString('zh-CN', { hour12: false });
+        }
+
+        function formatTaskLogChange(entry) {
+            const parts = [];
+            if (entry.beforeStatus !== entry.afterStatus) parts.push(`${entry.beforeStatus || '-'} -> ${entry.afterStatus || '-'}`);
+            if (Number(entry.beforeNValue || 0) !== Number(entry.afterNValue || 0)) parts.push(`N ${entry.beforeNValue || 0} -> ${entry.afterNValue || 0}`);
+            if (entry.beforeCompletedRound !== entry.afterCompletedRound) parts.push(`\u5b8c\u6210\u56de\u5408 ${entry.beforeCompletedRound || '-'} -> ${entry.afterCompletedRound || '-'}`);
+            if (!!entry.beforeHintUsed !== !!entry.afterHintUsed) parts.push(`\u63d0\u793a ${entry.beforeHintUsed ? '\u5df2\u7528' : '\u672a\u7528'} -> ${entry.afterHintUsed ? '\u5df2\u7528' : '\u672a\u7528'}`);
+            if (!!entry.beforeReplaced !== !!entry.afterReplaced) parts.push(`\u66ff\u6362 ${entry.beforeReplaced ? '\u662f' : '\u5426'} -> ${entry.afterReplaced ? '\u662f' : '\u5426'}`);
+            return parts.length ? parts.join('\uff1b') : '\u5df2\u8bb0\u5f55\u64cd\u4f5c';
+        }
+
+        function renderTaskActionLog(taskActionLog, options = {}) {
+            const entries = Array.isArray(taskActionLog) ? [...taskActionLog].sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)) : [];
+            const limit = options.limit || entries.length;
+            const visibleEntries = entries.slice(0, limit);
+            const title = options.title || '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55';
+            let html = '<div class="task-action-log" style="margin-top:12px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:10px;">';
+            html += `<h5 style="margin:0 0 8px; color:#334155;">${htmlEscape(title)}</h5>`;
+            if (!visibleEntries.length) {
+                html += '<p style="margin:0; color:#64748b;">\u6682\u65e0\u64cd\u4f5c\u8bb0\u5f55</p></div>';
+                return html;
+            }
+            html += '<table class="scoreboard-table" style="margin-top:8px; font-size:13px;"><tr><th>\u65f6\u95f4</th><th>\u56de\u5408</th><th>\u4efb\u52a1\u683c</th><th>\u64cd\u4f5c</th><th>\u53d8\u5316</th></tr>';
+            visibleEntries.forEach(entry => {
+                html += `<tr>
+                    <td>${htmlEscape(formatTaskLogTime(entry.timestamp))}</td>
+                    <td>\u7b2c ${Number(entry.round || 0)} \u56de\u5408</td>
+                    <td><b>${htmlEscape(entry.cellId || '-')}</b></td>
+                    <td>${htmlEscape(entry.action || '-')}</td>
+                    <td>${htmlEscape(formatTaskLogChange(entry))}</td>
+                </tr>`;
+            });
+            html += '</table>';
+            if (entries.length > visibleEntries.length) html += `<p style="margin:8px 0 0; color:#64748b; font-size:12px;">\u4ec5\u663e\u793a\u6700\u8fd1 ${visibleEntries.length} \u6761\uff0c\u5171 ${entries.length} \u6761\u3002</p>`;
+            html += '</div>';
+            return html;
+        }
+
         function setPostmatchStatsMode(mode) {
             window._postmatchStatsMode = mode || 'all';
             if (window._currentGameState) renderPostmatchPanels(window._currentGameState);
@@ -1418,13 +1500,28 @@ if (window._caorenModifiersEnabled !== true) {
             if (window._currentGameState) renderPostmatchPanels(window._currentGameState);
         }
 
+        if (!window._postmatchTabHandlersBound) {
+            window._postmatchTabHandlersBound = true;
+            document.addEventListener('click', (event) => {
+                const target = event.target?.closest?.('[data-postmatch-stats-mode], [data-postmatch-matrix-mode]');
+                if (!target) return;
+                const statsMode = target.getAttribute('data-postmatch-stats-mode');
+                if (statsMode) {
+                    setPostmatchStatsMode(statsMode);
+                    return;
+                }
+                const matrixMode = target.getAttribute('data-postmatch-matrix-mode');
+                if (matrixMode) setPostmatchMatrixMode(matrixMode);
+            });
+        }
+
         function emptyMatchStats() {
-            return { kills: 0, deaths: 0, assists: 0, damage: 0 };
+            return { roundsPlayed: 0, kastRounds: 0, kills: 0, deaths: 0, assists: 0, damage: 0 };
         }
 
         function numericStatTotal(stats) {
             if (!stats) return 0;
-            return Number(stats.kills || 0) + Number(stats.deaths || 0) + Number(stats.assists || 0) + Number(stats.damage || 0) +
+            return Number(stats.roundsPlayed || 0) + Number(stats.kastRounds || 0) + Number(stats.kills || 0) + Number(stats.deaths || 0) + Number(stats.assists || 0) + Number(stats.damage || 0) +
                 Number(stats.entryCount || 0) + Number(stats.entryWins || 0) + Number(stats.enemy2ks || 0) + Number(stats.enemy3ks || 0) +
                 Number(stats.enemy4ks || 0) + Number(stats.enemy5ks || 0) + Number(stats.headShotKills || 0) + Number(stats.tradedDeaths || 0) +
                 Math.abs(Number(stats.situationSwing || 0)) + Math.abs(Number(stats.equipmentSwing || 0)) + Number(stats.v1Wins || 0) +
@@ -1449,12 +1546,8 @@ if (window._caorenModifiersEnabled !== true) {
             return player.stats || emptyMatchStats();
         }
 
-        function postmatchRoundsForMode(state, mode) {
+        function postmatchFallbackRounds(state) {
             const live = state.liveGameData || {};
-            if (mode === 'CT' || mode === 'T') {
-                const sideRounds = Number(mode === 'CT' ? live.scoreCT : live.scoreT);
-                if (sideRounds > 0) return Math.max(1, sideRounds);
-            }
             return Math.max(1, Number(live.currentRound || live.lastScoredRound || 1));
         }
 
@@ -1463,23 +1556,23 @@ if (window._caorenModifiersEnabled !== true) {
             const deaths = Number(stats.deaths || 0);
             const assists = Number(stats.assists || 0);
             const tradedDeaths = Number(stats.tradedDeaths || stats.deathsTraded || 0);
+            const kastRounds = Number(stats.kastRounds || 0);
+            if (Number(stats.roundsPlayed || 0) > 0) return (Math.min(rounds, kastRounds) / rounds) * 100;
             const survivedRounds = Math.max(0, rounds - deaths);
             const contributionRounds = Math.min(rounds, kills + assists + tradedDeaths + survivedRounds);
             return (contributionRounds / rounds) * 100;
         }
 
-        function calculateApproxRating(stats, rounds, adr, playerScale = 1) {
+        function calculateApproxRating(stats, rounds, adr) {
             const kills = Number(stats.kills || 0);
             const deaths = Number(stats.deaths || 0);
             const assists = Number(stats.assists || 0);
-            const scale = Math.max(0.8, Math.min(1.2, Number(playerScale || 1)));
-            const kpr = (kills / rounds) / scale;
-            const dpr = (deaths / rounds) / scale;
+            const kpr = kills / rounds;
+            const dpr = deaths / rounds;
             const apr = assists / rounds;
             const kast = calculateApproxKast(stats, rounds);
             const impact = 2.13 * kpr + 0.42 * apr - 0.41;
-            const adjustedAdr = adr / scale;
-            return Math.max(0, 0.0073 * kast + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adjustedAdr + 0.1587);
+            return Math.max(0, 0.0073 * kast + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adr + 0.1587);
         }
 
         function calculateApproxSwing(stats, rounds) {
@@ -1492,12 +1585,11 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         function postmatchStatRows(state, mode) {
-            const rounds = postmatchRoundsForMode(state, mode);
             const players = Object.values(state.players || {}).filter(p => p.role !== 'Admin');
-            const playerScale = Math.max(0.8, Math.min(1.2, players.length / 10));
             return players.map(p => {
                 const stats = statSourceForMode(p, mode);
                 const hasData = hasStatsData(stats);
+                const rounds = Math.max(1, Number(stats.roundsPlayed || 0) || postmatchFallbackRounds(state));
                 const kills = Number(stats.kills || 0);
                 const deaths = Number(stats.deaths || 0);
                 const assists = Number(stats.assists || 0);
@@ -1516,7 +1608,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const tradedDeaths = Number(stats.tradedDeaths || stats.deathsTraded || 0);
                 const adr = hasData ? damage / rounds : null;
                 const kast = hasData ? calculateApproxKast(stats, rounds) : null;
-                const rating = hasData ? calculateApproxRating(stats, rounds, adr, playerScale) : null;
+                const rating = hasData ? calculateApproxRating(stats, rounds, adr) : null;
                 const swing = hasData ? calculateApproxSwing(stats, rounds) : null;
                 return { p, hasData, kills, deaths, assists, entryWins, entryLosses, multiKills, oneVsX, headShotKills, flashAssists, tradedDeaths, adr, kast, rating, swing };
             }).sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0) || Number(b.swing || 0) - Number(a.swing || 0) || b.kills - a.kills || Number(b.adr || 0) - Number(a.adr || 0));
@@ -1531,8 +1623,8 @@ if (window._caorenModifiersEnabled !== true) {
 
         function postmatchSwingClass(swing) {
             if (swing === null || swing === undefined) return 'neutral';
-            if (swing > 0.01) return 'positive';
-            if (swing < -0.01) return 'negative';
+            if (swing > 0.005) return 'positive';
+            if (swing < -0.005) return 'negative';
             return 'neutral';
         }
 
@@ -1572,7 +1664,7 @@ if (window._caorenModifiersEnabled !== true) {
             const mode = window._postmatchStatsMode || 'all';
             let html = '<div class="postmatch-tabs">';
             [['all', '总'], ['CT', 'CT'], ['T', 'T']].forEach(([key, label]) => {
-                html += `<button type="button" class="${mode === key ? 'active' : ''}" onclick="setPostmatchStatsMode('${key}')">${label}</button>`;
+                html += `<button type="button" class="${mode === key ? 'active' : ''}" data-postmatch-stats-mode="${key}">${label}</button>`;
             });
             html += '</div>';
             if (!hasAnyPostmatchStats(state)) return html + renderPostmatchNotice('暂无实时战绩。赛后战绩现在只使用桥接插件实时数据，不再读取 MatchZy CSV。');
@@ -1613,30 +1705,46 @@ if (window._caorenModifiersEnabled !== true) {
             const live = state.liveGameData || {};
             const mode = window._postmatchMatrixMode || 'all';
             const matrix = matrixForMode(live, mode);
-            const players = Object.values(state.players || {}).filter(p => p.role !== 'Admin' && playerSteamId(p));
+            const players = Object.values(state.players || {}).filter(p => p.role !== 'Admin' && playerSteamId(p) && (p.rosterTeam === 'A' || p.rosterTeam === 'B'));
             let html = '<div class="postmatch-tabs">';
             [['all', '总'], ['opening', 'Opening'], ['awp', 'AWP']].forEach(([key, label]) => {
-                html += `<button type="button" class="${mode === key ? 'active' : ''}" onclick="setPostmatchMatrixMode('${key}')">${label}</button>`;
+                html += `<button type="button" class="${mode === key ? 'active' : ''}" data-postmatch-matrix-mode="${key}">${label}</button>`;
             });
             html += '</div>';
             if (!players.length) return html + renderPostmatchNotice('暂无可匹配 SteamID 的玩家，无法生成对位矩阵。');
-            if (!matrixHasValues(matrix)) return html + renderPostmatchNotice('暂无逐击杀事件数据。对位矩阵只由桥接插件实时 player_death 事件生成，MatchZy CSV 不再用于补矩阵。');
-            html += '<div class="matrix-wrap"><table class="matrix-table"><tr><th>击杀者 \\ 被击杀者</th>';
-            players.forEach(p => { html += `<th>${htmlEscape(p.name)}</th>`; });
-            html += '<th>合计</th></tr>';
-            players.forEach(attacker => {
+            const teamA = players.filter(p => p.rosterTeam === 'A');
+            const teamB = players.filter(p => p.rosterTeam === 'B');
+            if (!teamA.length || !teamB.length) return html + renderPostmatchNotice('需要 A/B 两队都有绑定 SteamID 的玩家，才能生成对位矩阵。');
+            const hasVisibleValue = players.some(attacker => {
+                if (attacker.rosterTeam !== 'A' && attacker.rosterTeam !== 'B') return false;
                 const aId = playerSteamId(attacker);
-                let total = 0;
-                html += `<tr><th>${htmlEscape(attacker.name)}</th>`;
-                players.forEach(victim => {
-                    const vId = playerSteamId(victim);
-                    const value = aId === vId ? '' : Number(matrix?.[aId]?.[vId] || 0);
-                    if (typeof value === 'number') total += value;
-                    html += `<td>${value || ''}</td>`;
+                return players.some(victim => {
+                    if (victim.rosterTeam !== 'A' && victim.rosterTeam !== 'B') return false;
+                    if (attacker.rosterTeam === victim.rosterTeam) return false;
+                    return Number(matrix?.[aId]?.[playerSteamId(victim)] || 0) > 0;
                 });
-                html += `<td><b>${total || ''}</b></td></tr>`;
+            });
+            html += '<div class="matrix-wrap"><table class="matrix-table duel-matrix"><tr><th>A 队 \\ B 队</th>';
+            teamB.forEach(p => { html += `<th>${htmlEscape(p.name)}</th>`; });
+            html += '<th>合计</th></tr>';
+            teamA.forEach(aPlayer => {
+                const aId = playerSteamId(aPlayer);
+                let aTotal = 0;
+                let bTotal = 0;
+                html += `<tr><th>${htmlEscape(aPlayer.name)}</th>`;
+                teamB.forEach(bPlayer => {
+                    const bId = playerSteamId(bPlayer);
+                    const aKills = Number(matrix?.[aId]?.[bId] || 0);
+                    const bKills = Number(matrix?.[bId]?.[aId] || 0);
+                    aTotal += aKills;
+                    bTotal += bKills;
+                    html += `<td><span class="matrix-score matrix-score-row">${aKills}</span><span class="matrix-separator">:</span><span class="matrix-score matrix-score-col">${bKills}</span></td>`;
+                });
+                html += `<td><span class="matrix-score matrix-score-row">${aTotal}</span><span class="matrix-separator">:</span><span class="matrix-score matrix-score-col">${bTotal}</span></td></tr>`;
             });
             html += '</table></div>';
+            if (!hasVisibleValue) html += '<p class="postmatch-note">当前分类暂无跨队击杀记录，矩阵按 0 显示。</p>';
+            else html += '<p class="postmatch-note">每格格式：左侧数字为 A 队行玩家击杀 B 队列玩家，右侧数字为 B 队列玩家反杀该 A 队行玩家。</p>';
             return html;
         }
         function renderUndercoverTaskReview(state) {
@@ -1646,6 +1754,7 @@ if (window._caorenModifiersEnabled !== true) {
             undercovers.forEach(p => {
                 html += `<div style="margin-top:14px;"><b>${htmlEscape(p.name)} [${p.rosterTeam || '-'}队]</b>`;
                 html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                html += renderTaskActionLog(p.taskActionLog || [], { title: '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55' });
                 html += '</div>';
             });
             html += '</div>';
@@ -1660,6 +1769,10 @@ if (window._caorenModifiersEnabled !== true) {
             if (isUndercoverModeEnabledFromState(state)) html += renderUndercoverTaskReview(state);
             host.innerHTML = html;
         }
+
+        window.setPostmatchStatsMode = setPostmatchStatsMode;
+        window.setPostmatchMatrixMode = setPostmatchMatrixMode;
+        window.renderPostmatchPanels = renderPostmatchPanels;
 
         function renderLiveGame(state) {
             const live = state.liveGameData || window._liveGameData || {};
@@ -1677,6 +1790,7 @@ if (window._caorenModifiersEnabled !== true) {
             if (undercoverEnabled && currentPlayer?.gameRole === 'Undercover') {
                 html += '<h3 style="color:#d32f2f;">你的任务面板</h3>';
                 html += renderTaskGrid(currentPlayer.taskGrid || {}, { clickable: true });
+                html += renderTaskActionLog(currentPlayer.taskActionLog || [], { title: '\u6211\u7684\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55', limit: 20 });
 
                 html += '<div style="background:#fff3e0; padding:15px; border-radius:6px; border:1px solid #ffcc80; margin-top:20px;">';
                 html += '<p><b>基础状态干预：</b> ' +
@@ -1743,6 +1857,7 @@ if (window._caorenModifiersEnabled !== true) {
                     undercovers.forEach(p => {
                         html += `<div style="margin:12px 0 18px;"><b>玩家：${htmlEscape(p.name)} [${p.rosterTeam || '-'}队 / 当前边${getLiveSide(p) || '未进队'} / 应在边${getExpectedSide(p, state).label}]</b>`;
                         html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                        html += renderTaskActionLog(p.taskActionLog || [], { title: '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55', limit: 20 });
                         html += '</div>';
                     });
                 }
@@ -1830,6 +1945,7 @@ if (window._caorenModifiersEnabled !== true) {
         function adminBanMap(map) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADMIN_BAN_MAP', payload: { map } }); }
         function selectSide(side) { ws.emit('SIDE_PICK', { playerId: myPlayerId, side }); }
         function readyPlayer() { ws.emit('PLAYER_READY', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
+        function ackUndercoverTask() { ws.emit('UNDERCOVER_TASK_ACK', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
         function updateRoleCounts() { const u = parseInt(document.getElementById('undercover-count').value) || 0; const d = parseInt(document.getElementById('detective-count').value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_ROLES_COUNT', payload: { undercoverCount: u, detectiveCount: d } }); }
         function setPlayerRole(playerId) { const sel = document.getElementById('role-select-' + playerId); if (sel) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_PLAYER_ROLE', payload: { playerId, gameRole: sel.value } }); }
         function randomRemainingRoles() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RANDOM_REMAINING_ROLES' }); }
