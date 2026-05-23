@@ -387,6 +387,42 @@ const createEmptySideStats = () => ({
     CT: createEmptyMatchStats(),
     T: createEmptyMatchStats(),
 });
+
+const resetUndercoverReadiness = (player: Player) => {
+    if (player.gameRole === 'Undercover') {
+        player.isReady = false;
+        player.undercoverTaskAckStage = 'none';
+    } else {
+        player.undercoverTaskAckStage = undefined;
+    }
+};
+
+const ensureUndercoverTaskGrid = (player: Player, session: GameSession) => {
+    if (player.gameRole !== 'Undercover') {
+        delete player.taskGrid;
+        player.undercoverTaskAckStage = undefined;
+        return;
+    }
+
+    if (!player.taskGrid) assignTaskGridToPlayer(player, session.taskTemplate!);
+    player.undercoverTaskAckStage =
+        player.undercoverTaskAckStage === 'received' || player.undercoverTaskAckStage === 'read'
+            ? player.undercoverTaskAckStage
+            : 'none';
+};
+
+const prepareReleasedRoleState = () => {
+    const session = getSession();
+    for (const player of getGamePlayers(session)) {
+        resetUndercoverReadiness(player);
+        if (player.gameRole === 'Undercover') {
+            ensureUndercoverTaskGrid(player, session);
+        } else {
+            delete player.taskGrid;
+        }
+    }
+};
+
 const normalizePluginRound = (rawRound: unknown): number => {
     const session = getSession();
     if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
@@ -468,6 +504,7 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
             for (const player of getTeamPlayers(session, team)) {
                 player.gameRole = 'Soldier';
                 delete player.taskGrid;
+                player.undercoverTaskAckStage = undefined;
                 player.detectiveQuestionCount = 0;
             }
         }
@@ -490,6 +527,9 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
             if (needU > 0) { p.gameRole = 'Undercover'; needU--; }
             else if (needD > 0) { p.gameRole = 'Detective'; needD--; }
             else { p.gameRole = 'Soldier'; }
+            resetUndercoverReadiness(p);
+            if (p.gameRole === 'Undercover' && session.rolesReleased) ensureUndercoverTaskGrid(p, session);
+            if (p.gameRole !== 'Undercover') delete p.taskGrid;
         }
     }
     broadcast?.();
@@ -618,7 +658,12 @@ const performPhaseTransition = (to: GamePhase) => {
             const undercoverEnabled = session.matchOptions?.undercoverModeEnabled !== false;
             if (undercoverEnabled) {
                 session.rolesReleased = false;
-                Object.values(session.players).forEach(p => p.gameRole = undefined);
+                Object.values(session.players).forEach(p => {
+                    p.gameRole = undefined;
+                    p.isReady = false;
+                    p.undercoverTaskAckStage = undefined;
+                    delete p.taskGrid;
+                });
             } else {
                 session.undercoverCount = 0;
                 session.detectiveCount = 0;
@@ -631,6 +676,7 @@ const performPhaseTransition = (to: GamePhase) => {
                 Object.values(session.players).forEach(p => {
                     if (p.role !== 'Spectator' && p.role !== 'Admin') p.gameRole = 'Soldier';
                     delete p.taskGrid;
+                    p.undercoverTaskAckStage = undefined;
                     p.detectiveQuestionCount = 0;
                     p.abandonCount = 0;
                     p.replaceCount = 0;
@@ -660,8 +706,8 @@ const performPhaseTransition = (to: GamePhase) => {
                 p.finalScore = undefined;
                 p.scoreBreakdown = undefined;
                 p.detectiveQuestionCount = ue && p.gameRole === 'Detective' ? 0 : undefined;
-                if (ue && p.gameRole === 'Undercover') assignTaskGridToPlayer(p, session.taskTemplate!);
-                if (!ue) delete p.taskGrid;
+                if (ue && p.gameRole === 'Undercover') ensureUndercoverTaskGrid(p, session);
+                if (!ue || p.gameRole !== 'Undercover') delete p.taskGrid;
             });
             session.liveGameData = createEmptyLiveGameData();
             break;
@@ -712,6 +758,7 @@ const clearUndercoverModeState = () => {
     for (const player of getGamePlayers(session)) {
         player.gameRole = 'Soldier';
         delete player.taskGrid;
+        player.undercoverTaskAckStage = undefined;
         player.abandonCount = 0;
         player.replaceCount = 0;
         player.hintUsedCount = 0;
@@ -770,7 +817,8 @@ export {
     applyMatchOptions,
     clearUndercoverModeState,
     forceSkipUndercoverOnlyPhaseIfNeeded,
-    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    prepareReleasedRoleState,
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿?
     assignPlayerToRosterFlow as assignPlayerToRoster,
     removePlayerFromRosterTeams,
     getAvailableDraftPlayers,

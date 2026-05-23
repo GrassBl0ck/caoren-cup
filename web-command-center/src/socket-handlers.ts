@@ -1,7 +1,7 @@
 ﻿// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { GamePhase, LiveGameData, Player, PlayerRole, RosterTeam, WsEvents } from './types';
+import { CellStatus, GamePhase, LiveGameData, Player, PlayerRole, RosterTeam, TaskCell, WsEvents } from './types';
 import { getSession, resetSessionWithPlayers, terminateAndClear } from './session-manager';
 import {
     findPlayerById,
@@ -24,6 +24,7 @@ import {
     resetFormalMatchCounters,
     updateMatchFinishState,
     clearUndercoverModeState,
+    prepareReleasedRoleState,
     startMapVote,
     setRosterLiveSides,
 } from './game-flow-manager';
@@ -52,6 +53,66 @@ const createEmptyLiveGameData = (): LiveGameData => ({
 
 const isUndercoverModeEnabled = () => getSession().matchOptions?.undercoverModeEnabled !== false;
 
+const getReadinessBlockers = () => {
+    const session = getSession();
+    const players = getGamePlayers(session);
+    return players.filter(p => !p.isReady || (p.gameRole === 'Undercover' && p.undercoverTaskAckStage !== 'read'));
+};
+
+const taskActionLabels: Record<string, string> = {
+    MARK_COMPLETE: '标记完成',
+    UNDO_COMPLETE: '撤销完成',
+    ABANDON: '放弃任务',
+    REQUEST_HINT: '申请提示',
+    REPLACE: '替换任务',
+    N_ADD: 'N + 1',
+    N_SUB: 'N - 1',
+    N_SET: '精准设置 N',
+};
+
+const snapshotTaskCellForLog = (cell: TaskCell) => ({
+    status: cell.status,
+    nValue: Number(cell.nValue || 0),
+    completedRound: cell.completedRound,
+    isHintUsed: !!cell.isHintUsed,
+    isReplaced: !!cell.isReplaced,
+    description: cell.description,
+});
+
+const didTaskCellChange = (before: ReturnType<typeof snapshotTaskCellForLog>, after: ReturnType<typeof snapshotTaskCellForLog>): boolean =>
+    before.status !== after.status ||
+    before.nValue !== after.nValue ||
+    before.completedRound !== after.completedRound ||
+    before.isHintUsed !== after.isHintUsed ||
+    before.isReplaced !== after.isReplaced ||
+    before.description !== after.description;
+
+const appendTaskActionLog = (player: Player, cell: TaskCell, cellId: string, action: string, before: ReturnType<typeof snapshotTaskCellForLog>, round: number) => {
+    const after = snapshotTaskCellForLog(cell);
+    if (!didTaskCellChange(before, after)) return;
+    if (!player.taskActionLog) player.taskActionLog = [];
+    player.taskActionLog.push({
+        id: uuidv4(),
+        timestamp: Date.now(),
+        round,
+        playerId: player.playerId,
+        playerName: player.name,
+        cellId,
+        taskDescription: after.description || before.description || '',
+        action: taskActionLabels[action] || action,
+        beforeStatus: before.status as CellStatus,
+        afterStatus: after.status as CellStatus,
+        beforeNValue: before.nValue,
+        afterNValue: after.nValue,
+        beforeCompletedRound: before.completedRound,
+        afterCompletedRound: after.completedRound,
+        beforeHintUsed: before.isHintUsed,
+        afterHintUsed: after.isHintUsed,
+        beforeReplaced: before.isReplaced,
+        afterReplaced: after.isReplaced,
+    });
+};
+
 export function registerSocketHandlers(io: SocketIOServer, deps: {
     broadcastState: () => void;
     notifyMessage: (msg: string) => void;
@@ -69,6 +130,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             bindCode: player.bindCode,
             taskGrid: reveal ? player.taskGrid : undefined,
             gameRole: reveal ? player.gameRole : undefined,
+            undercoverTaskAckStage: player.undercoverTaskAckStage,
         });
     };
 
@@ -192,9 +254,19 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                             socket.emit(WsEvents.NOTIFICATION, { message: '身份尚未发放给玩家。请先点击“发放身份给玩家”，再进入正式对局。' });
                             return;
                         }
+                        const blockers = getReadinessBlockers();
+                        if (blockers.length > 0) {
+                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${blockers.length} 名玩家未完成准备：${blockers.map(p => p.name).join('、')}。可在游戏内用 /notice nor 提醒。` });
+                            return;
+                        }
                     } else {
                         clearUndercoverModeState();
                         session.rolesReleased = true;
+                        const blockers = getReadinessBlockers();
+                        if (blockers.length > 0) {
+                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${blockers.length} 名玩家未准备：${blockers.map(p => p.name).join('、')}。` });
+                            return;
+                        }
                     }
                 }
 
@@ -209,7 +281,10 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 terminateCurrentGameAndKickAll('管理员强制终止本局游戏');
             } else if (data.action === 'FORCE_READY') {
                 if (session.phase === GamePhase.PreGameSetup) {
-                    Object.values(session.players).forEach(p => p.isReady = true);
+                    getGamePlayers(session).forEach(p => {
+                        p.isReady = true;
+                        if (p.gameRole === 'Undercover') p.undercoverTaskAckStage = 'read';
+                    });
                     broadcastState();
                 }
             } else if (data.action === 'RERANDOM_CAPTAIN') {
@@ -266,6 +341,9 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const player = findPlayerById(session, targetId);
                 if (player && ['Undercover', 'Detective', 'Soldier'].includes(gameRole)) {
                     player.gameRole = gameRole;
+                    player.isReady = false;
+                    player.undercoverTaskAckStage = gameRole === 'Undercover' ? 'none' : undefined;
+                    if (gameRole !== 'Undercover') delete player.taskGrid;
                     broadcastState();
                 }
             } else if (data.action === 'RANDOM_REMAINING_ROLES') {
@@ -278,6 +356,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     return;
                 }
                 session.rolesReleased = true;
+                prepareReleasedRoleState();
                 notifyMessage('管理员已发放身份。玩家现在只能看到自己的身份。');
                 broadcastState();
             } else if (data.action === 'ASSIGN_ROSTER_TEAM') {
@@ -423,10 +502,37 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             if (session.phase !== GamePhase.PreGameSetup) return;
             const player = findPlayerById(session, data.playerId);
             if (!player || player.role === 'Admin' || player.role === 'Spectator') return;
+            if (isUndercoverModeEnabled() && session.rolesReleased && player.gameRole === 'Undercover') {
+                socket.emit(WsEvents.NOTIFICATION, { message: '卧底需要先确认任务表，再完成准备。' });
+                return;
+            }
             player.isReady = true;
             broadcastState();
             if (getGamePlayers(session).every(p => p.isReady)) {
                 notifyMessage('所有参赛玩家已准备，等待管理员分配并发放身份。');
+            }
+        });
+
+        socket.on(WsEvents.UNDERCOVER_TASK_ACK, (data: { playerId: string }) => {
+            const session = getSession();
+            if (session.phase !== GamePhase.PreGameSetup || !session.rolesReleased || !isUndercoverModeEnabled()) return;
+            const player = findPlayerById(session, data.playerId);
+            if (!player || player.role === 'Admin' || player.role === 'Spectator' || player.gameRole !== 'Undercover') return;
+            if (socket.data.playerId !== player.playerId) return;
+
+            if (!player.taskGrid) return;
+            if (player.undercoverTaskAckStage === 'read') return;
+            if (player.undercoverTaskAckStage === 'received') {
+                player.undercoverTaskAckStage = 'read';
+                player.isReady = true;
+            } else {
+                player.undercoverTaskAckStage = 'received';
+                player.isReady = false;
+            }
+
+            broadcastState();
+            if (getReadinessBlockers().length === 0) {
+                notifyMessage('所有参赛玩家已准备，管理员可以进入正式比赛。');
             }
         });
 
@@ -436,10 +542,12 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             if (!player || !player.taskGrid) return;
             const cell = player.taskGrid[data.cellId];
             if (!cell) return;
+            const before = snapshotTaskCellForLog(cell);
+            const round = Math.max(0, Number(session.liveGameData?.currentRound || 0));
 
             switch (data.action) {
                 case 'MARK_COMPLETE':
-                    if (cell.status === 'Abandoned' || cell.nType !== 'none') return;
+                    if (cell.status === 'Abandoned' || cell.status === 'Complete' || cell.nType !== 'none') return;
                     cell.status = 'Complete';
                     cell.completedRound = session.liveGameData?.currentRound || undefined;
                     if (!cell.borderHistory) cell.borderHistory = [];
@@ -517,6 +625,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     break;
                 }
             }
+            appendTaskActionLog(player, cell, data.cellId, data.action, before, round);
             sendPrivateData(socket.id, player.playerId);
             broadcastState();
         });

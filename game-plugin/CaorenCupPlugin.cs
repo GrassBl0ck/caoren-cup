@@ -23,6 +23,7 @@ public class CaorenCupPlugin : BasePlugin
     public CaorenCupConfig Config { get; set; } = new();
 
     private readonly List<ICaorenFeature> _features = new();
+    private bool _allowPlayerNoclip = false;
 
     // 强制锁定配置文件路径：永远在 DLL 旁边
     private string ConfigFilePath => Path.Combine(ModuleDirectory, "CaorenCup.json");
@@ -95,8 +96,111 @@ public override void Load(bool hotReload)
         AddCommand("css_hpcap", "设置模块血量全局上下限: /hpcap <min> <max>", OnCommandHpCap);
         AddCommand("info", "查看模块玩法说明: /info <模块名>", OnCommandInfo);
         AddCommand("info_cast", "向全服广播玩法说明: /info_cast <模块>", OnCommandInfoCast);
+        AddCommand("sv_noclip", "控制玩家 noclip: /sv_noclip <1允许/0禁止/status>", OnCommandSvNoclip);
+        AddCommandListener("noclip", OnNoclipCommand, HookMode.Pre);
 
         Console.WriteLine($"[CaorenCup] 插件加载完成。配置文件路径: {ConfigFilePath}");
+    }
+
+    private HookResult OnNoclipCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player == null)
+        {
+            return HookResult.Continue;
+        }
+
+        if (_allowPlayerNoclip)
+        {
+            return HookResult.Continue;
+        }
+
+        CaorenCupUtils.PrintToChat(player, "服务器已禁用 noclip，避免误触飞行。");
+        Console.WriteLine($"[CaorenCup] Blocked noclip from player {player.PlayerName} (slot {player.Slot}).");
+        return HookResult.Handled;
+    }
+
+    private void OnCommandSvNoclip(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
+        {
+            CaorenCupUtils.PrintToChat(player, "你没有权限修改 noclip 开关。");
+            return;
+        }
+
+        if (info.ArgCount < 2)
+        {
+            ReplySvNoclipStatus(player);
+            return;
+        }
+
+        string arg = info.GetArg(1).Trim().ToLowerInvariant();
+        switch (arg)
+        {
+            case "1":
+            case "on":
+            case "true":
+            case "enable":
+                _allowPlayerNoclip = true;
+                ReplySvNoclipChanged(player);
+                break;
+            case "0":
+            case "off":
+            case "false":
+            case "disable":
+                _allowPlayerNoclip = false;
+                ReplySvNoclipChanged(player);
+                break;
+            case "status":
+                ReplySvNoclipStatus(player);
+                break;
+            default:
+                ReplySvNoclipUsage(player);
+                break;
+        }
+    }
+
+    private void ReplySvNoclipChanged(CCSPlayerController? player)
+    {
+        string state = _allowPlayerNoclip ? "允许" : "禁止";
+        string message = $"[草人杯] 玩家 noclip 已设置为：{state}。";
+
+        if (player == null)
+        {
+            Console.WriteLine(message);
+        }
+        else
+        {
+            CaorenCupUtils.PrintToChatAll(message);
+        }
+    }
+
+    private void ReplySvNoclipStatus(CCSPlayerController? player)
+    {
+        string state = _allowPlayerNoclip ? "允许" : "禁止";
+        string message = $"[草人杯] 当前玩家 noclip：{state}。用法：/sv_noclip <1允许/0禁止/status>";
+
+        if (player == null)
+        {
+            Console.WriteLine(message);
+        }
+        else
+        {
+            CaorenCupUtils.PrintToChat(player, message);
+        }
+    }
+
+    private void ReplySvNoclipUsage(CCSPlayerController? player)
+    {
+        string message = "[草人杯] 用法：/sv_noclip <1允许/0禁止/status>";
+
+        if (player == null)
+        {
+            Console.WriteLine(message);
+        }
+        else
+        {
+            CaorenCupUtils.PrintToChat(player, message);
+        }
     }
 
     private void OnCommandInfoCast(CCSPlayerController? player, CommandInfo info)

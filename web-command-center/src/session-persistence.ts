@@ -65,6 +65,10 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     restored.timerEndAt = null;
     restored.timerPhase = null;
     restored.rollTimeout = undefined;
+    for (const player of Object.values(restored.players)) {
+        if (player.gameRole !== 'Undercover') player.undercoverTaskAckStage = undefined;
+        else if (player.undercoverTaskAckStage !== 'received' && player.undercoverTaskAckStage !== 'read') player.undercoverTaskAckStage = 'none';
+    }
     return restored;
 };
 

@@ -37,6 +37,15 @@ app.use(express.static('public', {
         if (normalizedFilePath.endsWith('.html')) {
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
         }
+        if (normalizedFilePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        }
+        if (normalizedFilePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
+        if (normalizedFilePath.endsWith('.json')) {
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        }
         if (normalizedFilePath.includes('/assets/audio/')) {
             res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         } else {

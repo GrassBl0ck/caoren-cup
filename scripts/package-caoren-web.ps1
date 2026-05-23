@@ -30,6 +30,7 @@ $excludedFilePatterns = @(
     '*.zip', '*.rar', '*.7z',
     '*.bak', '*.bak-*', '*.backup', '*.bak_*', '*.broken*',
     '*.log',
+    'postmatch-mock-test.html',
     '.env', 'caoren_config.json', 'ecosystem.config.cjs'
 )
 

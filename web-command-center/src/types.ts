@@ -17,8 +17,30 @@ export type GameRole = 'Soldier' | 'Undercover' | 'Detective';
 export type Team = 'CT' | 'T' | 'Unassigned';
 export type RosterTeam = 'A' | 'B';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
+export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
 
 export type NTaskType = '3N_multi' | '3N_single' | '5_4N_multi' | '5_4N_single' | 'none';
+
+export interface TaskActionLogEntry {
+    id: string;
+    timestamp: number;
+    round: number;
+    playerId: string;
+    playerName: string;
+    cellId: string;
+    taskDescription: string;
+    action: string;
+    beforeStatus: CellStatus;
+    afterStatus: CellStatus;
+    beforeNValue?: number;
+    afterNValue?: number;
+    beforeCompletedRound?: number;
+    afterCompletedRound?: number;
+    beforeHintUsed?: boolean;
+    afterHintUsed?: boolean;
+    beforeReplaced?: boolean;
+    afterReplaced?: boolean;
+}
 
 export interface TaskCell {
     cellId: string;
@@ -70,9 +92,11 @@ export interface Player {
     rosterTeam?: RosterTeam;
     team?: Team;
     isReady: boolean;
+    undercoverTaskAckStage?: UndercoverTaskAckStage;
     stats?: MatchStats;
     sideStats?: SideMatchStats;
     taskGrid?: Record<string, TaskCell>;
+    taskActionLog?: TaskActionLogEntry[];
     abandonCount?: number;
     replaceCount?: number;
     hintUsedCount?: number;
@@ -207,6 +231,7 @@ export enum WsEvents {
     SIDE_PICK = 'SIDE_PICK',
     TASK_ACTION = 'TASK_ACTION',
     SUBMIT_QUESTION = 'SUBMIT_QUESTION',
+    UNDERCOVER_TASK_ACK = 'UNDERCOVER_TASK_ACK',
     LOGIN_RESPONSE = 'LOGIN_RESPONSE',
     GAME_STATE = 'GAME_STATE',
     PRIVATE_DATA = 'PRIVATE_DATA',

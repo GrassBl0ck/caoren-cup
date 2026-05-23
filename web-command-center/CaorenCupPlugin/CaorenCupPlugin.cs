@@ -5,6 +5,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -31,7 +32,10 @@ public sealed class CaorenCupPlugin : BasePlugin
     private DateTime _lastPlayerHurtWarningUtc = DateTime.MinValue;
     private readonly Dictionary<string, CsTeam> _teamAssignments = new(StringComparer.Ordinal);
     private readonly HashSet<string> _teamAssignmentBypass = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, WebPlayerState> _webPlayersBySteamId = new(StringComparer.Ordinal);
+    private readonly List<WebPlayerState> _lastNoticeMissingTargets = new();
     private bool _teamLockEnabled;
+    private const string DefaultNoticeSound = "training/bell_normal.vsnd_c";
     private static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "css_ammo",
@@ -70,6 +74,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_cccode", "获取草人杯网页登录码。用法：!cccode", OnGameLoginCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
+        AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|noready|nor [内容]", OnNoticeCommand);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
 
         AddTimer(Math.Max(3, _config.HeartbeatSeconds), () => _ = SendHeartbeatAsync(), TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
@@ -184,6 +189,38 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         ReplyToPlayer(player, "[草人杯] 正在推送当前快照，请稍等...");
         _ = SendSnapshotAsync(null);
+    }
+
+    private void OnNoticeCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
+        {
+            ReplyToPlayer(player, "[草人杯] 你没有权限使用 /notice。");
+            return;
+        }
+
+        if (command.ArgCount < 2)
+        {
+            ReplyToPlayer(player, "[草人杯] 用法：/notice all|undercover|und|detective|det|noready|nor [提示内容]");
+            return;
+        }
+
+        var target = command.ArgByIndex(1)?.Trim().ToLowerInvariant() ?? string.Empty;
+        var message = BuildNoticeMessage(command);
+        _ = SendNoticeAsync(player, target, message);
+    }
+
+    private string BuildNoticeMessage(CommandInfo command)
+    {
+        if (command.ArgCount <= 2) return string.Empty;
+
+        var parts = new List<string>();
+        for (var i = 2; i < command.ArgCount; i++)
+        {
+            var part = command.ArgByIndex(i);
+            if (!string.IsNullOrWhiteSpace(part)) parts.Add(part.Trim());
+        }
+        return string.Join(" ", parts).Trim();
     }
 
     private static object PlayerEquipment(CCSPlayerController? player)
@@ -447,6 +484,139 @@ public sealed class CaorenCupPlugin : BasePlugin
             Logger.LogWarning(ex, "Snapshot failed");
         }
     }
+
+    private async Task<bool> RefreshWebStateAsync()
+    {
+        try
+        {
+            var response = await _http.GetAsync("api/plugin/state");
+            var text = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                Logger.LogWarning("Plugin state refresh failed: {Status} {Body}", response.StatusCode, text);
+                return false;
+            }
+
+            var state = JsonSerializer.Deserialize<PluginStateResponse>(text, _jsonOptions);
+            _webPlayersBySteamId.Clear();
+            if (state?.Players != null)
+            {
+                foreach (var webPlayer in state.Players)
+                {
+                    var steamId = NormalizeSteamId(webPlayer.SteamId);
+                    if (!string.IsNullOrWhiteSpace(steamId)) _webPlayersBySteamId[steamId] = webPlayer;
+                }
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Plugin state refresh exception");
+            return false;
+        }
+    }
+
+    private async Task SendNoticeAsync(CCSPlayerController? caller, string target, string customMessage)
+    {
+        if (!await RefreshWebStateAsync())
+        {
+            ReplyToPlayer(caller, "[草人杯] 无法读取网页指挥台状态，/notice 未发送。");
+            return;
+        }
+
+        var recipients = SelectNoticeRecipients(target, out var targetLabel);
+        if (targetLabel == null)
+        {
+            ReplyToPlayer(caller, "[草人杯] 目标无效。可用：all / undercover / und / detective / det / noready / nor");
+            return;
+        }
+
+        if (recipients.Count == 0)
+        {
+            ReplyToPlayer(caller, $"[草人杯] 没有找到可提示的在线玩家：{targetLabel}。");
+            return;
+        }
+
+        var message = string.IsNullOrWhiteSpace(customMessage) ? DefaultNoticeMessage(target) : customMessage.Trim();
+        foreach (var recipient in recipients)
+        {
+            SendNoticeToPlayer(recipient, targetLabel, message);
+        }
+
+        ReplyToPlayer(caller, $"[草人杯] /notice 已发送给 {recipients.Count} 名在线玩家：{targetLabel}。");
+        if (_lastNoticeMissingTargets.Count > 0)
+        {
+            ReplyToPlayer(caller, $"[草人杯] 这些网页玩家未绑定或不在线，未能提示：{string.Join("、", _lastNoticeMissingTargets.Select(p => p.Name))}");
+        }
+    }
+
+    private List<CCSPlayerController> SelectNoticeRecipients(string target, out string? targetLabel)
+    {
+        _lastNoticeMissingTargets.Clear();
+        targetLabel = target switch
+        {
+            "all" => "全体玩家",
+            "undercover" or "und" => "卧底玩家",
+            "detective" or "det" => "侦探玩家",
+            "noready" or "nor" => "未准备玩家",
+            _ => null
+        };
+
+        if (targetLabel == null) return new List<CCSPlayerController>();
+
+        var matched = _webPlayersBySteamId.Values.Where(p => target switch
+        {
+            "all" => true,
+            "undercover" or "und" => string.Equals(p.GameRole, "Undercover", StringComparison.OrdinalIgnoreCase),
+            "detective" or "det" => string.Equals(p.GameRole, "Detective", StringComparison.OrdinalIgnoreCase),
+            "noready" or "nor" => !p.IsReady || (string.Equals(p.GameRole, "Undercover", StringComparison.OrdinalIgnoreCase) && !string.Equals(p.UndercoverTaskAckStage, "read", StringComparison.OrdinalIgnoreCase)),
+            _ => false
+        }).ToList();
+
+        var onlineBySteamId = Utilities.GetPlayers()
+            .Where(IsRealPlayer)
+            .GroupBy(p => NormalizeSteamId(p.SteamID.ToString()))
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var recipients = new List<CCSPlayerController>();
+        foreach (var webPlayer in matched)
+        {
+            var steamId = NormalizeSteamId(webPlayer.SteamId);
+            if (!string.IsNullOrWhiteSpace(steamId) && onlineBySteamId.TryGetValue(steamId, out var player))
+            {
+                recipients.Add(player);
+            }
+            else
+            {
+                _lastNoticeMissingTargets.Add(webPlayer);
+            }
+        }
+
+        return recipients;
+    }
+
+    private static string DefaultNoticeMessage(string target) => target switch
+    {
+        "undercover" or "und" => "请立即查看网页上的卧底任务与确认状态。",
+        "detective" or "det" => "请注意裁判提示，准备进行侦探相关流程。",
+        "noready" or "nor" => "你还没有完成准备，请回网页完成准备或任务确认。",
+        _ => "请注意裁判提示，立即查看网页指挥台。"
+    };
+
+    private void SendNoticeToPlayer(CCSPlayerController player, string targetLabel, string message)
+    {
+        Server.NextFrame(() =>
+        {
+            if (!player.IsValid) return;
+            player.PrintToChat($" {ChatColors.Yellow}================ [草人杯 Notice] ================{ChatColors.Default}");
+            player.PrintToChat($" {ChatColors.Red}[重要提醒]{ChatColors.Default} {ChatColors.Green}{targetLabel}{ChatColors.Default}");
+            player.PrintToChat($" {ChatColors.Yellow}{message}{ChatColors.Default}");
+            try { player.ExecuteClientCommand($"play \"{DefaultNoticeSound}\""); } catch { }
+        });
+    }
+
+    private static string NormalizeSteamId(string? steamId) =>
+        new string((steamId ?? string.Empty).Where(char.IsDigit).ToArray());
 
     private async Task PostEventAsync(string type, object payload)
     {
@@ -847,6 +1017,36 @@ public sealed class PluginBindResponse
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }
+}
+
+public sealed class PluginStateResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("players")]
+    public List<WebPlayerState>? Players { get; set; }
+}
+
+public sealed class WebPlayerState
+{
+    [JsonPropertyName("playerId")]
+    public string? PlayerId { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("steamId")]
+    public string? SteamId { get; set; }
+
+    [JsonPropertyName("gameRole")]
+    public string? GameRole { get; set; }
+
+    [JsonPropertyName("isReady")]
+    public bool IsReady { get; set; }
+
+    [JsonPropertyName("undercoverTaskAckStage")]
+    public string? UndercoverTaskAckStage { get; set; }
 }
 
 

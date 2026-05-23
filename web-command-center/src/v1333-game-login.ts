@@ -172,6 +172,7 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
                         bindCode: adminPlayer.bindCode,
                         taskGrid: undefined,
                         gameRole: undefined,
+                        undercoverTaskAckStage: undefined,
                     });
                 }
                 broadcastState();
@@ -250,6 +251,7 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
                     bindCode: player.bindCode,
                     taskGrid: reveal ? player.taskGrid : undefined,
                     gameRole: reveal ? player.gameRole : undefined,
+                    undercoverTaskAckStage: player.undercoverTaskAckStage,
                 });
             }
             broadcastState();
