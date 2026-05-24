@@ -7,7 +7,7 @@ namespace CaorenCup.Features;
 
 public class ModifierFeature : ICaorenFeature
 {
-    public string FeatureName => "Modifier (/mod 规则修改)";
+    public string FeatureName => "Modifier (/mod 全局 CVar 规则)";
 
     private const string Owner = "Modifier";
     private CaorenCupPlugin _plugin = null!;
@@ -16,8 +16,8 @@ public class ModifierFeature : ICaorenFeature
     public void Init(CaorenCupPlugin plugin)
     {
         _plugin = plugin;
-        plugin.AddCommand("css_mod", "规则 buff: /mod damage|headshot|vampire|drain|selfdamage|grenade-damage|reset", OnCommand);
-        plugin.AddCommand("mod", "规则 buff: /mod damage|headshot|vampire|drain|selfdamage|grenade-damage|reset", OnCommand);
+        plugin.AddCommand("css_mod", "规则 CVar: /mod hit-scale|headshot|vampire|selfdamage|he-damage|reset", OnCommand);
+        plugin.AddCommand("mod", "规则 CVar: /mod hit-scale|headshot|vampire|selfdamage|he-damage|reset", OnCommand);
     }
 
     public void OnConfigParsed(CaorenCupConfig config) { }
@@ -34,21 +34,22 @@ public class ModifierFeature : ICaorenFeature
     }
 
     public string GetHelpEntry() =>
-        $" {ChatColors.Green}/mod damage|headshot|vampire|drain|selfdamage|grenade-damage|reset{ChatColors.Default} : 伤害/吸血/扣血规则";
+        $" {ChatColors.Green}/mod hit-scale|headshot|vampire|selfdamage|he-damage|reset{ChatColors.Default} : 爆头/吸血/自伤/高爆 CVar";
 
     public string GetStatusInfo() =>
         $"Modifier: {(_enabled ? $"{ChatColors.Green}已启用" : $"{ChatColors.Red}已禁用")}{ChatColors.Default}";
 
-    public string? GetPublicConfigInfo() => _enabled ? "[规则修改] 已修改伤害、吸血、持续扣血或投掷物伤害。" : null;
+    public string? GetPublicConfigInfo() =>
+        _enabled ? "[全局 CVar 规则] 已修改命中部位、爆头限定、吸血、自伤或高爆伤害。" : null;
 
     public string GetFeatureDescription() =>
-        "/mod damage <t/ct/all/0> <headScale> <bodyScale>\n" +
+        "/mod hit-scale <t/ct/all/0> <headScale> <bodyScale>  (命中部位 CVar)\n" +
         "/mod headshot <0/1>  (全局)\n" +
         "/mod vampire <amount>  (全局)\n" +
-        "/mod drain <damagePerSecond>  (全局)\n" +
         "/mod selfdamage <amount>  (全局)\n" +
-        "/mod grenade-damage <he> <fire>  (全局)\n" +
-        "/mod reset 恢复本模块托管的 CVar。";
+        "/mod he-damage <scale>  (全局，只改高爆伤害倍率)\n" +
+        "/mod reset 恢复本模块托管的 CVar。\n" +
+        "普通受伤倍率/锁血请用 /dmg，持续扣血请用 /bleed，火焰伤害请用 /fh。";
 
     private void OnCommand(CCSPlayerController? player, CommandInfo info)
     {
@@ -70,8 +71,12 @@ public class ModifierFeature : ICaorenFeature
 
         switch (action)
         {
+            case "hit-scale":
+            case "hitscale":
+                HandleHitScale(player, info);
+                return;
             case "damage":
-                HandleDamage(player, info);
+                Reply(player, "/mod damage 已停用，避免和 /dmg 重叠。命中部位倍率请用 /mod hit-scale，普通受伤倍率请用 /dmg。");
                 return;
             case "headshot":
                 HandleSingle(player, info, "mp_damage_headshot_only", "false", "0/1");
@@ -80,13 +85,17 @@ public class ModifierFeature : ICaorenFeature
                 HandleSingle(player, info, "mp_damage_vampiric_amount", "0", "amount");
                 return;
             case "drain":
-                HandleSingle(player, info, "mp_global_damage_per_second", "0", "damagePerSecond");
+                Reply(player, "/mod drain 已停用，避免和 /bleed 重叠。请使用 /bleed <t/ct/all/0> <秒> <负数扣血>。");
                 return;
             case "selfdamage":
                 HandleSingle(player, info, "mp_weapon_self_inflict_amount", "0", "amount");
                 return;
+            case "he-damage":
+            case "hedamage":
+                HandleHeDamage(player, info);
+                return;
             case "grenade-damage":
-                HandleGrenadeDamage(player, info);
+                HandleLegacyGrenadeDamage(player, info);
                 return;
             default:
                 PrintUsage(player);
@@ -94,11 +103,11 @@ public class ModifierFeature : ICaorenFeature
         }
     }
 
-    private void HandleDamage(CCSPlayerController? player, CommandInfo info)
+    private void HandleHitScale(CCSPlayerController? player, CommandInfo info)
     {
         if (info.ArgCount < 5 || !TryParseFloat(info.GetArg(3), out float head) || !TryParseFloat(info.GetArg(4), out float body))
         {
-            Reply(player, "用法: /mod damage <t/ct/all/0> <headScale> <bodyScale>");
+            Reply(player, "用法: /mod hit-scale <t/ct/all/0> <headScale> <bodyScale>");
             return;
         }
 
@@ -129,7 +138,7 @@ public class ModifierFeature : ICaorenFeature
         }
 
         _enabled = true;
-        Announce($"damage {target} head={head:0.###} body={body:0.###}");
+        Announce($"hit-scale {target} head={head:0.###} body={body:0.###}");
     }
 
     private void HandleSingle(CCSPlayerController? player, CommandInfo info, string cvar, string fallback, string usage)
@@ -146,19 +155,31 @@ public class ModifierFeature : ICaorenFeature
         Announce($"{cvar} = {value}");
     }
 
-    private void HandleGrenadeDamage(CCSPlayerController? player, CommandInfo info)
+    private void HandleHeDamage(CCSPlayerController? player, CommandInfo info)
     {
-        if (info.ArgCount < 4 || !TryParseFloat(info.GetArg(2), out float he) || !TryParseFloat(info.GetArg(3), out float fire))
+        if (info.ArgCount < 3 || !TryParseFloat(info.GetArg(2), out float he))
         {
-            Reply(player, "用法: /mod grenade-damage <he> <fire>");
+            Reply(player, "用法: /mod he-damage <scale>");
             return;
         }
 
         Set("sv_hegrenade_damage_multiplier", Format(he), "1");
-        Set("inferno_damage", Format(fire), "40");
-        Set("inferno_damage_ct", Format(fire), "40");
         _enabled = true;
-        Announce($"grenade damage HE={he:0.###} fire={fire:0.###}");
+        Announce($"HE damage scale = {he:0.###}");
+    }
+
+    private void HandleLegacyGrenadeDamage(CCSPlayerController? player, CommandInfo info)
+    {
+        if (info.ArgCount < 3 || !TryParseFloat(info.GetArg(2), out float he))
+        {
+            Reply(player, "用法: /mod he-damage <scale>。火焰伤害请使用 /fh。");
+            return;
+        }
+
+        Set("sv_hegrenade_damage_multiplier", Format(he), "1");
+        _enabled = true;
+        Reply(player, "已只应用 HE 伤害倍率；火焰伤害请使用 /fh，避免与 FireHeal 模块重叠。");
+        Announce($"HE damage scale = {he:0.###}");
     }
 
     private void Set(string name, string value, string fallbackDefault) =>
@@ -168,12 +189,6 @@ public class ModifierFeature : ICaorenFeature
     {
         t = target is "t" or "all";
         ct = target is "ct" or "all";
-        if (target == "0")
-        {
-            t = false;
-            ct = false;
-            return true;
-        }
         return t || ct;
     }
 
@@ -186,13 +201,13 @@ public class ModifierFeature : ICaorenFeature
 
     private void PrintUsage(CCSPlayerController? player)
     {
-        Reply(player, "/mod damage <t/ct/all/0> <headScale> <bodyScale>");
+        Reply(player, "/mod hit-scale <t/ct/all/0> <headScale> <bodyScale>  (命中部位 CVar)");
         Reply(player, "/mod headshot <0/1>  (全局)");
         Reply(player, "/mod vampire <amount>  (全局)");
-        Reply(player, "/mod drain <damagePerSecond>  (全局)");
         Reply(player, "/mod selfdamage <amount>  (全局)");
-        Reply(player, "/mod grenade-damage <he> <fire>  (全局)");
+        Reply(player, "/mod he-damage <scale>  (全局)");
         Reply(player, "/mod reset");
+        Reply(player, "普通受伤倍率/锁血用 /dmg；持续扣血用 /bleed；火焰伤害用 /fh。");
     }
 
     private bool HasRoot(CCSPlayerController? player)
