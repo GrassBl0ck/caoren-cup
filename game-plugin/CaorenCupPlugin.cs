@@ -21,6 +21,7 @@ public class CaorenCupPlugin : BasePlugin
     public override string ModuleAuthor => "Graslock + AI";
 
     public CaorenCupConfig Config { get; set; } = new();
+    public ManagedCvarScope ManagedCvars { get; } = new();
 
     private readonly List<ICaorenFeature> _features = new();
     private bool _allowPlayerNoclip = false;
@@ -77,6 +78,10 @@ public override void Load(bool hotReload)
         _features.Add(new WeaponSpeedFeature()); // 33 武器速度控制
         _features.Add(new AccuracyFeature()); // 34 acc 武器精准与后坐力控制
         _features.Add(new RadarColorFeature()); // 35 小地图/头像框颜色修复
+        _features.Add(new LoadoutFeature()); // 36 默认装备/购买规则
+        _features.Add(new ModifierFeature()); // 37 规则 buff CVar 托管
+        _features.Add(new MovementRulesFeature()); // 38 全局移动规则 CVar 托管
+        _features.Add(new PresetFeature()); // 39 grass 经典玩法预设
 
         // 3. 注入配置并初始化。先给配置，再 Init，保证 Alias 等模块能按 JSON 注册指令。
         foreach (var feature in _features)
@@ -535,6 +540,8 @@ public override void Load(bool hotReload)
 
     private void PerformReset()
     {
+        ManagedCvars.ResetAll();
+
         foreach (var f in _features)
         {
             if (f is Features.SkillPointsFeature) continue;

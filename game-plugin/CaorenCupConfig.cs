@@ -68,6 +68,7 @@ public class CaorenCupConfig : BasePluginConfig
     public EcoGuessSettings EcoGuess { get; set; } = new EcoGuessSettings();
     public PlaySoundSettings PlaySound { get; set; } = new PlaySoundSettings();
     public RadarColorSettings RadarColor { get; set; } = new RadarColorSettings();
+    public PresetSettings Preset { get; set; } = new PresetSettings();
 
     [JsonPropertyName("HpCap")]
     public HpCapSettings HpCap { get; set; } = new HpCapSettings();
@@ -88,6 +89,17 @@ public class RadarColorSettings
     public bool Enabled { get; set; } = true;
     public bool ApplyOnRoundStart { get; set; } = true;
     public bool ApplyOnSpawn { get; set; } = true;
+}
+
+public class PresetSettings
+{
+    public bool Enabled { get; set; } = true;
+    public string PresetFileName { get; set; } = "presets.grass.json";
+    public string DefaultPlayablePermission { get; set; } = "@css/changemap";
+    public string DefaultRestrictedPermission { get; set; } = "@css/root";
+    public bool ApplyResetBeforePreset { get; set; } = true;
+    public int MaxCommandsPerPreset { get; set; } = 200;
+    public bool LogExecutedCommands { get; set; } = false;
 }
 
 public class PlaySoundSettings

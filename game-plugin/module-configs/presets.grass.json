@@ -1,0 +1,2518 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "D:/OpenSourcework/grass",
+  "generatedAt": "2026-05-24T07:16:34.296Z",
+  "defaultPlayablePermission": "@css/changemap",
+  "defaultRestrictedPermission": "@css/root",
+  "commandPolicy": {
+    "blocked": [
+      "alias",
+      "bind",
+      "css_plugins",
+      "exec",
+      "exec_async",
+      "quit",
+      "exit",
+      "_restart"
+    ],
+    "restrictedOnly": [
+      "sv_cheats",
+      "host_timescale",
+      "ent_fire",
+      "plant_bomb",
+      "map_setbombradius",
+      "subclass_change"
+    ],
+    "allowedPrefixes": [
+      "mp_",
+      "sv_",
+      "cash_",
+      "ammo_",
+      "inferno_",
+      "bot_",
+      "say",
+      "css_say"
+    ]
+  },
+  "presets": [
+    {
+      "name": "1000vampire",
+      "title": "1000vampire",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/1000vampire.cfg.",
+      "commands": [
+        "mp_damage_vampiric_amount 1000",
+        "mp_global_damage_per_second 8",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u3010\u8840\u4e4b\u6218II\u3011\u6240\u6709\u73a9\u5bb6\u6bcf\u79d2\u53d7\u52308\u4f24\u5bb3\uff0c\u6b64\u4f24\u5bb3\u4e0d\u81f4\u547d\u3002\u5f53\u4ee5\u4efb\u4f55\u624b\u6bb5\u5bf9\u4efb\u4f55\u73a9\u5bb6\u9020\u6210\u4f24\u5bb3\u65f6\uff0c\u9020\u6210\u4f24\u5bb3\u7684\u4e00\u65b9\u8840\u91cf\u6062\u590d\u81f3200\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/1000vampire.cfg",
+        "rawCommands=3",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod vampire 1000; /mod drain 8"
+    },
+    {
+      "name": "1v5bot_ct",
+      "title": "1v5bot ct",
+      "category": "legacy",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/1v5bot_ct.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "custom_bot_difficulty 5",
+        "mp_autoteambalance 0",
+        "bot_kick",
+        "mp_limitteams 0",
+        "bot_add_t",
+        "bot_add_t",
+        "bot_add_t",
+        "bot_add_t",
+        "bot_add_t",
+        "mp_damage_scale_t_body 1.000000",
+        "mp_damage_scale_t_head 1.000000",
+        "mp_damage_scale_ct_body 1.000000",
+        "mp_damage_scale_ct_head 1.000000",
+        "sv_full_alltalk true",
+        "sv_alltalk 1",
+        "bot_all_weapons",
+        "bot_allow_grenades 1",
+        "bot_allow_machine_guns 1",
+        "bot_allow_pistols 1",
+        "bot_allow_rifles 1",
+        "bot_allow_rogues 1",
+        "bot_allow_shotguns 1",
+        "bot_allow_snipers 1",
+        "bot_allow_sub_machine_guns 1",
+        "say 1V5\u4e13\u5bb6\u4eba\u673a\uff01\u521d\u59cb\u8fb9\uff1aCT\u3002",
+        "mp_restartgame 1"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/1v5bot_ct.cfg",
+        "rawCommands=27",
+        "contains_sv_cheats",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "1v5bot_t",
+      "title": "1v5bot t",
+      "category": "legacy",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/1v5bot_t.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "custom_bot_difficulty 5",
+        "mp_autoteambalance 0",
+        "bot_kick",
+        "mp_limitteams 0",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "mp_damage_scale_t_body 1.000000",
+        "mp_damage_scale_t_head 1.000000",
+        "mp_damage_scale_ct_body 1.000000",
+        "mp_damage_scale_ct_head 1.000000",
+        "sv_full_alltalk true",
+        "sv_alltalk 1",
+        "bot_all_weapons",
+        "bot_allow_grenades 1",
+        "bot_allow_machine_guns 1",
+        "bot_allow_pistols 1",
+        "bot_allow_rifles 1",
+        "bot_allow_rogues 1",
+        "bot_allow_shotguns 1",
+        "bot_allow_snipers 1",
+        "bot_allow_sub_machine_guns 1",
+        "say 1V5\u4e13\u5bb6\u4eba\u673a\uff01\u521d\u59cb\u8fb9\uff1aT\u3002",
+        "mp_restartgame 1"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/1v5bot_t.cfg",
+        "rawCommands=27",
+        "contains_sv_cheats",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "5szeus",
+      "title": "5s Zeus",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/5szeus.cfg.",
+      "commands": [
+        "mp_taser_recharge_time 5",
+        "say [Grass 's Modifirers] \u7535\uff01\u7535\u51fb\u67aa\u7684\u5145\u80fd\u6240\u9700\u65f6\u95f4\u5927\u5e45\u7f29\u77ed\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/5szeus.cfg",
+        "rawCommands=2"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "aliass",
+      "title": "aliass",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/aliass.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/aliass.cfg",
+        "rawCommands=1",
+        "archived_legacy_cfg",
+        "contains_exec_reference",
+        "alias_lines_stripped"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "alldamage",
+      "title": "Global Damage",
+      "category": "damage",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/alldamage.cfg.",
+      "commands": [
+        "mp_global_damage_per_second 2.500000",
+        "mp_damage_vampiric_amount 0.8",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u65f6\u95f4\u5c31\u662f\u751f\u547d! \u6240\u6709\u73a9\u5bb6\u4ee52.5HP/s \u7684\u901f\u5ea6\u6263\u9664\u8840\u91cf\uff08\u6b64\u4f24\u5bb3\u4e0d\u81f4\u547d\uff09, \u73a9\u5bb6\u4f1a\u56de\u590d\u9020\u6210\u4f24\u5bb3\u503c80%\u7684\u8840\u91cf\u3002\u8840\u91cf\u4e0a\u9650\u4e3a200."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/alldamage.cfg",
+        "rawCommands=3",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod drain 2.5; /mod vampire 0.8"
+    },
+    {
+      "name": "allenemy",
+      "title": "allenemy",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/allenemy.cfg.",
+      "commands": [
+        "mp_teammates_are_enemies 1",
+        "sv_disable_radar 1",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u8c01\uff1f\u554a\uff1f \u73a9\u5bb6\u5c06\u4e0d\u80fd\u83b7\u53d6\u901a\u5e38\u60c5\u51b5\u4e0b\u53ef\u4ee5\u8f7b\u6613\u83b7\u53d6\u5230\u7684\u961f\u53cb\u4fe1\u606f\uff0c\u653b\u51fb\u961f\u53cb\u4f1a\u4f7f\u5176\u627f\u53d7\u5168\u989d\u4f24\u5bb3\u3002\u96f7\u8fbe\u5728\u6b64\u73a9\u6cd5\u4e0b\u4e0d\u53ef\u7528\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/allenemy.cfg",
+        "rawCommands=3"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "alltimekarambit",
+      "title": "alltimekarambit",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/alltimekarambit.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/alltimekarambit.cfg",
+        "rawCommands=0",
+        "archived_legacy_cfg",
+        "contains_exec_reference"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "awp_bizon",
+      "title": "awp bizon",
+      "category": "weapon",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/awp_bizon.cfg.",
+      "commands": [
+        "mp_ct_default_primary weapon_bizon",
+        "mp_t_default_primary weapon_bizon",
+        "sv_infinite_ammo 2",
+        "mp_weapons_allow_pistols 1",
+        "say < \u7981\u6b62\u4f7f\u7528\u7535\u51fb\u67aa\uff0c\u8fd1\u6218\u6b66\u5668> \u6b66\u5668\u6742\u4ea4\uff01\u6211\u4eec\u4e0d\u59a8\u5bf9AWP\u548cPP-\u91ce\u725b\u505a\u4e00\u4e9b\u795e\u79d8\u7684\u5c0f\u4fee\u6539......(AWP\u4f7f\u7528PP-\u91ce\u725b\u7684\u5b50\u5f39) \u6253\u5f00\u63a7\u5236\u53f0\uff0c\u8f93\u5165 /infos_1 \u67e5\u770b\u8be6\u60c5\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/awp_bizon.cfg",
+        "rawCommands=5",
+        "contains_ent_fire",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "awp",
+      "title": "AWP",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/awp.cfg.",
+      "commands": [
+        "mp_buytime 30",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_awp",
+        "mp_t_default_primary weapon_awp",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_pistols 1",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_smgs -1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528AWP>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/awp.cfg",
+        "rawCommands=11",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_awp; /loadout allow -1 1 -1 -1 5"
+    },
+    {
+      "name": "bounce",
+      "title": "bounce",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/bounce.cfg.",
+      "commands": [
+        "sv_bounce 9",
+        "sv_falldamage_scale 0.05",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u8bd5\u7740\u649e\u4e00\u4e0b\u5899.... \uff08\u63d0\u793a\uff1a\u8d77\u8df3\u5411\u5899\u58c1\u78b0\u649e\u3002\u78b0\u649e\u901f\u5ea6\u5c3d\u91cf\u4e0e\u5899\u58c1\u5782\u76f4\uff0c\u5373\u5c06\u78b0\u649e\u65f6\u677e\u5f00\u6240\u6709\u79fb\u52a8\u7c7b\u6309\u952e\uff09"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/bounce.cfg",
+        "rawCommands=3",
+        "alias_lines_stripped",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move fall 0.05; /move gravity 800"
+    },
+    {
+      "name": "buffs",
+      "title": "Buff Menu Archive",
+      "category": "buff_menu",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/buffs.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/buffs.cfg",
+        "rawCommands=0",
+        "archived_legacy_cfg",
+        "contains_exec_reference",
+        "alias_lines_stripped"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "c4anywhere",
+      "title": "C4 Anywhere",
+      "category": "bomb",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/c4anywhere.cfg.",
+      "commands": [
+        "mp_plant_c4_anywhere 1",
+        "mp_c4timer 55",
+        "mp_damage_scale_ct_head 0.65",
+        "mp_damage_scale_ct_body 0.65",
+        "map_setbombradius 1200",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> C4\u53ef\u4ee5\u88ab\u5b89\u88c5\u5728\u4efb\u4f55\u5730\u70b9\uff0c\u4f46\u5f15\u4fe1\u65f6\u95f4\u5ef6\u957f15s\uff0c\u7206\u70b8\u4f24\u5bb3\u8bbe\u5b9a\u4e3a1200\uff08\u7ea6\u4e24\u500d\u4e8e\u9ed8\u8ba4\uff09\uff0c\u5e76\u4e14CT\u65b9\u83b7\u5f97\u989d\u591635%\u514d\u4f24\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/c4anywhere.cfg",
+        "rawCommands=6",
+        "contains_map_setbombradius"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "cash",
+      "title": "Default Cash",
+      "category": "economy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/cash.cfg.",
+      "commands": [
+        "cash_player_bomb_defused 300",
+        "cash_player_bomb_planted 300",
+        "cash_player_damage_hostage -30",
+        "cash_player_get_killed 0",
+        "cash_player_interact_with_hostage 300",
+        "cash_player_killed_enemy_default 300",
+        "cash_player_killed_enemy_factor 1",
+        "cash_player_killed_hostage -1000",
+        "cash_player_killed_teammate -300",
+        "cash_player_rescued_hostage 1000",
+        "cash_player_respawn_amount 0",
+        "cash_team_bonus_shorthanded 0",
+        "cash_team_elimination_bomb_map 3250",
+        "cash_team_elimination_hostage_map_ct 3000",
+        "cash_team_elimination_hostage_map_t 3000",
+        "cash_team_hostage_alive 0",
+        "cash_team_hostage_interaction 600",
+        "cash_team_loser_bonus 1400",
+        "cash_team_loser_bonus_consecutive_rounds 500",
+        "cash_team_per_dead_enemy 50",
+        "cash_team_planted_bomb_but_defused 600",
+        "cash_team_rescued_hostage 600",
+        "cash_team_terrorist_win_bomb 3500",
+        "cash_team_win_by_defusing_bomb 3500",
+        "cash_team_win_by_hostage_rescue 2900",
+        "cash_team_win_by_time_running_out_bomb 3250",
+        "cash_team_win_by_time_running_out_hostage 3250",
+        "cash_team_winner_bonus_consecutive_rounds 0"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/cash.cfg",
+        "rawCommands=28"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "chaorenct",
+      "title": "chaorenct",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/chaorenct.cfg.",
+      "commands": [
+        "mp_damage_scale_t_head 0.75000000",
+        "mp_damage_scale_t_body 0.75000000",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u8d85\u4eba\u676fI \u8d85\u4eba\u7ec4\u5bf9\u654c\u65b9\u9020\u6210\u7684\u4f24\u5bb3\u6298\u51cf25%. \u5f53\u524d: CT\u4e3a\u8d85\u4eba\u961f"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/chaorenct.cfg",
+        "rawCommands=3",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod damage t 0.75 0.75"
+    },
+    {
+      "name": "chaorent",
+      "title": "chaorent",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/chaorent.cfg.",
+      "commands": [
+        "mp_damage_scale_ct_head 0.75000000",
+        "mp_damage_scale_ct_body 0.75000000",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u8d85\u4eba\u676fI \u8d85\u4eba\u7ec4\u5bf9\u654c\u65b9\u9020\u6210\u7684\u4f24\u5bb3\u6298\u51cf25%. \u5f53\u524d: T\u4e3a\u8d85\u4eba\u961f"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/chaorent.cfg",
+        "rawCommands=3",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod damage ct 0.75 0.75"
+    },
+    {
+      "name": "cjr1",
+      "title": "cjr1",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/cjr1.cfg.",
+      "commands": [
+        "sv_staminajumpcost 0.0",
+        "sv_staminalandcost 1",
+        "sv_staminamax 100",
+        "sv_staminarecoveryrate 11",
+        "say \u6b8b\u75be\u4ebaI \u4ece>30cm \u7684\u9ad8\u5ea6 (\u53c2\u8003\u63a2\u5458\u8eab\u9ad8\u76841/6) \u6389\u4e0b\u6765\u4f1a\u635f\u5931\u6240\u6709\u8010\u529b\u3002\u8010\u529b\u7684\u56de\u590d\u901f\u5ea6\u964d\u4f4e\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/cjr1.cfg",
+        "rawCommands=5",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move fall 1; /move reset stamina manually if needed"
+    },
+    {
+      "name": "cjr2",
+      "title": "cjr2",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/cjr2.cfg.",
+      "commands": [
+        "sv_staminajumpcost 0.0",
+        "sv_staminalandcost 0.0",
+        "sv_staminamax 100",
+        "sv_staminarecoveryrate 1",
+        "mp_damage_scale_ct_head 0.15",
+        "mp_damage_scale_ct_body 0.15",
+        "mp_damage_scale_t_head 0.15",
+        "mp_damage_scale_t_body 0.15",
+        "inferno_damage 10",
+        "sv_hegrenade_radius_multiplier 1",
+        "sv_hegrenade_damage_multiplier 0.15",
+        "say [Grass 's Modifirers] <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u6b8b\u75be\u4ebaII \u73a9\u5bb6\u83b7\u5f9785%\u514d\u4f24\uff0c\u4f46\u8010\u529b\u6062\u590d\u901f\u5ea6\u6781\u6162\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/cjr2.cfg",
+        "rawCommands=12",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move reset stamina manually if needed; /mod damage all 0.15 0.15; /mod grenade-damage 0.15 10"
+    },
+    {
+      "name": "cjr3",
+      "title": "cjr3",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/cjr3.cfg.",
+      "commands": [
+        "sv_gravity 3000",
+        "sv_jump_impulse 680",
+        "sv_falldamage_scale 0.6250000",
+        "sv_staminarecoveryrate 10000",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u6b8b\u75be\u4ebaIII \u73a9\u5bb6\u53d7\u5230\u6454\u843d\u4f24\u5bb3\u7684\u9ad8\u5ea6\u9608\u503c\u964d\u4f4e\uff0c\u8df3\u8dc3\u4f3c\u4e4e\u6709\u70b9\u5947\u602a... \u5c0f\u5fc3\u4efb\u4f55\u4e00\u4e2a\u574e\uff01\u8c28\u614e\u8df3\u8dc3\uff01"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/cjr3.cfg",
+        "rawCommands=5",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move gravity 3000; /move jump 680; /move fall 0.625"
+    },
+    {
+      "name": "cjr4",
+      "title": "cjr4",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/cjr4.cfg.",
+      "commands": [
+        "sv_jump_impulse 0",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u6b8b\u75be\u4ebaIV \u73a9\u5bb6\u65e0\u6cd5\u8df3\u8dc3\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/cjr4.cfg",
+        "rawCommands=2",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move jump 0"
+    },
+    {
+      "name": "costhealth",
+      "title": "costhealth",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/costhealth.cfg.",
+      "commands": [
+        "mp_weapon_self_inflict_amount 0.2",
+        "mp_damage_vampiric_amount 0.4",
+        "mp_damage_scale_t_head 0.5000000",
+        "mp_damage_scale_t_body 0.5000000",
+        "mp_damage_scale_ct_head 0.5000000",
+        "mp_damage_scale_ct_body 0.5000000",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u5c04\u51fb\u6d88\u8017\u751f\u547d\u503c\u3002\u82e5\u547d\u4e2d\u654c\u4eba\u5219\u56de\u590d\u751f\u547d\u503c\u3002\u901a\u8fc7\u547d\u4e2d\u654c\u4eba\u5f97\u5230\u7684\u8840\u91cf\u4e0a\u9650\u4e3a200\uff0c\u6240\u6709\u73a9\u5bb6\u53d7\u5230\u7684\u5b50\u5f39\u4f24\u5bb3\u964d\u4f4e50%\u3002\u3010\u8be6\u7ec6\u4fe1\u606f\u8bf7\u53c2\u9605\u63a7\u5236\u53f0\u3011"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/costhealth.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod selfdamage 0.2; /mod vampire 0.4; /mod damage all 0.5 0.5"
+    },
+    {
+      "name": "ct_healshot",
+      "title": "ct healshot",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/ct_healshot.cfg.",
+      "commands": [
+        "css_give @ct healthshot",
+        "healthshot_healthboost_time 1",
+        "healthshot_health 100",
+        "healthshot_healthboost_damage_multiplier 1",
+        "healthshot_healthboost_speed_multiplier 100",
+        "say \u672c\u56de\u5408CT\u65b9\u88ab\u7ed9\u4e88\u6cbb\u7597\u9488\uff1a\u4f7f\u7528\u4e4b\u540e\uff0c\u751f\u547d\u503c\u6062\u590d\u81f3100\u3002",
+        "say \u9700\u8981\u6ce8\u610f\uff0c\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ea\u80fd\u6301\u7eed\u5230\u6301\u7eed\u65f6\u95f4\u7ed3\u675f\u6216\u73a9\u5bb6\u6b7b\u4ea1\uff0c\u56de\u5408\u7ed3\u675f\u4e0d\u4f1a\u6e05\u9664\u6cbb\u7597\u9488\u5e26\u6765\u7684\u6548\u679c\uff0c\u4e14\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ef\u4ee5\u53e0\u52a0\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/ct_healshot.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout healthshot ct heal"
+    },
+    {
+      "name": "ct_immshot",
+      "title": "ct immshot",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/ct_immshot.cfg.",
+      "commands": [
+        "css_give @ct healthshot",
+        "healthshot_healthboost_time 2.59",
+        "healthshot_health 0",
+        "healthshot_healthboost_damage_multiplier 0",
+        "healthshot_healthboost_speed_multiplier 0",
+        "say \u672c\u56de\u5408CT\u65b9\u88ab\u7ed9\u4e88\u65e0\u654c\u9488\uff1a\u4f7f\u7528\u4e4b\u540e\u4e0d\u4f1a\u56de\u590d\u8840\u91cf\uff0c\u4f46\u63a5\u4e0b\u6765\u76842.59\u79d2\uff0c\u4e0d\u4f1a\u53d7\u5230\u4f24\u5bb3\u3002",
+        "say \u9700\u8981\u6ce8\u610f\uff0c\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ea\u80fd\u6301\u7eed\u5230\u6301\u7eed\u65f6\u95f4\u7ed3\u675f\u6216\u73a9\u5bb6\u6b7b\u4ea1\uff0c\u56de\u5408\u7ed3\u675f\u4e0d\u4f1a\u6e05\u9664\u6cbb\u7597\u9488\u5e26\u6765\u7684\u6548\u679c\uff0c\u4e14\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ef\u4ee5\u53e0\u52a0\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/ct_immshot.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout healthshot ct immune"
+    },
+    {
+      "name": "ct_regshot",
+      "title": "ct regshot",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/ct_regshot.cfg.",
+      "commands": [
+        "css_give @ct healthshot",
+        "healthshot_healthboost_time 45",
+        "healthshot_health 135",
+        "healthshot_healthboost_damage_multiplier 1",
+        "healthshot_healthboost_speed_multiplier 0.3",
+        "say \u672c\u56de\u5408CT\u65b9\u88ab\u7ed9\u4e88\u6062\u590d\u9488\uff1a\u4f7f\u7528\u4e4b\u540e\uff0c\u5728\u63a5\u4e0b\u6765\u768445\u79d2\u5185\uff0c\u6bcf\u79d2\u6062\u590d3\u70b9\u8840\u91cf\uff0c\u751f\u547d\u4e0a\u9650\u4ecd\u4e3a100\u3002",
+        "say \u9700\u8981\u6ce8\u610f\uff0c\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ea\u80fd\u6301\u7eed\u5230\u6301\u7eed\u65f6\u95f4\u7ed3\u675f\u6216\u73a9\u5bb6\u6b7b\u4ea1\uff0c\u56de\u5408\u7ed3\u675f\u4e0d\u4f1a\u6e05\u9664\u6cbb\u7597\u9488\u5e26\u6765\u7684\u6548\u679c\uff0c\u4e14\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ef\u4ee5\u53e0\u52a0\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/ct_regshot.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout healthshot ct regen"
+    },
+    {
+      "name": "ct_resshot",
+      "title": "ct resshot",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/ct_resshot.cfg.",
+      "commands": [
+        "css_give @ct healthshot",
+        "healthshot_healthboost_time 20",
+        "healthshot_health 25",
+        "healthshot_healthboost_damage_multiplier 0.8",
+        "healthshot_healthboost_speed_multiplier 100",
+        "say \u672c\u56de\u5408CT\u65b9\u88ab\u7ed9\u4e88\u6297\u6027\u9488\uff1a\u4f7f\u7528\u4e4b\u540e\u56de\u590d25\u70b9\u8840\u91cf\uff0c\u5e76\u5728\u63a5\u4e0b\u6765\u768420\u79d2\u5185\uff0c\u83b7\u5f97\u989d\u591620%\u514d\u4f24\u3002",
+        "say \u9700\u8981\u6ce8\u610f\uff0c\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ea\u80fd\u6301\u7eed\u5230\u6301\u7eed\u65f6\u95f4\u7ed3\u675f\u6216\u73a9\u5bb6\u6b7b\u4ea1\uff0c\u56de\u5408\u7ed3\u675f\u4e0d\u4f1a\u6e05\u9664\u6cbb\u7597\u9488\u5e26\u6765\u7684\u6548\u679c\uff0c\u4e14\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ef\u4ee5\u53e0\u52a0\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/ct_resshot.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout healthshot ct resist"
+    },
+    {
+      "name": "cz75",
+      "title": "cz75",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/cz75.cfg.",
+      "commands": [
+        "mp_buytime 30",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_cz75a",
+        "mp_t_default_primary weapon_cz75a",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_pistols -1",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_smgs -1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528CZ75>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/cz75.cfg",
+        "rawCommands=11",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_cz75a; /loadout allow -1 -1 -1 -1 5"
+    },
+    {
+      "name": "deagle",
+      "title": "deagle",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/deagle.cfg.",
+      "commands": [
+        "mp_buytime 30",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_secondary weapon_deagle",
+        "mp_t_default_secondary weapon_deagle",
+        "mp_free_armor 2",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u6c99\u6f20\u4e4b\u9e70>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/deagle.cfg",
+        "rawCommands=6",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all secondary weapon_deagle; /loadout armor all 2"
+    },
+    {
+      "name": "decoy",
+      "title": "decoy",
+      "category": "grenade",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/decoy.cfg.",
+      "commands": [
+        "mp_global_damage_per_second 99",
+        "ammo_grenade_limit_total 10",
+        "ammo_grenade_limit_default 2",
+        "sv_infinite_ammo 1",
+        "mp_weapons_allow_heavy 1",
+        "mp_weapons_allow_pistols 1",
+        "mp_weapons_allow_rifles 1",
+        "mp_weapons_allow_smgs 1",
+        "mp_weapons_allow_zeus 0",
+        "mp_buytime 0",
+        "mp_buy_during_immunity 1",
+        "mp_ct_default_grenades weapon_decoy",
+        "mp_t_default_grenades weapon_decoy",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u8bf1\u9975\u5f39> \u5168\u4f53\u73a9\u5bb6\u4ec5\u62e5\u67091HP\u7684\u751f\u547d\u4e0a\u9650\u3002\u4f7f\u7528\u4f60\u7684\u8bf1\u9975\u5f39\u7838\u6b7b\u5bf9\u9762\uff01\u800c\u4e14\u522b\u7838\u5230\u961f\u53cb..."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/decoy.cfg",
+        "rawCommands=14",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "default_settings",
+      "title": "default settings",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/default_settings.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/default_settings.cfg",
+        "rawCommands=1",
+        "archived_legacy_cfg",
+        "contains_exec_reference",
+        "contains_subclass_change",
+        "alias_lines_stripped"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "default",
+      "title": "default",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/default.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/default.cfg",
+        "rawCommands=162",
+        "archived_legacy_cfg",
+        "contains_css_plugins",
+        "contains_exec_reference",
+        "contains_client_bind",
+        "contains_sv_cheats",
+        "contains_host_timescale",
+        "contains_ent_fire",
+        "contains_map_setbombradius",
+        "contains_subclass_change",
+        "alias_lines_stripped"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "demo",
+      "title": "demo",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/demo.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/demo.cfg",
+        "rawCommands=4",
+        "archived_legacy_cfg",
+        "contains_client_bind",
+        "alias_lines_stripped"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "dfplay",
+      "title": "dfplay",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/dfplay.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/dfplay.cfg",
+        "rawCommands=126",
+        "archived_legacy_cfg",
+        "contains_exec_reference",
+        "contains_client_bind",
+        "contains_sv_cheats",
+        "contains_host_timescale",
+        "contains_ent_fire",
+        "contains_map_setbombradius",
+        "contains_subclass_change",
+        "alias_lines_stripped"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "dm_bot",
+      "title": "Bot DM",
+      "category": "legacy",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/dm_bot.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "mp_limitteams 10",
+        "custom_bot_difficulty 5",
+        "bot_difficulty 3",
+        "bot_kick",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_add_ct",
+        "bot_randombuy 1",
+        "mp_respawn_immunitytime 1.5",
+        "bot_allow_snipers 1",
+        "mp_buy_during_immunity 0",
+        "bot_allow_machine_guns 1",
+        "bot_allow_pistols 1",
+        "bot_allow_rifles 1",
+        "bot_allow_rogues 1",
+        "bot_allow_shotguns 1",
+        "bot_allow_sub_machine_guns 1",
+        "healthshot_health 100",
+        "mp_teammates_are_enemies 1",
+        "mp_buytime 1000",
+        "mp_damage_scale_t_head 1.000000",
+        "mp_damage_scale_t_body 1.000000",
+        "mp_damage_scale_ct_head 1.000000",
+        "mp_damage_scale_ct_body 1.000000"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/dm_bot.cfg",
+        "rawCommands=32",
+        "contains_exec_reference",
+        "contains_sv_cheats",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "duel_awp",
+      "title": "Duel AWP",
+      "category": "duel",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/duel_awp.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "mp_round_restart_delay 1",
+        "mp_ct_default_primary weapon_awp",
+        "mp_t_default_primary weapon_awp",
+        "mp_freezetime 1",
+        "mp_respawn_immunitytime 1",
+        "mp_maxrounds 49",
+        "mp_free_armor 2",
+        "mp_t_default_grenades weapon_flashbang weapon_hegrenade weapon_molotov weapon_smokegrenade",
+        "mp_ct_default_grenades weapon_flashbang weapon_hegrenade weapon_molotov weapon_smokegrenade",
+        "sv_full_alltalk true",
+        "mp_weapons_allow_pistols 1",
+        "say \u72d9\u51fb\u51b3\u6597\uff1a\u5f53\u524d\u83b7\u80dc\u6761\u4ef6\u4e3a\uff1a\u9996\u5148\u83b7\u5f97\u7b2c25\u5206\u7684\u73a9\u5bb6\u83b7\u80dc\u3002",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_pistols 1",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_smgs -1"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/duel_awp.cfg",
+        "rawCommands=17",
+        "contains_exec_reference",
+        "contains_sv_cheats",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "duel_guns",
+      "title": "duel guns",
+      "category": "duel",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/duel_guns.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/duel_guns.cfg",
+        "rawCommands=0",
+        "archived_legacy_cfg",
+        "contains_exec_reference",
+        "alias_lines_stripped"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "duel_pistol",
+      "title": "duel pistol",
+      "category": "duel",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/duel_pistol.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "mp_round_restart_delay 1",
+        "mp_ct_default_secondary weapon_usp_silencer",
+        "mp_t_default_secondary weapon_p250",
+        "mp_freezetime 1",
+        "mp_respawn_immunitytime 1",
+        "mp_maxrounds 49",
+        "mp_free_armor 1",
+        "mp_t_default_grenades weapon_flashbang weapon_hegrenade weapon_molotov weapon_smokegrenade",
+        "mp_ct_default_grenades weapon_flashbang weapon_hegrenade weapon_molotov weapon_smokegrenade",
+        "sv_full_alltalk true",
+        "say \u624b\u67aa\u51b3\u6597\uff1a\u5f53\u524d\u83b7\u80dc\u6761\u4ef6\u4e3a\uff1a\u9996\u5148\u83b7\u5f97\u7b2c25\u5206\u7684\u73a9\u5bb6\u83b7\u80dc\u3002",
+        "mp_weapons_allow_rifles 1",
+        "mp_weapons_allow_pistols -1",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_smgs -1"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/duel_pistol.cfg",
+        "rawCommands=16",
+        "contains_exec_reference",
+        "contains_sv_cheats",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "duel_rifle",
+      "title": "duel rifle",
+      "category": "duel",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/duel_rifle.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "mp_round_restart_delay 1",
+        "mp_ct_default_primary weapon_ak47",
+        "mp_t_default_primary weapon_ak47",
+        "mp_ct_default_secondary weapon_deagle",
+        "mp_t_default_secondary weapon_deagle",
+        "mp_freezetime 2",
+        "mp_respawn_immunitytime 1",
+        "mp_maxrounds 49",
+        "mp_free_armor 2",
+        "mp_t_default_grenades weapon_flashbang weapon_hegrenade weapon_molotov weapon_smokegrenade",
+        "mp_ct_default_grenades weapon_flashbang weapon_hegrenade weapon_molotov weapon_smokegrenade",
+        "sv_full_alltalk true",
+        "say \u6b65\u67aa\u51b3\u6597\uff1a\u5f53\u524d\u83b7\u80dc\u6761\u4ef6\u4e3a\uff1a\u9996\u5148\u83b7\u5f97\u7b2c25\u5206\u7684\u73a9\u5bb6\u83b7\u80dc\u3002",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_pistols -1",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_smgs -1"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/duel_rifle.cfg",
+        "rawCommands=18",
+        "contains_exec_reference",
+        "contains_sv_cheats",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "elec",
+      "title": "elec",
+      "category": "legacy",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/elec.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "cl_versus_intro 0",
+        "sv_infinite_ammo 1",
+        "sv_enablebunnyhopping 1",
+        "sv_autobunnyhopping 1",
+        "sv_airaccelerate 9999",
+        "sv_maxvelocity 9999",
+        "sv_staminajumpcost 0",
+        "sv_staminalandcost 0",
+        "say [Grass 's Modifirers] <\u53ea\u5141\u8bb8\u4f7f\u7528\u7535\u51fb\u67aa\u548c\u8fd1\u6218\u6b66\u5668> \u7535\uff01\u7535\u51fb\u67aa\u4ec5\u9700\u975e\u5e38\u77ed\u7684\u65f6\u95f4\u8fdb\u884c\u5145\u80fd\uff0c\u5f00\u542f\u65e0\u9650\u8fde\u8df3\uff01\uff08\u6309\u4f4f\u7a7a\u683c\uff09"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/elec.cfg",
+        "rawCommands=10",
+        "contains_sv_cheats"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "eleclow",
+      "title": "eleclow",
+      "category": "legacy",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/eleclow.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "cl_versus_intro 0",
+        "sv_infinite_ammo 1",
+        "say [Grass 's Modifirers] <\u4ec5\u5141\u8bb8\u4f7f\u7528\u7535\u51fb\u67aa\u548c\u8fd1\u6218\u6b66\u5668> \u7535\uff01\u7535\u51fb\u67aa\u4ec5\u9700\u975e\u5e38\u77ed\u7684\u65f6\u95f4\u8fdb\u884c\u5145\u80fd\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/eleclow.cfg",
+        "rawCommands=4",
+        "contains_sv_cheats"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "fireandnade",
+      "title": "Fire And Nade",
+      "category": "grenade",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/fireandnade.cfg.",
+      "commands": [
+        "sv_hegrenade_damage_multiplier 0.25",
+        "inferno_damage 30",
+        "say <\u53ea\u5141\u8bb8\u4f7f\u7528\u71c3\u70e7\u74f6\u3001\u70df\u96fe\u5f39\u548c\u9ad8\u7206\u624b\u96f7> \u71c3\u70e7\u74f6\u7684\u4f24\u5bb3\u6298\u51cf25%\uff0c\u624b\u96f7\u7684\u4f24\u5bb3\u6298\u51cf75%\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/fireandnade.cfg",
+        "rawCommands=3",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod grenade-damage 0.25 30"
+    },
+    {
+      "name": "fly",
+      "title": "Fly",
+      "category": "movement",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/fly.cfg.",
+      "commands": [
+        "sv_falldamage_scale 0",
+        "sv_jump_impulse 600",
+        "say [Grass 's Modifirers] <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u98de\u8d77\u6765! \u6240\u6709\u73a9\u5bb6\u7684\u8df3\u8dc3\u80fd\u529b\u7ffb\u500d,\u5e76\u4e14\u4e0d\u4f1a\u53d7\u5230\u4efb\u4f55\u6454\u843d\u4f24\u5bb3."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/fly.cfg",
+        "rawCommands=3",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move fall 0; /move jump 600"
+    },
+    {
+      "name": "flyshoot",
+      "title": "Fly Shoot",
+      "category": "movement",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/flyshoot.cfg.",
+      "commands": [
+        "weapon_accuracy_nospread true",
+        "sv_falldamage_scale 0",
+        "sv_jump_impulse 600",
+        "say [Grass 's Modifirers] <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u98de\u8d77\u6765! \u6240\u6709\u73a9\u5bb6\u7684\u8df3\u8dc3\u80fd\u529b\u7ffb\u500d,\u6b66\u5668\u5f39\u9053\u7edd\u5bf9\u7cbe\u51c6,\u5e76\u4e14\u4e0d\u4f1a\u53d7\u5230\u4efb\u4f55\u6454\u843d\u4f24\u5bb3."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/flyshoot.cfg",
+        "rawCommands=4",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move fall 0; /move jump 600; /acc all 0 0"
+    },
+    {
+      "name": "headshot",
+      "title": "Headshot",
+      "category": "damage",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/headshot.cfg.",
+      "commands": [
+        "mp_damage_headshot_only true",
+        "say <\u7981\u6b62\u4f7f\u7528\u9ad8\u7206\u624b\u96f7\u3001\u71c3\u70e7\u74f6/\u71c3\u70e7\u5f39> \u7206\u5934\u6a21\u5f0f\uff01\u73a9\u5bb6\u7684\u5b50\u5f39\u4ec5\u80fd\u901a\u8fc7\u7206\u5934\u9020\u6210\u4f24\u5bb3\u3002\uff08\u7535\u51fb\u67aa\u4e0d\u53d7\u5f71\u54cd\uff09"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/headshot.cfg",
+        "rawCommands=2",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod headshot 1"
+    },
+    {
+      "name": "highgravity",
+      "title": "High Gravity",
+      "category": "movement",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/highgravity.cfg.",
+      "commands": [
+        "sv_gravity 1600.000000",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u8d85\u7ea7\u91cd\u529b\uff01\u91cd\u529b\u589e\u52a0\uff0c\u4f1a\u5f71\u54cd\u73a9\u5bb6\u7684\u8df3\u8dc3\u9ad8\u5ea6\uff0c\u6454\u843d\u4f24\u5bb3\uff0c\u4ee5\u53ca\u9053\u5177\u7684\u6295\u63b7\u8f68\u8ff9."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/highgravity.cfg",
+        "rawCommands=2",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move gravity 1600"
+    },
+    {
+      "name": "huabing",
+      "title": "huabing",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/huabing.cfg.",
+      "commands": [
+        "sv_friction 0",
+        "sv_accelerate 100",
+        "ragdoll_friction_scale 0",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u6ed1\uff01\u4e16\u754c\u6469\u64e6\u529b\u8bbe\u5b9a\u4e3a0. \u3010\u8be6\u7ec6\u4fe1\u606f\u8bf7\u53c2\u9605\u63a7\u5236\u53f0\u3011"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/huabing.cfg",
+        "rawCommands=4",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move friction 0"
+    },
+    {
+      "name": "hugechicken",
+      "title": "hugechicken",
+      "category": "legacy",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/hugechicken.cfg.",
+      "commands": [
+        "sv_minimum_desired_chicken_count 150",
+        "ent_fire chicken setscale 40",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u901a\u5929\u5de8\u9e21\uff01\u5730\u56fe\u91cc\u751f\u6210\u5c0f\u9e21\u7684\u6570\u91cf\u589e\u591a\uff0c\u4e14\u6a21\u578b\u5927\u5e45\u589e\u52a0\uff0c\u78b0\u649e\u4f53\u79ef\u589e\u5927\uff0c\u4f46\u4e0d\u7b26\u5408\u6a21\u578b\u7684\u5927\u5c0f\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/hugechicken.cfg",
+        "rawCommands=3",
+        "contains_ent_fire"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "huohai",
+      "title": "Fire Sea",
+      "category": "grenade",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/huohai.cfg.",
+      "commands": [
+        "inferno_damage 30",
+        "inferno_initial_spawn_interval 0.001",
+        "inferno_max_range 500",
+        "inferno_max_range_ct 500",
+        "inferno_max_flames 128",
+        "say <\u53ea\u5141\u8bb8\u4f7f\u7528\u71c3\u70e7\u74f6/\u71c3\u70e7\u5f39>\u832b\u832b\u706b\u6d77! \u71c3\u70e7\u74f6\u4e0e\u71c3\u70e7\u5f39\u7684\u8303\u56f4\u6269\u5927\u6570\u500d\uff0c\u4f24\u5bb3\u964d\u4f4e25%. \u3010\u8be6\u7ec6\u4fe1\u606f\u8bf7\u53c2\u9605\u63a7\u5236\u53f0\u3011"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/huohai.cfg",
+        "rawCommands=6"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "knife",
+      "title": "Knife",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/knife.cfg.",
+      "commands": [
+        "mp_buytime 0.01",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_deagle",
+        "mp_t_default_primary weapon_deagle",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy 1",
+        "mp_weapons_allow_pistols 1",
+        "mp_weapons_allow_rifles 1",
+        "mp_weapons_allow_smgs 1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u8fd1\u6218\u6b66\u5668>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/knife.cfg",
+        "rawCommands=11",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout buy 0.01 0; /loadout allow 1 1 1 1 5"
+    },
+    {
+      "name": "knifeking",
+      "title": "knifeking",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/knifeking.cfg.",
+      "commands": [
+        "sv_hegrenade_radius_multiplier 1",
+        "sv_staminamax 0",
+        "sv_hegrenade_damage_multiplier 0.0875",
+        "mp_damage_scale_ct_head 0.0875",
+        "mp_damage_scale_ct_body 0.0875",
+        "mp_damage_scale_t_head 0.0875",
+        "mp_damage_scale_t_body 0.0875",
+        "inferno_damage 3.5",
+        "mp_weapons_allow_zeus 0",
+        "say <\u7981\u6b62\u4f7f\u7528\u7535\u51fb\u67aa> \u3010\u5251\u5723\u3011\u73a9\u5bb6\u7684\u8010\u529b\u56de\u590d\u901f\u5ea6\u6781\u5feb\uff0c\u9664\u53d7\u5230\u8fd1\u6218\u6b66\u5668\u548c\u73af\u5883\u7684\u4f24\u5bb3\u5916\uff0c\u73a9\u5bb6\u53d7\u5230\u7684\u4f24\u5bb3\u964d\u4f4e92.5%\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/knifeking.cfg",
+        "rawCommands=10"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "laoda",
+      "title": "laoda",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/laoda.cfg.",
+      "commands": [
+        "sv_hegrenade_damage_multiplier 1",
+        "sv_infinite_ammo 1",
+        "inferno_damage 5",
+        "mp_damage_scale_t_head 0.100000",
+        "mp_damage_scale_t_body 0.100000",
+        "mp_damage_scale_ct_head 0.100000",
+        "mp_damage_scale_ct_body 0.100000",
+        "say <\u7981\u6b62\u4f7f\u7528\u8fd1\u6218\u6b66\u5668\u4ee5\u53ca\u7535\u51fb\u67aa> \u7262\u5927! \u672c\u56de\u5408\u9664\u4e86\u624b\u96f7\u4f24\u5bb3\u4e0d\u53d8\u4e4b\u5916\uff0c\u6240\u6709\u73a9\u5bb6\u9020\u6210\u7684\u4f24\u5bb3\u5747\u964d\u4f4e90%."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/laoda.cfg",
+        "rawCommands=8",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod damage all 0.1 0.1; /mod grenade-damage 1 5"
+    },
+    {
+      "name": "laoda2",
+      "title": "laoda2",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/laoda2.cfg.",
+      "commands": [
+        "sv_hegrenade_radius_multiplier 1145",
+        "sv_hegrenade_damage_multiplier 0.35",
+        "sv_infinite_ammo 1",
+        "inferno_damage 5",
+        "mp_damage_scale_t_head 0.100000",
+        "mp_damage_scale_t_body 0.100000",
+        "mp_damage_scale_ct_head 0.100000",
+        "mp_damage_scale_ct_body 0.100000",
+        "say <\u7981\u6b62\u4f7f\u7528\u7535\u51fb\u67aa> \u7262\u5927II \u672c\u56de\u5408\u73a9\u5bb6\u7684\u624b\u96f7\u4f24\u5bb3\u964d\u4f4e65%\uff0c\u5176\u4f59\u4f24\u5bb3\u964d\u4f4e95%\u3002\u4f46\u82e5\u624b\u96f7\u7206\u70b8\u65f6\uff0c\u4e0e\u73a9\u5bb6\u95f4\u6ca1\u6709\u5899\u4f53\u963b\u9694\uff0c\u65e0\u8bba\u79bb\u5f97\u591a\u8fdc\uff0c\u73a9\u5bb6\u90fd\u4f1a\u53d7\u5230\u5168\u989d\u4f24\u5bb3\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/laoda2.cfg",
+        "rawCommands=9",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod damage all 0.1 0.1; /mod grenade-damage 0.35 5"
+    },
+    {
+      "name": "lesscash",
+      "title": "Less Cash",
+      "category": "economy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/lesscash.cfg.",
+      "commands": [
+        "cash_player_bomb_defused 225",
+        "cash_player_bomb_planted 225",
+        "cash_player_killed_enemy_default 225",
+        "cash_player_killed_enemy_factor 0.75",
+        "cash_player_killed_teammate -225",
+        "cash_player_rescued_hostage 750",
+        "cash_team_bonus_shorthanded 0",
+        "cash_team_elimination_bomb_map 2438",
+        "cash_team_loser_bonus 1050",
+        "cash_team_loser_bonus_consecutive_rounds 375",
+        "cash_team_per_dead_enemy 38",
+        "cash_team_planted_bomb_but_defused 450",
+        "cash_team_terrorist_win_bomb 2625",
+        "cash_team_win_by_defusing_bomb 2625",
+        "cash_team_win_by_hostage_rescue 2175",
+        "cash_team_win_by_time_running_out_bomb 2438",
+        "cash_team_win_by_time_running_out_hostage 2438",
+        "cash_team_winner_bonus_consecutive_rounds 0"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/lesscash.cfg",
+        "rawCommands=18"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "lesslesscash",
+      "title": "Very Low Cash",
+      "category": "economy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/lesslesscash.cfg.",
+      "commands": [
+        "cash_player_bomb_defused 150",
+        "cash_player_bomb_planted 150",
+        "cash_player_killed_enemy_default 150",
+        "cash_player_killed_enemy_factor 0.5",
+        "cash_player_killed_teammate -150",
+        "cash_player_rescued_hostage 500",
+        "cash_team_bonus_shorthanded 0",
+        "cash_team_elimination_bomb_map 1625",
+        "cash_team_loser_bonus 700",
+        "cash_team_loser_bonus_consecutive_rounds 250",
+        "cash_team_per_dead_enemy 25",
+        "cash_team_planted_bomb_but_defused 300",
+        "cash_team_terrorist_win_bomb 1750",
+        "cash_team_win_by_defusing_bomb 1750",
+        "cash_team_win_by_hostage_rescue 1450",
+        "cash_team_win_by_time_running_out_bomb 1625",
+        "cash_team_win_by_time_running_out_hostage 1625",
+        "cash_team_winner_bonus_consecutive_rounds 0"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/lesslesscash.cfg",
+        "rawCommands=18"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "littlecash",
+      "title": "Tiny Cash",
+      "category": "economy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/littlecash.cfg.",
+      "commands": [
+        "cash_player_bomb_defused 75",
+        "cash_player_bomb_planted 75",
+        "cash_player_killed_enemy_default 75",
+        "cash_player_killed_enemy_factor 0.25",
+        "cash_player_killed_teammate -75",
+        "cash_player_rescued_hostage 250",
+        "cash_team_bonus_shorthanded 0",
+        "cash_team_elimination_bomb_map 813",
+        "cash_team_loser_bonus 350",
+        "cash_team_loser_bonus_consecutive_rounds 125",
+        "cash_team_per_dead_enemy 13",
+        "cash_team_planted_bomb_but_defused 150",
+        "cash_team_terrorist_win_bomb 875",
+        "cash_team_win_by_defusing_bomb 875",
+        "cash_team_win_by_hostage_rescue 725",
+        "cash_team_win_by_time_running_out_bomb 813",
+        "cash_team_win_by_time_running_out_hostage 813",
+        "cash_team_winner_bonus_consecutive_rounds 0"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/littlecash.cfg",
+        "rawCommands=18"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "lowgravity",
+      "title": "Low Gravity",
+      "category": "movement",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/lowgravity.cfg.",
+      "commands": [
+        "sv_gravity 200",
+        "sv_falldamage_scale 0",
+        "ragdoll_gravity_scale -1",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u829c\u6e56\uff01\u91cd\u529b\u5927\u5e45\u964d\u4f4e\uff0c\u4f1a\u5f71\u54cd\u73a9\u5bb6\uff0c\u9053\u5177\uff0c\u6389\u843d\u7269\u7b49\u7684\u79fb\u52a8\u8f68\u8ff9\u3002\u73a9\u5bb6\u4e0d\u4f1a\u53d7\u5230\u4efb\u4f55\u6454\u843d\u4f24\u5bb3.\u3010\u8be6\u7ec6\u4fe1\u606f\u8bf7\u53c2\u9605\u63a7\u5236\u53f0\u3011"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/lowgravity.cfg",
+        "rawCommands=4",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/move gravity 200; /move fall 0"
+    },
+    {
+      "name": "lowgravityshoot",
+      "title": "Low Gravity Shoot",
+      "category": "movement",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/lowgravityshoot.cfg.",
+      "commands": [
+        "weapon_accuracy_nospread true",
+        "sv_gravity 200",
+        "sv_falldamage_scale 0",
+        "ragdoll_gravity_scale -1",
+        "say [Grass 's Modifirers] <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u829c\u6e56\uff01\u91cd\u529b\u5927\u5e45\u964d\u4f4e\uff0c\u4f1a\u5f71\u54cd\u73a9\u5bb6\uff0c\u9053\u5177\u7b49\u7684\u79fb\u52a8\u8f68\u8ff9\u3002\u6b66\u5668\u5f39\u9053\u7edd\u5bf9\u7cbe\u51c6,\u73a9\u5bb6\u4e0d\u4f1a\u53d7\u5230\u4efb\u4f55\u6454\u843d\u4f24\u5bb3."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/lowgravityshoot.cfg",
+        "rawCommands=5"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "m249",
+      "title": "m249",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/m249.cfg.",
+      "commands": [
+        "mp_buytime 30",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_m249",
+        "mp_t_default_primary weapon_m249",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_pistols 1",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_smgs -1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528M249>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/m249.cfg",
+        "rawCommands=11",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_m249; /loadout allow -1 1 -1 -1 5"
+    },
+    {
+      "name": "negev",
+      "title": "negev",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/negev.cfg.",
+      "commands": [
+        "mp_buytime 30",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_negev",
+        "mp_t_default_primary weapon_negev",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_pistols 1",
+        "mp_weapons_allow_rifles 1",
+        "mp_weapons_allow_smgs 1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u5185\u683c\u592b>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/negev.cfg",
+        "rawCommands=11",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_negev; /loadout allow -1 1 1 1 5"
+    },
+    {
+      "name": "nextround",
+      "title": "nextround",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/nextround.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/nextround.cfg",
+        "rawCommands=5",
+        "archived_legacy_cfg",
+        "contains_plant_bomb",
+        "contains_map_setbombradius"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "nohead",
+      "title": "No Headshot",
+      "category": "damage",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/nohead.cfg.",
+      "commands": [
+        "mp_damage_headshot_only false",
+        "mp_damage_scale_ct_head 0",
+        "mp_damage_scale_ct_body 1",
+        "mp_damage_scale_t_head 0",
+        "mp_damage_scale_t_body 1",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u8eab\u4f53\u6a21\u5f0f\uff01\u73a9\u5bb6\u7684\u5b50\u5f39\u4ec5\u4e0d\u80fd\u901a\u8fc7\u7206\u5934\u9020\u6210\u4f24\u5bb3\u3002\uff08\u7535\u51fb\u67aa\u4e0d\u53d7\u5f71\u54cd\uff09"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/nohead.cfg",
+        "rawCommands=6",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod headshot 0; /mod damage all 0 1"
+    },
+    {
+      "name": "nosound",
+      "title": "nosound",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/nosound.cfg.",
+      "commands": [
+        "sv_min_jump_landing_sound 1000000",
+        "sv_maxspeed 135.000000",
+        "sv_disable_radar 1",
+        "mp_roundtime_defuse 2.60000",
+        "mp_c4timer 30",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u73a9\u5bb6\u79fb\u52a8\u901f\u5ea6\u4e0a\u9650\u964d\u4f4e\uff0c\u540c\u65f6\u79fb\u52a8\uff0c\u8df3\u8dc3\u53d1\u51fa\u7684\u58f0\u97f3\u663e\u8457\u964d\u4f4e\uff0c\u56de\u5408\u65f6\u95f4\u9002\u5f53\u5ef6\u957f\uff0cC4\u5f15\u4fe1\u65f6\u95f4\u7f29\u77ed\u3002\u96f7\u8fbe\u5728\u6b64\u73a9\u6cd5\u4e0b\u4e0d\u53ef\u7528\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/nosound.cfg",
+        "rawCommands=6"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "nosoundspeed",
+      "title": "nosoundspeed",
+      "category": "movement",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/nosoundspeed.cfg.",
+      "commands": [
+        "sv_min_jump_landing_sound 1000000",
+        "sv_maxspeed 135.000000",
+        "sv_disable_radar 1",
+        "mp_roundtime_defuse 2.60000",
+        "host_timescale 1.6200000",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u670d\u52a1\u5668\u500d\u901f\u63d0\u9ad8\u3002\u73a9\u5bb6\u79fb\u52a8\u901f\u5ea6\u4e0a\u9650\u964d\u4f4e\uff0c\u540c\u65f6\u79fb\u52a8\uff0c\u8df3\u8dc3\u53d1\u51fa\u7684\u58f0\u97f3\u663e\u8457\u964d\u4f4e\uff0c\u56de\u5408\u65f6\u95f4\u9002\u5f53\u5ef6\u957f\u3002\u96f7\u8fbe\u5728\u6b64\u73a9\u6cd5\u4e0b\u4e0d\u53ef\u7528\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/nosoundspeed.cfg",
+        "rawCommands=6",
+        "contains_host_timescale"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "nospread",
+      "title": "No Spread",
+      "category": "accuracy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/nospread.cfg.",
+      "commands": [
+        "weapon_accuracy_nospread true",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u6b66\u5668\u6563\u5e03\u4e3a0\uff01"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/nospread.cfg",
+        "rawCommands=2"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "nova",
+      "title": "nova",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/nova.cfg.",
+      "commands": [
+        "mp_buytime 30",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_nova",
+        "mp_t_default_primary weapon_nova",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_pistols -1",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_smgs -1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u65b0\u661f>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/nova.cfg",
+        "rawCommands=11",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_nova; /loadout allow -1 -1 -1 -1 5"
+    },
+    {
+      "name": "onlyfire",
+      "title": "onlyfire",
+      "category": "grenade",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/onlyfire.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "cl_versus_intro 0",
+        "sv_infinite_ammo 1",
+        "mp_c4timer 300",
+        "mp_friendlyfire 0",
+        "mp_maxmoney 64795",
+        "mp_startmoney 64795",
+        "sv_alltalk 1"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/onlyfire.cfg",
+        "rawCommands=8",
+        "contains_sv_cheats",
+        "contains_local_path"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "p2000_awp",
+      "title": "p2000 awp",
+      "category": "weapon",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/p2000_awp.cfg.",
+      "commands": [
+        "mp_ct_default_primary weapon_awp",
+        "mp_t_default_primary weapon_awp",
+        "sv_infinite_ammo 2",
+        "mp_weapons_allow_pistols 1",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u6b66......\u7b49\u7b49\uff0c\u8fd9\u5565?> \u6b66\u5668\u6742\u4ea4\uff01\u90a3\u5929\uff0cP2000\u548cAWP\u559d\u9189\u4e86...... (P2000\u4f7f\u7528AWP\u7684\u5b50\u5f39) \u6253\u5f00\u63a7\u5236\u53f0\uff0c\u8f93\u5165 /info_1 \u67e5\u770b\u8be6\u60c5\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/p2000_awp.cfg",
+        "rawCommands=5",
+        "contains_ent_fire",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "practice",
+      "title": "Practice",
+      "category": "practice",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/practice.cfg.",
+      "commands": [
+        "sv_cheats 1",
+        "bot_kick",
+        "sv_grenade_trajectory_prac_pipreview true",
+        "sv_grenade_trajectory_prac_trailtime 3",
+        "sv_infinite_ammo 2",
+        "mp_t_default_grenades weapon_molotov weapon_hegrenade weapon_smokegrenade weapon_flashbang weapon_decoy",
+        "mp_ct_default_grenades weapon_molotov weapon_hegrenade weapon_smokegrenade weapon_flashbang weapon_decoy",
+        "mp_startmoney 160000",
+        "mp_maxmoney 160000",
+        "ammo_grenade_limit_total 5",
+        "mp_buytime 100000",
+        "mp_buy_anywhere 1",
+        "mp_plant_c4_anywhere 1",
+        "mp_respawn_on_death_t 1",
+        "mp_respawn_on_death_ct 1",
+        "mp_roundtime_defuse 45",
+        "mp_warmup_start",
+        "mp_autoteambalance false",
+        "mp_limitteams 10",
+        "mp_solid_teammates 0",
+        "sv_showimpacts_time 15.000000",
+        "sv_regeneration_force_on true",
+        "sv_showimpacts 1",
+        "mp_freezetime 1",
+        "say \u8dd1\u56fe\u8bad\u7ec3\uff01\u670d\u52a1\u5668\u521d\u59cb\u5316\u5df2\u7ecf\u5b8c\u6bd5\uff0c\u5373\u5c06\u91cd\u542f..."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/practice.cfg",
+        "rawCommands=25",
+        "contains_exec_reference",
+        "contains_client_bind",
+        "contains_sv_cheats",
+        "contains_ent_fire",
+        "contains_subclass_change",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "r8",
+      "title": "r8",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/r8.cfg.",
+      "commands": [
+        "mp_buytime 30",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_revolver",
+        "mp_t_default_primary weapon_revolver",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_pistols -1",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_smgs -1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528R8\u5de6\u8f6e\u624b\u67aa>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/r8.cfg",
+        "rawCommands=11",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_revolver; /loadout allow -1 -1 -1 -1 5"
+    },
+    {
+      "name": "relallplugins",
+      "title": "Reload All Plugins Archive",
+      "category": "system",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/relallplugins.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/relallplugins.cfg",
+        "rawCommands=0",
+        "archived_legacy_cfg",
+        "contains_css_plugins"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "relplugins",
+      "title": "Reload Plugins Archive",
+      "category": "system",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/relplugins.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/relplugins.cfg",
+        "rawCommands=0",
+        "archived_legacy_cfg",
+        "contains_css_plugins"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "rich",
+      "title": "Rich Cash",
+      "category": "economy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/rich.cfg.",
+      "commands": [
+        "mp_afterroundmoney 10000",
+        "mp_maxmoney 160000",
+        "mp_startmoney 99999",
+        "mp_buytime 9999",
+        "mp_buy_anywhere 1",
+        "say \u89e3\u653e\u7ecf\u6d4e\u4ee5\u53ca\u8d2d\u4e70\u9650\u5236\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/rich.cfg",
+        "rawCommands=6"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "sawedoff",
+      "title": "sawedoff",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/sawedoff.cfg.",
+      "commands": [
+        "mp_buytime 30",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_sawedoff",
+        "mp_t_default_primary weapon_sawedoff",
+        "mp_free_armor 2",
+        "mp_weapons_allow_pistols 1",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u622a\u77ed\u9730\u5f39\u67aa>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/sawedoff.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_sawedoff; /loadout allow -1 1 -1 -1 5"
+    },
+    {
+      "name": "smallman",
+      "title": "smallman",
+      "category": "legacy",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/smallman.cfg.",
+      "commands": [
+        "ent_fire player setscale 0.5",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u73a9\u5bb6\u6a21\u578b\u548c\u78b0\u649e\u4f53\u79ef\u53d8\u5c0f,\u4f46\u5176\u4ed6\u6240\u6709\u5c5e\u6027\u5747\u4e0d\u53d8."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/smallman.cfg",
+        "rawCommands=2",
+        "contains_ent_fire"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "smoke",
+      "title": "smoke",
+      "category": "grenade",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/smoke.cfg.",
+      "commands": [
+        "mp_ct_default_secondary weapon_usp_sliencer",
+        "mp_t_default_secondary weapon_usp_sliencer",
+        "mp_ct_default_primary weapon_mp5sd",
+        "mp_t_default_primary weapon_mp5sd",
+        "sv_infinite_ammo 2",
+        "mp_ct_default_grenades weapon_hegrenade weapon_smokegrenade",
+        "mp_t_default_grenades weapon_hegrenade weapon_smokegrenade",
+        "sv_hegrenade_damage_multiplier 0.13",
+        "sv_hegrenade_radius_multiplier 1",
+        "mp_buytime 0",
+        "mp_buy_during_immunity 1",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u7ed9\u4e88\u7684\u7269\u54c1> \u3010\u70df\u96fe\u7f2d\u7ed5\u3011\u70df\u96fe\u5f39\u3001\u624b\u96f7\u7684\u6570\u91cf\u65e0\u9650\uff0c\u4f46\u624b\u96f7\u7206\u70b8\u4f24\u5bb3\u5927\u5e45\u964d\u4f4e\u3002\u73a9\u5bb6\u5907\u5f39\u65e0\u9650\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/smoke.cfg",
+        "rawCommands=12"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "speedgame",
+      "title": "speedgame",
+      "category": "movement",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/speedgame.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "cl_versus_intro 0",
+        "bot_kick",
+        "sv_alltalk 1",
+        "mp_c4timer 300",
+        "mp_friendlyfire 0",
+        "mp_maxmoney 64795",
+        "mp_startmoney 64795",
+        "mp_freezetime 25",
+        "sv_infinite_ammo 2",
+        "mp_roundtime_defuse 5",
+        "mp_buytime 99999",
+        "host_timescale 2.5",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> SPEEEEEEEED! \u6e38\u620f\u500d\u901f\u63d0\u9ad8\uff0c\u5907\u5f39\u65e0\u9650\u3002\u76f8\u5e94\u7684\u65f6\u95f4\u4e5f\u5f97\u5230\u4e86\u5ef6\u957f(\u4f8b\u5982\u56de\u5408\u65f6\u95f4\uff0c\u70b8\u5f39\u5f15\u7206\u65f6\u95f4\u7b49\uff09"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/speedgame.cfg",
+        "rawCommands=14",
+        "contains_sv_cheats",
+        "contains_host_timescale"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "spread",
+      "title": "High Spread",
+      "category": "accuracy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/spread.cfg.",
+      "commands": [
+        "weapon_accuracy_forcespread 0.2",
+        "say \u6b66\u5668\u57fa\u7840\u6563\u5e03\u6269\u5927\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/spread.cfg",
+        "rawCommands=2"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "ssg_deagle",
+      "title": "ssg deagle",
+      "category": "weapon",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/ssg_deagle.cfg.",
+      "commands": [
+        "mp_buytime 0.01",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_secondary weapon_deagle",
+        "mp_t_default_secondary weapon_deagle",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_pistols -1",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_smgs -1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528SSG 08> \u6b66\u5668\u6742\u4ea4\uff01\u771f\u6b63\u7684\u5c0f\u72d9\uff01\uff08SSG 08 \u4f7f\u7528 \u6c99\u6f20\u4e4b\u9e70 \u7684\u5b50\u5f39\uff09\u6253\u5f00\u63a7\u5236\u53f0\uff0c\u8f93\u5165 /info_1 \u67e5\u770b\u8be6\u60c5\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/ssg_deagle.cfg",
+        "rawCommands=11",
+        "contains_ent_fire",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "ssg",
+      "title": "ssg",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/ssg.cfg.",
+      "commands": [
+        "mp_buytime 0.01",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_ssg_08",
+        "mp_t_default_primary weapon_ssg_08",
+        "mp_free_armor 2",
+        "mp_weapons_allow_heavy -1",
+        "mp_weapons_allow_pistols -1",
+        "mp_weapons_allow_rifles -1",
+        "mp_weapons_allow_smgs -1",
+        "mp_weapons_allow_zeus 5",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528SSG 08>"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/ssg.cfg",
+        "rawCommands=11",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_ssg_08; /loadout allow -1 -1 -1 -1 5"
+    },
+    {
+      "name": "stamina",
+      "title": "stamina",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/stamina.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/stamina.cfg",
+        "rawCommands=1",
+        "archived_legacy_cfg"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "t_healshot",
+      "title": "t healshot",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/t_healshot.cfg.",
+      "commands": [
+        "css_give @t healthshot",
+        "healthshot_healthboost_time 1",
+        "healthshot_health 100",
+        "healthshot_healthboost_damage_multiplier 1",
+        "healthshot_healthboost_speed_multiplier 100",
+        "say \u672c\u56de\u5408T\u65b9\u88ab\u7ed9\u4e88\u6cbb\u7597\u9488\uff1a\u4f7f\u7528\u4e4b\u540e\uff0c\u751f\u547d\u503c\u6062\u590d\u81f3100\u3002",
+        "say \u9700\u8981\u6ce8\u610f\uff0c\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ea\u80fd\u6301\u7eed\u5230\u6301\u7eed\u65f6\u95f4\u7ed3\u675f\u6216\u73a9\u5bb6\u6b7b\u4ea1\uff0c\u56de\u5408\u7ed3\u675f\u4e0d\u4f1a\u6e05\u9664\u6cbb\u7597\u9488\u5e26\u6765\u7684\u6548\u679c\uff0c\u4e14\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ef\u4ee5\u53e0\u52a0\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/t_healshot.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout healthshot t heal"
+    },
+    {
+      "name": "t_immshot",
+      "title": "t immshot",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/t_immshot.cfg.",
+      "commands": [
+        "css_give @t healthshot",
+        "healthshot_healthboost_time 2.59",
+        "healthshot_health 0",
+        "healthshot_healthboost_damage_multiplier 0",
+        "healthshot_healthboost_speed_multiplier 0",
+        "say \u672c\u56de\u5408T\u65b9\u88ab\u7ed9\u4e88\u65e0\u654c\u9488\uff1a\u4f7f\u7528\u4e4b\u540e\u4e0d\u4f1a\u56de\u590d\u8840\u91cf\uff0c\u4f46\u63a5\u4e0b\u6765\u76842.59\u79d2\uff0c\u4e0d\u4f1a\u53d7\u5230\u4f24\u5bb3\u3002",
+        "say \u9700\u8981\u6ce8\u610f\uff0c\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ea\u80fd\u6301\u7eed\u5230\u6301\u7eed\u65f6\u95f4\u7ed3\u675f\u6216\u73a9\u5bb6\u6b7b\u4ea1\uff0c\u56de\u5408\u7ed3\u675f\u4e0d\u4f1a\u6e05\u9664\u6cbb\u7597\u9488\u5e26\u6765\u7684\u6548\u679c\uff0c\u4e14\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ef\u4ee5\u53e0\u52a0\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/t_immshot.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout healthshot t immune"
+    },
+    {
+      "name": "t_regshot",
+      "title": "t regshot",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/t_regshot.cfg.",
+      "commands": [
+        "css_give @t healthshot",
+        "healthshot_healthboost_time 45",
+        "healthshot_health 135",
+        "healthshot_healthboost_damage_multiplier 1",
+        "healthshot_healthboost_speed_multiplier 0.3",
+        "say \u672c\u56de\u5408T\u65b9\u88ab\u7ed9\u4e88\u6062\u590d\u9488\uff1a\u4f7f\u7528\u4e4b\u540e\uff0c\u5728\u63a5\u4e0b\u6765\u768445\u79d2\u5185\uff0c\u6bcf\u79d2\u6062\u590d3\u70b9\u8840\u91cf\uff0c\u751f\u547d\u4e0a\u9650\u4ecd\u4e3a100\u3002",
+        "say \u9700\u8981\u6ce8\u610f\uff0c\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ea\u80fd\u6301\u7eed\u5230\u6301\u7eed\u65f6\u95f4\u7ed3\u675f\u6216\u73a9\u5bb6\u6b7b\u4ea1\uff0c\u56de\u5408\u7ed3\u675f\u4e0d\u4f1a\u6e05\u9664\u6cbb\u7597\u9488\u5e26\u6765\u7684\u6548\u679c\uff0c\u4e14\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ef\u4ee5\u53e0\u52a0\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/t_regshot.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout healthshot t regen"
+    },
+    {
+      "name": "t_resshot",
+      "title": "t resshot",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/t_resshot.cfg.",
+      "commands": [
+        "css_give @t healthshot",
+        "healthshot_healthboost_time 20",
+        "healthshot_health 25",
+        "healthshot_healthboost_damage_multiplier 0.8",
+        "healthshot_healthboost_speed_multiplier 100",
+        "say \u672c\u56de\u5408T\u65b9\u88ab\u7ed9\u4e88\u6297\u6027\u9488\uff1a\u4f7f\u7528\u4e4b\u540e\u56de\u590d25\u70b9\u8840\u91cf\uff0c\u5e76\u5728\u63a5\u4e0b\u6765\u768420\u79d2\u5185\uff0c\u83b7\u5f97\u989d\u591620%\u514d\u4f24\u3002",
+        "say \u9700\u8981\u6ce8\u610f\uff0c\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ea\u80fd\u6301\u7eed\u5230\u6301\u7eed\u65f6\u95f4\u7ed3\u675f\u6216\u73a9\u5bb6\u6b7b\u4ea1\uff0c\u56de\u5408\u7ed3\u675f\u4e0d\u4f1a\u6e05\u9664\u6cbb\u7597\u9488\u5e26\u6765\u7684\u6548\u679c\uff0c\u4e14\u6cbb\u7597\u9488\u7684\u6548\u679c\u53ef\u4ee5\u53e0\u52a0\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/t_resshot.cfg",
+        "rawCommands=7",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout healthshot t resist"
+    },
+    {
+      "name": "testasync",
+      "title": "testasync",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/testasync.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/testasync.cfg",
+        "rawCommands=80",
+        "archived_legacy_cfg",
+        "contains_exec_reference"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "testasync2",
+      "title": "testasync2",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/testasync2.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/testasync2.cfg",
+        "rawCommands=160",
+        "archived_legacy_cfg",
+        "contains_exec_reference",
+        "contains_host_timescale"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "testasync3",
+      "title": "testasync3",
+      "category": "legacy",
+      "riskLevel": "archived",
+      "permission": "archived",
+      "description": "Legacy cfg grass/testasync3.cfg is archived and cannot be executed by /preset.",
+      "commands": [],
+      "resetBeforeApply": false,
+      "notes": [
+        "source=grass/testasync3.cfg",
+        "rawCommands=0",
+        "archived_legacy_cfg"
+      ],
+      "status": "archived",
+      "replacement": ""
+    },
+    {
+      "name": "THROW",
+      "title": "THROW",
+      "category": "grenade",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Converted from legacy cfg grass/THROW.cfg.",
+      "commands": [
+        "sv_cheats true",
+        "cl_versus_intro 0",
+        "sv_infinite_ammo 1",
+        "mp_friendlyfire 0",
+        "mp_maxmoney 99999",
+        "mp_startmoney 800",
+        "inferno_max_range_150",
+        "inferno_max_range_ct 150",
+        "ammo_grenade_limit_total 6",
+        "sv_alltalk 1",
+        "say <\u8ddf\u968f\u540e\u7eed\u73a9\u6cd5\u51b3\u5b9a\u9650\u5236\u6b66\u5668\u9053\u5177> \u73a9\u5bb6\u7684\u6240\u6709\u6295\u63b7\u7269\u65e0\u6570\u91cf\u9650\u5236\uff01"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/THROW.cfg",
+        "rawCommands=11",
+        "contains_sv_cheats"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "tjfr",
+      "title": "tjfr",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/tjfr.cfg.",
+      "commands": [
+        "sv_infinite_ammo 1",
+        "weapon_accuracy_nospread 1",
+        "mp_ct_default_primary weapon_ssg08",
+        "mp_t_default_primary weapon_ssg08",
+        "sv_jump_impulse 500",
+        "sv_falldamage_scale 0",
+        "mp_weapons_allow_pistols 1",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528SSG 08> \u8df3\u72d9\u98de\u4eba\uff01\u73a9\u5bb6\u5b50\u5f39\u6570\u91cf\u65e0\u9650\uff0c\u6b66\u5668\u5f39\u9053\u7edd\u5bf9\u7cbe\u51c6\uff0c\u8df3\u8dc3\u80fd\u529b\u63d0\u5347\uff0c\u91cd\u529b\u964d\u4f4e\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/tjfr.cfg",
+        "rawCommands=8",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/loadout weapon all primary weapon_ssg08; /move jump 500; /move fall 0; /acc all 0 0"
+    },
+    {
+      "name": "vampire",
+      "title": "Vampire",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/vampire.cfg.",
+      "commands": [
+        "mp_damage_vampiric_amount 0.75",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u5438\u8840\u6a21\u5f0f\uff01\u73a9\u5bb6\u4f1a\u56de\u590d\u4ee5\u4efb\u4f55\u65b9\u5f0f\u9020\u6210\u4f24\u5bb3\u503c75%\u7684\u8840\u91cf,"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/vampire.cfg",
+        "rawCommands=2",
+        "migrated_to_feature"
+      ],
+      "status": "migrated",
+      "replacement": "/mod vampire 0.75"
+    },
+    {
+      "name": "voice",
+      "title": "voice",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/voice.cfg.",
+      "commands": [
+        "sv_auto_full_alltalk_during_warmup_half_end true",
+        "sv_alltalk true",
+        "sv_deadtalk true",
+        "sv_full_alltalk true",
+        "sv_show_voip_indicator_for_enemies true",
+        "sv_talk_after_dying_time true",
+        "sv_talk_enemy_dead true",
+        "sv_talk_enemy_living true"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/voice.cfg",
+        "rawCommands=8"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "walktough",
+      "title": "walktough",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/walktough.cfg.",
+      "commands": [
+        "sv_walkable_normal 1",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u4f60\u53ef\u80fd\u4f1a\u88ab\u8def\u4e0a\u7684\u4efb\u4f55\u4e1c\u897f\u5361\u4e00\u4e0b..."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/walktough.cfg",
+        "rawCommands=2"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "yirenchengjunct",
+      "title": "yirenchengjunct",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/yirenchengjunct.cfg.",
+      "commands": [
+        "mp_autoteambalance 0",
+        "mp_limitteams 10",
+        "mp_spectators_max 9",
+        "mp_damage_scale_ct_head 0.09",
+        "mp_damage_scale_ct_body 0.09",
+        "mp_damage_scale_t_head 1.1",
+        "mp_damage_scale_t_body 1.1",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u4e00\u4eba\u6210\u519b\uff01\u72ec\u52c7\u8005\u83b7\u5f9790%\u514d\u4f24\uff0c\u6311\u6218\u8005\u83b7\u5f9710%\u6613\u4f24\u3002\uff08\u5f53\u524dCT\u65b9\u4e3a\u72ec\u52c7\u8005\uff09"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/yirenchengjunct.cfg",
+        "rawCommands=8"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "yirenchengjunt",
+      "title": "yirenchengjunt",
+      "category": "legacy",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/yirenchengjunt.cfg.",
+      "commands": [
+        "mp_autoteambalance 0",
+        "mp_limitteams 10",
+        "mp_spectators_max 9",
+        "mp_damage_scale_t_head 0.09",
+        "mp_damage_scale_t_body 0.09",
+        "mp_damage_scale_ct_head 1.1",
+        "mp_damage_scale_ct_body 1.1",
+        "say <\u6b66\u5668\u9053\u5177\u65e0\u9650\u5236> \u4e00\u4eba\u6210\u519b\uff01\u72ec\u52c7\u8005\u83b7\u5f9790%\u514d\u4f24\uff0c\u6311\u6218\u8005\u83b7\u5f9710%\u6613\u4f24\u3002\uff08\u5f53\u524dT\u65b9\u4e3a\u72ec\u52c7\u8005\uff09"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/yirenchengjunt.cfg",
+        "rawCommands=8"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "zeus",
+      "title": "Zeus",
+      "category": "weapon",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/zeus.cfg.",
+      "commands": [
+        "mp_buytime 20",
+        "mp_buy_anywhere 0",
+        "mp_ct_default_primary weapon_zeus",
+        "mp_t_default_primary weapon_awp",
+        "mp_free_armor 2",
+        "mp_weapons_allow_pistols 1",
+        "mp_buy_allow_guns 0",
+        "say <\u4ec5\u5141\u8bb8\u4f7f\u7528\u5b99\u65afX27\u7535\u51fb\u67aa> \u6ce8\u610f\u8fd9\u4e2a\u8981\u8fdb\u5165\u5546\u5e97\u4e70"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/zeus.cfg",
+        "rawCommands=8"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "zombie",
+      "title": "Zombie",
+      "category": "health",
+      "riskLevel": "playable",
+      "permission": "@css/changemap",
+      "description": "Converted from legacy cfg grass/zombie.cfg.",
+      "commands": [
+        "ammo_grenade_limit_default 1",
+        "ammo_grenade_limit_flashbang 2",
+        "mp_damage_scale_ct_head 0.000000",
+        "mp_damage_scale_ct_body 0.000000",
+        "mp_damage_scale_t_head 0.25",
+        "mp_damage_scale_t_body 0.25",
+        "mp_weapons_allow_zeus 0",
+        "mp_buytime 114514",
+        "mp_buy_anywhere 0",
+        "mp_roundtime_defuse 2.52",
+        "mp_freezetime 25",
+        "cash_player_killed_enemy_default 300",
+        "mp_afterroundmoney 114514",
+        "mp_maxmoney 3300",
+        "mp_damage_vampiric_amount 0",
+        "mp_respawn_on_death_t 1",
+        "mp_respawnwavetime_t 1",
+        "mp_free_armor 2",
+        "mp_respawn_immunitytime 20.000000",
+        "sv_staminamax 0",
+        "mp_buy_allow_guns 239",
+        "mp_c4timer 80",
+        "cash_player_killed_enemy_default 0",
+        "mp_weapons_allow_typecount 1",
+        "sv_enablebunnyhopping 1",
+        "sv_autobunnyhopping 1",
+        "sv_airaccelerate 9999",
+        "sv_maxvelocity 355",
+        "sv_staminajumpcost 0",
+        "sv_staminalandcost 0",
+        "mp_weapons_allow_heavy 1",
+        "mp_buy_allow_grenades true",
+        "mp_give_player_c4 false",
+        "inferno_damage_ct 0.000000",
+        "inferno_damage_t 0.000000",
+        "sv_hegrenade_damage_multiplier 0.000000",
+        "say <T\u65b9\u4ec5\u5efa\u8bae\u4f7f\u7528\u8fd1\u6218\u6b66\u5668\uff0cCT\u65b9\u4e0d\u5141\u8bb8\u4f7f\u7528\u72d9\u51fb\u6b65\u67aa\u4ee5\u53ca\u673a\u67aa\u3002\u53cc\u65b9\u5747\u4e0d\u5141\u8bb8\u8d2d\u4e70\u7535\u51fb\u67aa>\u3010\u751f\u5316\u6a21\u5f0f\u3011CT\u5bf9\u5b50\u5f39\u4f24\u5bb3\u514d\u75ab\u4f46\u53d7\u51fb\u4f1a\u76f8\u5e94\u51cf\u901f\u3002\u5f00\u5c40\u5177\u67093300$\u7528\u6765\u8d2d\u7f6e\u7269\u54c1\uff0c\u6bcf\u79cd\u7269\u54c1\u6700\u591a\u53ea\u80fd\u8d2d\u4e70\u4e00\u6b21\u3002"
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/zombie.cfg",
+        "rawCommands=37",
+        "alias_lines_stripped"
+      ],
+      "status": "active",
+      "replacement": ""
+    },
+    {
+      "name": "gravity_wave",
+      "title": "Gravity Wave",
+      "category": "gravity",
+      "riskLevel": "restricted",
+      "permission": "@css/root",
+      "description": "Merged archive for grass/singravity/1.cfg..36.cfg. First version exposes a root-only entry; full wave timing should be implemented later as plugin logic.",
+      "commands": [
+        "sv_gravity 800",
+        "say [CaorenCup] gravity_wave is archived as a root-only preset; full 36-step wave should become plugin timer logic later."
+      ],
+      "resetBeforeApply": true,
+      "notes": [
+        "source=grass/singravity/1.cfg..36.cfg",
+        "merged_36_cfg_files",
+        "timer_logic_recommended"
+      ],
+      "status": "active",
+      "replacement": ""
+    }
+  ]
+}
