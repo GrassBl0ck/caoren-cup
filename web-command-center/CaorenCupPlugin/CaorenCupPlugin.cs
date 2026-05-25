@@ -23,6 +23,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private readonly HttpClient _http = new();
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
+    private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
     private CaorenConfig _config = new();
@@ -297,6 +298,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
         _currentRound++;
+        RefreshRoundHealthState();
         EnforceTeamAssignments();
         _ = PostEventAsync("round_start", new
         {
@@ -363,18 +365,26 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (attacker!.SteamID == victim!.SteamID) return HookResult.Continue;
         if (@event.DmgHealth <= 0) return HookResult.Continue;
 
+        var victimSteamId = victim.SteamID.ToString();
+        var victimPawn = victim.PlayerPawn?.Value;
+        var victimMaxHealth = Math.Max(100, victimPawn?.MaxHealth ?? 100);
+        var effectiveDamage = EffectiveHealthDamage(victimSteamId, @event.DmgHealth, @event.Health, victimMaxHealth);
+        if (effectiveDamage <= 0) return HookResult.Continue;
+
         var attackerSteamId = attacker.SteamID.ToString();
-        EnsureLocalStats(attackerSteamId, SafePlayerName(attacker)).Damage += @event.DmgHealth;
+        EnsureLocalStats(attackerSteamId, SafePlayerName(attacker)).Damage += effectiveDamage;
 
         _ = PostEventAsync("player_hurt", new
         {
             round = _currentRound,
             attackerSteamId,
             attackerTeam = TeamName(attacker.TeamNum),
-            victimSteamId = victim.SteamID.ToString(),
+            victimSteamId,
             victimTeam = TeamName(victim.TeamNum),
-            damage = @event.DmgHealth,
+            damage = effectiveDamage,
+            rawDamage = @event.DmgHealth,
             health = @event.Health,
+            maxHealth = victimMaxHealth,
             mapName = SafeMapName()
         });
         return HookResult.Continue;
@@ -412,6 +422,10 @@ public sealed class CaorenCupPlugin : BasePlugin
                 var steamId = player.SteamID.ToString();
                 var playerName = SafePlayerName(player);
                 var stats = EnsureLocalStats(steamId, playerName);
+                var pawn = player.PlayerPawn?.Value;
+                var health = Math.Max(0, pawn?.Health ?? 0);
+                var maxHealth = Math.Max(100, pawn?.MaxHealth ?? 100);
+                if (player.PawnIsAlive) _roundHealthBySteamId[steamId] = health;
                 players.Add(new
                 {
                     steamId,
@@ -421,6 +435,8 @@ public sealed class CaorenCupPlugin : BasePlugin
                     deaths = stats.Deaths,
                     assists = stats.Assists,
                     damage = stats.Damage,
+                    health,
+                    maxHealth,
                     isAlive = player.PawnIsAlive
                 });
             }
@@ -431,6 +447,45 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         return players.ToArray();
+    }
+
+    private int EffectiveHealthDamage(string victimSteamId, int rawDamage, int healthAfter, int maxHealth)
+    {
+        if (rawDamage <= 0) return 0;
+        var safeHealthAfter = Math.Max(0, healthAfter);
+        var hasKnownHealth = _roundHealthBySteamId.TryGetValue(victimSteamId, out var knownHealthBefore);
+        var observedHealthBefore = safeHealthAfter + rawDamage;
+        var safeMaxHealth = Math.Max(100, maxHealth);
+        if (!hasKnownHealth)
+        {
+            knownHealthBefore = Math.Min(observedHealthBefore, safeMaxHealth);
+        }
+        else if (safeHealthAfter > 0 && observedHealthBefore > knownHealthBefore && observedHealthBefore <= safeMaxHealth)
+        {
+            knownHealthBefore = observedHealthBefore;
+        }
+
+        var effectiveDamage = Math.Min(rawDamage, Math.Max(0, knownHealthBefore - safeHealthAfter));
+        _roundHealthBySteamId[victimSteamId] = safeHealthAfter;
+        return effectiveDamage;
+    }
+
+    private void RefreshRoundHealthState()
+    {
+        _roundHealthBySteamId.Clear();
+        foreach (var player in Utilities.GetPlayers())
+        {
+            try
+            {
+                if (!IsRealPlayer(player)) continue;
+                var pawn = player.PlayerPawn?.Value;
+                _roundHealthBySteamId[player.SteamID.ToString()] = Math.Max(0, pawn?.Health ?? 0);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Skipping invalid player while refreshing round health state");
+            }
+        }
     }
 
     private async Task BindAsync(CCSPlayerController player, string bindCode, string steamId, string name)
@@ -946,6 +1001,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     }    private void ResetLiveMatchStats(int currentRound)
     {
         _stats.Clear();
+        _roundHealthBySteamId.Clear();
         _currentRound = Math.Max(0, currentRound);
         _scoreCt = 0;
         _scoreT = 0;

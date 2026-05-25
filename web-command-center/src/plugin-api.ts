@@ -200,6 +200,12 @@ const createEmptyMatchStats = () => ({
     equipmentSwing: 0,
     situationSwing: 0,
 });
+
+function nonNegativeInt(value: unknown): number {
+    const n = Math.floor(Number(value || 0));
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
 const requirePluginAuth = (req: any, res: any, next: any) => {
     const token = req.header('x-caoren-plugin-token') || req.query?.token;
     if (!PLUGIN_TOKEN || token !== PLUGIN_TOKEN) return res.status(401).json({ success: false, error: '插件认证失败' });
@@ -432,6 +438,7 @@ function applyRoundStartEvent(session: any, payload: any) {
     roundStats.oneVsRecordedBySteamId = {};
     if (!roundStats.sideBySteamId) roundStats.sideBySteamId = {};
     if (!roundStats.roundStartedSteamIds) roundStats.roundStartedSteamIds = {};
+    roundStats.healthBySteamId = {};
     const players = Array.isArray(payload.players) ? payload.players : [];
     for (const raw of players) {
         const steamId = normalizeSteamId(raw.steamId);
@@ -439,6 +446,7 @@ function applyRoundStartEvent(session: any, payload: any) {
         if (!steamId || (side !== 'CT' && side !== 'T')) continue;
         if (raw.isAlive !== false) roundStats.aliveBySide[side][steamId] = true;
         roundStats.sideBySteamId[steamId] = side;
+        roundStats.healthBySteamId[steamId] = nonNegativeInt(raw.health || raw.maxHealth || 100);
         const player = findPlayerBySteamId(session, steamId);
         if (player) player.team = side;
         if (player && !roundStats.roundStartedSteamIds[steamId]) {
@@ -542,6 +550,7 @@ function getRoundStats(live: any, round: number) {
         firstDeathSeen: false,
         firstDeathVictimSeen: false,
         openingKillRecorded: false,
+        healthBySteamId: {},
     };
     return live.roundStats[round];
 }
@@ -786,9 +795,28 @@ function applyKillEvent(session: any, payload: any) {
 }
 
 function applyDamageEvent(session: any, payload: any) {
+    const live = session.liveGameData;
+    const round = Math.max(1, normalizePluginRound(Number(payload.round || live?.currentRound || 1)));
+    const roundStats = getRoundStats(live, round);
     const attacker = findPlayerBySteamId(session, payload.attackerSteamId);
     const victim = findPlayerBySteamId(session, payload.victimSteamId);
-    const damage = Math.max(0, Number(payload.damage || 0));
+    const victimSteamId = normalizeSteamId(payload.victimSteamId);
+    const rawDamage = nonNegativeInt(payload.rawDamage ?? payload.damage);
+    const reportedDamage = nonNegativeInt(payload.damage);
+    const healthAfter = nonNegativeInt(payload.health);
+    const maxHealth = Math.max(100, nonNegativeInt(payload.maxHealth));
+    const observedHealthBefore = healthAfter + rawDamage;
+    const knownHealthBefore = victimSteamId && typeof roundStats.healthBySteamId?.[victimSteamId] === 'number'
+        ? roundStats.healthBySteamId[victimSteamId]
+        : Math.min(observedHealthBefore, maxHealth);
+    const effectiveHealthBefore = healthAfter > 0 && observedHealthBefore > knownHealthBefore && observedHealthBefore <= maxHealth
+        ? observedHealthBefore
+        : knownHealthBefore;
+    const damage = Math.min(reportedDamage, Math.max(0, effectiveHealthBefore - healthAfter));
+    if (victimSteamId) {
+        if (!roundStats.healthBySteamId) roundStats.healthBySteamId = {};
+        roundStats.healthBySteamId[victimSteamId] = healthAfter;
+    }
     if (!attacker || damage <= 0 || attacker.playerId === victim?.playerId) return;
     const attackerStats = ensurePlayerStats(attacker);
     const attackerSideStats = ensureSideStats(attacker, payload.attackerTeam);
