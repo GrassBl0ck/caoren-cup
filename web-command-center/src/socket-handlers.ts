@@ -22,6 +22,7 @@ import {
     removePlayerFromRosterTeams,
     randomRemainingRoles,
     resetFormalMatchCounters,
+    syncCurrentRoundFromScores,
     updateMatchFinishState,
     clearUndercoverModeState,
     prepareReleasedRoleState,
@@ -386,10 +387,9 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 broadcastState();
             } else if (data.action === 'RESET_FORMAL_MATCH_COUNTERS') {
                 if (session.phase !== GamePhase.LiveGame) return;
-                const rawPluginRound = Math.max(0, Math.floor(Number(session.liveGameData?.rawPluginRound || session.liveGameData?.currentRound || 0)));
-                resetFormalMatchCounters();
+                const rawPluginRound = resetFormalMatchCounters();
                 enqueuePluginCommand('RESET_LIVE_MATCH_STATS', { currentRound: rawPluginRound });
-                notifyMessage('管理员已将当前插件回合视为正式第 1 回合，并重置网页端与插件端战绩。');
+                notifyMessage('管理员已将当前局重置为正式第 1 回合，并重置网页端与插件端战绩。');
                 broadcastState();
             } else if (data.action === 'UPDATE_LIVE_DATA') {
                 if (![GamePhase.LiveGame, GamePhase.PostGameAccusation, GamePhase.Scoreboard].includes(session.phase)) return;
@@ -400,6 +400,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (typeof scoreCT === 'number') session.liveGameData.scoreCT = scoreCT;
                 if (typeof scoreT === 'number') session.liveGameData.scoreT = scoreT;
                 if (typeof round === 'number') session.liveGameData.currentRound = round;
+                syncCurrentRoundFromScores(session.liveGameData);
                 updateMatchFinishState();
                 if (session.phase === GamePhase.Scoreboard) calculateScores(session);
                 broadcastState();

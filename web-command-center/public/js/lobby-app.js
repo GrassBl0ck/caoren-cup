@@ -1602,7 +1602,13 @@ if (window._caorenModifiersEnabled !== true) {
                 const enemy4ks = Number(stats.enemy4ks || 0);
                 const enemy5ks = Number(stats.enemy5ks || 0);
                 const multiKills = enemy2ks + enemy3ks + enemy4ks + enemy5ks;
-                const oneVsX = Number(stats.v1Wins || 0) + Number(stats.v2Wins || 0) + Number(stats.v3Wins || 0) + Number(stats.v4Wins || 0) + Number(stats.v5Wins || 0) + Number(stats.v6Wins || 0);
+                const v1Wins = Number(stats.v1Wins || 0);
+                const v2Wins = Number(stats.v2Wins || 0);
+                const v3Wins = Number(stats.v3Wins || 0);
+                const v4Wins = Number(stats.v4Wins || 0);
+                const v5Wins = Number(stats.v5Wins || 0);
+                const v6Wins = Number(stats.v6Wins || 0);
+                const oneVsX = v1Wins + v2Wins + v3Wins + v4Wins + v5Wins + v6Wins;
                 const headShotKills = Number(stats.headShotKills || stats.head_shot_kills || 0);
                 const flashAssists = Number(stats.flashSuccesses || 0);
                 const tradedDeaths = Number(stats.tradedDeaths || stats.deathsTraded || 0);
@@ -1610,7 +1616,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const kast = hasData ? calculateApproxKast(stats, rounds) : null;
                 const rating = hasData ? calculateApproxRating(stats, rounds, adr) : null;
                 const swing = hasData ? calculateApproxSwing(stats, rounds) : null;
-                return { p, hasData, kills, deaths, assists, entryWins, entryLosses, multiKills, oneVsX, headShotKills, flashAssists, tradedDeaths, adr, kast, rating, swing };
+                return { p, hasData, kills, deaths, assists, entryWins, entryLosses, enemy2ks, enemy3ks, enemy4ks, enemy5ks, multiKills, v1Wins, v2Wins, v3Wins, v4Wins, v5Wins, v6Wins, oneVsX, headShotKills, flashAssists, tradedDeaths, adr, kast, rating, swing };
             }).sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0) || Number(b.swing || 0) - Number(a.swing || 0) || b.kills - a.kills || Number(b.adr || 0) - Number(a.adr || 0));
         }
 
@@ -1630,19 +1636,27 @@ if (window._caorenModifiersEnabled !== true) {
 
         function renderHltvTeamTable(teamName, rows) {
             const thTip = (label, tip, extra = '') => `<th class="stat-tip" title="${htmlEscape(tip)}">${label}${extra}</th>`;
+            const tdTip = (content, tip, className = '') => `<td${className ? ` class="${className}"` : ''} title="${htmlEscape(tip)}">${content}</td>`;
+            const statPartsTip = (parts, fallback) => {
+                const text = parts
+                    .filter(([, value]) => Number(value || 0) > 0)
+                    .map(([label, value]) => `${label}:${Number(value || 0)}`)
+                    .join(' ');
+                return text || fallback;
+            };
             let html = `<table class="hl-table hltv-style-table"><thead><tr><th class="team-heading" colspan="11">${htmlEscape(teamName)}</th></tr>`;
             html += '<tr>';
             html += thTip('Players', '玩家');
             html += thTip('<span>Op.</span>K-D', '首杀成功数 : 首死数');
-            html += thTip('MKs', '多杀回合数（2K/3K/4K/5K）');
-            html += thTip('KAST', '近似 KAST，来自实时插件统计，不是 HLTV 官方数据');
-            html += thTip('1vsX', '残局胜利次数，1v1 到 1v6');
+            html += thTip('MKs', '多杀回合数');
+            html += thTip('KAST', '击杀、助攻、存活和被交换击杀的回合占比');
+            html += thTip('1vsX', '1vsX残局胜利次数');
             html += thTip('K (hs)', '击杀数（爆头击杀数）');
-            html += thTip('A (f)', '助攻数（括号内为闪光相关数据）');
-            html += thTip('D (t)', '死亡数（括号内为被交易死亡数）');
+            html += thTip('A (f)', '助攻数（闪光助攻）');
+            html += thTip('D (t)', '死亡数（被交换死亡数）');
             html += thTip('ADR', '每回合平均伤害');
-            html += thTip('Swing', '近似回合影响值，基于 XvX、残局、装备和道具');
-            html += thTip('Rating', '民间拟合 Rating，不是官方 HLTV Rating', '<span>3.0*</span>');
+            html += thTip('Swing', '回合影响力');
+            html += thTip('Rating', '本局游戏的综合评分', '<span>3.0*</span>');
             html += '</tr></thead><tbody>';
             rows.forEach(row => {
                 const swingPercent = row.swing === null || row.swing === undefined ? null : row.swing * 100;
@@ -1650,7 +1664,9 @@ if (window._caorenModifiersEnabled !== true) {
                 const adrText = row.adr === null || row.adr === undefined ? '-' : trimFixed(row.adr, 1);
                 const swingText = swingPercent === null ? '-' : `${swingPercent >= 0 ? '+' : ''}${trimFixed(swingPercent, 2)}%`;
                 const ratingText = row.rating === null || row.rating === undefined ? '-' : trimFixed(row.rating, 2);
-                html += `<tr><td><b>${htmlEscape(row.p.name)}</b></td><td>${row.entryWins} : ${row.entryLosses}</td><td>${row.multiKills}</td><td>${kastText}</td><td>${row.oneVsX}</td><td>${row.kills} (${row.headShotKills})</td><td>${row.assists} (${row.flashAssists})</td><td>${row.deaths} (${row.tradedDeaths})</td><td>${adrText}</td><td class="${postmatchSwingClass(row.swing)}">${swingText}</td><td class="${postmatchRatingClass(row.rating)}"><b>${ratingText}</b></td></tr>`;
+                const multiKillsTip = statPartsTip([['2K', row.enemy2ks], ['3K', row.enemy3ks], ['4K', row.enemy4ks], ['5K', row.enemy5ks]], '无多杀回合');
+                const oneVsXTip = statPartsTip([['1v1', row.v1Wins], ['1v2', row.v2Wins], ['1v3', row.v3Wins], ['1v4', row.v4Wins], ['1v5', row.v5Wins], ['1v6', row.v6Wins]], '无1vsX残局胜利');
+                html += `<tr><td><b>${htmlEscape(row.p.name)}</b></td><td>${row.entryWins} : ${row.entryLosses}</td>${tdTip(row.multiKills, multiKillsTip)}<td>${kastText}</td>${tdTip(row.oneVsX, oneVsXTip)}<td title="${htmlEscape('击杀数（爆头击杀数）')}">${row.kills} (${row.headShotKills})</td><td title="${htmlEscape('助攻数（闪光助攻）')}">${row.assists} (${row.flashAssists})</td><td title="${htmlEscape('死亡数（被交换死亡数）')}">${row.deaths} (${row.tradedDeaths})</td><td>${adrText}</td><td class="${postmatchSwingClass(row.swing)}">${swingText}</td><td class="${postmatchRatingClass(row.rating)}"><b>${ratingText}</b></td></tr>`;
             });
             html += '</tbody></table>';
             return html;
@@ -1683,7 +1699,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const label = team === 'A' ? 'A 队' : team === 'B' ? 'B 队' : team;
                 html += renderHltvTeamTable(label, grouped[team]);
             });
-            html += '</div><p class="postmatch-note">* KAST / Swing / Rating 为近似指标，不等同于 HLTV 官方算法。所有赛后战绩来自桥接插件实时数据；MatchZy CSV 已停用。</p>';
+            html += '</div>';
             return html;
         }
 
@@ -1773,15 +1789,30 @@ if (window._caorenModifiersEnabled !== true) {
         window.setPostmatchStatsMode = setPostmatchStatsMode;
         window.setPostmatchMatrixMode = setPostmatchMatrixMode;
         window.renderPostmatchPanels = renderPostmatchPanels;
+        function liveDisplayRound(live) {
+            const toInt = value => {
+                const n = Math.floor(Number(value || 0));
+                return Number.isFinite(n) ? Math.max(0, n) : 0;
+            };
+            const currentRound = toInt(live?.currentRound);
+            const completedByCtT = toInt(live?.scoreCT) + toInt(live?.scoreT);
+            const completedByRoster = toInt(live?.scoreA) + toInt(live?.scoreB);
+            const completedRounds = Math.max(completedByCtT, completedByRoster, toInt(live?.lastScoredRound));
+            if (completedRounds <= 0) return currentRound;
+            return Math.max(currentRound, completedRounds);
+        }
+
+
 
         function renderLiveGame(state) {
             const live = state.liveGameData || window._liveGameData || {};
             const currentPlayer = window._currentPlayer;
             const undercoverEnabled = isUndercoverModeEnabledFromState(state);
+            const displayRound = liveDisplayRound(live);
             let html = '<div class="live-header" style="background:#263238; color:#fff;">' +
                 '<span style="font-size:24px;">赛况：A队 <span style="color:#64b5f6;">' + (live.scoreA || 0) + '</span> - <span style="color:#ffb74d;">' + (live.scoreB || 0) + '</span> B队</span> ' +
                 '<span style="font-size:16px; color:#b0bec5;">CT/T参考：' + (live.scoreCT || 0) + ':' + (live.scoreT || 0) + '</span> ' +
-                '<span style="font-size:20px; color:#aed581;">第 ' + (live.currentRound || 0) + ' 回合｜目标 ' + (live.winTarget || 13) + ' 分</span> ' +
+                '<span style="font-size:20px; color:#aed581;">第 ' + (displayRound || 0) + ' 回合｜目标 ' + (live.winTarget || 13) + ' 分</span> ' +
                 '<button onclick="showRules()" style="background:#455a64; color:#fff; border:1px solid #78909c;">📖 温习规则指引</button></div>';
             if (live.matchFinished) {
                 html += '<div style="background:#fff8e1; border:1px solid #fbc02d; padding:12px; border-radius:6px; margin-bottom:12px; font-weight:bold; color:#e65100;">比赛已自动判定结束：' + (live.winnerTeam || '?') + '队获胜。请等待进入结算/指认流程。</div>';
@@ -1821,7 +1852,7 @@ if (window._caorenModifiersEnabled !== true) {
                 html += 'B队比分：<input id="admin-scoreB" type="number" value="' + (live.scoreB || 0) + '" style="width:60px;"> &nbsp;&nbsp;';
                 html += 'CT参考：<input id="admin-scoreCT" type="number" value="' + (live.scoreCT || 0) + '" style="width:60px;"> &nbsp;&nbsp;';
                 html += 'T参考：<input id="admin-scoreT" type="number" value="' + (live.scoreT || 0) + '" style="width:60px;"> &nbsp;&nbsp;';
-                html += '当前回合：<input id="admin-round" type="number" value="' + (live.currentRound || 0) + '" style="width:60px;"> &nbsp;';
+                html += '当前回合：<input id="admin-round" type="number" value="' + (displayRound || 0) + '" style="width:60px;"> &nbsp;';
                 html += '<button onclick="updateLiveData()" style="background:#607d8b; color:#fff;">覆盖赛局</button> ';
                 html += '<button onclick="resetFormalMatchCounters()" style="background:#d32f2f; color:#fff;">开启正式统计：现在是第一回合</button>';
                 html += '<p style="font-size:13px;color:#64748b;margin:8px 0 0;">点击前，练习模式的击杀/伤害/矩阵不会纳入正式战绩；正式开赛第一回合时点此按钮，网页端和插件端会清零并从当前回合开始统计。</p></div>';

@@ -51,7 +51,7 @@ const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0, scoreT: 0, scoreA: 0, scoreB: 0,
     currentRound: 0, pluginConnected: false, winnerTeam: null, matchFinished: false,
     winTarget: 13, lastScoredRound: 0, rawPluginRound: 0, roundBaseOffset: undefined,
-    formalStatsStarted: false, statsLocked: false,
+    formalRoundStartRaw: undefined, formalStatsStarted: false, statsLocked: false,
     killMatrix: {}, openingKillMatrix: {}, awpKillMatrix: {}, firstKillRounds: {},
 });
 
@@ -110,6 +110,21 @@ const buildTeamAssignments = (session: any): TeamAssignmentBuildResult => {
     };
 };
 
+const hasTeamAssignmentMismatch = (session: any, round: number): boolean => {
+    const teamASide = getTeamASideForRound(session.selectedSide, round);
+    if (!teamASide) return false;
+    let hasBoundRosterPlayer = false;
+    for (const player of getGamePlayers(session)) {
+        if (player.role === 'Admin' || player.role === 'Spectator') continue;
+        if (player.rosterTeam !== 'A' && player.rosterTeam !== 'B') continue;
+        if (!normalizeSteamId(player.steamId)) continue;
+        hasBoundRosterPlayer = true;
+        const expectedSide = player.rosterTeam === 'A' ? teamASide : oppositeSide(teamASide);
+        const currentSide = normalizeTeam(player.team);
+        if (currentSide !== expectedSide) return true;
+    }
+    return !hasBoundRosterPlayer;
+};
 const enqueueTeamAssignments = (
     session: any,
     reason: string,
@@ -123,6 +138,8 @@ const enqueueTeamAssignments = (
     const queued = enqueuePluginCommand('APPLY_TEAM_ASSIGNMENTS', {
         matchId: session.matchId,
         round: built.round,
+        validFromRound: built.halftimeSwapped ? 13 : 0,
+        validUntilRound: built.halftimeSwapped ? 0 : 12,
         lockTeams,
         reason,
         halftimeSwapped: built.halftimeSwapped,
@@ -229,6 +246,9 @@ export function registerPluginRoutes(app: express.Express, deps: {
             success: true,
             matchId: session.matchId,
             phase: session.phase,
+            scoreCT: session.liveGameData.scoreCT || 0,
+            scoreT: session.liveGameData.scoreT || 0,
+            currentRound: session.liveGameData.currentRound || 0,
             commands: takeQueuedPluginCommands(),
         });
     });
@@ -299,7 +319,11 @@ export function registerPluginRoutes(app: express.Express, deps: {
         if (req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
         if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
         if (isPluginStatsLocked(session)) return res.json({ success: true, ignored: true, reason: '赛后战绩已锁定' });
-        if (typeof req.body?.currentRound === 'number') session.liveGameData.currentRound = Math.max(session.liveGameData.currentRound || 0, normalizePluginRound(req.body.currentRound));
+        if (typeof req.body?.currentRound === 'number' && !isFormalStatsStarted(session)) {
+            session.liveGameData.currentRound = Math.max(session.liveGameData.currentRound || 0, normalizePluginRound(req.body.currentRound));
+        }
+        if (typeof req.body?.scoreCT === 'number') session.liveGameData.scoreCT = Math.max(0, Math.floor(req.body.scoreCT));
+        if (typeof req.body?.scoreT === 'number') session.liveGameData.scoreT = Math.max(0, Math.floor(req.body.scoreT));
         if (req.body?.mapName) session.liveGameData.mapName = String(req.body.mapName);
         session.liveGameData.pluginConnected = true;
         session.liveGameData.lastPluginHeartbeatAt = Date.now();
@@ -322,7 +346,6 @@ export function registerPluginRoutes(app: express.Express, deps: {
 
         const type = String(req.body?.type || '');
         const payload = req.body?.payload || {};
-        if (typeof payload.round === 'number') session.liveGameData.currentRound = Math.max(session.liveGameData.currentRound || 0, normalizePluginRound(payload.round));
 
         if (!isFormalStatsStarted(session)) {
             if (type === 'round_start' && Array.isArray(payload.players)) {
@@ -425,17 +448,21 @@ function applyRoundStartEvent(session: any, payload: any) {
         }
     }
 
-    if (
-        round === 13 &&
+    const shouldRefreshHalftimeLock =
+        round >= 13 &&
         live.teamLockEnabled === true &&
-        live.teamLockLastAutoSideSwapRound !== 13
-    ) {
+        Number(live.teamLockLastAutoSideSwapRound || 0) !== round &&
+        Date.now() - Number(live.teamLockLastAutoSideSwapAt || 0) > 3000 &&
+        (live.teamLockHalftimeSwapped !== true || hasTeamAssignmentMismatch(session, round));
+
+    if (shouldRefreshHalftimeLock) {
         try {
             const result = enqueueTeamAssignments(session, 'halftime-auto-swap', true);
-            live.teamLockLastAutoSideSwapRound = 13;
+            live.teamLockLastAutoSideSwapRound = round;
+            live.teamLockLastAutoSideSwapAt = Date.now();
             live.teamLockLastAutoSideSwapCommandId = result.commandId;
         } catch (err) {
-            live.teamLockLastAutoSideSwapError = err instanceof Error ? err.message : '半场自动换边失败';
+            live.teamLockLastAutoSideSwapError = err instanceof Error ? err.message : 'halftime auto side swap failed';
         }
     }
 }
@@ -780,24 +807,23 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
         if (roundStats) finalizeOneVsXWins(session, roundStats, winnerSide);
         if (winnerSide === 'CT') live.scoreCT += 1;
         else if (winnerSide === 'T') live.scoreT += 1;
-        let winnerRoster = null;
-        const players = payload.players || [];
-        const votes: Record<string, number> = { A: 0, B: 0 };
-        for (const raw of players) {
-            const side = normalizeTeam(raw.team);
-            if (side !== winnerSide) continue;
-            const player = findPlayerBySteamId(session, raw.steamId);
-            if (player?.rosterTeam) votes[player.rosterTeam] += 1;
-        }
-        if (votes.A === 0 && votes.B === 0) {
-            for (const player of getGamePlayers(session)) {
-                if (player.team === winnerSide && player.rosterTeam) votes[player.rosterTeam] += 1;
+        let winnerRoster = resolveRosterTeamByInitialSide(winnerSide, formalRound);
+        if (!winnerRoster) {
+            const players = payload.players || [];
+            const votes: Record<string, number> = { A: 0, B: 0 };
+            for (const raw of players) {
+                const side = normalizeTeam(raw.team);
+                if (side !== winnerSide) continue;
+                const player = findPlayerBySteamId(session, raw.steamId);
+                if (player?.rosterTeam) votes[player.rosterTeam] += 1;
             }
-        }
-        if (votes.A > votes.B) winnerRoster = 'A';
-        else if (votes.B > votes.A) winnerRoster = 'B';
-        else {
-            winnerRoster = resolveRosterTeamByInitialSide(winnerSide, formalRound);
+            if (votes.A === 0 && votes.B === 0) {
+                for (const player of getGamePlayers(session)) {
+                    if (player.team === winnerSide && player.rosterTeam) votes[player.rosterTeam] += 1;
+                }
+            }
+            if (votes.A > votes.B) winnerRoster = 'A';
+            else if (votes.B > votes.A) winnerRoster = 'B';
         }
         if (winnerRoster && !live.matchFinished) {
             if (winnerRoster === 'A') live.scoreA += 1;

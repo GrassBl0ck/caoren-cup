@@ -28,6 +28,7 @@ dist/
 build/
 coverage/
 *.out
+web-command-center/public/postmatch-mock-test.html
 
 # Archives / backups
 *.zip

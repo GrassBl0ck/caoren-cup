@@ -344,6 +344,7 @@ const createEmptyLiveGameData = (): LiveGameData => ({
     lastScoredRound: 0,
     rawPluginRound: 0,
     roundBaseOffset: undefined,
+    formalRoundStartRaw: undefined,
     formalStatsStarted: false,
     killMatrix: {},
     openingKillMatrix: {},
@@ -430,10 +431,35 @@ const normalizePluginRound = (rawRound: unknown): number => {
     const raw = Math.floor(Number(rawRound || 0));
     if (!Number.isFinite(raw) || raw <= 0) return Math.max(0, live.currentRound || 0);
     live.rawPluginRound = raw;
+    if (live.formalStatsStarted === true && typeof live.formalRoundStartRaw === 'number') {
+        return Math.max(1, raw - live.formalRoundStartRaw + 1);
+    }
     if (typeof live.roundBaseOffset !== 'number') {
         live.roundBaseOffset = Math.max(0, raw - 1);
     }
     return Math.max(1, raw - live.roundBaseOffset);
+};
+
+const nonNegativeInt = (value: unknown): number => {
+    const n = Math.floor(Number(value || 0));
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+};
+
+const getScoreDerivedCurrentRound = (live: Partial<LiveGameData> | null | undefined): number => {
+    if (!live) return 0;
+    const currentRound = nonNegativeInt(live.currentRound);
+    const completedByCtT = nonNegativeInt(live.scoreCT) + nonNegativeInt(live.scoreT);
+    const completedByRoster = nonNegativeInt(live.scoreA) + nonNegativeInt(live.scoreB);
+    const completedRounds = Math.max(completedByCtT, completedByRoster, nonNegativeInt(live.lastScoredRound));
+    if (completedRounds <= 0) return currentRound;
+    return Math.max(currentRound, completedRounds);
+};
+
+const syncCurrentRoundFromScores = (live: LiveGameData | null | undefined): number => {
+    if (!live) return 0;
+    const round = getScoreDerivedCurrentRound(live);
+    if (round > 0) live.currentRound = round;
+    return live.currentRound;
 };
 
 const updateMatchFinishState = () => {
@@ -446,6 +472,7 @@ const updateMatchFinishState = () => {
     session.liveGameData.winTarget = winTarget;
     session.liveGameData.winnerTeam = winner;
     session.liveGameData.matchFinished = !!winner;
+    syncCurrentRoundFromScores(session.liveGameData);
 };
 
 const getRequiredWinTarget = (scoreA: number, scoreB: number): number => {
@@ -470,7 +497,7 @@ const resolveRosterTeamByInitialSide = (side: Team, roundNumber?: number): Roste
     return side === teamASide ? 'A' : 'B';
 };
 
-const resetFormalMatchCounters = () => {
+const resetFormalMatchCounters = (): number => {
     const session = getSession();
     const oldLive = session.liveGameData || createEmptyLiveGameData();
     const raw = Math.max(1, Math.floor(Number(oldLive.rawPluginRound || oldLive.currentRound || 1)));
@@ -480,6 +507,7 @@ const resetFormalMatchCounters = () => {
     session.liveGameData = createEmptyLiveGameData();
     session.liveGameData.rawPluginRound = raw;
     session.liveGameData.roundBaseOffset = Math.max(0, raw - 1);
+    session.liveGameData.formalRoundStartRaw = raw;
     session.liveGameData.currentRound = 1;
     session.liveGameData.formalStatsStarted = true;
     session.liveGameData.mapName = keepMap;
@@ -492,6 +520,7 @@ const resetFormalMatchCounters = () => {
         p.finalScore = undefined;
         p.scoreBreakdown = undefined;
     }
+    return raw;
 };
 
 // ========== ï¿½ï¿½É«ï¿½ï¿½ï¿½ï¿½ ==========
@@ -810,6 +839,8 @@ export {
     randomRemainingRoles,
     // LiveGame
     normalizePluginRound,
+    getScoreDerivedCurrentRound,
+    syncCurrentRoundFromScores,
     updateMatchFinishState,
     resolveRosterTeamByInitialSide,
     resetFormalMatchCounters,
@@ -818,7 +849,7 @@ export {
     clearUndercoverModeState,
     forceSkipUndercoverOnlyPhaseIfNeeded,
     prepareReleasedRoleState,
-    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿?
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½?
     assignPlayerToRosterFlow as assignPlayerToRoster,
     removePlayerFromRosterTeams,
     getAvailableDraftPlayers,
