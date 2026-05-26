@@ -10,31 +10,26 @@ namespace CaorenCup.Features;
 
 public class RadarColorFeature : ICaorenFeature
 {
-    public string FeatureName => "Radar Color Fix (小地图颜色修复)";
+    public string FeatureName => "Radar Color Fix (???????)";
 
     private const string SchemaClass = "CCSPlayerController";
     private const string ColorField = "m_iCompTeammateColor";
     private static readonly int[] ColorOrder = { 0, 1, 2, 3, 4 };
 
-    private RadarColorSettings _settings = null!;
-    private CaorenCupPlugin _plugin = null!;
     private readonly Dictionary<string, int?> _schemaOffsetCache = new();
     private bool _warnedSchemaUnavailable;
 
     public void Init(CaorenCupPlugin plugin)
     {
-        _plugin = plugin;
-
         plugin.RegisterEventHandler<EventRoundStart>(OnRoundStart);
         plugin.RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
-        plugin.AddCommand("css_radarcolor", "修复小地图/头像框队友颜色: css_radarcolor <status/apply/1/0>", OnCommand);
+        plugin.AddCommand("css_radarcolor", "?????/???????: css_radarcolor <status/apply>", OnCommand);
 
         plugin.AddTimer(1.0f, ApplyAllRadarColors);
     }
 
     public void OnConfigParsed(CaorenCupConfig config)
     {
-        _settings = config.RadarColor;
     }
 
     public void OnUnload()
@@ -43,71 +38,62 @@ public class RadarColorFeature : ICaorenFeature
 
     public void SetEnabled(bool enabled)
     {
-        _settings.Enabled = enabled;
-        if (enabled)
-            ApplyAllRadarColors();
+        ApplyAllRadarColors();
     }
 
     private void OnCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
         {
-            CaorenCupUtils.PrintToChat(player, "你没有权限使用此指令。");
+            CaorenCupUtils.PrintToChat(player, "???????????");
             return;
         }
 
         string action = info.ArgCount >= 2 ? info.GetArg(1).Trim().ToLowerInvariant() : "status";
         switch (action)
         {
-            case "1":
-            case "on":
-            case "enable":
-                _settings.Enabled = true;
-                ApplyAllRadarColors();
-                _plugin.SaveConfig();
-                Reply(player, "小地图/头像框颜色修复已启用，并已重新分配颜色。");
-                break;
             case "0":
             case "off":
             case "disable":
-                _settings.Enabled = false;
-                _plugin.SaveConfig();
-                Reply(player, "小地图/头像框颜色修复已禁用。");
+                ApplyAllRadarColors();
+                Reply(player, "???/????????????????????????");
+                break;
+            case "1":
+            case "on":
+            case "enable":
+                ApplyAllRadarColors();
+                Reply(player, "???/????????????????????");
                 break;
             case "apply":
             case "fix":
                 ApplyAllRadarColors();
-                Reply(player, "已重新分配当前玩家的小地图/头像框颜色。");
+                Reply(player, "?????????????/??????");
                 break;
             case "status":
-                Reply(player, _settings.Enabled ? "小地图/头像框颜色修复：已启用。" : "小地图/头像框颜色修复：已禁用。");
+                Reply(player, "???/??????????????????????");
                 break;
             default:
-                Reply(player, "用法：/radarcolor status | apply | 1 | 0");
+                Reply(player, "???/radarcolor status | apply");
                 break;
         }
     }
 
     private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
-        if (_settings.Enabled && _settings.ApplyOnRoundStart)
-            ApplyAllRadarColors();
+        ApplyAllRadarColors();
 
         return HookResult.Continue;
     }
 
     private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
     {
-        if (_settings.Enabled && _settings.ApplyOnSpawn)
-            ApplyAllRadarColors();
+        ApplyAllRadarColors();
 
         return HookResult.Continue;
     }
 
     private void ApplyAllRadarColors()
     {
-        if (!_settings.Enabled) return;
-
         ApplyTeamColors((byte)CsTeam.CounterTerrorist);
         ApplyTeamColors((byte)CsTeam.Terrorist);
     }
@@ -217,24 +203,22 @@ public class RadarColorFeature : ICaorenFeature
 
     public string GetHelpEntry()
     {
-        return $" {ChatColors.Green}/radarcolor{ChatColors.Default} : 自动修复小地图/头像框队友颜色重复";
+        return $" {ChatColors.Green}/radarcolor{ChatColors.Default} : ???????/?????????";
     }
 
     public string GetStatusInfo()
     {
-        return _settings.Enabled
-            ? $"RadarColor: {ChatColors.Green}已启用{ChatColors.Default} | 同阵营按 0/1/2/3/4 分配"
-            : $"RadarColor: {ChatColors.Red}已禁用{ChatColors.Default}";
+        return $"RadarColor: {ChatColors.Green}????{ChatColors.Default} | ???? 0/1/2/3/4 ??";
     }
 
     public string? GetPublicConfigInfo()
     {
-        return _settings.Enabled ? "[小地图颜色] 已启用同阵营颜色自动分配" : null;
+        return "[?????] ????????????";
     }
 
     public string GetFeatureDescription()
     {
-        return " [RadarColor] 小地图/头像框队友颜色修复模块。\n" +
-               " 服务器会在玩家出生和回合开始时，按 CT/T 阵营分别分配 CS2 原生队友颜色，尽量避免同阵营撞色。";
+        return " [RadarColor] ???/????????????\n" +
+               " ????????????????? CT/T ?????? CS2 ?????????????????";
     }
 }
