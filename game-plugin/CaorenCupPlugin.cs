@@ -50,7 +50,7 @@ public override void Load(bool hotReload)
         _features.Add(new Features.KillHealFeature());//5 击杀回血
         _features.Add(new Features.SimpleHpFeature());//6 查看伤害
         _features.Add(new Features.BleedFeature());//7 血量更改
-        _features.Add(new Features.OMAFeature());//8 一人成军
+        // 8 一人成军 OMA 已归档，功能已拆分到其他模块。
         //features.Add(new Features.PlayerStatsFeature());//9 玩家数据（已弃用）
         _features.Add(new Features.SmokeFeature());//10 烟雾修改
         _features.Add(new Features.MoneyFeature());//11 货币战争
