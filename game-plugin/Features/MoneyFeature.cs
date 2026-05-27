@@ -1,10 +1,12 @@
 ﻿using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Events;
 using CounterStrikeSharp.API.Modules.Utils;
 using CounterStrikeSharp.API.Modules.Admin;
 using System;
+using System.Collections.Generic;
 
 namespace CaorenCup.Features;
 
@@ -14,6 +16,7 @@ public class MoneyFeature : ICaorenFeature
 
     private CaorenCupPlugin _plugin = null!;
     private MoneySettings _settings = null!;
+    private readonly Dictionary<ulong, int> _moneyBeforeDeath = new();
 
     public void Init(CaorenCupPlugin plugin)
     {
@@ -23,8 +26,9 @@ public class MoneyFeature : ICaorenFeature
         plugin.AddCommand("css_cash", "设置经济倍率: css_cash <t/ct/all/0> <倍数> [1/0回合奖励]", OnCommandCash);
 
         // 事件监听
-        plugin.RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
-        plugin.RegisterEventHandler<EventRoundEnd>(OnRoundEnd);
+        plugin.RegisterEventHandler<EventPlayerDeath>(OnPlayerDeathPre, HookMode.Pre);
+        plugin.RegisterEventHandler<EventPlayerDeath>(OnPlayerDeathPost, HookMode.Post);
+        plugin.RegisterEventHandler<EventRoundEnd>(OnRoundEnd, HookMode.Pre);
     }
 
     public void OnConfigParsed(CaorenCup.CaorenCupConfig config)
@@ -120,7 +124,7 @@ public class MoneyFeature : ICaorenFeature
 
     // --- 游戏逻辑 1: 击杀奖励 ---
 
-    private HookResult OnPlayerDeath(EventPlayerDeath @event, GameEventInfo info)
+    private HookResult OnPlayerDeathPre(EventPlayerDeath @event, GameEventInfo info)
     {
         if (!_settings.Enabled || _settings.Multiplier == 1.0f) return HookResult.Continue;
 
@@ -131,18 +135,38 @@ public class MoneyFeature : ICaorenFeature
         // 判断阵营
         if (!IsTarget(killer)) return HookResult.Continue;
 
-        // 基础击杀奖励估算 (基于武器)
-        int baseReward = 300;
-        string weapon = @event.Weapon ?? "";
-        if (weapon.Contains("awp")) baseReward = 100;
-        else if (weapon.Contains("knife")) baseReward = 1500;
-        else if (weapon.Contains("shotgun") || weapon.Contains("xm1014") || weapon.Contains("mag7") || weapon.Contains("nova") || weapon.Contains("sawedoff")) baseReward = 900;
-        else if (weapon.Contains("smg") || weapon.Contains("mac10") || weapon.Contains("mp9") || weapon.Contains("mp7") || weapon.Contains("ump45") || weapon.Contains("bizon")) baseReward = 600;
+        var services = killer.InGameMoneyServices;
+        if (services != null)
+        {
+            _moneyBeforeDeath[killer.SteamID] = services.Account;
+        }
 
-        if (weapon == "p90") baseReward = 300; // P90 特例
+        return HookResult.Continue;
+    }
 
-        // 补发差额
-        GiveExtraMoney(killer, baseReward, _settings.Multiplier);
+    private HookResult OnPlayerDeathPost(EventPlayerDeath @event, GameEventInfo info)
+    {
+        if (!_settings.Enabled || _settings.Multiplier == 1.0f) return HookResult.Continue;
+
+        var killer = @event.Attacker;
+        if (killer == null || !killer.IsValid || killer == @event.Userid) return HookResult.Continue;
+        if (!IsTarget(killer)) return HookResult.Continue;
+
+        ulong steamId = killer.SteamID;
+        if (!_moneyBeforeDeath.TryGetValue(steamId, out int beforeMoney)) return HookResult.Continue;
+        _moneyBeforeDeath.Remove(steamId);
+
+        _plugin.AddTimer(0.1f, () =>
+        {
+            if (!killer.IsValid) return;
+
+            var result = ApplyMultiplierFromActualAward(killer, beforeMoney, _settings.Multiplier);
+            if (result.Changed)
+            {
+                PrintCashAdjustment(killer, "击杀奖励", result.BaseAward, _settings.Multiplier, result.ActualDelta, result.NewMoney);
+            }
+        });
+
         return HookResult.Continue;
     }
 
@@ -155,21 +179,25 @@ public class MoneyFeature : ICaorenFeature
         int winnerTeam = @event.Winner; // 2=T, 3=CT
         if (winnerTeam != 2 && winnerTeam != 3) return HookResult.Continue; // 平局不处理
 
-        int winBase = 3250; // 标准胜利奖金估算
-        int lossBase = 1900; // 标准连败奖金估算
-
         foreach (var p in Utilities.GetPlayers())
         {
-            if (p == null || !p.IsValid || p.TeamNum < 2) continue;
+            if (p == null || !p.IsValid || p.TeamNum < 2 || p.InGameMoneyServices == null) continue;
 
             if (IsTarget(p))
             {
-                int baseMoney = (p.TeamNum == winnerTeam) ? winBase : lossBase;
+                int beforeMoney = p.InGameMoneyServices.Account;
 
                 // 为了防止在引擎刚刚发完钱的一瞬间冲突，延时 0.5 秒补发差额
                 _plugin.AddTimer(0.5f, () =>
                 {
-                    if (p.IsValid) GiveExtraMoney(p, baseMoney, _settings.Multiplier);
+                    if (!p.IsValid) return;
+
+                    var result = ApplyMultiplierFromActualAward(p, beforeMoney, _settings.Multiplier);
+                    if (result.Changed)
+                    {
+                        string reason = p.TeamNum == winnerTeam ? "回合胜利奖励" : "回合失败奖励";
+                        PrintCashAdjustment(p, reason, result.BaseAward, _settings.Multiplier, result.ActualDelta, result.NewMoney);
+                    }
                 });
             }
         }
@@ -187,24 +215,61 @@ public class MoneyFeature : ICaorenFeature
         return false;
     }
 
-    private void GiveExtraMoney(CCSPlayerController player, int baseAmount, float multiplier)
+    private CashAdjustmentResult ApplyMultiplierFromActualAward(CCSPlayerController player, int beforeMoney, float multiplier)
     {
-        // 差额 = 目标总额 - 引擎已经发的总额
-        int extra = (int)Math.Round(baseAmount * (multiplier - 1.0f));
-        if (extra == 0) return;
-
         var services = player.InGameMoneyServices;
-        if (services != null)
+        if (services == null) return CashAdjustmentResult.NoChange;
+
+        int current = services.Account;
+        int actualAward = current - beforeMoney;
+        if (actualAward == 0) return CashAdjustmentResult.NoChange;
+
+        // 差额 = 游戏实际已经发的钱 * (倍率 - 1)
+        int extra = (int)Math.Round(actualAward * (multiplier - 1.0f));
+        if (extra == 0) return CashAdjustmentResult.NoChange;
+
+        int newMoney = current + extra;
+        int maxMoney = GetMaxMoney();
+
+        if (newMoney < 0) newMoney = 0;
+        if (newMoney > maxMoney) newMoney = maxMoney;
+
+        int actualDelta = newMoney - current;
+        if (actualDelta == 0) return CashAdjustmentResult.NoChange;
+
+        services.Account = newMoney;
+        Utilities.SetStateChanged(player, "CCSPlayerController", "m_pInGameMoneyServices");
+        return new CashAdjustmentResult(true, actualAward, actualDelta, newMoney);
+    }
+
+    private static int GetMaxMoney()
+    {
+        try
         {
-            int current = services.Account;
-            int newMoney = current + extra;
-
-            if (newMoney < 0) newMoney = 0;
-            if (newMoney > 16000) newMoney = 16000; // 默认最大经济上限
-
-            services.Account = newMoney;
-            Utilities.SetStateChanged(player, "CCSPlayerController", "m_pInGameMoneyServices");
+            var cvar = ConVar.Find("mp_maxmoney");
+            int value = cvar?.GetPrimitiveValue<int>() ?? 16000;
+            return Math.Max(0, value);
         }
+        catch
+        {
+            return 16000;
+        }
+    }
+
+    private static void PrintCashAdjustment(CCSPlayerController player, string reason, int baseAmount, float multiplier, int actualDelta, int newMoney)
+    {
+        string sign = actualDelta > 0 ? "+" : "-";
+        int absDelta = Math.Abs(actualDelta);
+
+        CaorenCupUtils.PrintToChat(
+            player,
+            $"{ChatColors.Green}[Cash]{ChatColors.Default} {reason}倍率生效：基础 ${baseAmount}，倍率 {multiplier:0.###}x，本次修正 {sign}${absDelta}，当前金钱 ${newMoney}"
+        );
+    }
+
+    private readonly record struct CashAdjustmentResult(bool Changed, int BaseAward, int ActualDelta, int NewMoney)
+    {
+        public static CashAdjustmentResult NoChange => new(false, 0, 0, 0);
     }
 
     // --- 接口实现 ---

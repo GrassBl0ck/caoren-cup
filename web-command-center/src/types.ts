@@ -193,7 +193,9 @@ export interface GameSession {
     };
     rollValues: { A: number | null; B: number | null };
     draftOrder: RosterTeam[];
+    draftOriginalOrder?: RosterTeam[];
     draftIndex: number;
+    draftCaptainsActive?: boolean;
     draftPickTimeoutAt?: number | null;
     mapPool: string[];
     bannedMaps: string[];

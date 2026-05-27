@@ -739,7 +739,8 @@ if (window._caorenModifiersEnabled !== true) {
                 const capBId = state.captains.B;
                 const capA = state.players[capAId];
                 const capB = state.players[capBId];
-                const isMyTurn = (currentTeam === 'A' && myPlayerId === capAId) || (currentTeam === 'B' && myPlayerId === capBId);
+                const draftActive = state.draftCaptainsActive === true;
+                const isMyTurn = draftActive && ((currentTeam === 'A' && myPlayerId === capAId) || (currentTeam === 'B' && myPlayerId === capBId));
                 const available = Object.values(state.players).filter(p => !p.rosterTeam && p.playerId !== capAId && p.playerId !== capBId && p.role !== 'Admin' && p.role !== 'Spectator');
                 const totalPicks = state.draftOrder.length;
                 const donePicks = Math.min(state.draftIndex, totalPicks);
@@ -755,10 +756,14 @@ if (window._caorenModifiersEnabled !== true) {
                 let html = '<div class="draft-board">';
                 html += '<div class="draft-header">';
                 html += '<div><h2 class="draft-title">蛇形选人</h2>';
-                html += `<p class="draft-subtitle">当前蛇形批次共 ${batchTotal || 0} 人，已选 ${batchDone || 0} 人，剩余 ${batchLeft || 0} 人；同一批次不会因为选了第 1 个人就重置倒计时。</p></div>`;
+                html += `<p class="draft-subtitle">${draftActive ? `\u5f53\u524d\u86c7\u5f62\u6279\u6b21\u5171 ${batchTotal || 0} \u4eba\uff0c\u5df2\u9009 ${batchDone || 0} \u4eba\uff0c\u5269\u4f59 ${batchLeft || 0} \u4eba\uff1b\u540c\u4e00\u6279\u6b21\u4e0d\u4f1a\u56e0\u4e3a\u9009\u4e86\u7b2c 1 \u4e2a\u4eba\u5c31\u91cd\u7f6e\u5012\u8ba1\u65f6\u3002` : '\u7ba1\u7406\u5458\u53ef\u5148\u4e0d\u9650\u65f6\u5206\u961f\uff1b\u786e\u8ba4\u540e\u518d\u5f00\u59cb\u961f\u957f\u9009\u4eba\u5012\u8ba1\u65f6\u3002'}</p>`;
+                if (isAdmin && !draftActive && available.length > 0) {
+                    html += '<button onclick="adminStartCaptainDraft()" style="margin-top:10px;background:#16a34a;color:#fff;">\u5f00\u59cb\u961f\u957f\u9009\u4eba\u8ba1\u65f6</button>';
+                }
+                html += '</div>';
                 html += `<div class="map-bp-turn-wrap">
                             <div class="draft-turn-card"><span style="display:block;color:#607086;font-size:13px;margin-bottom:6px;">当前轮次</span><b>${currentTeam || '-'}队</b><div style="font-size:13px;color:#607086;margin-top:4px;">队长：${currentCaptain?.name || '-'}</div></div>
-                            <div class="bp-inline-timer"><span>选人倒计时</span><strong class="inline-timer-text">${getTimerSecondsText()}</strong></div>
+                            <div class="bp-inline-timer"><span>${draftActive ? '\u9009\u4eba\u5012\u8ba1\u65f6' : '\u7ba1\u7406\u5458\u9884\u5206\u961f'}</span><strong class="inline-timer-text">${draftActive ? getTimerSecondsText() : '\u4e0d\u9650\u65f6'}</strong></div>
                          </div>`;
                 html += '</div>';
 
@@ -767,7 +772,7 @@ if (window._caorenModifiersEnabled !== true) {
                 html += `<div class="map-bp-summary-card"><span>本批次</span><strong>${currentTeam || '-'}队 ${batchDone}/${batchTotal}</strong></div>`;
                 html += `<div class="map-bp-summary-card"><span>A 队队长</span><strong>${capA?.name || '-'}</strong></div>`;
                 html += `<div class="map-bp-summary-card"><span>B 队队长</span><strong>${capB?.name || '-'}</strong></div>`;
-                html += `<div class="map-bp-summary-card"><span>你的状态</span><strong>${isMyTurn ? '轮到你选人' : (currentTeam ? '等待队长选择' : '选人完成')}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>\u4f60\u7684\u72b6\u6001</span><strong>${!draftActive ? '\u7b49\u5f85\u7ba1\u7406\u5458\u5f00\u59cb' : (isMyTurn ? '\u8f6e\u5230\u4f60\u9009\u4eba' : (currentTeam ? '\u7b49\u5f85\u961f\u957f\u9009\u62e9' : '\u9009\u4eba\u5b8c\u6210'))}</strong></div>`;
                 html += '</div>';
 
                 if (available.length > 0) {
@@ -1971,6 +1976,7 @@ if (window._caorenModifiersEnabled !== true) {
         function rerandomCaptain(team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RERANDOM_CAPTAIN', payload: { team } }); }
         function setCaptain(team) { const select = document.getElementById('cap' + team + '-select'); if (select && select.value) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_CAPTAIN', payload: { team, playerId: select.value } }); }
         function adminAssignTeam(playerId, team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ASSIGN_ROSTER_TEAM', payload: { playerId, team } }); }
+        function adminStartCaptainDraft() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'START_CAPTAIN_DRAFT' }); }
         function kickPlayer(playerId, name) { if (confirm('确定要踢出玩家：' + name + '？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
         function voteMap(map) { ws.emit('VOTE', { playerId: myPlayerId, map }); }
         function adminBanMap(map) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADMIN_BAN_MAP', payload: { map } }); }

@@ -27,6 +27,9 @@ import {
     clearUndercoverModeState,
     prepareReleasedRoleState,
     startMapVote,
+    startCaptainDraft,
+    startDraftPickTimer,
+    syncPendingDraftOrderWithRoster,
     setRosterLiveSides,
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
@@ -365,13 +368,23 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const targetId = String(data.payload?.playerId || '');
                 const team = data.payload?.team as RosterTeam;
                 if (team !== 'A' && team !== 'B') return;
+                const previousTeam = session.draftOrder[session.draftIndex];
                 if (!assignPlayerToRoster(targetId, team)) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '无法分配该玩家：队长、管理员或旁观者不能在这里直接改队。' });
+                    socket.emit(WsEvents.NOTIFICATION, { message: '\u65e0\u6cd5\u5206\u914d\u8be5\u73a9\u5bb6\uff1a\u961f\u957f\u3001\u7ba1\u7406\u5458\u6216\u65c1\u89c2\u8005\u4e0d\u80fd\u5728\u8fd9\u91cc\u76f4\u63a5\u6539\u961f\u3002' });
                     return;
                 }
-                notifyMessage(`管理员已将 ${findPlayerById(session, targetId)?.name || '玩家'} 分入 ${team} 队。`);
+                syncPendingDraftOrderWithRoster();
+                notifyMessage(`\u7ba1\u7406\u5458\u5df2\u5c06 ${findPlayerById(session, targetId)?.name || '\u73a9\u5bb6'} \u5206\u5165 ${team} \u961f\u3002`);
                 if (isDraftComplete()) finishDraftPick('manual');
+                else if (session.draftCaptainsActive && previousTeam !== session.draftOrder[session.draftIndex]) startDraftPickTimer(true);
                 else broadcastState();
+            } else if (data.action === 'START_CAPTAIN_DRAFT') {
+                if (session.phase !== GamePhase.PlayerDraft) return;
+                if (session.draftCaptainsActive) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '\u961f\u957f\u9009\u4eba\u8ba1\u65f6\u5df2\u7ecf\u5f00\u59cb\u3002' });
+                    return;
+                }
+                if (startCaptainDraft(true)) notifyMessage('\u7ba1\u7406\u5458\u5df2\u5f00\u59cb\u961f\u957f\u9009\u4eba\u8ba1\u65f6\u3002');
             } else if (data.action === 'KICK_PLAYER') {
                 const targetId = String(data.payload?.playerId || '');
                 const target = findPlayerById(session, targetId);
@@ -451,6 +464,10 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const session = getSession();
             const drafter = findPlayerById(session, data.playerId);
             if (!drafter || session.phase !== GamePhase.PlayerDraft) return;
+            if (!session.draftCaptainsActive) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '\u8bf7\u7b49\u5f85\u7ba1\u7406\u5458\u5f00\u59cb\u961f\u957f\u9009\u4eba\u8ba1\u65f6\u3002' });
+                return;
+            }
             if (session.draftIndex >= session.draftOrder.length) return;
             const currentTeam = session.draftOrder[session.draftIndex];
             const isCapA = session.captains.A === data.playerId && currentTeam === 'A';

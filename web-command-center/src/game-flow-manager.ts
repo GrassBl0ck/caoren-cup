@@ -67,6 +67,25 @@ const isDraftComplete = (): boolean => {
     return session.draftIndex >= session.draftOrder.length || getAvailableDraftPlayers().length === 0;
 };
 
+const syncPendingDraftOrderWithRoster = () => {
+    const session = getSession();
+    const originalOrder = session.draftOriginalOrder || session.draftOrder;
+    const assignedCounts: Record<RosterTeam, number> = { A: 0, B: 0 };
+    for (const team of ['A', 'B'] as const) {
+        assignedCounts[team] = session.teams[team].players.filter(
+            id => id !== session.captains.A && id !== session.captains.B
+        ).length;
+    }
+
+    const remainingOrder: RosterTeam[] = [];
+    for (const team of originalOrder) {
+        if (assignedCounts[team] > 0) assignedCounts[team]--;
+        else remainingOrder.push(team);
+    }
+    session.draftOrder = remainingOrder;
+    session.draftIndex = 0;
+};
+
 const getCurrentDraftBatch = () => {
     const session = getSession();
     if (session.draftIndex >= session.draftOrder.length) return null;
@@ -169,6 +188,7 @@ const startDraftPickTimerFunc = (shouldBroadcast = false) => {
     clearDraftPickTimer();
     const session = getSession();
     if (session.phase !== GamePhase.PlayerDraft) return;
+    session.draftCaptainsActive = true;
 
     if (isDraftComplete()) {
         scheduleDraftToMapBan();
@@ -192,6 +212,7 @@ const finishDraftPick = (reason: 'timeout' | 'manual' = 'timeout') => {
     const session = getSession();
     if (session.phase !== GamePhase.PlayerDraft) return;
     clearDraftPickTimer();
+    session.draftCaptainsActive = true;
 
     const batch = getCurrentDraftBatch();
     const team = batch?.team;
@@ -211,6 +232,25 @@ const finishDraftPick = (reason: 'timeout' | 'manual' = 'timeout') => {
     } else {
         startDraftPickTimerFunc(true);
     }
+};
+
+const startCaptainDraftFunc = (shouldBroadcast = true) => {
+    const session = getSession();
+    if (session.phase !== GamePhase.PlayerDraft) return false;
+
+    syncPendingDraftOrderWithRoster();
+    if (isDraftComplete()) {
+        session.draftCaptainsActive = false;
+        session.draftPickTimeoutAt = null;
+        session.timerEndAt = null;
+        session.timerPhase = null;
+        scheduleDraftToMapBan();
+        if (shouldBroadcast) broadcast?.();
+        return true;
+    }
+
+    startDraftPickTimerFunc(shouldBroadcast);
+    return true;
 };
 
 // ========== ��ͼBP���� ==========
@@ -594,6 +634,7 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
 
     if (from === GamePhase.PlayerDraft) {
         clearDraftPickTimer();
+        session.draftCaptainsActive = false;
         session.draftPickTimeoutAt = null;
         while (session.draftIndex < session.draftOrder.length) {
             const currentTeam = session.draftOrder[session.draftIndex];
@@ -662,7 +703,10 @@ const performPhaseTransition = (to: GamePhase) => {
             const secondTeam: RosterTeam = firstTeam === 'A' ? 'B' : 'A';
             const pickSequence: RosterTeam[] = [firstTeam, secondTeam, secondTeam, firstTeam];
             for (let i = 0; i < totalPicks; i++) session.draftOrder.push(pickSequence[i % 4]);
+            session.draftOriginalOrder = [...session.draftOrder];
             session.draftIndex = 0;
+            session.draftCaptainsActive = false;
+            session.draftPickTimeoutAt = null;
             session.teams.A.players = [session.captains.A!].filter(Boolean);
             session.teams.B.players = [session.captains.B!].filter(Boolean);
             const pA = findPlayerById(session, session.captains.A!); if (pA) { pA.rosterTeam = 'A'; pA.team = undefined; }
@@ -672,7 +716,9 @@ const performPhaseTransition = (to: GamePhase) => {
             while (banSequence.length < session.mapPool.length - 1) { banSequence.push(...baseOrder); }
             banSequence.length = session.mapPool.length - 1;
             session.banSequence = banSequence;
-            startDraftPickTimerFunc(false);
+            session.timerEndAt = null;
+            session.timerPhase = null;
+            if (isDraftComplete()) scheduleDraftToMapBan();
             break;
         case GamePhase.MapBan:
             session.bannedMaps = [];
@@ -854,4 +900,6 @@ export {
     removePlayerFromRosterTeams,
     getAvailableDraftPlayers,
     isDraftComplete,
+    syncPendingDraftOrderWithRoster,
+    startCaptainDraftFunc as startCaptainDraft,
 };
