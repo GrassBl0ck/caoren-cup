@@ -235,7 +235,7 @@
             font-weight: bold;
         }
 
-        /* ?????????? */
+        /* 放大并优化九宫格尺寸 */
         .task-grid {
             display: grid;
             grid-template-columns: repeat(3, 180px);
@@ -291,7 +291,7 @@
                 outline-offset: 4px;
             }
 
-        /* ????????????????? */
+        /* 任务描述内允许使用的富文本基础样式 */
         .task-desc b {
             font-weight: 900;
         }
@@ -325,7 +325,7 @@
                 background: #c8e6c9;
             }
 
-        /* ?????????? */
+        /* 可视化模板编辑器布局 */
         .tpl-editor-layout {
             display: flex;
             gap: 20px;
@@ -367,7 +367,7 @@
                 box-sizing: border-box;
             }
 
-        /* ?????? */
+        /* 富文本工具栏 */
         .format-toolbar {
             display: flex;
             gap: 5px;
@@ -705,7 +705,7 @@
 
 
 
-        /* Stage 3.3???????????? */
+        /* Stage 3.3：更接近旧版后台表格风格 */
         body {
             background: #edf3f8;
             padding: 18px 22px;
@@ -878,7 +878,7 @@
         }
 
 
-        /* Stage 3.7 ?? BP ?? */
+        /* Stage 3.7 地图 BP 卡片 */
         .map-bp-board {
             background: #fff;
             border: 1px solid #dbe5ef;
@@ -1119,7 +1119,7 @@
         }
 
 
-        /* Stage 3.9????????????????? */
+        /* Stage 3.9：全局悬浮倒计时，滚动页面时仍可见 */
         #timer-display {
             position: fixed;
             top: 14px;
@@ -1153,7 +1153,7 @@
         }
 
 
-        /* Stage 3.10???????? BP ??? */
+        /* Stage 3.10：更醒目的官匹式 BP 倒计时 */
         #timer-display {
             position: fixed;
             top: 18px;
@@ -1176,7 +1176,7 @@
         }
 
             #timer-display::before {
-                content: "???????";
+                content: "当前投票倒计时";
                 display: block;
                 font-size: 12px;
                 line-height: 1;
@@ -1278,7 +1278,7 @@
         }
 
 
-        /* Stage 3.11???????? */
+        /* Stage 3.11：选人倒计时面板 */
         .draft-board {
             background: #fff;
             border: 1px solid #dbe5ef;
@@ -1388,7 +1388,7 @@
             }
 
 
-        /* Stage 3.12????????????? */
+        /* Stage 3.12：地图卡片内显示本队投票人 */
         .map-card-voters {
             margin-top: 10px;
             min-height: 32px;
@@ -1450,7 +1450,7 @@
         }
 
 
-        /* Stage 3.14?????? */
+        /* Stage 3.14：结算明细表 */
         .score-detail-table {
             border-collapse: separate;
             border-spacing: 0;
@@ -1768,7 +1768,7 @@
         }
 
 
-        /* ?????????????????????? */
+        /* 第一阶段：本局模式设置（固定在管理员控制区） */
         .match-options-panel {
             margin: 12px 0 16px;
             padding: 14px 16px;
@@ -1845,7 +1845,7 @@
             color: #b45309;
             font-size: 13px;
         }
-        /* ?????CaorenCup ??????? */
+        /* 第二阶段：CaorenCup 修改可视化面板 */
         .caoren-mod-panel {
             margin: 12px 0 16px;
             padding: 14px 16px;
@@ -1939,7 +1939,7 @@
         }
 
     
-/* CAOREN_V1_3_2_HIDE_DISABLED_MOD_PANEL_PATCH: ??? CaorenCup ???????????????????????? */
+/* CAOREN_V1_3_2_HIDE_DISABLED_MOD_PANEL_PATCH: 未启用 CaorenCup 修改时，强制隐藏所有模块配置内容，只保留状态提示 */
 body.caoren-modifiers-disabled #caoren-mod-panel .caoren-mod-grid,
 body.caoren-modifiers-disabled #caoren-mod-panel .caoren-unified-mod-shell,
 body.caoren-modifiers-disabled #caoren-mod-panel .caoren-batch2-wrapper,

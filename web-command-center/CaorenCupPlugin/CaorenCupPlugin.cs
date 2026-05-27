@@ -5,6 +5,7 @@ using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -22,7 +23,9 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private readonly HttpClient _http = new();
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
+    private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
     private CaorenConfig _config = new();
     private string? _currentMatchId;
     private int _currentRound;
@@ -31,7 +34,13 @@ public sealed class CaorenCupPlugin : BasePlugin
     private DateTime _lastPlayerHurtWarningUtc = DateTime.MinValue;
     private readonly Dictionary<string, CsTeam> _teamAssignments = new(StringComparer.Ordinal);
     private readonly HashSet<string> _teamAssignmentBypass = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, WebPlayerState> _webPlayersBySteamId = new(StringComparer.Ordinal);
+    private readonly List<WebPlayerState> _lastNoticeMissingTargets = new();
     private bool _teamLockEnabled;
+    private int _teamAssignmentsValidFromRound;
+    private int _teamAssignmentsValidUntilRound;
+    private bool _isUnloading;
+    private const string DefaultNoticeSound = "training/bell_normal.vsnd_c";
     private static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "css_ammo",
@@ -60,6 +69,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     public override void Load(bool hotReload)
     {
+        _isUnloading = false;
         LoadConfig();
         _http.BaseAddress = new Uri(_config.CommandCenterBaseUrl.TrimEnd('/') + "/");
         _http.DefaultRequestHeaders.Remove("x-caoren-plugin-token");
@@ -70,11 +80,21 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_cccode", "获取草人杯网页登录码。用法：!cccode", OnGameLoginCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
+        AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|noready|nor [内容]", OnNoticeCommand);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
 
-        AddTimer(Math.Max(3, _config.HeartbeatSeconds), () => _ = SendHeartbeatAsync(), TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-        AddTimer(Math.Max(5, _config.HeartbeatSeconds), () => _ = SendSnapshotAsync(), TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
-        AddTimer(1.0f, EnforceTeamAssignments, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+        _timers.Add(AddTimer(Math.Max(3, _config.HeartbeatSeconds), () =>
+        {
+            if (!_isUnloading) _ = SendHeartbeatAsync();
+        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
+        _timers.Add(AddTimer(Math.Max(5, _config.HeartbeatSeconds), () =>
+        {
+            if (!_isUnloading) _ = SendSnapshotAsync();
+        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
+        _timers.Add(AddTimer(1.0f, () =>
+        {
+            if (!_isUnloading) EnforceTeamAssignments();
+        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
 
         Logger.LogInformation("{Name} loaded. CommandCenter={BaseUrl}", ModuleName, _config.CommandCenterBaseUrl);
         _ = SendHeartbeatAsync();
@@ -82,8 +102,27 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     public override void Unload(bool hotReload)
     {
+        _isUnloading = true;
+        StopTimers();
         RemoveCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _http.Dispose();
+    }
+
+    private void StopTimers()
+    {
+        foreach (var timer in _timers.ToArray())
+        {
+            try
+            {
+                timer.Kill();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Failed to stop CaorenCup plugin timer");
+            }
+        }
+
+        _timers.Clear();
     }
 
     private void LoadConfig()
@@ -118,7 +157,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         var steamId = player!.SteamID.ToString();
-        var name = player.PlayerName;
+        var name = SafePlayerName(player);
         ReplyToPlayer(player, "[草人杯] 已收到绑定请求，正在连接网页指挥台...");
         _ = BindAsync(player, bindCode, steamId, name);
     }
@@ -132,7 +171,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         var steamId = player!.SteamID.ToString();
-        var name = player.PlayerName;
+        var name = SafePlayerName(player);
         ReplyToPlayer(player, "[草人杯] 正在生成网页登录码...");
         _ = RequestGameLoginCodeAsync(player, steamId, name);
     }
@@ -186,6 +225,38 @@ public sealed class CaorenCupPlugin : BasePlugin
         _ = SendSnapshotAsync(null);
     }
 
+    private void OnNoticeCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
+        {
+            ReplyToPlayer(player, "[草人杯] 你没有权限使用 /notice。");
+            return;
+        }
+
+        if (command.ArgCount < 2)
+        {
+            ReplyToPlayer(player, "[草人杯] 用法：/notice all|undercover|und|detective|det|noready|nor [提示内容]");
+            return;
+        }
+
+        var target = command.ArgByIndex(1)?.Trim().ToLowerInvariant() ?? string.Empty;
+        var message = BuildNoticeMessage(command);
+        _ = SendNoticeAsync(player, target, message);
+    }
+
+    private string BuildNoticeMessage(CommandInfo command)
+    {
+        if (command.ArgCount <= 2) return string.Empty;
+
+        var parts = new List<string>();
+        for (var i = 2; i < command.ArgCount; i++)
+        {
+            var part = command.ArgByIndex(i);
+            if (!string.IsNullOrWhiteSpace(part)) parts.Add(part.Trim());
+        }
+        return string.Join(" ", parts).Trim();
+    }
+
     private static object PlayerEquipment(CCSPlayerController? player)
     {
         var pawn = player?.PlayerPawn?.Value;
@@ -227,6 +298,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
         _currentRound++;
+        RefreshRoundHealthState();
         EnforceTeamAssignments();
         _ = PostEventAsync("round_start", new
         {
@@ -246,7 +318,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (!IsRealPlayer(victim)) return HookResult.Continue;
 
         var victimSteamId = victim!.SteamID.ToString();
-        EnsureLocalStats(victimSteamId, victim.PlayerName).Deaths++;
+        EnsureLocalStats(victimSteamId, SafePlayerName(victim)).Deaths++;
 
         string? attackerSteamId = null;
         string? attackerTeam = null;
@@ -254,14 +326,14 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             attackerSteamId = attacker.SteamID.ToString();
             attackerTeam = TeamName(attacker.TeamNum);
-            EnsureLocalStats(attackerSteamId, attacker.PlayerName).Kills++;
+            EnsureLocalStats(attackerSteamId, SafePlayerName(attacker)).Kills++;
         }
 
         string? assisterSteamId = null;
         if (IsRealPlayer(assister) && assister!.SteamID != victim.SteamID && assister.SteamID.ToString() != attackerSteamId)
         {
             assisterSteamId = assister.SteamID.ToString();
-            EnsureLocalStats(assisterSteamId, assister.PlayerName).Assists++;
+            EnsureLocalStats(assisterSteamId, SafePlayerName(assister)).Assists++;
         }
 
         var attackerEquipment = PlayerEquipment(attacker);
@@ -293,18 +365,26 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (attacker!.SteamID == victim!.SteamID) return HookResult.Continue;
         if (@event.DmgHealth <= 0) return HookResult.Continue;
 
+        var victimSteamId = victim.SteamID.ToString();
+        var victimPawn = victim.PlayerPawn?.Value;
+        var victimMaxHealth = Math.Max(100, victimPawn?.MaxHealth ?? 100);
+        var effectiveDamage = EffectiveHealthDamage(victimSteamId, @event.DmgHealth, @event.Health, victimMaxHealth);
+        if (effectiveDamage <= 0) return HookResult.Continue;
+
         var attackerSteamId = attacker.SteamID.ToString();
-        EnsureLocalStats(attackerSteamId, attacker.PlayerName).Damage += @event.DmgHealth;
+        EnsureLocalStats(attackerSteamId, SafePlayerName(attacker)).Damage += effectiveDamage;
 
         _ = PostEventAsync("player_hurt", new
         {
             round = _currentRound,
             attackerSteamId,
             attackerTeam = TeamName(attacker.TeamNum),
-            victimSteamId = victim.SteamID.ToString(),
+            victimSteamId,
             victimTeam = TeamName(victim.TeamNum),
-            damage = @event.DmgHealth,
+            damage = effectiveDamage,
+            rawDamage = @event.DmgHealth,
             health = @event.Health,
+            maxHealth = victimMaxHealth,
             mapName = SafeMapName()
         });
         return HookResult.Continue;
@@ -332,26 +412,80 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private object[] BuildLivePlayers()
     {
-        return Utilities.GetPlayers()
-            .Where(IsRealPlayer)
-            .Select(p =>
+        var players = new List<object>();
+        foreach (var player in Utilities.GetPlayers())
+        {
+            try
             {
-                var steamId = p.SteamID.ToString();
-                var stats = EnsureLocalStats(steamId, p.PlayerName);
-                return new
+                if (!IsRealPlayer(player)) continue;
+
+                var steamId = player.SteamID.ToString();
+                var playerName = SafePlayerName(player);
+                var stats = EnsureLocalStats(steamId, playerName);
+                var pawn = player.PlayerPawn?.Value;
+                var health = Math.Max(0, pawn?.Health ?? 0);
+                var maxHealth = Math.Max(100, pawn?.MaxHealth ?? 100);
+                if (player.PawnIsAlive) _roundHealthBySteamId[steamId] = health;
+                players.Add(new
                 {
                     steamId,
-                    name = p.PlayerName,
-                    team = TeamName(p.TeamNum),
-                    stats.Kills,
-                    stats.Deaths,
-                    stats.Assists,
-                    stats.Damage,
-                    isAlive = p.PawnIsAlive
-                };
-            })
-            .Cast<object>()
-            .ToArray();
+                    name = playerName,
+                    team = TeamName(player.TeamNum),
+                    kills = stats.Kills,
+                    deaths = stats.Deaths,
+                    assists = stats.Assists,
+                    damage = stats.Damage,
+                    health,
+                    maxHealth,
+                    isAlive = player.PawnIsAlive
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Skipping invalid player while building live snapshot");
+            }
+        }
+
+        return players.ToArray();
+    }
+
+    private int EffectiveHealthDamage(string victimSteamId, int rawDamage, int healthAfter, int maxHealth)
+    {
+        if (rawDamage <= 0) return 0;
+        var safeHealthAfter = Math.Max(0, healthAfter);
+        var hasKnownHealth = _roundHealthBySteamId.TryGetValue(victimSteamId, out var knownHealthBefore);
+        var observedHealthBefore = safeHealthAfter + rawDamage;
+        var safeMaxHealth = Math.Max(100, maxHealth);
+        if (!hasKnownHealth)
+        {
+            knownHealthBefore = Math.Min(observedHealthBefore, safeMaxHealth);
+        }
+        else if (safeHealthAfter > 0 && observedHealthBefore > knownHealthBefore && observedHealthBefore <= safeMaxHealth)
+        {
+            knownHealthBefore = observedHealthBefore;
+        }
+
+        var effectiveDamage = Math.Min(rawDamage, Math.Max(0, knownHealthBefore - safeHealthAfter));
+        _roundHealthBySteamId[victimSteamId] = safeHealthAfter;
+        return effectiveDamage;
+    }
+
+    private void RefreshRoundHealthState()
+    {
+        _roundHealthBySteamId.Clear();
+        foreach (var player in Utilities.GetPlayers())
+        {
+            try
+            {
+                if (!IsRealPlayer(player)) continue;
+                var pawn = player.PlayerPawn?.Value;
+                _roundHealthBySteamId[player.SteamID.ToString()] = Math.Max(0, pawn?.Health ?? 0);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Skipping invalid player while refreshing round health state");
+            }
+        }
     }
 
     private async Task BindAsync(CCSPlayerController player, string bindCode, string steamId, string name)
@@ -394,9 +528,12 @@ public sealed class CaorenCupPlugin : BasePlugin
                 {
                     _currentMatchId = state.MatchId;
                     _stats.Clear();
-                    _currentRound = 0;
-                    _scoreCt = 0;
-                    _scoreT = 0;
+                }
+                if (state != null)
+                {
+                    _currentRound = Math.Max(0, state.CurrentRound);
+                    _scoreCt = Math.Max(0, state.ScoreCT);
+                    _scoreT = Math.Max(0, state.ScoreT);
                 }
                 if (state?.Commands is { Count: > 0 })
                 {
@@ -447,6 +584,139 @@ public sealed class CaorenCupPlugin : BasePlugin
             Logger.LogWarning(ex, "Snapshot failed");
         }
     }
+
+    private async Task<bool> RefreshWebStateAsync()
+    {
+        try
+        {
+            var response = await _http.GetAsync("api/plugin/state");
+            var text = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                Logger.LogWarning("Plugin state refresh failed: {Status} {Body}", response.StatusCode, text);
+                return false;
+            }
+
+            var state = JsonSerializer.Deserialize<PluginStateResponse>(text, _jsonOptions);
+            _webPlayersBySteamId.Clear();
+            if (state?.Players != null)
+            {
+                foreach (var webPlayer in state.Players)
+                {
+                    var steamId = NormalizeSteamId(webPlayer.SteamId);
+                    if (!string.IsNullOrWhiteSpace(steamId)) _webPlayersBySteamId[steamId] = webPlayer;
+                }
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Plugin state refresh exception");
+            return false;
+        }
+    }
+
+    private async Task SendNoticeAsync(CCSPlayerController? caller, string target, string customMessage)
+    {
+        if (!await RefreshWebStateAsync())
+        {
+            ReplyToPlayer(caller, "[草人杯] 无法读取网页指挥台状态，/notice 未发送。");
+            return;
+        }
+
+        var recipients = SelectNoticeRecipients(target, out var targetLabel);
+        if (targetLabel == null)
+        {
+            ReplyToPlayer(caller, "[草人杯] 目标无效。可用：all / undercover / und / detective / det / noready / nor");
+            return;
+        }
+
+        if (recipients.Count == 0)
+        {
+            ReplyToPlayer(caller, $"[草人杯] 没有找到可提示的在线玩家：{targetLabel}。");
+            return;
+        }
+
+        var message = string.IsNullOrWhiteSpace(customMessage) ? DefaultNoticeMessage(target) : customMessage.Trim();
+        foreach (var recipient in recipients)
+        {
+            SendNoticeToPlayer(recipient, targetLabel, message);
+        }
+
+        ReplyToPlayer(caller, $"[草人杯] /notice 已发送给 {recipients.Count} 名在线玩家：{targetLabel}。");
+        if (_lastNoticeMissingTargets.Count > 0)
+        {
+            ReplyToPlayer(caller, $"[草人杯] 这些网页玩家未绑定或不在线，未能提示：{string.Join("、", _lastNoticeMissingTargets.Select(p => p.Name))}");
+        }
+    }
+
+    private List<CCSPlayerController> SelectNoticeRecipients(string target, out string? targetLabel)
+    {
+        _lastNoticeMissingTargets.Clear();
+        targetLabel = target switch
+        {
+            "all" => "全体玩家",
+            "undercover" or "und" => "卧底玩家",
+            "detective" or "det" => "侦探玩家",
+            "noready" or "nor" => "未准备玩家",
+            _ => null
+        };
+
+        if (targetLabel == null) return new List<CCSPlayerController>();
+
+        var matched = _webPlayersBySteamId.Values.Where(p => target switch
+        {
+            "all" => true,
+            "undercover" or "und" => string.Equals(p.GameRole, "Undercover", StringComparison.OrdinalIgnoreCase),
+            "detective" or "det" => string.Equals(p.GameRole, "Detective", StringComparison.OrdinalIgnoreCase),
+            "noready" or "nor" => !p.IsReady || (string.Equals(p.GameRole, "Undercover", StringComparison.OrdinalIgnoreCase) && !string.Equals(p.UndercoverTaskAckStage, "read", StringComparison.OrdinalIgnoreCase)),
+            _ => false
+        }).ToList();
+
+        var onlineBySteamId = Utilities.GetPlayers()
+            .Where(IsRealPlayer)
+            .GroupBy(p => NormalizeSteamId(p.SteamID.ToString()))
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var recipients = new List<CCSPlayerController>();
+        foreach (var webPlayer in matched)
+        {
+            var steamId = NormalizeSteamId(webPlayer.SteamId);
+            if (!string.IsNullOrWhiteSpace(steamId) && onlineBySteamId.TryGetValue(steamId, out var player))
+            {
+                recipients.Add(player);
+            }
+            else
+            {
+                _lastNoticeMissingTargets.Add(webPlayer);
+            }
+        }
+
+        return recipients;
+    }
+
+    private static string DefaultNoticeMessage(string target) => target switch
+    {
+        "undercover" or "und" => "请立即查看网页上的卧底任务与确认状态。",
+        "detective" or "det" => "请注意裁判提示，准备进行侦探相关流程。",
+        "noready" or "nor" => "你还没有完成准备，请回网页完成准备或任务确认。",
+        _ => "请注意裁判提示，立即查看网页指挥台。"
+    };
+
+    private void SendNoticeToPlayer(CCSPlayerController player, string targetLabel, string message)
+    {
+        Server.NextFrame(() =>
+        {
+            if (!player.IsValid) return;
+            player.PrintToChat($" {ChatColors.Yellow}================ [草人杯 Notice] ================{ChatColors.Default}");
+            player.PrintToChat($" {ChatColors.Red}[重要提醒]{ChatColors.Default} {ChatColors.Green}{targetLabel}{ChatColors.Default}");
+            player.PrintToChat($" {ChatColors.Yellow}{message}{ChatColors.Default}");
+            try { player.ExecuteClientCommand($"play \"{DefaultNoticeSound}\""); } catch { }
+        });
+    }
+
+    private static string NormalizeSteamId(string? steamId) =>
+        new string((steamId ?? string.Empty).Where(char.IsDigit).ToArray());
 
     private async Task PostEventAsync(string type, object payload)
     {
@@ -582,8 +852,15 @@ public sealed class CaorenCupPlugin : BasePlugin
         _teamLockEnabled = payload.TryGetProperty("lockTeams", out var lockElement)
             ? lockElement.ValueKind != JsonValueKind.False
             : true;
+        _teamAssignmentsValidFromRound = ReadPayloadInt(payload, "validFromRound", 0);
+        _teamAssignmentsValidUntilRound = ReadPayloadInt(payload, "validUntilRound", 0);
 
-        Logger.LogInformation("Applied {Count} CaorenCup team assignments. Lock={Lock}", _teamAssignments.Count, _teamLockEnabled);
+        Logger.LogInformation(
+            "Applied {Count} CaorenCup team assignments. Lock={Lock} ValidFromRound={FromRound} ValidUntilRound={UntilRound}",
+            _teamAssignments.Count,
+            _teamLockEnabled,
+            _teamAssignmentsValidFromRound,
+            _teamAssignmentsValidUntilRound);
         Server.NextFrame(() =>
         {
             EnforceTeamAssignments();
@@ -596,6 +873,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         _teamAssignments.Clear();
         _teamAssignmentBypass.Clear();
         _teamLockEnabled = false;
+        _teamAssignmentsValidFromRound = 0;
+        _teamAssignmentsValidUntilRound = 0;
         Logger.LogInformation("Cleared CaorenCup team assignments.");
         Server.NextFrame(() =>
         {
@@ -606,6 +885,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private void EnforceTeamAssignments()
     {
         if (!_teamLockEnabled || _teamAssignments.Count == 0) return;
+        if (!IsTeamAssignmentActiveForCurrentRound()) return;
 
         foreach (var player in Utilities.GetPlayers().Where(IsRealPlayer))
         {
@@ -633,6 +913,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private HookResult OnJoinTeamCommand(CCSPlayerController? player, CommandInfo command)
     {
         if (!_teamLockEnabled || !IsRealPlayer(player)) return HookResult.Continue;
+        if (!IsTeamAssignmentActiveForCurrentRound()) return HookResult.Continue;
 
         var steamId = player!.SteamID.ToString();
         if (_teamAssignmentBypass.Contains(steamId)) return HookResult.Continue;
@@ -655,6 +936,32 @@ public sealed class CaorenCupPlugin : BasePlugin
             "T" => CsTeam.Terrorist,
             _ => null
         };
+    }
+
+    private bool IsTeamAssignmentActiveForCurrentRound()
+    {
+        var effectiveRound = GetEffectiveTeamAssignmentRound();
+        if (_teamAssignmentsValidFromRound > 0 && effectiveRound < _teamAssignmentsValidFromRound) return false;
+        if (_teamAssignmentsValidUntilRound > 0 && effectiveRound > _teamAssignmentsValidUntilRound) return false;
+        return true;
+    }
+
+    private int GetEffectiveTeamAssignmentRound()
+    {
+        var nextRoundByScore = Math.Max(0, _scoreCt + _scoreT) + 1;
+        return Math.Max(_currentRound, nextRoundByScore);
+    }
+
+    private static int ReadPayloadInt(JsonElement payload, string propertyName, int fallback)
+    {
+        if (payload.ValueKind != JsonValueKind.Object ||
+            !payload.TryGetProperty(propertyName, out var element) ||
+            !element.TryGetInt32(out var value))
+        {
+            return fallback;
+        }
+
+        return Math.Max(0, value);
     }
 
     private static string TeamLabel(CsTeam team)
@@ -694,6 +1001,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     }    private void ResetLiveMatchStats(int currentRound)
     {
         _stats.Clear();
+        _roundHealthBySteamId.Clear();
         _currentRound = Math.Max(0, currentRound);
         _scoreCt = 0;
         _scoreT = 0;
@@ -730,9 +1038,29 @@ public sealed class CaorenCupPlugin : BasePlugin
         return stats;
     }
 
+    private static string SafePlayerName(CCSPlayerController? player)
+    {
+        if (player == null) return string.Empty;
+        try
+        {
+            return player.PlayerName ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
     private static bool IsRealPlayer(CCSPlayerController? player)
     {
-        return player is { IsValid: true, IsBot: false, IsHLTV: false };
+        try
+        {
+            return player is { IsValid: true, IsBot: false, IsHLTV: false };
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string? TeamName(int teamNum)
@@ -849,6 +1177,36 @@ public sealed class PluginBindResponse
     public string? Error { get; set; }
 }
 
+public sealed class PluginStateResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("players")]
+    public List<WebPlayerState>? Players { get; set; }
+}
+
+public sealed class WebPlayerState
+{
+    [JsonPropertyName("playerId")]
+    public string? PlayerId { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("steamId")]
+    public string? SteamId { get; set; }
+
+    [JsonPropertyName("gameRole")]
+    public string? GameRole { get; set; }
+
+    [JsonPropertyName("isReady")]
+    public bool IsReady { get; set; }
+
+    [JsonPropertyName("undercoverTaskAckStage")]
+    public string? UndercoverTaskAckStage { get; set; }
+}
+
 
 public sealed class PluginGameLoginCodeResponse
 {
@@ -893,4 +1251,13 @@ public sealed class PluginHeartbeatResponse
 
     [JsonPropertyName("commands")]
     public List<PluginCommand>? Commands { get; set; }
+
+    [JsonPropertyName("scoreCT")]
+    public int ScoreCT { get; set; }
+
+    [JsonPropertyName("scoreT")]
+    public int ScoreT { get; set; }
+
+    [JsonPropertyName("currentRound")]
+    public int CurrentRound { get; set; }
 }

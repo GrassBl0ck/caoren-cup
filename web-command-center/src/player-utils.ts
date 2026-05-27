@@ -1,7 +1,7 @@
 // player-utils.ts
 import { GameSession, Player, Team, RosterTeam } from './types';
 
-// ========== ??????? ==========
+// ========== 查找玩家 ==========
 export const findPlayerById = (session: GameSession, id: string): Player | undefined =>
     session.players[id];
 
@@ -25,15 +25,15 @@ export const findPlayerByName = (session: GameSession, name: unknown): Player | 
 export const getGamePlayers = (session: GameSession): Player[] =>
     Object.values(session.players).filter(p => p.role !== 'Spectator' && p.role !== 'Admin');
 
-// ???????? hasAnyDetective ?????????? gameSession????????????????
+// 注意：原函数 hasAnyDetective 直接用了全局 gameSession，这里同样改为参数
 export const hasAnyDetective = (session: GameSession): boolean =>
     Object.values(session.players).some(p => p.gameRole === 'Detective' && p.role !== 'Spectator' && p.role !== 'Admin');
 
-// ???????
+// 队伍玩家
 export const getTeamPlayers = (session: GameSession, team: RosterTeam): Player[] =>
     getGamePlayers(session).filter(p => p.rosterTeam === team || session.teams[team].players.includes(p.playerId));
 
-// ========== Steam ID / Team ????? ==========
+// ========== Steam ID / Team 标准化 ==========
 export const normalizeSteamId = (steamId: unknown): string => String(steamId || '').replace(/[^0-9]/g, '');
 
 export const findPlayerBySteamId = (session: GameSession, steamId: unknown): Player | undefined => {
@@ -52,7 +52,7 @@ export const normalizeTeam = (team: unknown): Team | undefined => {
 export const otherRosterTeam = (team: RosterTeam): RosterTeam => team === 'A' ? 'B' : 'A';
 export const oppositeSide = (side: Team): Team => side === 'CT' ? 'T' : 'CT';
 
-// ========== ??? / ??????????? ==========
+// ========== 权限 / 公开数据构建 ==========
 export const shouldRevealRoleToViewer = (viewer: Player | undefined, target: Player, rolesReleased: boolean): boolean => {
     if (!target.gameRole) return false;
     if (viewer?.role === 'Admin') return true;
@@ -103,7 +103,7 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
     return s;
 };
 
-// ========== CSV ???????? ==========
+// ========== CSV 解析辅助 ==========
 export const toNumber = (value: unknown): number => {
     const n = Number(String(value ?? '').trim());
     return Number.isFinite(n) ? n : 0;

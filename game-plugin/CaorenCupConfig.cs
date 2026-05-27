@@ -33,8 +33,6 @@ public class CaorenCupConfig : BasePluginConfig
     // --- 模块 7: Bleed (刚才报错就是缺这个) ---
     [JsonPropertyName("Bleed")]
     public BleedSettings Bleed { get; set; } = new();//bleed
-    [JsonPropertyName("OneManArmy")]
-    public OMASettings OneManArmy { get; set; } = new OMASettings();
     [JsonPropertyName("PlayerStats")]
     public PlayerStatsSettings PlayerStats { get; set; } = new PlayerStatsSettings();
     [JsonPropertyName("Smoke")]
@@ -67,7 +65,7 @@ public class CaorenCupConfig : BasePluginConfig
     public AuraSettings Aura { get; set; } = new AuraSettings();
     public EcoGuessSettings EcoGuess { get; set; } = new EcoGuessSettings();
     public PlaySoundSettings PlaySound { get; set; } = new PlaySoundSettings();
-    public RadarColorSettings RadarColor { get; set; } = new RadarColorSettings();
+    public PresetSettings Preset { get; set; } = new PresetSettings();
 
     [JsonPropertyName("HpCap")]
     public HpCapSettings HpCap { get; set; } = new HpCapSettings();
@@ -83,11 +81,15 @@ public class HpCapSettings
     public int Max { get; set; } = 100;
 }
 
-public class RadarColorSettings
+public class PresetSettings
 {
     public bool Enabled { get; set; } = true;
-    public bool ApplyOnRoundStart { get; set; } = true;
-    public bool ApplyOnSpawn { get; set; } = true;
+    public string PresetFileName { get; set; } = "presets.grass.json";
+    public string DefaultPlayablePermission { get; set; } = "@css/changemap";
+    public string DefaultRestrictedPermission { get; set; } = "@css/root";
+    public bool ApplyResetBeforePreset { get; set; } = true;
+    public int MaxCommandsPerPreset { get; set; } = 200;
+    public bool LogExecutedCommands { get; set; } = false;
 }
 
 public class PlaySoundSettings
@@ -174,37 +176,6 @@ public class BleedSettings
     public bool PlaySound { get; set; } = true; // 保留原有的音效开关
 }
 
-public class OMASettings
-{
-    // Solo (独勇者) 属性
-    [JsonPropertyName("SoloHealth")] public int SoloHealth { get; set; } = 500;
-    [JsonPropertyName("SoloArmor")] public int SoloArmor { get; set; } = 200;
-    [JsonPropertyName("SoloSpeed")] public float SoloSpeed { get; set; } = 1.2f;
-    [JsonPropertyName("SoloDamage")] public float SoloDamage { get; set; } = 2.0f; // 造成伤害倍率
-    [JsonPropertyName("SoloHeal")] public int SoloHeal { get; set; } = 50; // 击杀回血
-    [JsonPropertyName("InfiniteAmmo")] public bool InfiniteAmmo { get; set; } = true;
-
-    // Wallhack (雷达透视)
-    [JsonPropertyName("WallhackEnabled")] public bool WallhackEnabled { get; set; } = false;
-    [JsonPropertyName("WallhackDuration")] public float WallhackDuration { get; set; } = 3.0f;
-    [JsonPropertyName("WallhackInterval")] public float WallhackInterval { get; set; } = 10.0f;
-
-    // Team (挑战者团队) 属性
-    [JsonPropertyName("TeamHealth")] public int TeamHealth { get; set; } = 100;
-    [JsonPropertyName("TeamSpeed")] public float TeamSpeed { get; set; } = 1.0f;
-    [JsonPropertyName("BanTeamAWP")] public bool BanTeamAWP { get; set; } = false;
-    [JsonPropertyName("BanTeamHelm")] public bool BanTeamHelm { get; set; } = false;
-
-    // Game (游戏规则)
-    [JsonPropertyName("C4TimerSoloCT")] public int C4TimerSoloCT { get; set; } = 60;
-    [JsonPropertyName("C4TimerDefault")] public int C4TimerDefault { get; set; } = 40;
-    [JsonPropertyName("AutoSwap")] public bool AutoSwap { get; set; } = true;
-
-    // 当前开启状态 (0=关, 2=T Solo, 3=CT Solo)
-    // 注意：这个状态不需要持久化保存，每次重启默认为关即可，防止重启后直接进入变态模式
-    // 但为了能在 Config 里改默认值，还是加上吧
-    [JsonPropertyName("DefaultMode")] public int DefaultMode { get; set; } = 0;
-}
 public class PlayerStatsSettings
 {
     [JsonPropertyName("Enabled")] public bool Enabled { get; set; } = true;

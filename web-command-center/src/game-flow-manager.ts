@@ -67,6 +67,25 @@ const isDraftComplete = (): boolean => {
     return session.draftIndex >= session.draftOrder.length || getAvailableDraftPlayers().length === 0;
 };
 
+const syncPendingDraftOrderWithRoster = () => {
+    const session = getSession();
+    const originalOrder = session.draftOriginalOrder || session.draftOrder;
+    const assignedCounts: Record<RosterTeam, number> = { A: 0, B: 0 };
+    for (const team of ['A', 'B'] as const) {
+        assignedCounts[team] = session.teams[team].players.filter(
+            id => id !== session.captains.A && id !== session.captains.B
+        ).length;
+    }
+
+    const remainingOrder: RosterTeam[] = [];
+    for (const team of originalOrder) {
+        if (assignedCounts[team] > 0) assignedCounts[team]--;
+        else remainingOrder.push(team);
+    }
+    session.draftOrder = remainingOrder;
+    session.draftIndex = 0;
+};
+
 const getCurrentDraftBatch = () => {
     const session = getSession();
     if (session.draftIndex >= session.draftOrder.length) return null;
@@ -169,6 +188,7 @@ const startDraftPickTimerFunc = (shouldBroadcast = false) => {
     clearDraftPickTimer();
     const session = getSession();
     if (session.phase !== GamePhase.PlayerDraft) return;
+    session.draftCaptainsActive = true;
 
     if (isDraftComplete()) {
         scheduleDraftToMapBan();
@@ -192,6 +212,7 @@ const finishDraftPick = (reason: 'timeout' | 'manual' = 'timeout') => {
     const session = getSession();
     if (session.phase !== GamePhase.PlayerDraft) return;
     clearDraftPickTimer();
+    session.draftCaptainsActive = true;
 
     const batch = getCurrentDraftBatch();
     const team = batch?.team;
@@ -211,6 +232,25 @@ const finishDraftPick = (reason: 'timeout' | 'manual' = 'timeout') => {
     } else {
         startDraftPickTimerFunc(true);
     }
+};
+
+const startCaptainDraftFunc = (shouldBroadcast = true) => {
+    const session = getSession();
+    if (session.phase !== GamePhase.PlayerDraft) return false;
+
+    syncPendingDraftOrderWithRoster();
+    if (isDraftComplete()) {
+        session.draftCaptainsActive = false;
+        session.draftPickTimeoutAt = null;
+        session.timerEndAt = null;
+        session.timerPhase = null;
+        scheduleDraftToMapBan();
+        if (shouldBroadcast) broadcast?.();
+        return true;
+    }
+
+    startDraftPickTimerFunc(shouldBroadcast);
+    return true;
 };
 
 // ========== ��ͼBP���� ==========
@@ -344,6 +384,7 @@ const createEmptyLiveGameData = (): LiveGameData => ({
     lastScoredRound: 0,
     rawPluginRound: 0,
     roundBaseOffset: undefined,
+    formalRoundStartRaw: undefined,
     formalStatsStarted: false,
     killMatrix: {},
     openingKillMatrix: {},
@@ -387,6 +428,42 @@ const createEmptySideStats = () => ({
     CT: createEmptyMatchStats(),
     T: createEmptyMatchStats(),
 });
+
+const resetUndercoverReadiness = (player: Player) => {
+    if (player.gameRole === 'Undercover') {
+        player.isReady = false;
+        player.undercoverTaskAckStage = 'none';
+    } else {
+        player.undercoverTaskAckStage = undefined;
+    }
+};
+
+const ensureUndercoverTaskGrid = (player: Player, session: GameSession) => {
+    if (player.gameRole !== 'Undercover') {
+        delete player.taskGrid;
+        player.undercoverTaskAckStage = undefined;
+        return;
+    }
+
+    if (!player.taskGrid) assignTaskGridToPlayer(player, session.taskTemplate!);
+    player.undercoverTaskAckStage =
+        player.undercoverTaskAckStage === 'received' || player.undercoverTaskAckStage === 'read'
+            ? player.undercoverTaskAckStage
+            : 'none';
+};
+
+const prepareReleasedRoleState = () => {
+    const session = getSession();
+    for (const player of getGamePlayers(session)) {
+        resetUndercoverReadiness(player);
+        if (player.gameRole === 'Undercover') {
+            ensureUndercoverTaskGrid(player, session);
+        } else {
+            delete player.taskGrid;
+        }
+    }
+};
+
 const normalizePluginRound = (rawRound: unknown): number => {
     const session = getSession();
     if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
@@ -394,10 +471,35 @@ const normalizePluginRound = (rawRound: unknown): number => {
     const raw = Math.floor(Number(rawRound || 0));
     if (!Number.isFinite(raw) || raw <= 0) return Math.max(0, live.currentRound || 0);
     live.rawPluginRound = raw;
+    if (live.formalStatsStarted === true && typeof live.formalRoundStartRaw === 'number') {
+        return Math.max(1, raw - live.formalRoundStartRaw + 1);
+    }
     if (typeof live.roundBaseOffset !== 'number') {
         live.roundBaseOffset = Math.max(0, raw - 1);
     }
     return Math.max(1, raw - live.roundBaseOffset);
+};
+
+const nonNegativeInt = (value: unknown): number => {
+    const n = Math.floor(Number(value || 0));
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+};
+
+const getScoreDerivedCurrentRound = (live: Partial<LiveGameData> | null | undefined): number => {
+    if (!live) return 0;
+    const currentRound = nonNegativeInt(live.currentRound);
+    const completedByCtT = nonNegativeInt(live.scoreCT) + nonNegativeInt(live.scoreT);
+    const completedByRoster = nonNegativeInt(live.scoreA) + nonNegativeInt(live.scoreB);
+    const completedRounds = Math.max(completedByCtT, completedByRoster, nonNegativeInt(live.lastScoredRound));
+    if (completedRounds <= 0) return currentRound;
+    return Math.max(currentRound, completedRounds);
+};
+
+const syncCurrentRoundFromScores = (live: LiveGameData | null | undefined): number => {
+    if (!live) return 0;
+    const round = getScoreDerivedCurrentRound(live);
+    if (round > 0) live.currentRound = round;
+    return live.currentRound;
 };
 
 const updateMatchFinishState = () => {
@@ -410,6 +512,7 @@ const updateMatchFinishState = () => {
     session.liveGameData.winTarget = winTarget;
     session.liveGameData.winnerTeam = winner;
     session.liveGameData.matchFinished = !!winner;
+    syncCurrentRoundFromScores(session.liveGameData);
 };
 
 const getRequiredWinTarget = (scoreA: number, scoreB: number): number => {
@@ -434,7 +537,7 @@ const resolveRosterTeamByInitialSide = (side: Team, roundNumber?: number): Roste
     return side === teamASide ? 'A' : 'B';
 };
 
-const resetFormalMatchCounters = () => {
+const resetFormalMatchCounters = (): number => {
     const session = getSession();
     const oldLive = session.liveGameData || createEmptyLiveGameData();
     const raw = Math.max(1, Math.floor(Number(oldLive.rawPluginRound || oldLive.currentRound || 1)));
@@ -444,6 +547,7 @@ const resetFormalMatchCounters = () => {
     session.liveGameData = createEmptyLiveGameData();
     session.liveGameData.rawPluginRound = raw;
     session.liveGameData.roundBaseOffset = Math.max(0, raw - 1);
+    session.liveGameData.formalRoundStartRaw = raw;
     session.liveGameData.currentRound = 1;
     session.liveGameData.formalStatsStarted = true;
     session.liveGameData.mapName = keepMap;
@@ -456,6 +560,7 @@ const resetFormalMatchCounters = () => {
         p.finalScore = undefined;
         p.scoreBreakdown = undefined;
     }
+    return raw;
 };
 
 // ========== ��ɫ���� ==========
@@ -468,6 +573,7 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
             for (const player of getTeamPlayers(session, team)) {
                 player.gameRole = 'Soldier';
                 delete player.taskGrid;
+                player.undercoverTaskAckStage = undefined;
                 player.detectiveQuestionCount = 0;
             }
         }
@@ -490,6 +596,9 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
             if (needU > 0) { p.gameRole = 'Undercover'; needU--; }
             else if (needD > 0) { p.gameRole = 'Detective'; needD--; }
             else { p.gameRole = 'Soldier'; }
+            resetUndercoverReadiness(p);
+            if (p.gameRole === 'Undercover' && session.rolesReleased) ensureUndercoverTaskGrid(p, session);
+            if (p.gameRole !== 'Undercover') delete p.taskGrid;
         }
     }
     broadcast?.();
@@ -525,6 +634,7 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
 
     if (from === GamePhase.PlayerDraft) {
         clearDraftPickTimer();
+        session.draftCaptainsActive = false;
         session.draftPickTimeoutAt = null;
         while (session.draftIndex < session.draftOrder.length) {
             const currentTeam = session.draftOrder[session.draftIndex];
@@ -593,7 +703,10 @@ const performPhaseTransition = (to: GamePhase) => {
             const secondTeam: RosterTeam = firstTeam === 'A' ? 'B' : 'A';
             const pickSequence: RosterTeam[] = [firstTeam, secondTeam, secondTeam, firstTeam];
             for (let i = 0; i < totalPicks; i++) session.draftOrder.push(pickSequence[i % 4]);
+            session.draftOriginalOrder = [...session.draftOrder];
             session.draftIndex = 0;
+            session.draftCaptainsActive = false;
+            session.draftPickTimeoutAt = null;
             session.teams.A.players = [session.captains.A!].filter(Boolean);
             session.teams.B.players = [session.captains.B!].filter(Boolean);
             const pA = findPlayerById(session, session.captains.A!); if (pA) { pA.rosterTeam = 'A'; pA.team = undefined; }
@@ -603,7 +716,9 @@ const performPhaseTransition = (to: GamePhase) => {
             while (banSequence.length < session.mapPool.length - 1) { banSequence.push(...baseOrder); }
             banSequence.length = session.mapPool.length - 1;
             session.banSequence = banSequence;
-            startDraftPickTimerFunc(false);
+            session.timerEndAt = null;
+            session.timerPhase = null;
+            if (isDraftComplete()) scheduleDraftToMapBan();
             break;
         case GamePhase.MapBan:
             session.bannedMaps = [];
@@ -618,7 +733,12 @@ const performPhaseTransition = (to: GamePhase) => {
             const undercoverEnabled = session.matchOptions?.undercoverModeEnabled !== false;
             if (undercoverEnabled) {
                 session.rolesReleased = false;
-                Object.values(session.players).forEach(p => p.gameRole = undefined);
+                Object.values(session.players).forEach(p => {
+                    p.gameRole = undefined;
+                    p.isReady = false;
+                    p.undercoverTaskAckStage = undefined;
+                    delete p.taskGrid;
+                });
             } else {
                 session.undercoverCount = 0;
                 session.detectiveCount = 0;
@@ -631,6 +751,7 @@ const performPhaseTransition = (to: GamePhase) => {
                 Object.values(session.players).forEach(p => {
                     if (p.role !== 'Spectator' && p.role !== 'Admin') p.gameRole = 'Soldier';
                     delete p.taskGrid;
+                    p.undercoverTaskAckStage = undefined;
                     p.detectiveQuestionCount = 0;
                     p.abandonCount = 0;
                     p.replaceCount = 0;
@@ -660,8 +781,8 @@ const performPhaseTransition = (to: GamePhase) => {
                 p.finalScore = undefined;
                 p.scoreBreakdown = undefined;
                 p.detectiveQuestionCount = ue && p.gameRole === 'Detective' ? 0 : undefined;
-                if (ue && p.gameRole === 'Undercover') assignTaskGridToPlayer(p, session.taskTemplate!);
-                if (!ue) delete p.taskGrid;
+                if (ue && p.gameRole === 'Undercover') ensureUndercoverTaskGrid(p, session);
+                if (!ue || p.gameRole !== 'Undercover') delete p.taskGrid;
             });
             session.liveGameData = createEmptyLiveGameData();
             break;
@@ -712,6 +833,7 @@ const clearUndercoverModeState = () => {
     for (const player of getGamePlayers(session)) {
         player.gameRole = 'Soldier';
         delete player.taskGrid;
+        player.undercoverTaskAckStage = undefined;
         player.abandonCount = 0;
         player.replaceCount = 0;
         player.hintUsedCount = 0;
@@ -763,6 +885,8 @@ export {
     randomRemainingRoles,
     // LiveGame
     normalizePluginRound,
+    getScoreDerivedCurrentRound,
+    syncCurrentRoundFromScores,
     updateMatchFinishState,
     resolveRosterTeamByInitialSide,
     resetFormalMatchCounters,
@@ -770,9 +894,12 @@ export {
     applyMatchOptions,
     clearUndercoverModeState,
     forceSkipUndercoverOnlyPhaseIfNeeded,
-    // �������
+    prepareReleasedRoleState,
+    // �������?
     assignPlayerToRosterFlow as assignPlayerToRoster,
     removePlayerFromRosterTeams,
     getAvailableDraftPlayers,
     isDraftComplete,
+    syncPendingDraftOrderWithRoster,
+    startCaptainDraftFunc as startCaptainDraft,
 };
