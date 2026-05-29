@@ -35,6 +35,7 @@ import {
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
 import { ADMIN_PASSWORD } from './game-constants';
 import { enqueuePluginCommand } from './plugin-command-queue';
+import { assignTaskGridToPlayer } from './task-system';
 
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
@@ -281,7 +282,11 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 return;
             }
 
-            if (data.action === 'TERMINATE_GAME') {
+            if (data.action === 'PLAY_AUDIO_CUE') {
+                const cue = typeof data.payload?.cue === 'string' ? data.payload.cue : 'adminPrompt';
+                io.emit('AUDIO_CUE', { cue, source: 'admin', adminName: admin.name });
+                socket.emit(WsEvents.NOTIFICATION, { message: '已向所有网页玩家发送提示音。' });
+            } else if (data.action === 'TERMINATE_GAME') {
                 terminateCurrentGameAndKickAll('管理员强制终止本局游戏');
             } else if (data.action === 'FORCE_READY') {
                 if (session.phase === GamePhase.PreGameSetup) {
@@ -368,7 +373,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const targetId = String(data.payload?.playerId || '');
                 const team = data.payload?.team as RosterTeam;
                 if (team !== 'A' && team !== 'B') return;
-                const previousTeam = session.draftOrder[session.draftIndex];
                 if (!assignPlayerToRoster(targetId, team)) {
                     socket.emit(WsEvents.NOTIFICATION, { message: '\u65e0\u6cd5\u5206\u914d\u8be5\u73a9\u5bb6\uff1a\u961f\u957f\u3001\u7ba1\u7406\u5458\u6216\u65c1\u89c2\u8005\u4e0d\u80fd\u5728\u8fd9\u91cc\u76f4\u63a5\u6539\u961f\u3002' });
                     return;
@@ -376,7 +380,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 syncPendingDraftOrderWithRoster();
                 notifyMessage(`\u7ba1\u7406\u5458\u5df2\u5c06 ${findPlayerById(session, targetId)?.name || '\u73a9\u5bb6'} \u5206\u5165 ${team} \u961f\u3002`);
                 if (isDraftComplete()) finishDraftPick('manual');
-                else if (session.draftCaptainsActive && previousTeam !== session.draftOrder[session.draftIndex]) startDraftPickTimer(true);
+                else if (session.draftCaptainsActive) startDraftPickTimer(true);
                 else broadcastState();
             } else if (data.action === 'START_CAPTAIN_DRAFT') {
                 if (session.phase !== GamePhase.PlayerDraft) return;
@@ -429,6 +433,16 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             } else if (data.action === 'UPDATE_TASK_TEMPLATE') {
                 if (data.payload?.taskTemplate) {
                     session.taskTemplate = data.payload.taskTemplate;
+                    for (const player of getGamePlayers(session)) {
+                        if (player.gameRole !== 'Undercover') continue;
+                        assignTaskGridToPlayer(player, session.taskTemplate);
+                        player.isReady = false;
+                        player.undercoverTaskAckStage = 'none';
+                        player.taskActionLog = [];
+                        player.abandonCount = 0;
+                        player.replaceCount = 0;
+                        player.hintUsedCount = 0;
+                    }
                     broadcastState();
                     socket.emit(WsEvents.NOTIFICATION, { message: '任务模板已更新！' });
                 }

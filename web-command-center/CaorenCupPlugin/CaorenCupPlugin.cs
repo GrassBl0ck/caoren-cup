@@ -1,6 +1,7 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
@@ -26,11 +27,19 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
+    private readonly Channel<PluginOutboundMessage> _outboundQueue = Channel.CreateUnbounded<PluginOutboundMessage>(new UnboundedChannelOptions
+    {
+        SingleReader = true,
+        SingleWriter = false
+    });
+    private readonly CancellationTokenSource _outboundCts = new();
+    private Task? _outboundWorker;
     private CaorenConfig _config = new();
     private string? _currentMatchId;
     private int _currentRound;
     private int _scoreCt;
     private int _scoreT;
+    private long _eventSequence;
     private DateTime _lastPlayerHurtWarningUtc = DateTime.MinValue;
     private readonly Dictionary<string, CsTeam> _teamAssignments = new(StringComparer.Ordinal);
     private readonly HashSet<string> _teamAssignmentBypass = new(StringComparer.Ordinal);
@@ -82,6 +91,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|noready|nor [内容]", OnNoticeCommand);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
+        _outboundWorker = Task.Run(() => ProcessOutboundQueueAsync(_outboundCts.Token));
 
         _timers.Add(AddTimer(Math.Max(3, _config.HeartbeatSeconds), () =>
         {
@@ -105,6 +115,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _isUnloading = true;
         StopTimers();
         RemoveCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
+        _outboundCts.Cancel();
         _http.Dispose();
     }
 
@@ -300,7 +311,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _currentRound++;
         RefreshRoundHealthState();
         EnforceTeamAssignments();
-        _ = PostEventAsync("round_start", new
+        QueueEvent("round_start", new
         {
             round = _currentRound,
             mapName = SafeMapName(),
@@ -318,19 +329,25 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (!IsRealPlayer(victim)) return HookResult.Continue;
 
         var victimSteamId = victim!.SteamID.ToString();
-        EnsureLocalStats(victimSteamId, SafePlayerName(victim)).Deaths++;
+        var victimTeam = TeamName(victim.TeamNum);
 
         string? attackerSteamId = null;
         string? attackerTeam = null;
+        var isFriendlyKill = false;
         if (IsRealPlayer(attacker) && attacker!.SteamID != victim.SteamID)
         {
             attackerSteamId = attacker.SteamID.ToString();
             attackerTeam = TeamName(attacker.TeamNum);
-            EnsureLocalStats(attackerSteamId, SafePlayerName(attacker)).Kills++;
+            isFriendlyKill = IsSamePlayableSide(attackerTeam, victimTeam);
+            if (IsEnemySideKill(attackerTeam, victimTeam))
+            {
+                EnsureLocalStats(attackerSteamId, SafePlayerName(attacker)).Kills++;
+            }
         }
+        if (!isFriendlyKill) EnsureLocalStats(victimSteamId, SafePlayerName(victim)).Deaths++;
 
         string? assisterSteamId = null;
-        if (IsRealPlayer(assister) && assister!.SteamID != victim.SteamID && assister.SteamID.ToString() != attackerSteamId)
+        if (IsRealPlayer(assister) && assister!.SteamID != victim.SteamID && assister.SteamID.ToString() != attackerSteamId && IsEnemySideKill(attackerTeam, victimTeam))
         {
             assisterSteamId = assister.SteamID.ToString();
             EnsureLocalStats(assisterSteamId, SafePlayerName(assister)).Assists++;
@@ -339,13 +356,13 @@ public sealed class CaorenCupPlugin : BasePlugin
         var attackerEquipment = PlayerEquipment(attacker);
         var victimEquipment = PlayerEquipment(victim);
 
-        _ = PostEventAsync("player_death", new
+        QueueEvent("player_death", new
         {
             round = _currentRound,
             attackerSteamId,
             attackerTeam,
             victimSteamId,
-            victimTeam = TeamName(victim.TeamNum),
+            victimTeam,
             assisterSteamId,
             headshot = @event.Headshot,
             weapon = @event.Weapon,
@@ -372,9 +389,12 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (effectiveDamage <= 0) return HookResult.Continue;
 
         var attackerSteamId = attacker.SteamID.ToString();
-        EnsureLocalStats(attackerSteamId, SafePlayerName(attacker)).Damage += effectiveDamage;
+        if (IsEnemySideKill(TeamName(attacker.TeamNum), TeamName(victim.TeamNum)))
+        {
+            EnsureLocalStats(attackerSteamId, SafePlayerName(attacker)).Damage += effectiveDamage;
+        }
 
-        _ = PostEventAsync("player_hurt", new
+        QueueEvent("player_hurt", new
         {
             round = _currentRound,
             attackerSteamId,
@@ -397,7 +417,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (winner == "CT") _scoreCt++;
         else if (winner == "T") _scoreT++;
 
-        _ = PostEventAsync("round_end", new
+        QueueEvent("round_end", new
         {
             round = _currentRound,
             winner,
@@ -406,7 +426,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             mapName = SafeMapName(),
             players = BuildLivePlayers()
         });
-        _ = SendSnapshotAsync();
+        QueueSnapshot();
         return HookResult.Continue;
     }
 
@@ -718,38 +738,140 @@ public sealed class CaorenCupPlugin : BasePlugin
     private static string NormalizeSteamId(string? steamId) =>
         new string((steamId ?? string.Empty).Where(char.IsDigit).ToArray());
 
-    private async Task PostEventAsync(string type, object payload)
+    private static bool IsEnemySideKill(string? attackerTeam, string? victimTeam) =>
+        (attackerTeam == "CT" || attackerTeam == "T") &&
+        (victimTeam == "CT" || victimTeam == "T") &&
+        attackerTeam != victimTeam;
+
+    private static bool IsSamePlayableSide(string? attackerTeam, string? victimTeam) =>
+        (attackerTeam == "CT" || attackerTeam == "T") &&
+        attackerTeam == victimTeam;
+
+    private void QueueEvent(string type, object payload)
     {
+        var message = PluginOutboundMessage.ForEvent(
+            type,
+            payload,
+            _currentMatchId,
+            Interlocked.Increment(ref _eventSequence),
+            DateTimeOffset.UtcNow);
+
+        if (!_outboundQueue.Writer.TryWrite(message) && ShouldLogEventFailure(type))
+        {
+            Logger.LogWarning("Failed to queue event {Type} seq={Sequence}", type, message.Sequence);
+        }
+    }
+
+    private void QueueSnapshot()
+    {
+        var message = PluginOutboundMessage.ForSnapshot(new
+        {
+            matchId = _currentMatchId,
+            mapName = SafeMapName(),
+            scoreCT = _scoreCt,
+            scoreT = _scoreT,
+            currentRound = _currentRound,
+            players = BuildLivePlayers()
+        }, Interlocked.Increment(ref _eventSequence), DateTimeOffset.UtcNow);
+
+        if (!_outboundQueue.Writer.TryWrite(message))
+        {
+            Logger.LogWarning("Failed to queue snapshot seq={Sequence}", message.Sequence);
+        }
+    }
+
+    private async Task ProcessOutboundQueueAsync(CancellationToken cancellationToken)
+    {
+        await foreach (var message in _outboundQueue.Reader.ReadAllAsync(cancellationToken))
+        {
+            if (_isUnloading) break;
+            try
+            {
+                if (message.Kind == PluginOutboundKind.Event)
+                {
+                    await PostEventAsync(message, cancellationToken);
+                }
+                else
+                {
+                    await PostSnapshotAsync(message.Body, message.Sequence, cancellationToken);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Outbound queue failed for {Kind} seq={Sequence}", message.Kind, message.Sequence);
+            }
+        }
+    }
+
+    private async Task PostEventAsync(PluginOutboundMessage message, CancellationToken cancellationToken)
+    {
+        var type = message.EventType ?? string.Empty;
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/event", new
             {
-                matchId = _currentMatchId,
+                matchId = message.MatchId,
                 type,
-                payload
-            }, _jsonOptions);
+                eventSequence = message.Sequence,
+                eventTimestampUtc = message.TimestampUtc,
+                payload = message.Body
+            }, _jsonOptions, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadAsStringAsync();
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
                 if (ShouldLogEventFailure(type))
                 {
-                    Logger.LogWarning("Event {Type} rejected: {Status} {Body}", type, response.StatusCode, body);
+                    Logger.LogWarning("Event {Type} seq={Sequence} rejected: {Status} {Body}", type, message.Sequence, response.StatusCode, body);
                 }
             }
             else
             {
                 if (!string.Equals(type, "player_hurt", StringComparison.OrdinalIgnoreCase))
                 {
-                    LogDebug("Event {Type} posted", type);
+                    LogDebug("Event {Type} seq={Sequence} posted", type, message.Sequence);
                 }
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             if (ShouldLogEventFailure(type))
             {
-                Logger.LogWarning(ex, "Failed to post event {Type}", type);
+                Logger.LogWarning(ex, "Failed to post event {Type} seq={Sequence}", type, message.Sequence);
             }
+        }
+    }
+
+    private async Task PostSnapshotAsync(object body, long sequence, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("api/plugin/snapshot", body, _jsonOptions, cancellationToken);
+
+            var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                LogDebug("Snapshot seq={Sequence} OK: {Text}", sequence, text);
+            }
+            else
+            {
+                Logger.LogWarning("Snapshot seq={Sequence} failed: {Status} {Body}", sequence, response.StatusCode, text);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Snapshot seq={Sequence} failed", sequence);
         }
     }
 
@@ -1205,6 +1327,40 @@ public sealed class WebPlayerState
 
     [JsonPropertyName("undercoverTaskAckStage")]
     public string? UndercoverTaskAckStage { get; set; }
+}
+
+public enum PluginOutboundKind
+{
+    Event,
+    Snapshot
+}
+
+public sealed class PluginOutboundMessage
+{
+    public PluginOutboundKind Kind { get; init; }
+    public string? EventType { get; init; }
+    public object Body { get; init; } = new();
+    public string? MatchId { get; init; }
+    public long Sequence { get; init; }
+    public string TimestampUtc { get; init; } = string.Empty;
+
+    public static PluginOutboundMessage ForEvent(string eventType, object body, string? matchId, long sequence, DateTimeOffset timestamp) => new()
+    {
+        Kind = PluginOutboundKind.Event,
+        EventType = eventType,
+        Body = body,
+        MatchId = matchId,
+        Sequence = sequence,
+        TimestampUtc = timestamp.ToString("O")
+    };
+
+    public static PluginOutboundMessage ForSnapshot(object body, long sequence, DateTimeOffset timestamp) => new()
+    {
+        Kind = PluginOutboundKind.Snapshot,
+        Body = body,
+        Sequence = sequence,
+        TimestampUtc = timestamp.ToString("O")
+    };
 }
 
 
