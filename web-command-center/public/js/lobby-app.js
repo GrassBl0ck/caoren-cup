@@ -17,6 +17,29 @@ const ws = io();
         window._postmatchStatsMode = 'all';
         window._postmatchMatrixMode = 'all';
         window._lobbyAnnouncement = null;
+        window._activeAdminTab = localStorage.getItem('caoren-active-admin-tab') || 'flow';
+
+        function switchAdminTab(tab) {
+            const knownTabs = ['announcement', 'setup', 'flow', 'tasks', 'mods'];
+            const activeTab = knownTabs.includes(tab) ? tab : 'flow';
+            window._activeAdminTab = activeTab;
+            localStorage.setItem('caoren-active-admin-tab', activeTab);
+
+            document.querySelectorAll('[data-admin-tab]').forEach(btn => {
+                const active = btn.getAttribute('data-admin-tab') === activeTab;
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-selected', active ? 'true' : 'false');
+                btn.setAttribute('tabindex', active ? '0' : '-1');
+            });
+
+            document.querySelectorAll('[data-admin-tab-panel]').forEach(panel => {
+                const active = panel.getAttribute('data-admin-tab-panel') === activeTab;
+                panel.classList.toggle('active', active);
+                panel.hidden = !active;
+            });
+        }
+
+        window.switchAdminTab = switchAdminTab;
 
         function applyTheme(theme) {
             const value = theme === 'dark' ? 'dark' : 'light';
@@ -323,7 +346,7 @@ const ws = io();
         function syncMatchOptionsPanel(state, isAdmin) {
             const panel = document.getElementById('match-options-panel');
             if (!panel) return;
-            panel.style.display = isAdmin ? 'block' : 'none';
+            panel.style.display = isAdmin ? '' : 'none';
             if (!isAdmin) return;
 
             const phase = state?.phase || 'Lobby';
@@ -451,6 +474,11 @@ const ws = io();
 
             document.body.classList.toggle('caoren-modifiers-disabled', !visible);
             document.documentElement.classList.toggle('caoren-modifiers-disabled', !visible);
+
+            const emptyState = document.getElementById('admin-mods-empty-state');
+            if (emptyState) {
+                emptyState.style.display = visible ? 'none' : '';
+            }
 
             const panel = document.getElementById('caoren-mod-panel');
             if (panel) {
@@ -760,10 +788,15 @@ if (window._caorenModifiersEnabled !== true) {
                 if (btn) btn.textContent = '推进阶段 (当前: ' + state.phase + ')';
                 const templateBtn = document.getElementById('template-config-btn');
                 if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
+                const taskTemplateBtn = document.getElementById('task-template-config-btn');
+                if (taskTemplateBtn) taskTemplateBtn.style.display = undercoverEnabled ? '' : 'none';
+                switchAdminTab(window._activeAdminTab || 'flow');
                 syncMatchOptionsPanel(state, true);
+                renderAdminUndercoverTaskPanel(state);
             } else {
                 document.getElementById('admin-controls').style.display = 'none';
                 syncMatchOptionsPanel(state, false);
+                renderAdminUndercoverTaskPanel(state);
             }
 
             const lobbyArea = document.getElementById('lobby-area');
@@ -1638,6 +1671,52 @@ if (window._caorenModifiersEnabled !== true) {
             return html;
         }
 
+        function renderAdminUndercoverTaskPanel(state) {
+            const status = document.getElementById('admin-undercover-task-status');
+            const body = document.getElementById('admin-undercover-task-body');
+            const templateBtn = document.getElementById('task-template-config-btn');
+            if (!status || !body) return;
+
+            const currentPlayer = window._currentPlayer;
+            const undercoverEnabled = isUndercoverModeEnabledFromState(state);
+            const phase = state?.phase || window._currentGamePhase || 'Lobby';
+            const players = state?.players || window._allPlayers || {};
+
+            if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
+
+            if (currentPlayer?.role !== 'Admin') {
+                status.textContent = '只有管理员可以查看卧底任务。';
+                body.innerHTML = '';
+                return;
+            }
+
+            if (!undercoverEnabled) {
+                status.textContent = '本局卧底模式已关闭。';
+                body.innerHTML = '<p class="muted" style="margin:0;">本局不会生成卧底任务，也不会出现侦探问答或赛后指认。</p>';
+                return;
+            }
+
+            const undercovers = Object.values(players).filter(p => p.gameRole === 'Undercover');
+            status.innerHTML = `当前阶段：<b>${phaseDisplayName(phase)}</b>；卧底人数：${undercovers.length}`;
+
+            if (!undercovers.length) {
+                body.innerHTML = '<p class="muted" style="margin:0;">当前没有卧底玩家。身份发放后，这里会显示每名卧底的任务格和操作记录。</p>';
+                return;
+            }
+
+            let html = '<div class="admin-undercover-task-list">';
+            undercovers.forEach(p => {
+                const liveSide = getLiveSide(p) || '未进队';
+                const expected = getExpectedSide(p, state).label;
+                html += `<div class="admin-undercover-task-item"><h5>玩家：${htmlEscape(p.name)} <span>[${p.rosterTeam || '-'}队 / 当前边 ${htmlEscape(liveSide)} / 应在边 ${htmlEscape(expected)}]</span></h5>`;
+                html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                html += renderTaskActionLog(p.taskActionLog || [], { title: '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55', limit: 20 });
+                html += '</div>';
+            });
+            html += '</div>';
+            body.innerHTML = html;
+        }
+
         function setPostmatchStatsMode(mode) {
             window._postmatchStatsMode = mode || 'all';
             if (window._currentGameState) renderPostmatchPanels(window._currentGameState);
@@ -2041,19 +2120,6 @@ if (window._caorenModifiersEnabled !== true) {
                 }
                 html += '</div>';
 
-                html += '<div style="margin-top:15px; padding: 15px; background: #fff3e0; border: 1px solid #ffb74d; border-radius:6px;"><h4 style="margin-top:0; color:#e65100;">卧底任务监控</h4>';
-                const undercovers = Object.values(window._allPlayers || {}).filter(p => p.gameRole === 'Undercover');
-                if (undercovers.length === 0) {
-                    html += '<p style="color:#777;">当前没有卧底玩家</p>';
-                } else {
-                    undercovers.forEach(p => {
-                        html += `<div style="margin:12px 0 18px;"><b>玩家：${htmlEscape(p.name)} [${p.rosterTeam || '-'}队 / 当前边${getLiveSide(p) || '未进队'} / 应在边${getExpectedSide(p, state).label}]</b>`;
-                        html += renderTaskGrid(p.taskGrid || {}, { compact: true });
-                        html += renderTaskActionLog(p.taskActionLog || [], { title: '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55', limit: 20 });
-                        html += '</div>';
-                    });
-                }
-                html += '</div>';
             }
                 }
             document.getElementById('extra-info').innerHTML = html;
