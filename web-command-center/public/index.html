@@ -68,6 +68,13 @@
                 </ol>
                 <p style="margin:8px 0 0;color:#64748b;font-size:14px;line-height:1.7;">管理员在同一输入框输入管理员密码即可直接进入。旧 4 位绑定码只作为兼容信息，不再作为玩家登录主入口。</p>
             </div>
+            <section id="lobby-announcement-public" class="lobby-announcement" style="display:none;" aria-live="polite">
+                <div class="lobby-announcement-header">
+                    <span class="status-chip">大厅公告</span>
+                    <h3 id="lobby-announcement-title">大厅公告</h3>
+                </div>
+                <div id="lobby-announcement-body" class="lobby-announcement-body"></div>
+            </section>
         </div>
         <input id="name-input" type="hidden" />
         <input id="extra-input" type="hidden" />
@@ -78,6 +85,38 @@
         <div class="player-list" id="player-list"></div>
         <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
             <h3 style="margin-top:0;">管理员控制区</h3>
+
+            <div id="lobby-announcement-admin-panel" class="match-options-panel lobby-announcement-admin-panel">
+                <h4>大厅公告设置</h4>
+                <div id="lobby-announcement-admin-status" class="match-options-status">公告状态读取中……</div>
+                <label class="match-options-row lobby-announcement-enabled-row">
+                    <input type="checkbox" id="lobby-announcement-enabled">
+                    <div>
+                        <div class="match-options-title">展示大厅公告</div>
+                        <div class="match-options-desc">开启后，未进入大厅的玩家会在登录区域看到这段内容。</div>
+                    </div>
+                </label>
+                <label class="lobby-announcement-title-field">
+                    标题
+                    <input id="lobby-announcement-title-input" type="text" maxlength="40" placeholder="例如：更新公告">
+                </label>
+                <div class="lobby-rich-toolbar" role="toolbar" aria-label="公告富文本工具栏">
+                    <button type="button" onclick="formatLobbyAnnouncement('bold')"><b>B</b></button>
+                    <button type="button" onclick="formatLobbyAnnouncement('italic')"><i>I</i></button>
+                    <button type="button" onclick="formatLobbyAnnouncement('underline')"><u>U</u></button>
+                    <button type="button" onclick="formatLobbyAnnouncementBlock('h3')">H</button>
+                    <button type="button" onclick="formatLobbyAnnouncementBlock('p')">P</button>
+                    <button type="button" onclick="formatLobbyAnnouncement('insertUnorderedList')">列表</button>
+                    <button type="button" onclick="formatLobbyAnnouncement('insertOrderedList')">编号</button>
+                    <button type="button" onclick="formatLobbyAnnouncementLink()">链接</button>
+                    <button type="button" onclick="formatLobbyAnnouncement('removeFormat')">清除格式</button>
+                </div>
+                <div id="lobby-announcement-editor" class="lobby-announcement-editor" contenteditable="true"></div>
+                <div class="match-options-actions">
+                    <button type="button" class="primary-btn" onclick="saveLobbyAnnouncement()">保存公告</button>
+                    <button type="button" class="secondary-btn" onclick="refreshLobbyAnnouncement()">刷新公告</button>
+                </div>
+            </div>
 
             <div id="match-options-panel" class="match-options-panel">
                 <h4>本局模式设置</h4>

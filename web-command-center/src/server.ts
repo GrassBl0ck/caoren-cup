@@ -12,6 +12,11 @@ import { restoreSessionSnapshot, scheduleSessionSnapshotSave } from './session-p
 import { sanitizeForPublic } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
+import {
+    LobbyAnnouncement,
+    readLobbyAnnouncement,
+    registerLobbyAnnouncementRoutes,
+} from './routes/lobby-announcement-routes';
 import { registerPluginRoutes } from './plugin-api';
 import { registerSocketHandlers } from './socket-handlers';
 import { registerGameCodeLogin } from './v1333-game-login';
@@ -75,6 +80,10 @@ const notifyMessage = (msg: string) => {
     io.emit(WsEvents.NOTIFICATION, { message: msg });
 };
 
+const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {
+    io.emit(WsEvents.LOBBY_ANNOUNCEMENT, { announcement });
+};
+
 injectFlowBroadcast(broadcastState);
 injectNotify(notifyMessage);
 
@@ -113,6 +122,12 @@ registerCaorenModRoutes(app, {
     broadcastState,
 });
 
+registerLobbyAnnouncementRoutes(app, {
+    adminPassword: ADMIN_PASSWORD,
+    notify: notifyMessage,
+    broadcastAnnouncement,
+});
+
 registerPluginRoutes(app, {
     broadcastState,
     notifyMessage,
@@ -121,6 +136,10 @@ registerPluginRoutes(app, {
 registerSocketHandlers(io, {
     broadcastState,
     notifyMessage,
+});
+
+io.on('connection', (socket) => {
+    socket.emit(WsEvents.LOBBY_ANNOUNCEMENT, { announcement: readLobbyAnnouncement() });
 });
 
 registerGameCodeLogin(app, io, {

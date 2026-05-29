@@ -141,6 +141,108 @@
             line-height: 1.85;
         }
 
+        .lobby-announcement {
+            margin-top: 16px;
+            padding: 16px 18px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--panel-soft);
+        }
+
+        .lobby-announcement-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+
+        .lobby-announcement-header h3 {
+            margin: 0;
+            font-size: 20px;
+            line-height: 1.35;
+        }
+
+        .lobby-announcement-body {
+            line-height: 1.8;
+            overflow-wrap: anywhere;
+        }
+
+        .lobby-announcement-body :first-child {
+            margin-top: 0;
+        }
+
+        .lobby-announcement-body :last-child {
+            margin-bottom: 0;
+        }
+
+        .lobby-announcement-body blockquote {
+            margin: 10px 0;
+            padding: 8px 12px;
+            border-left: 4px solid var(--primary);
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        .lobby-announcement-body a {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        .lobby-announcement-admin-panel {
+            display: block;
+        }
+
+        .lobby-announcement-enabled-row {
+            margin-top: 10px;
+        }
+
+        .lobby-announcement-title-field {
+            display: grid;
+            gap: 6px;
+            margin: 12px 0;
+            font-weight: 800;
+        }
+
+        .lobby-announcement-title-field input {
+            width: min(520px, 100%);
+        }
+
+        .lobby-rich-toolbar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 10px 0;
+        }
+
+        .lobby-rich-toolbar button {
+            min-width: 36px;
+            margin: 0;
+            padding: 6px 10px;
+            border-color: var(--border);
+            background: var(--panel);
+            color: var(--text);
+            font-weight: 800;
+        }
+
+        .lobby-announcement-editor {
+            min-height: 180px;
+            max-height: 420px;
+            overflow: auto;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--panel);
+            color: var(--text);
+            line-height: 1.75;
+            outline: none;
+        }
+
+        .lobby-announcement-editor:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+        }
+
         .player-list {
             margin-top: 20px;
         }

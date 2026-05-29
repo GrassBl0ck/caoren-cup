@@ -16,6 +16,7 @@ const ws = io();
         window._editingCellId = null;
         window._postmatchStatsMode = 'all';
         window._postmatchMatrixMode = 'all';
+        window._lobbyAnnouncement = null;
 
         function applyTheme(theme) {
             const value = theme === 'dark' ? 'dark' : 'light';
@@ -180,6 +181,97 @@ const ws = io();
 
         function getAdminPasswordForRequest() {
             return document.getElementById('extra-input')?.value || prompt('请输入管理员密码：') || '';
+        }
+
+        function renderLobbyAnnouncement(announcement) {
+            const normalized = announcement || {};
+            window._lobbyAnnouncement = normalized;
+
+            const publicPanel = document.getElementById('lobby-announcement-public');
+            const titleEl = document.getElementById('lobby-announcement-title');
+            const bodyEl = document.getElementById('lobby-announcement-body');
+            const hasContent = normalized.enabled === true && String(normalized.html || '').trim();
+
+            if (publicPanel) publicPanel.style.display = hasContent ? 'block' : 'none';
+            if (titleEl) titleEl.textContent = normalized.title || '大厅公告';
+            if (bodyEl) bodyEl.innerHTML = hasContent ? normalized.html : '';
+
+            const enabledInput = document.getElementById('lobby-announcement-enabled');
+            const titleInput = document.getElementById('lobby-announcement-title-input');
+            const editor = document.getElementById('lobby-announcement-editor');
+            const status = document.getElementById('lobby-announcement-admin-status');
+
+            if (enabledInput) enabledInput.checked = normalized.enabled === true;
+            if (titleInput) titleInput.value = normalized.title || '大厅公告';
+            if (editor && document.activeElement !== editor) editor.innerHTML = normalized.html || '';
+            if (status) {
+                const updated = normalized.updatedAt ? new Date(normalized.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '未保存';
+                status.textContent = `当前状态：${normalized.enabled ? '展示中' : '已隐藏'}；最后保存：${updated}`;
+            }
+        }
+
+        async function refreshLobbyAnnouncement() {
+            try {
+                const res = await fetch('/api/lobby-announcement', { headers: { Accept: 'application/json' } });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || '读取大厅公告失败');
+                renderLobbyAnnouncement(data.announcement);
+            } catch (err) {
+                const status = document.getElementById('lobby-announcement-admin-status');
+                if (status) status.textContent = err.message || '读取大厅公告失败';
+            }
+        }
+
+        function formatLobbyAnnouncement(command) {
+            const editor = document.getElementById('lobby-announcement-editor');
+            if (!editor) return;
+            editor.focus();
+            document.execCommand(command, false, null);
+        }
+
+        function formatLobbyAnnouncementBlock(tagName) {
+            const editor = document.getElementById('lobby-announcement-editor');
+            if (!editor) return;
+            editor.focus();
+            document.execCommand('formatBlock', false, tagName);
+        }
+
+        function formatLobbyAnnouncementLink() {
+            const editor = document.getElementById('lobby-announcement-editor');
+            if (!editor) return;
+            const url = prompt('请输入链接地址，建议使用 https:// 开头：');
+            if (!url) return;
+            editor.focus();
+            document.execCommand('createLink', false, url);
+        }
+
+        async function saveLobbyAnnouncement() {
+            const adminPassword = getAdminPasswordForRequest();
+            if (!adminPassword) return;
+
+            const announcement = {
+                enabled: !!document.getElementById('lobby-announcement-enabled')?.checked,
+                title: document.getElementById('lobby-announcement-title-input')?.value || '大厅公告',
+                html: document.getElementById('lobby-announcement-editor')?.innerHTML || ''
+            };
+
+            const status = document.getElementById('lobby-announcement-admin-status');
+            if (status) status.textContent = '正在保存大厅公告……';
+
+            try {
+                const res = await fetch('/api/admin/lobby-announcement', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ adminPassword, announcement })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || '保存大厅公告失败');
+                renderLobbyAnnouncement(data.announcement);
+                alert('大厅公告已保存。');
+            } catch (err) {
+                if (status) status.textContent = err.message || '保存大厅公告失败';
+                alert(err.message || '保存大厅公告失败');
+            }
         }
 
         function getPendingMatchOptions() {
@@ -586,6 +678,12 @@ if (window._caorenModifiersEnabled !== true) {
                 }
             }
         });
+
+        ws.on('LOBBY_ANNOUNCEMENT', (data) => {
+            renderLobbyAnnouncement(data?.announcement);
+        });
+
+        refreshLobbyAnnouncement();
 
         ws.on('GAME_STATE', (state) => {
             window._currentGameState = state;
