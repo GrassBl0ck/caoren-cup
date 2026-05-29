@@ -2,6 +2,15 @@
 (function () {
   function byId(id) { return document.getElementById(id); }
 
+  function isDesktopClient() {
+    return /\bCaorenCupDesktopClient\/1\.0\b/.test(navigator.userAgent || '');
+  }
+
+  function hideDesktopClientDownloadInClient() {
+    var downloadLink = byId('caoren-desktop-client-download');
+    if (downloadLink && isDesktopClient()) downloadLink.style.display = 'none';
+  }
+
   function getLoginSocket() {
     try {
       if (typeof ws !== 'undefined' && ws && ws.emit) return ws;
@@ -33,6 +42,7 @@
     var loginArea = byId('login-area') || document.body;
     var panel = byId('v1333-game-code-login-panel');
     if (!panel) return;
+    hideDesktopClientDownloadInClient();
 
     Array.prototype.forEach.call(loginArea.querySelectorAll('button'), function (el) {
       if (el.id !== 'v1333-connect-server-btn' && el.id !== 'v1335-enter-lobby-btn') el.style.display = 'none';

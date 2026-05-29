@@ -53,6 +53,7 @@
                 <span id="v1333-server-dot" aria-hidden="true" style="display:inline-block;width:12px;height:12px;border-radius:999px;background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18);"></span>
                 <strong id="v1333-server-status">正在读取服务器状态...</strong>
                 <button id="v1333-connect-server-btn" type="button" disabled>连接至草人杯服务器</button>
+                <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-%E6%A1%8C%E9%9D%A2%E5%AE%A2%E6%88%B7%E7%AB%AF-v1.0.0.exe" download style="display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:6px;background:#0f172a;color:#fff;text-decoration:none;font-weight:700;">下载桌面客户端</a>
             </div>
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <input id="v1333-game-login-code-input" type="text" placeholder="输入游戏内返回的码或管理员密码" style="width:min(460px,100%);box-sizing:border-box;" autocomplete="one-time-code" />
@@ -86,6 +87,15 @@
         <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
             <h3 style="margin-top:0;">管理员控制区</h3>
 
+            <div class="admin-tabs" role="tablist" aria-label="管理员功能标签">
+                <button type="button" class="admin-tab-btn" data-admin-tab="announcement" role="tab" aria-controls="admin-tab-announcement" onclick="switchAdminTab('announcement')">公告</button>
+                <button type="button" class="admin-tab-btn" data-admin-tab="setup" role="tab" aria-controls="admin-tab-setup" onclick="switchAdminTab('setup')">本局设置</button>
+                <button type="button" class="admin-tab-btn" data-admin-tab="flow" role="tab" aria-controls="admin-tab-flow" onclick="switchAdminTab('flow')">流程控制</button>
+                <button type="button" class="admin-tab-btn" data-admin-tab="tasks" role="tab" aria-controls="admin-tab-tasks" onclick="switchAdminTab('tasks')">卧底任务</button>
+                <button type="button" class="admin-tab-btn" data-admin-tab="mods" role="tab" aria-controls="admin-tab-mods" onclick="switchAdminTab('mods')">娱乐修改</button>
+            </div>
+
+            <div id="admin-tab-announcement" class="admin-tab-panel" data-admin-tab-panel="announcement" role="tabpanel">
             <div id="lobby-announcement-admin-panel" class="match-options-panel lobby-announcement-admin-panel">
                 <h4>大厅公告设置</h4>
                 <div id="lobby-announcement-admin-status" class="match-options-status">公告状态读取中……</div>
@@ -117,7 +127,9 @@
                     <button type="button" class="secondary-btn" onclick="refreshLobbyAnnouncement()">刷新公告</button>
                 </div>
             </div>
+            </div>
 
+            <div id="admin-tab-setup" class="admin-tab-panel" data-admin-tab-panel="setup" role="tabpanel">
             <div id="match-options-panel" class="match-options-panel">
                 <h4>本局模式设置</h4>
                 <div id="match-options-status" class="match-options-status">当前阶段：读取中……</div>
@@ -147,6 +159,12 @@
                 </div>
                 <div class="match-options-warning">只能在大厅阶段修改；进入队长选择后，本局模式会锁定。</div>
             </div>
+                <div class="admin-action-row">
+                    <button id="template-config-btn" onclick="openTemplateModal()" style="font-weight:bold; background-color:#bbdefb; border-color:#90caf9; font-size: 16px; padding: 10px 20px;">配置任务模板</button>
+                </div>
+            </div>
+
+            <div id="admin-tab-flow" class="admin-tab-panel" data-admin-tab-panel="flow" role="tabpanel">
             <div id="team-lock-panel" class="match-options-panel">
                 <h4>网页强制分队</h4>
                 <div id="team-lock-status" class="match-options-status">按网页 A/B 队和选边结果，把玩家同步到游戏内 CT/T，并锁定防止自行换边。</div>
@@ -156,6 +174,28 @@
                 </div>
                 <div class="match-options-warning">第 13 回合开始会自动按半场换边重新同步；如插件重载，可手动再点一次同步。</div>
             </div>
+                <div class="admin-action-row">
+                    <button id="advance-phase-btn" onclick="advancePhase()" style="font-weight:bold; background-color:#ffeb3b; border-color:#fbc02d; font-size: 16px; padding: 10px 20px;">推进阶段 (当前: Lobby)</button>
+                    <button onclick="playAdminAudioCue()" style="font-weight:bold; background-color:#0ea5e9; color:#fff; border-color:#0284c7; font-size: 16px; padding: 10px 20px;">发送提示音</button>
+                </div>
+            </div>
+
+            <div id="admin-tab-tasks" class="admin-tab-panel" data-admin-tab-panel="tasks" role="tabpanel">
+                <div id="admin-undercover-task-panel" class="match-options-panel admin-undercover-task-panel">
+                    <h4>卧底任务查看</h4>
+                    <div id="admin-undercover-task-status" class="match-options-status">任务状态读取中……</div>
+                    <div id="admin-undercover-task-body"></div>
+                    <div class="match-options-actions">
+                        <button type="button" id="task-template-config-btn" class="secondary-btn" onclick="openTemplateModal()">配置任务模板</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-tab-mods" class="admin-tab-panel" data-admin-tab-panel="mods" role="tabpanel">
+                <div id="admin-mods-empty-state" class="match-options-panel admin-mods-empty-state">
+                    <h4>CaorenCup 修改</h4>
+                    <div class="match-options-status">本局未启用 CaorenCup 修改。需要使用娱乐修改时，先到“本局设置”里开启并保存。</div>
+                </div>
             <div id="caoren-mod-panel" class="caoren-mod-panel" style="display:none;">
                 <h4>CaorenCup 修改可视化面板</h4>
                 <div id="caoren-mod-status" class="caoren-mod-status">请先在“本局模式设置”中启用 CaorenCup 修改。</div>
@@ -229,10 +269,14 @@
                 </div>
             </div>
 
-            <button id="advance-phase-btn" onclick="advancePhase()" style="font-weight:bold; background-color:#ffeb3b; border-color:#fbc02d; font-size: 16px; padding: 10px 20px;">推进阶段 (当前: Lobby)</button>
-            <button id="template-config-btn" onclick="openTemplateModal()" style="font-weight:bold; background-color:#bbdefb; border-color:#90caf9; font-size: 16px; padding: 10px 20px;">配置任务模板</button>
-            <button onclick="playAdminAudioCue()" style="font-weight:bold; background-color:#0ea5e9; color:#fff; border-color:#0284c7; font-size: 16px; padding: 10px 20px;">发送提示音</button>
-            <button onclick="terminateGame()" style="font-weight:bold; background-color:#d32f2f; color:#fff; border-color:#b71c1c; font-size: 16px; padding: 10px 20px;">终止本局游戏</button>
+                <div class="admin-danger-zone">
+                    <div>
+                        <strong>危险操作</strong>
+                        <p>终止本局会踢出所有玩家并清空房间，所有人需要重新进入。</p>
+                    </div>
+                    <button onclick="terminateGame()" style="font-weight:bold; background-color:#d32f2f; color:#fff; border-color:#b71c1c; font-size: 16px; padding: 10px 20px;">终止本局游戏</button>
+                </div>
+            </div>
         </div>
     </div>
 

@@ -29,6 +29,10 @@ build/
 coverage/
 *.out
 web-command-center/public/postmatch-mock-test.html
+desktop-client/dist/
+desktop-client/out/
+desktop-client/*.exe
+web-command-center/public/downloads/*.exe
 
 # Archives / backups
 *.zip
