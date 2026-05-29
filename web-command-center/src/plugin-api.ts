@@ -328,14 +328,13 @@ export function registerPluginRoutes(app: express.Express, deps: {
         if (typeof req.body?.currentRound === 'number' && !isFormalStatsStarted(session)) {
             session.liveGameData.currentRound = Math.max(session.liveGameData.currentRound || 0, normalizePluginRound(req.body.currentRound));
         }
-        if (typeof req.body?.scoreCT === 'number') session.liveGameData.scoreCT = Math.max(0, Math.floor(req.body.scoreCT));
-        if (typeof req.body?.scoreT === 'number') session.liveGameData.scoreT = Math.max(0, Math.floor(req.body.scoreT));
+        if (!isFormalStatsStarted(session) && typeof req.body?.scoreCT === 'number') session.liveGameData.scoreCT = Math.max(0, Math.floor(req.body.scoreCT));
+        if (!isFormalStatsStarted(session) && typeof req.body?.scoreT === 'number') session.liveGameData.scoreT = Math.max(0, Math.floor(req.body.scoreT));
         if (req.body?.mapName) session.liveGameData.mapName = String(req.body.mapName);
         session.liveGameData.pluginConnected = true;
         session.liveGameData.lastPluginHeartbeatAt = Date.now();
-        const suppressStats = Date.now() < Number(session.liveGameData.suppressSnapshotStatsUntil || 0);
         const players = Array.isArray(req.body?.players) ? req.body.players : [];
-        updateLivePlayersFromSnapshot(session, players, { updateStats: isFormalStatsStarted(session) && !suppressStats });
+        updateLivePlayersFromSnapshot(session, players, { updateStats: false });
         updateMatchFinishState();
         broadcastState();
         res.json({ success: true, matchedPlayers: getGamePlayers(session).filter(p => p.steamId && p.stats).length });
@@ -429,24 +428,50 @@ function sideStatsForSteamId(session: any, steamId: string, side: string | null 
     return player ? ensureSideStats(player, side) : null;
 }
 
+function rawRoundKey(payload: any, formalRound: number): string {
+    const raw = Math.floor(Number(payload?.round || 0));
+    return Number.isFinite(raw) && raw > 0 ? String(raw) : `formal:${formalRound}`;
+}
+
+function isAlreadyScoredRound(live: any, key: string): boolean {
+    return live.scoredRawRounds?.[key] === true;
+}
+
+function markScoredRound(live: any, key: string, formalRound: number) {
+    if (!live.scoredRawRounds) live.scoredRawRounds = {};
+    live.scoredRawRounds[key] = true;
+    if (formalRound) live.lastScoredRound = Math.max(nonNegativeInt(live.lastScoredRound), formalRound);
+}
+
 function applyRoundStartEvent(session: any, payload: any) {
     const live = session.liveGameData;
     const round = Math.max(1, normalizePluginRound(Number(payload.round || live?.currentRound || 1)));
-    if (round) live.currentRound = round;
+    if (round) live.currentRound = Math.max(Number(live.currentRound || 0), round);
     const roundStats = getRoundStats(live, round);
-    roundStats.aliveBySide = { CT: {}, T: {} };
-    roundStats.oneVsRecordedBySteamId = {};
+    roundStats.rawRound = rawRoundKey(payload, round);
+    if (roundStats.roundStartApplied) return;
+    roundStats.roundStartApplied = true;
+    const preserveCombatState = roundStats.hasCombatEvent || roundStats.roundEndApplied;
+    if (!preserveCombatState) {
+        roundStats.aliveBySide = { CT: {}, T: {} };
+        roundStats.oneVsRecordedBySteamId = {};
+    } else {
+        ensureRoundAliveState(session, roundStats);
+    }
     if (!roundStats.sideBySteamId) roundStats.sideBySteamId = {};
     if (!roundStats.roundStartedSteamIds) roundStats.roundStartedSteamIds = {};
-    roundStats.healthBySteamId = {};
+    if (!preserveCombatState) roundStats.healthBySteamId = {};
+    if (!roundStats.healthBySteamId) roundStats.healthBySteamId = {};
     const players = Array.isArray(payload.players) ? payload.players : [];
     for (const raw of players) {
         const steamId = normalizeSteamId(raw.steamId);
         const side = normalizeTeam(raw.team);
         if (!steamId || (side !== 'CT' && side !== 'T')) continue;
-        if (raw.isAlive !== false) roundStats.aliveBySide[side][steamId] = true;
+        if (!preserveCombatState && raw.isAlive !== false) roundStats.aliveBySide[side][steamId] = true;
         roundStats.sideBySteamId[steamId] = side;
-        roundStats.healthBySteamId[steamId] = nonNegativeInt(raw.health || raw.maxHealth || 100);
+        if (!preserveCombatState || typeof roundStats.healthBySteamId[steamId] !== 'number') {
+            roundStats.healthBySteamId[steamId] = nonNegativeInt(raw.health || raw.maxHealth || 100);
+        }
         const player = findPlayerBySteamId(session, steamId);
         if (player) player.team = side;
         if (player && !roundStats.roundStartedSteamIds[steamId]) {
@@ -547,11 +572,14 @@ function getRoundStats(live: any, round: number) {
     if (!live.roundStats) live.roundStats = {};
     if (!live.roundStats[round]) live.roundStats[round] = {
         killCountBySteamId: {},
+        enemyKillCountBySteamId: {},
         firstDeathSeen: false,
         firstDeathVictimSeen: false,
         openingKillRecorded: false,
         healthBySteamId: {},
     };
+    if (!live.roundStats[round].killCountBySteamId) live.roundStats[round].killCountBySteamId = {};
+    if (!live.roundStats[round].enemyKillCountBySteamId) live.roundStats[round].enemyKillCountBySteamId = {};
     return live.roundStats[round];
 }
 
@@ -695,11 +723,32 @@ function equipmentSwingDelta(payload: any): number {
     return diff * 0.08;
 }
 
+function recordEnemyMultiKill(session: any, steamId: string, side: string | null | undefined, kills: number) {
+    if (kills < 2) return;
+    const key = kills >= 5 ? 'enemy5ks' : `enemy${kills}ks`;
+    const player = findPlayerBySteamId(session, steamId);
+    if (!player) return;
+    incrementStat(ensurePlayerStats(player), key);
+    incrementStat(ensureSideStats(player, side), key);
+}
+
+function finalizeEnemyMultiKills(session: any, roundStats: any) {
+    if (!roundStats || roundStats.enemyMultiKillsFinalized) return;
+    roundStats.enemyMultiKillsFinalized = true;
+    for (const [steamId, count] of Object.entries(roundStats.enemyKillCountBySteamId || {})) {
+        const kills = Math.floor(Number(count || 0));
+        const side = roundStats.sideBySteamId?.[steamId];
+        recordEnemyMultiKill(session, steamId, side, kills);
+    }
+}
+
 function applyKillEvent(session: any, payload: any) {
     const now = Date.now();
     const live = session.liveGameData;
     const round = Math.max(1, normalizePluginRound(Number(payload.round || live?.currentRound || 1)));
     const roundStats = getRoundStats(live, round);
+    roundStats.hasCombatEvent = true;
+    roundStats.rawRound = roundStats.rawRound || rawRoundKey(payload, round);
     const attacker = findPlayerBySteamId(session, payload.attackerSteamId);
     const victim = findPlayerBySteamId(session, payload.victimSteamId);
     const assister = findPlayerBySteamId(session, payload.assisterSteamId);
@@ -713,8 +762,22 @@ function applyKillEvent(session: any, payload: any) {
     const assisterSideStats = assister ? ensureSideStats(assister, attackerSide) : null;
     const ownAliveBeforeKill = aliveCount(roundStats, attackerSide);
     const enemyAliveBeforeKill = aliveCount(roundStats, victimSide);
+    const isEnemyKill =
+        !!attacker &&
+        !!victim &&
+        attacker.playerId !== victim.playerId &&
+        (attackerSide === 'CT' || attackerSide === 'T') &&
+        (victimSide === 'CT' || victimSide === 'T') &&
+        attackerSide !== victimSide;
+    const isFriendlyKill =
+        !!attacker &&
+        !!victim &&
+        attacker.playerId !== victim.playerId &&
+        (attackerSide === 'CT' || attackerSide === 'T') &&
+        (victimSide === 'CT' || victimSide === 'T') &&
+        attackerSide === victimSide;
 
-    if (attacker && attacker.playerId !== victim?.playerId) {
+    if (isEnemyKill) {
         markTradedDeaths(session, roundStats, payload, now);
         const attackerStats = ensurePlayerStats(attacker);
         incrementStat(attackerStats, 'kills');
@@ -731,21 +794,8 @@ function applyKillEvent(session: any, payload: any) {
         }
         const attackerSteamId = normalizeSteamId(payload.attackerSteamId);
         if (attackerSteamId) {
-            const previousKills = Number(roundStats.killCountBySteamId[attackerSteamId] || 0);
-            roundStats.killCountBySteamId[attackerSteamId] = previousKills + 1;
-            if (previousKills === 1) {
-                incrementStat(attackerStats, 'enemy2ks');
-                incrementStat(attackerSideStats, 'enemy2ks');
-            } else if (previousKills === 2) {
-                incrementStat(attackerStats, 'enemy3ks');
-                incrementStat(attackerSideStats, 'enemy3ks');
-            } else if (previousKills === 3) {
-                incrementStat(attackerStats, 'enemy4ks');
-                incrementStat(attackerSideStats, 'enemy4ks');
-            } else if (previousKills === 4) {
-                incrementStat(attackerStats, 'enemy5ks');
-                incrementStat(attackerSideStats, 'enemy5ks');
-            }
+            roundStats.killCountBySteamId[attackerSteamId] = Number(roundStats.killCountBySteamId[attackerSteamId] || 0) + 1;
+            roundStats.enemyKillCountBySteamId[attackerSteamId] = Number(roundStats.enemyKillCountBySteamId[attackerSteamId] || 0) + 1;
             if (!roundStats.firstDeathSeen) {
                 roundStats.firstDeathSeen = true;
                 incrementStat(attackerStats, 'entryCount');
@@ -767,26 +817,32 @@ function applyKillEvent(session: any, payload: any) {
     }
     if (victim) {
         const victimStats = ensurePlayerStats(victim);
-        incrementStat(victimStats, 'deaths');
-        incrementStat(victimSideStats, 'deaths');
-        const victimSituationDelta = situationSwingValue(enemyAliveBeforeKill, ownAliveBeforeKill) * 0.7;
-        incrementStat(victimStats, 'situationSwing', -victimSituationDelta);
-        incrementStat(victimSideStats, 'situationSwing', -victimSituationDelta);
+        if (!isFriendlyKill) {
+            incrementStat(victimStats, 'deaths');
+            incrementStat(victimSideStats, 'deaths');
+        } else {
+            markKastContributor(roundStats, payload.victimSteamId);
+        }
+        if (isEnemyKill) {
+            const victimSituationDelta = situationSwingValue(enemyAliveBeforeKill, ownAliveBeforeKill) * 0.7;
+            incrementStat(victimStats, 'situationSwing', -victimSituationDelta);
+            incrementStat(victimSideStats, 'situationSwing', -victimSituationDelta);
+        }
         const victimSteamId = normalizeSteamId(payload.victimSteamId);
         if (victimSteamId && victimSide && roundStats.aliveBySide?.[victimSide]) {
             roundStats.aliveBySide[victimSide][victimSteamId] = false;
         }
-        if (!roundStats.firstDeathVictimSeen) {
+        if (isEnemyKill && !roundStats.firstDeathVictimSeen) {
             roundStats.firstDeathVictimSeen = true;
             incrementStat(victimStats, 'entryCount');
             incrementStat(victimSideStats, 'entryCount');
         }
     }
-    if (attacker && victim && attacker.playerId !== victim.playerId) {
+    if (isEnemyKill) {
         addPendingTrade(roundStats, payload, now);
     }
     recordOneVsXStates(session, roundStats);
-    if (assister && assister.playerId !== attacker?.playerId && assister.playerId !== victim?.playerId) {
+    if (isEnemyKill && assister && assister.playerId !== attacker?.playerId && assister.playerId !== victim?.playerId) {
         const assisterStats = ensurePlayerStats(assister);
         incrementStat(assisterStats, 'assists');
         incrementStat(assisterSideStats, 'assists');
@@ -805,6 +861,8 @@ function applyDamageEvent(session: any, payload: any) {
     const reportedDamage = nonNegativeInt(payload.damage);
     const healthAfter = nonNegativeInt(payload.health);
     const maxHealth = Math.max(100, nonNegativeInt(payload.maxHealth));
+    const attackerSide = normalizeTeam(payload.attackerTeam);
+    const victimSide = normalizeTeam(payload.victimTeam);
     const observedHealthBefore = healthAfter + rawDamage;
     const knownHealthBefore = victimSteamId && typeof roundStats.healthBySteamId?.[victimSteamId] === 'number'
         ? roundStats.healthBySteamId[victimSteamId]
@@ -817,22 +875,28 @@ function applyDamageEvent(session: any, payload: any) {
         if (!roundStats.healthBySteamId) roundStats.healthBySteamId = {};
         roundStats.healthBySteamId[victimSteamId] = healthAfter;
     }
-    if (!attacker || damage <= 0 || attacker.playerId === victim?.playerId) return;
+    if (!attacker || damage <= 0 || attacker.playerId === victim?.playerId || !attackerSide || !victimSide || attackerSide === victimSide) return;
     const attackerStats = ensurePlayerStats(attacker);
-    const attackerSideStats = ensureSideStats(attacker, payload.attackerTeam);
+    const attackerSideStats = ensureSideStats(attacker, attackerSide);
     incrementStat(attackerStats, 'damage', damage);
     incrementStat(attackerSideStats, 'damage', damage);
 }
 function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) => void) {
     const live = session.liveGameData;
     const formalRound = typeof payload.round === 'number' ? normalizePluginRound(payload.round) : live?.currentRound || 0;
-    if (formalRound) live.currentRound = formalRound;
+    if (formalRound) live.currentRound = Math.max(Number(live.currentRound || 0), formalRound);
     const winnerSide = normalizeTeam(payload.winner);
-    const alreadyProcessed = !!formalRound && live.lastScoredRound === formalRound;
+    const rawKey = rawRoundKey(payload, formalRound);
+    const alreadyProcessed = !!formalRound && isAlreadyScoredRound(live, rawKey);
     const roundStats = formalRound ? getRoundStats(live, formalRound) : null;
+    if (roundStats) {
+        roundStats.rawRound = rawKey;
+        roundStats.roundEndApplied = true;
+    }
     if (winnerSide && !alreadyProcessed) {
         if (roundStats) finalizeKastRounds(session, roundStats);
         if (roundStats) finalizeOneVsXWins(session, roundStats, winnerSide);
+        if (roundStats) finalizeEnemyMultiKills(session, roundStats);
         if (winnerSide === 'CT') live.scoreCT += 1;
         else if (winnerSide === 'T') live.scoreT += 1;
         let winnerRoster = resolveRosterTeamByInitialSide(winnerSide, formalRound);
@@ -857,7 +921,7 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
             if (winnerRoster === 'A') live.scoreA += 1;
             else live.scoreB += 1;
         }
-        if (formalRound) live.lastScoredRound = formalRound;
+        if (formalRound) markScoredRound(live, rawKey, formalRound);
     }
     updateMatchFinishState();
     if (live.matchFinished) live.statsLocked = true;

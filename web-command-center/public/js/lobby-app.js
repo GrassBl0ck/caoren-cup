@@ -1109,6 +1109,26 @@ if (window._caorenModifiersEnabled !== true) {
             return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
+        function renderSafeTaskRichText(value) {
+            const placeholders = [];
+            const stash = html => {
+                const key = `__TASK_RICH_${placeholders.length}__`;
+                placeholders.push([key, html]);
+                return key;
+            };
+            let text = String(value ?? '')
+                .replace(/<\s*br\s*\/?\s*>/gi, () => stash('<br>'))
+                .replace(/<\s*(b|strong)\s*>/gi, () => stash('<strong>'))
+                .replace(/<\s*\/\s*(b|strong)\s*>/gi, () => stash('</strong>'))
+                .replace(/<\s*u\s*>/gi, () => stash('<u>'))
+                .replace(/<\s*\/\s*u\s*>/gi, () => stash('</u>'));
+            text = htmlEscape(text);
+            placeholders.forEach(([key, html]) => {
+                text = text.replaceAll(key, html);
+            });
+            return text;
+        }
+
         function trimFixed(num, digits) {
             const n = Number(num || 0);
             if (!Number.isFinite(n) || Math.abs(n) < 1e-9) return '0';
@@ -1409,6 +1429,12 @@ if (window._caorenModifiersEnabled !== true) {
             return '#333';
         }
 
+        function formatNDisplayText(value, cell) {
+            const text = String(value ?? '');
+            if (!cell || cell.nType === 'none' || Number(cell.nValue || 0) !== 1) return text;
+            return text.replace(/1N/g, 'N');
+        }
+
         function getTaskStatusBadge(status) {
             const map = {
                 Complete: { text: 'Complete', bg: '#e8f5e9', fg: '#1b5e20', border: '#81c784' },
@@ -1430,16 +1456,18 @@ if (window._caorenModifiersEnabled !== true) {
             }
             let titleHtml = '';
             if (cell && cell.levelLabel) {
-                const color = getLevelColor(cell.levelLabel);
-                titleHtml = `<div style="color:${color}; font-weight:900; font-size:${compact ? '13px' : '16px'}; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${htmlEscape(cell.levelLabel)}】</div>`;
+                const displayLabel = formatNDisplayText(cell.levelLabel, cell);
+                const color = getLevelColor(displayLabel);
+                titleHtml = `<div style="color:${color}; font-weight:900; font-size:${compact ? '13px' : '16px'}; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${htmlEscape(displayLabel)}】</div>`;
             }
-            const desc = cell ? htmlEscape(cell.description) : '无';
+            const desc = cell ? renderSafeTaskRichText(formatNDisplayText(cell.description, cell)) : '无';
             const hasN = cell && cell.nType !== 'none' && Number(cell.nValue || 0) > 0;
             const nInfo = hasN ? `<div style="color:#d32f2f; font-size:${compact ? '12px' : '15px'}; margin-top:8px; font-weight:bold; background:#ffebee; padding:4px; border-radius:4px; width:100%;">当前 N = ${cell.nValue}</div>` : '';
             const roundInfo = cell?.completedRound ? `<div class="task-round-note">完成回合：第 ${cell.completedRound} 回合</div>` : '';
             const status = cell ? `<div style="margin-top:6px;">${getTaskStatusBadge(cell.status || 'Incomplete')}</div>` : '';
+            const selectedClass = clickable && window.selectedCellId === cellId ? ' selected' : '';
             const click = clickable ? ` id="cell-${cellId}" onclick="handleCellClick('${cellId}')"` : '';
-            return `<div class="task-cell" ${click} style="${bgClass} box-shadow: ${boxShadow}; margin: 8px;">${titleHtml}<div class="task-desc" style="flex:1; display:flex; align-items:center; justify-content:center; font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${nInfo}${status}${roundInfo}</div>`;
+            return `<div class="task-cell${selectedClass}" ${click} style="${bgClass} box-shadow: ${boxShadow}; margin: 8px;">${titleHtml}<div class="task-desc" style="flex:1; display:flex; align-items:center; justify-content:center; font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${nInfo}${status}${roundInfo}</div>`;
         }
 
         function renderTaskGrid(taskGrid, options = {}) {
@@ -1450,6 +1478,23 @@ if (window._caorenModifiersEnabled !== true) {
             });
             html += '</div>';
             return html;
+        }
+
+        function applySelectedTaskCellState() {
+            const cellId = window.selectedCellId;
+            const selectedLabel = document.getElementById('selected-cell');
+            document.querySelectorAll('.task-cell.selected').forEach(el => el.classList.remove('selected'));
+            if (!cellId) {
+                if (selectedLabel) selectedLabel.textContent = '未锁定格子';
+                return;
+            }
+            const cellEl = document.getElementById('cell-' + cellId);
+            if (cellEl) {
+                cellEl.classList.add('selected');
+                if (selectedLabel) selectedLabel.textContent = `【格子 ${cellId}】`;
+            } else if (selectedLabel) {
+                selectedLabel.textContent = '未锁定格子';
+            }
         }
 
         function formatTaskLogTime(timestamp) {
@@ -1568,6 +1613,8 @@ if (window._caorenModifiersEnabled !== true) {
             return (contributionRounds / rounds) * 100;
         }
 
+        const POSTMATCH_RATING_DISPLAY_FLOOR = 0.10;
+
         function calculateApproxRating(stats, rounds, adr) {
             const kills = Number(stats.kills || 0);
             const deaths = Number(stats.deaths || 0);
@@ -1578,6 +1625,10 @@ if (window._caorenModifiersEnabled !== true) {
             const kast = calculateApproxKast(stats, rounds);
             const impact = 2.13 * kpr + 0.42 * apr - 0.41;
             return Math.max(0, 0.0073 * kast + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.0032 * adr + 0.1587);
+        }
+
+        function displayApproxRating(stats, rounds, adr) {
+            return Math.max(POSTMATCH_RATING_DISPLAY_FLOOR, calculateApproxRating(stats, rounds, adr));
         }
 
         function calculateApproxSwing(stats, rounds) {
@@ -1591,6 +1642,10 @@ if (window._caorenModifiersEnabled !== true) {
 
         function postmatchStatRows(state, mode) {
             const players = Object.values(state.players || {}).filter(p => p.role !== 'Admin');
+            const teamCounts = players.reduce((acc, p) => {
+                if (p.rosterTeam === 'A' || p.rosterTeam === 'B') acc[p.rosterTeam] += 1;
+                return acc;
+            }, { A: 0, B: 0 });
             return players.map(p => {
                 const stats = statSourceForMode(p, mode);
                 const hasData = hasStatsData(stats);
@@ -1619,9 +1674,10 @@ if (window._caorenModifiersEnabled !== true) {
                 const tradedDeaths = Number(stats.tradedDeaths || stats.deathsTraded || 0);
                 const adr = hasData ? damage / rounds : null;
                 const kast = hasData ? calculateApproxKast(stats, rounds) : null;
-                const rating = hasData ? calculateApproxRating(stats, rounds, adr) : null;
+                const rating = hasData ? displayApproxRating(stats, rounds, adr) : null;
                 const swing = hasData ? calculateApproxSwing(stats, rounds) : null;
-                return { p, hasData, kills, deaths, assists, entryWins, entryLosses, enemy2ks, enemy3ks, enemy4ks, enemy5ks, multiKills, v1Wins, v2Wins, v3Wins, v4Wins, v5Wins, v6Wins, oneVsX, headShotKills, flashAssists, tradedDeaths, adr, kast, rating, swing };
+                const maxEnemyKills = p.rosterTeam === 'A' ? teamCounts.B : p.rosterTeam === 'B' ? teamCounts.A : 5;
+                return { p, hasData, kills, deaths, assists, entryWins, entryLosses, enemy2ks, enemy3ks, enemy4ks, enemy5ks, multiKills, maxEnemyKills, v1Wins, v2Wins, v3Wins, v4Wins, v5Wins, v6Wins, oneVsX, headShotKills, flashAssists, tradedDeaths, adr, kast, rating, swing };
             }).sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0) || Number(b.swing || 0) - Number(a.swing || 0) || b.kills - a.kills || Number(b.adr || 0) - Number(a.adr || 0));
         }
 
@@ -1649,6 +1705,12 @@ if (window._caorenModifiersEnabled !== true) {
                     .join(' ');
                 return text || fallback;
             };
+            const multiKillParts = (row) => [
+                ['2K', row.enemy2ks],
+                ['3K', row.enemy3ks],
+                ['4K', row.enemy4ks],
+                ['5K', row.enemy5ks]
+            ].filter(([label]) => Number(label[0]) <= Number(row.maxEnemyKills || 5));
             let html = `<table class="hl-table hltv-style-table"><thead><tr><th class="team-heading" colspan="11">${htmlEscape(teamName)}</th></tr>`;
             html += '<tr>';
             html += thTip('Players', '玩家');
@@ -1661,7 +1723,7 @@ if (window._caorenModifiersEnabled !== true) {
             html += thTip('D (t)', '死亡数（被交换死亡数）');
             html += thTip('ADR', '每回合平均伤害');
             html += thTip('Swing', '回合影响力');
-            html += thTip('Rating', '本局游戏的综合评分', '<span>3.0*</span>');
+            html += thTip('Rating', '本局游戏的综合评分；有参赛数据时最低显示 0.10', '<span>3.0*</span>');
             html += '</tr></thead><tbody>';
             rows.forEach(row => {
                 const swingPercent = row.swing === null || row.swing === undefined ? null : row.swing * 100;
@@ -1669,7 +1731,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const adrText = row.adr === null || row.adr === undefined ? '-' : trimFixed(row.adr, 1);
                 const swingText = swingPercent === null ? '-' : `${swingPercent >= 0 ? '+' : ''}${trimFixed(swingPercent, 2)}%`;
                 const ratingText = row.rating === null || row.rating === undefined ? '-' : trimFixed(row.rating, 2);
-                const multiKillsTip = statPartsTip([['2K', row.enemy2ks], ['3K', row.enemy3ks], ['4K', row.enemy4ks], ['5K', row.enemy5ks]], '无多杀回合');
+                const multiKillsTip = statPartsTip(multiKillParts(row), '无多杀回合');
                 const oneVsXTip = statPartsTip([['1v1', row.v1Wins], ['1v2', row.v2Wins], ['1v3', row.v3Wins], ['1v4', row.v4Wins], ['1v5', row.v5Wins], ['1v6', row.v6Wins]], '无1vsX残局胜利');
                 html += `<tr><td><b>${htmlEscape(row.p.name)}</b></td><td>${row.entryWins} : ${row.entryLosses}</td>${tdTip(row.multiKills, multiKillsTip)}<td>${kastText}</td>${tdTip(row.oneVsX, oneVsXTip)}<td title="${htmlEscape('击杀数（爆头击杀数）')}">${row.kills} (${row.headShotKills})</td><td title="${htmlEscape('助攻数（闪光助攻）')}">${row.assists} (${row.flashAssists})</td><td title="${htmlEscape('死亡数（被交换死亡数）')}">${row.deaths} (${row.tradedDeaths})</td><td>${adrText}</td><td class="${postmatchSwingClass(row.swing)}">${swingText}</td><td class="${postmatchRatingClass(row.rating)}"><b>${ratingText}</b></td></tr>`;
             });
@@ -1747,21 +1809,17 @@ if (window._caorenModifiersEnabled !== true) {
             });
             html += '<div class="matrix-wrap"><table class="matrix-table duel-matrix"><tr><th>A 队 \\ B 队</th>';
             teamB.forEach(p => { html += `<th>${htmlEscape(p.name)}</th>`; });
-            html += '<th>合计</th></tr>';
+            html += '</tr>';
             teamA.forEach(aPlayer => {
                 const aId = playerSteamId(aPlayer);
-                let aTotal = 0;
-                let bTotal = 0;
                 html += `<tr><th>${htmlEscape(aPlayer.name)}</th>`;
                 teamB.forEach(bPlayer => {
                     const bId = playerSteamId(bPlayer);
                     const aKills = Number(matrix?.[aId]?.[bId] || 0);
                     const bKills = Number(matrix?.[bId]?.[aId] || 0);
-                    aTotal += aKills;
-                    bTotal += bKills;
                     html += `<td><span class="matrix-score matrix-score-row">${aKills}</span><span class="matrix-separator">:</span><span class="matrix-score matrix-score-col">${bKills}</span></td>`;
                 });
-                html += `<td><span class="matrix-score matrix-score-row">${aTotal}</span><span class="matrix-separator">:</span><span class="matrix-score matrix-score-col">${bTotal}</span></td></tr>`;
+                html += '</tr>';
             });
             html += '</table></div>';
             if (!hasVisibleValue) html += '<p class="postmatch-note">当前分类暂无跨队击杀记录，矩阵按 0 显示。</p>';
@@ -1826,7 +1884,6 @@ if (window._caorenModifiersEnabled !== true) {
             if (undercoverEnabled && currentPlayer?.gameRole === 'Undercover') {
                 html += '<h3 style="color:#d32f2f;">你的任务面板</h3>';
                 html += renderTaskGrid(currentPlayer.taskGrid || {}, { clickable: true });
-                html += renderTaskActionLog(currentPlayer.taskActionLog || [], { title: '\u6211\u7684\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55', limit: 20 });
 
                 html += '<div style="background:#fff3e0; padding:15px; border-radius:6px; border:1px solid #ffcc80; margin-top:20px;">';
                 html += '<p><b>基础状态干预：</b> ' +
@@ -1841,6 +1898,7 @@ if (window._caorenModifiersEnabled !== true) {
                     '<button id="btn-n-set" onclick="changeN(\'N_SET\')" style="background:#607d8b; color:#fff;">精准录入 N 值</button></p>';
                 html += '<hr style="border-top:1px dashed #ffb74d;"><p style="font-size:16px; margin-bottom:0;">当前操作焦点：<span id="selected-cell" style="color:#d32f2f; font-weight:bold; font-size:20px;">未锁定格子</span></p>';
                 html += '</div>';
+                html += renderTaskActionLog(currentPlayer.taskActionLog || [], { title: '\u6211\u7684\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55', limit: 20 });
             } else if (undercoverEnabled && currentPlayer?.gameRole === 'Detective') {
                 html += '<div style="background:#e3f2fd; padding:20px; border-radius:8px; border:1px solid #90caf9;">';
                 html += '<h3 style="color:#1565c0; margin-top:0;">侦探语音问答草稿</h3>';
@@ -1902,6 +1960,7 @@ if (window._caorenModifiersEnabled !== true) {
                 }
             document.getElementById('extra-info').innerHTML = html;
 
+            applySelectedTaskCellState();
             updateButtonStates();
         }
 
@@ -1975,6 +2034,7 @@ if (window._caorenModifiersEnabled !== true) {
         function pick(pickedId) { ws.emit('DRAFT_PICK', { playerId: myPlayerId, pickedId }); }
         function rerandomCaptain(team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RERANDOM_CAPTAIN', payload: { team } }); }
         function setCaptain(team) { const select = document.getElementById('cap' + team + '-select'); if (select && select.value) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_CAPTAIN', payload: { team, playerId: select.value } }); }
+        function playAdminAudioCue() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'PLAY_AUDIO_CUE', payload: { cue: 'adminPrompt' } }); }
         function adminAssignTeam(playerId, team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ASSIGN_ROSTER_TEAM', payload: { playerId, team } }); }
         function adminStartCaptainDraft() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'START_CAPTAIN_DRAFT' }); }
         function kickPlayer(playerId, name) { if (confirm('确定要踢出玩家：' + name + '？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
@@ -2020,10 +2080,8 @@ if (window._caorenModifiersEnabled !== true) {
         function doQuit() { const name = document.getElementById('quit-name-input').value.trim(); if (!name) return alert('请输入昵称确认'); ws.emit('PLAYER_QUIT', { playerId: myPlayerId, confirmName: name }); document.getElementById('quit-modal').style.display = 'none'; }
 
         window.handleCellClick = function (cellId) {
-            document.querySelectorAll('.task-cell').forEach(el => el.classList.remove('selected'));
-            document.getElementById('cell-' + cellId)?.classList.add('selected');
-            document.getElementById('selected-cell').textContent = `【格子 ${cellId}】`;
             window.selectedCellId = cellId;
+            applySelectedTaskCellState();
             updateButtonStates();
         };
         window.markComplete = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'MARK_COMPLETE', cellId }); };
@@ -2088,16 +2146,15 @@ if (window._caorenModifiersEnabled !== true) {
                 let titleHtml = '';
                 if (cell.levelLabel) {
                     const color = getLevelColor(cell.levelLabel);
-                    titleHtml = `<div style="color:${color}; font-weight:900; font-size:16px; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${cell.levelLabel}】</div>`;
+                    titleHtml = `<div style="color:${color}; font-weight:900; font-size:16px; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${htmlEscape(cell.levelLabel)}】</div>`;
                 }
                 const nInfo = (cell.nType && cell.nType !== 'none') ? `<div style="color:#d32f2f; font-size:14px; margin-top:8px; font-weight:bold;">[带N任务体系]</div>` : '';
 
-                // 由于任务描述含有HTML标签，直接渲染
                 html += `<div class="task-cell" style="${border} position:relative;" onclick="selectTplCell('${id}')">
                                 ${titleHtml}
-                                <div class="task-desc" style="flex:1; display:flex; align-items:center;"><div>${cell.description || ''}</div></div>
+                                <div class="task-desc" style="flex:1; display:flex; align-items:center;"><div>${renderSafeTaskRichText(cell.description || '')}</div></div>
                                 ${nInfo}
-                                <div style="position:absolute; top:2px; left:5px; font-size:12px; color:#aaa; font-weight:bold;">${id}</div>
+                                <div style="position:absolute; top:2px; left:5px; font-size:12px; color:#aaa; font-weight:bold;">${htmlEscape(id)}</div>
                              </div>`;
             });
             container.innerHTML = html;
@@ -2106,7 +2163,7 @@ if (window._caorenModifiersEnabled !== true) {
             const isRepSelected = window._editingCellId === 'rep';
             document.getElementById('tpl-preview-replacement').style.borderColor = isRepSelected ? '#f44336' : '#aaa';
             document.getElementById('tpl-preview-replacement').style.background = isRepSelected ? '#ffebee' : '#fff';
-            document.getElementById('tpl-prev-rep-desc').innerHTML = `<span class="task-desc">${rep.description || ''}</span> <span style="color:#888;">(等级 ${rep.level || 4})</span>`;
+            document.getElementById('tpl-prev-rep-desc').innerHTML = `<span class="task-desc">${renderSafeTaskRichText(rep.description || '')}</span> <span style="color:#888;">(等级 ${htmlEscape(rep.level || 4)})</span>`;
         }
 
         function setTplSelectValue(id, value, fallback) {

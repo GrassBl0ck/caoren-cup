@@ -13,7 +13,7 @@
 
   const MANIFEST_URL = "/assets/audio/manifest.json";
   const STORAGE_PREFIX = "caorenCupAudio.";
-  const WATCHED_BGM_PHASES = new Set(["PlayerDraft", "MapBan", "SidePick"]);
+  const NO_BGM_PHASES = new Set(["LiveGame"]);
 
   const PHASE_LABELS = {
     Lobby: "大厅",
@@ -38,6 +38,7 @@
     bgmAudio: null,
     enabled: readBool("enabled", false),
     unlocked: false,
+    unlockAttempted: false,
     masterVolume: readNumber("masterVolume", 0.75),
     bgmVolume: readNumber("bgmVolume", 0.42),
     sfxVolume: readNumber("sfxVolume", 0.85),
@@ -88,6 +89,20 @@
     audio.volume = clamp01(state.masterVolume * local * (trackVolume ?? 1));
   }
 
+  function unlockAudioFromUserGesture() {
+    if (state.unlockAttempted) return;
+    state.unlockAttempted = true;
+    state.unlocked = true;
+
+    try {
+      const audio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=");
+      audio.volume = 0;
+      audio.play().catch(function () {});
+    } catch (_) {
+      // Keep the local unlock flag even if this browser refuses the silent warm-up.
+    }
+  }
+
   async function loadManifest() {
     const response = await fetch(MANIFEST_URL, { cache: "no-cache" });
     if (!response.ok) {
@@ -112,17 +127,20 @@
   }
 
   function getTracksForPhase(phase) {
+    if (NO_BGM_PHASES.has(phase)) return [];
+    const sharedTracks = state.manifest?.music;
+    if (Array.isArray(sharedTracks) && sharedTracks.length) return sharedTracks;
     return state.manifest?.musicByPhase?.[phase] || [];
   }
 
   function getTrackIdForPhase(phase) {
-    const saved = readString(`phaseTrack.${phase}`, "");
+    const saved = readString("musicTrack", "");
     if (saved) return saved;
-    return state.manifest?.defaults?.phaseBgm?.[phase] || "";
+    return state.manifest?.defaults?.musicTrack || state.manifest?.defaults?.phaseBgm?.[phase] || "";
   }
 
   function setTrackIdForPhase(phase, trackId) {
-    writeString(`phaseTrack.${phase}`, trackId || "");
+    writeString("musicTrack", trackId || "");
   }
 
   function getSelectedTrackForPhase(phase) {
@@ -147,7 +165,7 @@
 
   async function playBgmForPhase(phase, force) {
     if (!state.enabled || !state.unlocked) return;
-    if (!WATCHED_BGM_PHASES.has(phase)) {
+    if (NO_BGM_PHASES.has(phase)) {
       stopBgm();
       return;
     }
@@ -158,7 +176,7 @@
       return;
     }
 
-    const bgmKey = `${phase}:${track.id}:${track.src}`;
+    const bgmKey = `shared:${track.id}:${track.src}`;
     if (!force && state.currentBgmKey === bgmKey && state.bgmAudio && !state.bgmAudio.paused) return;
 
     const oldAudio = state.bgmAudio;
@@ -188,15 +206,18 @@
     state.currentBgmKey = null;
   }
 
-  async function playSfx(name) {
-    if (!state.enabled || !state.unlocked) return;
+  async function playSfx(name, options) {
+    const allowWhenDisabled = options?.allowWhenDisabled === true;
+    const force = options?.force === true;
+    if (!force && (!state.unlocked || (!state.enabled && !allowWhenDisabled))) return;
 
     const cue = state.manifest?.sfx?.[name];
     if (!cue?.src) return;
 
     const audio = new Audio(cue.src);
     audio.preload = "auto";
-    setAudioVolume(audio, "sfx", cue.volume);
+    if (force) audio.volume = clamp01(options?.volumeOverride ?? cue.forceVolume ?? cue.volume ?? 1);
+    else setAudioVolume(audio, "sfx", cue.volume);
 
     try {
       await audio.play();
@@ -277,7 +298,8 @@
     // 预留给后端增强版：io.emit('AUDIO_CUE', { cue: 'mapBan' })
     state.socket.on("AUDIO_CUE", function (payload) {
       const cue = typeof payload === "string" ? payload : payload?.cue;
-      if (cue) playSfx(cue);
+      const force = payload?.source === "admin" || cue === "adminPrompt";
+      if (cue) playSfx(cue, { allowWhenDisabled: true, force, volumeOverride: force ? 1 : undefined });
     });
   }
 
@@ -459,7 +481,7 @@
     const tracks = getTracksForPhase(phase);
     select.innerHTML = "";
 
-    if (!WATCHED_BGM_PHASES.has(phase)) {
+    if (NO_BGM_PHASES.has(phase)) {
       const option = document.createElement("option");
       option.value = "";
       option.textContent = "当前阶段不播放 BGM";
@@ -486,6 +508,8 @@
 
   async function init() {
     buildUi();
+    document.addEventListener("pointerdown", unlockAudioFromUserGesture, { once: true });
+    document.addEventListener("keydown", unlockAudioFromUserGesture, { once: true });
 
     try {
       await loadManifest();

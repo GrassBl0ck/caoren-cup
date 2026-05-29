@@ -352,12 +352,15 @@ const finishSideVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
         if (side === 'CT') ct++;
         else if (side === 'T') t++;
     }
+    const pickedTeam = session.sideVote.team || session.sidePickTeam || 'A';
     const selectedSide: 'CT' | 'T' = ct > t ? 'CT' : (t > ct ? 'T' : (Math.random() < 0.5 ? 'CT' : 'T'));
-    session.selectedSide = selectedSide;
+    const oppositePickedSide: 'CT' | 'T' = selectedSide === 'CT' ? 'T' : 'CT';
+    const teamASide: 'CT' | 'T' = pickedTeam === 'A' ? selectedSide : oppositePickedSide;
+    session.selectedSide = teamASide;
     session.sideVote = undefined;
     session.timerEndAt = null;
     session.timerPhase = null;
-    setRosterLiveSides(selectedSide);
+    setRosterLiveSides(teamASide);
     notifyMessage?.(`ѡ��ͶƱ������${session.sidePickTeam || 'A'}��ѡ�� ${selectedSide}`);
     broadcast?.();
     advancePhase(GamePhase.SidePick, GamePhase.PreGameSetup);

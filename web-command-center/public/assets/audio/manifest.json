@@ -1,61 +1,32 @@
 {
-  "version": 1,
-  "description": "Caoren Cup 网页端音乐/音效清单。你只需要把自己的音频文件放到对应目录，并修改这里的 src。",
+  "version": 2,
+  "description": "Caoren Cup web audio manifest. Put BGM files in music/ and SFX files in sfx/, then update the src paths here.",
   "defaults": {
     "masterVolume": 0.75,
     "bgmVolume": 0.42,
     "sfxVolume": 0.85,
-    "phaseBgm": {
-      "PlayerDraft": "draft_tension_01",
-      "MapBan": "map_bp_01",
-      "SidePick": "side_pick_01"
+    "musicTrack": "common_bgm_01"
+  },
+  "music": [
+    {
+      "id": "common_bgm_01",
+      "title": "统一 BGM 01",
+      "src": "/assets/audio/music/common-bgm-01.mp3",
+      "loop": true
+    },
+    {
+      "id": "common_bgm_02",
+      "title": "统一 BGM 02",
+      "src": "/assets/audio/music/common-bgm-02.mp3",
+      "loop": true
     }
-  },
-  "musicByPhase": {
-    "PlayerDraft": [
-      {
-        "id": "draft_tension_01",
-        "title": "人员选择 BGM 01",
-        "src": "/assets/audio/music/player-draft-01.mp3",
-        "loop": true
-      },
-      {
-        "id": "draft_tension_02",
-        "title": "人员选择 BGM 02",
-        "src": "/assets/audio/music/player-draft-02.mp3",
-        "loop": true
-      }
-    ],
-    "MapBan": [
-      {
-        "id": "map_bp_01",
-        "title": "地图 BP BGM 01",
-        "src": "/assets/audio/music/map-ban-01.mp3",
-        "loop": true
-      },
-      {
-        "id": "map_bp_02",
-        "title": "地图 BP BGM 02",
-        "src": "/assets/audio/music/map-ban-02.mp3",
-        "loop": true
-      }
-    ],
-    "SidePick": [
-      {
-        "id": "side_pick_01",
-        "title": "最终选边 BGM 01",
-        "src": "/assets/audio/music/side-pick-01.mp3",
-        "loop": true
-      },
-      {
-        "id": "side_pick_02",
-        "title": "最终选边 BGM 02",
-        "src": "/assets/audio/music/side-pick-02.mp3",
-        "loop": true
-      }
-    ]
-  },
+  ],
   "sfx": {
+    "adminPrompt": {
+      "title": "管理员提示音",
+      "src": "/assets/audio/sfx/admin-prompt.mp3",
+      "forceVolume": 1
+    },
     "phaseChange": {
       "title": "阶段切换",
       "src": "/assets/audio/sfx/phase-change.mp3"
