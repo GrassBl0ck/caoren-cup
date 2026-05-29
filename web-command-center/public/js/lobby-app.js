@@ -1315,8 +1315,31 @@ if (window._caorenModifiersEnabled !== true) {
             return { won: 0, lost: 0 };
         }
 
+        const scoreBreakdownKeyMap = {
+            '击杀': 'kills',
+            '死亡': 'deaths',
+            '助攻': 'assists',
+            '游戏胜负': 'gameResult',
+            '回合胜负': 'roundResult',
+            '伤害': 'damage',
+            '指认成功票数': 'correctAccuseVotes',
+            '指认成功': 'correctAccuse',
+            '被指认票数': 'receivedAccuseVotes',
+            '被指认': 'receivedAccuse',
+            '暴露惩罚': 'exposurePenalty',
+            '任务等级': 'taskLevel',
+            '连线数': 'lineCount',
+            '连线': 'lineBonus',
+            '任务': 'taskTotal',
+            '问答问题数': 'questionCount',
+            '问答惩罚': 'questionPenalty'
+        };
+
         function getScoreBreakdownValue(p, key) {
-            return Number((p.scoreBreakdown && p.scoreBreakdown[key]) || 0);
+            const breakdown = p.scoreBreakdown || {};
+            const stableKey = scoreBreakdownKeyMap[key] || key;
+            if (Object.prototype.hasOwnProperty.call(breakdown, stableKey)) return Number(breakdown[stableKey] || 0);
+            return Number(breakdown[key] || 0);
         }
 
         function renderRoundScoreTerms(role, p, state) {
