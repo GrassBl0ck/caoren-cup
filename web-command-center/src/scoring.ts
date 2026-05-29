@@ -2,7 +2,7 @@
 import { GameSession, Player, MatchStats, RosterTeam } from './types';
 import { findPlayerById, getGamePlayers, toNumber, parseCsvLine, getTeamPlayers } from './player-utils';
 
-// ========== CSV ÀàĞÍºÍ½âÎö ==========
+// ========== CSV ç±»å‹å’Œè§£æ ==========
 
 export type CsvRow = Record<string, string | number> & {
     steamid64: string;
@@ -76,7 +76,7 @@ export const csvRowToStats = (row: CsvRow) => ({
     raw: row,
 });
 
-// ========== ¼Æ·ÖºËĞÄ ==========
+// ========== è®¡åˆ†æ ¸å¿ƒ ==========
 
 export const calculateScores = (session: GameSession): void => {
     const players = getGamePlayers(session);
@@ -159,43 +159,43 @@ export const calculateScores = (session: GameSession): void => {
         let score = 0;
 
         if (!session.matchOptions?.undercoverModeEnabled) {
-            // ·ÇÎÔµ×Ä£Ê½µÄ¼Æ·Ö£¨ÓëÔ­Âß¼­Ò»ÖÂ£©
-            breakdown['»÷É±'] = kills * 5;
-            breakdown['ËÀÍö'] = deaths * -2;
-            breakdown['Öú¹¥'] = assists * 2;
-            breakdown['ÓÎÏ·Ê¤¸º'] = gameResultScore > 0 ? 30 : (gameResultScore < 0 ? -10 : 0);
-            breakdown['»ØºÏÊ¤¸º'] = roundRecord.won * 10 + roundRecord.lost * -4;
-            breakdown['ÉËº¦'] = Math.floor(damage / 100) * 1;
-            score = breakdown['»÷É±'] + breakdown['ËÀÍö'] + breakdown['Öú¹¥'] + breakdown['ÓÎÏ·Ê¤¸º'] + breakdown['»ØºÏÊ¤¸º'] + breakdown['ÉËº¦'];
+            // éå§åº•æ¨¡å¼çš„è®¡åˆ†ï¼ˆä¸åŸé€»è¾‘ä¸€è‡´ï¼‰
+            breakdown.kills = kills * 5;
+            breakdown.deaths = deaths * -2;
+            breakdown.assists = assists * 2;
+            breakdown.gameResult = gameResultScore > 0 ? 30 : (gameResultScore < 0 ? -10 : 0);
+            breakdown.roundResult = roundRecord.won * 10 + roundRecord.lost * -4;
+            breakdown.damage = Math.floor(damage / 100) * 1;
+            score = breakdown.kills + breakdown.deaths + breakdown.assists + breakdown.gameResult + breakdown.roundResult + breakdown.damage;
             player.finalScore = Math.round(score * 100) / 100;
             player.scoreBreakdown = breakdown;
             continue;
         }
 
-        // ÎÔµ×Ä£Ê½¼Æ·Ö
+        // å§åº•æ¨¡å¼è®¡åˆ†
         if (role === 'Soldier') {
-            breakdown['»÷É±'] = kills * 5;
-            breakdown['ËÀÍö'] = deaths * -2;
-            breakdown['Öú¹¥'] = assists * 2;
-            breakdown['ÓÎÏ·Ê¤¸º'] = gameResultScore > 0 ? 30 : (gameResultScore < 0 ? -10 : 0);
-            breakdown['»ØºÏÊ¤¸º'] = roundRecord.won * 10 + roundRecord.lost * -4;
-            breakdown['ÉËº¦'] = Math.floor(damage / 100) * 1;
+            breakdown.kills = kills * 5;
+            breakdown.deaths = deaths * -2;
+            breakdown.assists = assists * 2;
+            breakdown.gameResult = gameResultScore > 0 ? 30 : (gameResultScore < 0 ? -10 : 0);
+            breakdown.roundResult = roundRecord.won * 10 + roundRecord.lost * -4;
+            breakdown.damage = Math.floor(damage / 100) * 1;
             const correctVotes = countCorrectAccuseVotes(player);
-            breakdown['Ö¸ÈÏ³É¹¦Æ±Êı'] = correctVotes;
-            breakdown['Ö¸ÈÏ³É¹¦'] = correctVotes * 15;
-            score = breakdown['»÷É±'] + breakdown['ËÀÍö'] + breakdown['Öú¹¥'] + breakdown['ÓÎÏ·Ê¤¸º'] + breakdown['»ØºÏÊ¤¸º'] + breakdown['ÉËº¦'] + breakdown['Ö¸ÈÏ³É¹¦'];
+            breakdown.correctAccuseVotes = correctVotes;
+            breakdown.correctAccuse = correctVotes * 15;
+            score = breakdown.kills + breakdown.deaths + breakdown.assists + breakdown.gameResult + breakdown.roundResult + breakdown.damage + breakdown.correctAccuse;
         } else if (role === 'Undercover') {
-            breakdown['»÷É±'] = kills * -2;
-            breakdown['ËÀÍö'] = deaths * 5;
-            breakdown['Öú¹¥'] = assists * -1;
-            breakdown['ÓÎÏ·Ê¤¸º'] = gameResultScore > 0 ? -10 : (gameResultScore < 0 ? 40 : 0);
-            breakdown['»ØºÏÊ¤¸º'] = roundRecord.won * -4 + roundRecord.lost * 10;
-            breakdown['ÉËº¦'] = Math.floor(damage / 100) * -0.75;
+            breakdown.kills = kills * -2;
+            breakdown.deaths = deaths * 5;
+            breakdown.assists = assists * -1;
+            breakdown.gameResult = gameResultScore > 0 ? -10 : (gameResultScore < 0 ? 40 : 0);
+            breakdown.roundResult = roundRecord.won * -4 + roundRecord.lost * 10;
+            breakdown.damage = Math.floor(damage / 100) * -0.75;
             const receivedVotes = countReceivedAccuseVotes(player.playerId);
-            breakdown['±»Ö¸ÈÏÆ±Êı'] = receivedVotes;
-            breakdown['±»Ö¸ÈÏ'] = receivedVotes * -5;
+            breakdown.receivedAccuseVotes = receivedVotes;
+            breakdown.receivedAccuse = receivedVotes * -5;
             const exposeThreshold = getSideSize(player) * 2;
-            breakdown['±©Â¶³Í·£'] = receivedVotes >= exposeThreshold ? -50 : 0;
+            breakdown.exposurePenalty = receivedVotes >= exposeThreshold ? -50 : 0;
             let taskCellScore = 0, lineCount = 0;
             if (player.taskGrid) {
                 for (const cell of Object.values(player.taskGrid)) {
@@ -207,24 +207,24 @@ export const calculateScores = (session: GameSession): void => {
                 }
                 lineCount = countLines(player);
             }
-            breakdown['ÈÎÎñµÈ¼¶'] = taskCellScore;
-            breakdown['Á¬ÏßÊı'] = lineCount;
-            breakdown['Á¬Ïß'] = lineCount * 14;
-            breakdown['ÈÎÎñ'] = taskCellScore + breakdown['Á¬Ïß'];
-            score = breakdown['»÷É±'] + breakdown['ËÀÍö'] + breakdown['Öú¹¥'] + breakdown['ÓÎÏ·Ê¤¸º'] + breakdown['»ØºÏÊ¤¸º'] + breakdown['ÉËº¦'] + breakdown['±»Ö¸ÈÏ'] + breakdown['±©Â¶³Í·£'] + breakdown['ÈÎÎñ'];
+            breakdown.taskLevel = taskCellScore;
+            breakdown.lineCount = lineCount;
+            breakdown.lineBonus = lineCount * 14;
+            breakdown.taskTotal = taskCellScore + breakdown.lineBonus;
+            score = breakdown.kills + breakdown.deaths + breakdown.assists + breakdown.gameResult + breakdown.roundResult + breakdown.damage + breakdown.receivedAccuse + breakdown.exposurePenalty + breakdown.taskTotal;
         } else if (role === 'Detective') {
-            breakdown['»÷É±'] = kills * 4;
-            breakdown['ËÀÍö'] = deaths * -2;
-            breakdown['Öú¹¥'] = assists * 2;
-            breakdown['ÓÎÏ·Ê¤¸º'] = gameResultScore > 0 ? 30 : 0;
-            breakdown['»ØºÏÊ¤¸º'] = roundRecord.won * 8 + roundRecord.lost * -4;
-            breakdown['ÉËº¦'] = Math.floor(damage / 100) * 0.9;
-            breakdown['ÎÊ´ğÎÊÌâÊı'] = Math.max(0, Math.min(2, Number(player.detectiveQuestionCount || 0)));
-            breakdown['ÎÊ´ğ³Í·£'] = breakdown['ÎÊ´ğÎÊÌâÊı'] >= 2 ? -12 : 0;
+            breakdown.kills = kills * 4;
+            breakdown.deaths = deaths * -2;
+            breakdown.assists = assists * 2;
+            breakdown.gameResult = gameResultScore > 0 ? 30 : 0;
+            breakdown.roundResult = roundRecord.won * 8 + roundRecord.lost * -4;
+            breakdown.damage = Math.floor(damage / 100) * 0.9;
+            breakdown.questionCount = Math.max(0, Math.min(2, Number(player.detectiveQuestionCount || 0)));
+            breakdown.questionPenalty = breakdown.questionCount >= 2 ? -12 : 0;
             const correctVotes = countCorrectAccuseVotes(player);
-            breakdown['Ö¸ÈÏ³É¹¦Æ±Êı'] = correctVotes;
-            breakdown['Ö¸ÈÏ³É¹¦'] = correctVotes * 20;
-            score = breakdown['»÷É±'] + breakdown['ËÀÍö'] + breakdown['Öú¹¥'] + breakdown['ÓÎÏ·Ê¤¸º'] + breakdown['»ØºÏÊ¤¸º'] + breakdown['ÉËº¦'] + breakdown['ÎÊ´ğ³Í·£'] + breakdown['Ö¸ÈÏ³É¹¦'];
+            breakdown.correctAccuseVotes = correctVotes;
+            breakdown.correctAccuse = correctVotes * 20;
+            score = breakdown.kills + breakdown.deaths + breakdown.assists + breakdown.gameResult + breakdown.roundResult + breakdown.damage + breakdown.questionPenalty + breakdown.correctAccuse;
         }
 
         player.finalScore = Math.round(score * 100) / 100;
@@ -232,7 +232,7 @@ export const calculateScores = (session: GameSession): void => {
     }
 };
 
-// ¹¤¾ßº¯Êı
+// å·¥å…·å‡½æ•°
 const getRequiredWinTarget = (scoreA: number, scoreB: number): number => {
     const minScore = Math.min(scoreA, scoreB);
     if (minScore < 12) return 13;
