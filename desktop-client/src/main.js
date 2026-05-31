@@ -7,6 +7,8 @@ const commandCenterUrl = normalizeCommandCenterUrl(process.env.CAOREN_COMMAND_CE
 
 let mainWindow = null;
 
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 function normalizeCommandCenterUrl(raw) {
   const value = String(raw || '').trim();
   if (!value || value === PLACEHOLDER_URL) return null;

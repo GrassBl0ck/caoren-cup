@@ -180,7 +180,8 @@
     if (!force && state.currentBgmKey === bgmKey && state.bgmAudio && !state.bgmAudio.paused) return;
 
     const oldAudio = state.bgmAudio;
-    state.bgmAudio = new Audio(track.src);
+    const nextAudio = new Audio(track.src);
+    state.bgmAudio = nextAudio;
     state.bgmAudio.loop = track.loop !== false;
     state.bgmAudio.preload = "auto";
     setAudioVolume(state.bgmAudio, "bgm", track.volume);
@@ -193,7 +194,15 @@
     } catch (error) {
       state.currentBgmKey = null;
       state.bgmAudio = oldAudio || null;
-      updateStatus("浏览器拦截了自动播放，请点击“启用音乐”。");
+      const networkState = nextAudio.networkState;
+      const mediaErrorCode = nextAudio.error?.code;
+      if (networkState === HTMLMediaElement.NETWORK_NO_SOURCE || mediaErrorCode === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+        updateStatus(`音频文件未找到或无法播放：${track.src}`);
+      } else if (error?.name === "NotAllowedError") {
+        updateStatus("浏览器拦截了自动播放，请点击“启用音乐”。");
+      } else {
+        updateStatus(`BGM 播放失败：${error?.message || "未知错误"}`);
+      }
     }
   }
 

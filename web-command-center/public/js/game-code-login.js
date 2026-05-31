@@ -7,8 +7,15 @@
   }
 
   function hideDesktopClientDownloadInClient() {
-    var downloadLink = byId('caoren-desktop-client-download');
-    if (downloadLink && isDesktopClient()) downloadLink.style.display = 'none';
+    if (!isDesktopClient()) return;
+    var downloadIds = [
+      'caoren-desktop-client-download',
+      'caoren-desktop-client-github-download'
+    ];
+    downloadIds.forEach(function (id) {
+      var downloadLink = byId(id);
+      if (downloadLink) downloadLink.style.display = 'none';
+    });
   }
 
   function getLoginSocket() {

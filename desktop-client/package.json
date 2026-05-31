@@ -1,6 +1,6 @@
 {
   "name": "caoren-cup-desktop-client",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "private": true,
   "description": "Caoren Cup fixed-entry Windows desktop client.",
   "main": "src/main.js",
