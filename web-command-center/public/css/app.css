@@ -1796,6 +1796,48 @@
             color: #fff;
         }
 
+        .funfact-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 10px;
+        }
+
+        .funfact-card {
+            min-height: 104px;
+            padding: 14px;
+            border: 1px solid #dbe5ef;
+            border-left: 5px solid #64748b;
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        .funfact-title {
+            margin-bottom: 8px;
+            color: #0f172a;
+            font-size: 16px;
+            font-weight: 900;
+        }
+
+        .funfact-text {
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.6;
+            word-break: break-word;
+        }
+
+        .funfact-text strong {
+            color: #0f172a;
+            font-weight: 900;
+        }
+
+        .funfact-blue { border-left-color: #2563eb; }
+        .funfact-red { border-left-color: #dc2626; }
+        .funfact-amber { border-left-color: #d97706; }
+        .funfact-purple { border-left-color: #7c3aed; }
+        .funfact-green { border-left-color: #16a34a; }
+        .funfact-cyan { border-left-color: #0891b2; }
+        .funfact-orange { border-left-color: #ea580c; }
+
         .hl-table {
             width: 100%;
             border-collapse: collapse;
@@ -2636,4 +2678,22 @@ body[data-theme="dark"] .hltv-style-table thead th {
 
 body[data-theme="dark"] .hltv-style-table .team-heading {
     color: #d5dde6 !important;
+}
+
+body[data-theme="dark"] .funfact-card {
+    background: #172033 !important;
+    border-color: #334155 !important;
+    color: var(--text) !important;
+}
+
+body[data-theme="dark"] .funfact-title {
+    color: #dbeafe !important;
+}
+
+body[data-theme="dark"] .funfact-text {
+    color: #cbd5e1 !important;
+}
+
+body[data-theme="dark"] .funfact-text strong {
+    color: #ffffff !important;
 }

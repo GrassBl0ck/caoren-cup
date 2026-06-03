@@ -443,6 +443,16 @@ const createEmptyMatchStats = () => ({
     tradedDeaths: 0,
     equipmentSwing: 0,
     situationSwing: 0,
+    friendlyDamage: 0,
+    friendlyKills: 0,
+    blindSeconds: 0,
+    friendlyBlindSeconds: 0,
+    knifeDeaths: 0,
+    utilityDamageTaken: 0,
+    specialDeaths: 0,
+    survivalSeconds: 0,
+    deathGrenadeCount: 0,
+    grenadeDeaths: 0,
 });
 
 const createEmptySideStats = () => ({
@@ -648,7 +658,7 @@ const queueDuelRulesCommands = (delaySeconds = 0) => {
         { command: 'mp_winlimit 0', label: 'duel no win limit' },
         { command: 'mp_match_can_clinch 0', label: 'duel force full rounds' },
         { command: `mp_roundtime ${roundTime}`, label: `duel round time ${roundTime}` },
-        { command: 'mp_freezetime 2', label: 'duel freeze time' },
+        { command: 'mp_freezetime 0', label: 'duel no freeze time' },
         { command: 'mp_round_restart_delay 2', label: 'duel short round end' },
         { command: 'mp_free_armor 0', label: 'duel no free armor' },
         { command: 'mp_halftime 0', label: 'duel no halftime' },

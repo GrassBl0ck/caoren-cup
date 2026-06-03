@@ -201,6 +201,16 @@ const createEmptyMatchStats = () => ({
     tradedDeaths: 0,
     equipmentSwing: 0,
     situationSwing: 0,
+    friendlyDamage: 0,
+    friendlyKills: 0,
+    blindSeconds: 0,
+    friendlyBlindSeconds: 0,
+    knifeDeaths: 0,
+    utilityDamageTaken: 0,
+    specialDeaths: 0,
+    survivalSeconds: 0,
+    deathGrenadeCount: 0,
+    grenadeDeaths: 0,
 });
 
 function nonNegativeInt(value: unknown): number {
@@ -383,6 +393,9 @@ export function registerPluginRoutes(app: express.Express, deps: {
                 break;
             case 'player_hurt':
                 applyDamageEvent(session, payload);
+                break;
+            case 'player_blind':
+                applyBlindEvent(session, payload);
                 break;
             case 'round_end':
                 applyRoundEndEvent(session, payload, notifyMessage);
@@ -591,6 +604,8 @@ function getRoundStats(live: any, round: number) {
         firstDeathVictimSeen: false,
         openingKillRecorded: false,
         healthBySteamId: {},
+        startedAt: Date.now(),
+        survivalFinalizedBySteamId: {},
     };
     if (!live.roundStats[round].killCountBySteamId) live.roundStats[round].killCountBySteamId = {};
     if (!live.roundStats[round].enemyKillCountBySteamId) live.roundStats[round].enemyKillCountBySteamId = {};
@@ -664,6 +679,29 @@ function addPendingTrade(roundStats: any, payload: any, now: number) {
 
 function normalizeWeaponName(rawWeapon: any): string {
     return String(rawWeapon || '').toLowerCase().replace(/^weapon_/, '');
+}
+
+function isUtilityWeapon(rawWeapon: any): boolean {
+    const weapon = normalizeWeaponName(rawWeapon);
+    return weapon.includes('hegrenade') || weapon.includes('molotov') || weapon.includes('incgrenade') || weapon.includes('inferno') || weapon.includes('decoy');
+}
+
+function isSpecialDeathWeapon(rawWeapon: any): boolean {
+    const weapon = normalizeWeaponName(rawWeapon);
+    return weapon.includes('fall') || weapon.includes('world') || weapon.includes('trigger_hurt') || weapon.includes('hegrenade') || weapon.includes('molotov') || weapon.includes('incgrenade') || weapon.includes('inferno');
+}
+
+function recordSurvivalTime(session: any, roundStats: any, steamId: string | null | undefined, side: string | null | undefined, endedAt = Date.now()) {
+    const normalizedSteamId = normalizeSteamId(steamId);
+    if (!normalizedSteamId || roundStats.survivalFinalizedBySteamId?.[normalizedSteamId]) return;
+    if (!roundStats.survivalFinalizedBySteamId) roundStats.survivalFinalizedBySteamId = {};
+    roundStats.survivalFinalizedBySteamId[normalizedSteamId] = true;
+    const startedAt = Number(roundStats.startedAt || endedAt);
+    const seconds = Math.max(0, (endedAt - startedAt) / 1000);
+    const player = findPlayerBySteamId(session, normalizedSteamId);
+    if (!player) return;
+    incrementStat(ensurePlayerStats(player), 'survivalSeconds', seconds);
+    incrementStat(ensureSideStats(player, side), 'survivalSeconds', seconds);
 }
 
 function primaryWeaponValue(rawWeapon: any): number {
@@ -756,6 +794,16 @@ function finalizeEnemyMultiKills(session: any, roundStats: any) {
     }
 }
 
+function finalizeSurvivalTimes(session: any, roundStats: any) {
+    if (!roundStats || roundStats.survivalTimesFinalized) return;
+    roundStats.survivalTimesFinalized = true;
+    const endedAt = Date.now();
+    for (const steamId of Object.keys(roundStats.roundStartedSteamIds || {})) {
+        const side = roundStats.sideBySteamId?.[steamId];
+        recordSurvivalTime(session, roundStats, steamId, side, endedAt);
+    }
+}
+
 function applyKillEvent(session: any, payload: any) {
     const now = Date.now();
     const live = session.liveGameData;
@@ -831,6 +879,20 @@ function applyKillEvent(session: any, payload: any) {
     }
     if (victim) {
         const victimStats = ensurePlayerStats(victim);
+        recordSurvivalTime(session, roundStats, payload.victimSteamId, victimSide, now);
+        const victimGrenadeCount = nonNegativeInt(payload.victimGrenadeCount ?? payload.victimEquipment?.grenadeCount);
+        incrementStat(victimStats, 'deathGrenadeCount', victimGrenadeCount);
+        incrementStat(victimSideStats, 'deathGrenadeCount', victimGrenadeCount);
+        incrementStat(victimStats, 'grenadeDeaths');
+        incrementStat(victimSideStats, 'grenadeDeaths');
+        if (payload.victimActiveWeaponIsKnife || payload.victimEquipment?.activeWeaponIsKnife) {
+            incrementStat(victimStats, 'knifeDeaths');
+            incrementStat(victimSideStats, 'knifeDeaths');
+        }
+        if (isSpecialDeathWeapon(payload.weapon)) {
+            incrementStat(victimStats, 'specialDeaths');
+            incrementStat(victimSideStats, 'specialDeaths');
+        }
         if (!isFriendlyKill) {
             incrementStat(victimStats, 'deaths');
             incrementStat(victimSideStats, 'deaths');
@@ -851,6 +913,11 @@ function applyKillEvent(session: any, payload: any) {
             incrementStat(victimStats, 'entryCount');
             incrementStat(victimSideStats, 'entryCount');
         }
+    }
+    if (isFriendlyKill && attacker) {
+        const attackerStats = ensurePlayerStats(attacker);
+        incrementStat(attackerStats, 'friendlyKills');
+        incrementStat(attackerSideStats, 'friendlyKills');
     }
     if (isEnemyKill) {
         addPendingTrade(roundStats, payload, now);
@@ -889,11 +956,41 @@ function applyDamageEvent(session: any, payload: any) {
         if (!roundStats.healthBySteamId) roundStats.healthBySteamId = {};
         roundStats.healthBySteamId[victimSteamId] = healthAfter;
     }
-    if (!attacker || damage <= 0 || attacker.playerId === victim?.playerId || !attackerSide || !victimSide || attackerSide === victimSide) return;
+    if (!victim || damage <= 0 || !attackerSide || !victimSide || attacker?.playerId === victim.playerId) return;
+    const victimStats = ensurePlayerStats(victim);
+    const victimSideStats = ensureSideStats(victim, victimSide);
+    if (isUtilityWeapon(payload.weapon)) {
+        incrementStat(victimStats, 'utilityDamageTaken', damage);
+        incrementStat(victimSideStats, 'utilityDamageTaken', damage);
+    }
+    if (!attacker) return;
     const attackerStats = ensurePlayerStats(attacker);
     const attackerSideStats = ensureSideStats(attacker, attackerSide);
+    if (attackerSide === victimSide) {
+        incrementStat(attackerStats, 'friendlyDamage', damage);
+        incrementStat(attackerSideStats, 'friendlyDamage', damage);
+        return;
+    }
     incrementStat(attackerStats, 'damage', damage);
     incrementStat(attackerSideStats, 'damage', damage);
+}
+
+function applyBlindEvent(session: any, payload: any) {
+    const victim = findPlayerBySteamId(session, payload.victimSteamId);
+    if (!victim) return;
+    const attacker = findPlayerBySteamId(session, payload.attackerSteamId);
+    const victimSide = normalizeTeam(payload.victimTeam);
+    const attackerSide = normalizeTeam(payload.attackerTeam);
+    const duration = Math.max(0, Number(payload.duration || 0));
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    const victimStats = ensurePlayerStats(victim);
+    const victimSideStats = ensureSideStats(victim, victimSide);
+    incrementStat(victimStats, 'blindSeconds', duration);
+    incrementStat(victimSideStats, 'blindSeconds', duration);
+    if (attacker && attacker.playerId !== victim.playerId && attackerSide && victimSide && attackerSide === victimSide) {
+        incrementStat(victimStats, 'friendlyBlindSeconds', duration);
+        incrementStat(victimSideStats, 'friendlyBlindSeconds', duration);
+    }
 }
 function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) => void) {
     const live = session.liveGameData;
@@ -911,6 +1008,7 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
         if (roundStats) finalizeKastRounds(session, roundStats);
         if (roundStats) finalizeOneVsXWins(session, roundStats, winnerSide);
         if (roundStats) finalizeEnemyMultiKills(session, roundStats);
+        if (roundStats) finalizeSurvivalTimes(session, roundStats);
         if (winnerSide === 'CT') live.scoreCT += 1;
         else if (winnerSide === 'T') live.scoreT += 1;
         let winnerRoster = resolveRosterTeamByInitialSide(winnerSide, formalRound);

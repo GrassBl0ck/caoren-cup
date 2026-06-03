@@ -55,6 +55,8 @@ public sealed class CaorenCupPlugin : BasePlugin
     private string _duelUtilityMode = "none";
     private int _duelFormalRound;
     private DuelStage? _duelLastAnnouncedStage;
+    private float _duelRoundProtectionEndsAt;
+    private readonly Dictionary<string, float> _duelProtectionNoticeAt = new(StringComparer.Ordinal);
     private readonly Random _duelRandom = new();
     private readonly Dictionary<string, string> _duelPendingPrimary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _duelPendingSecondary = new(StringComparer.Ordinal);
@@ -174,6 +176,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_duel_map", "切换单挑创意工坊地图。用法：/duel_map <序号|地图名|创意工坊ID>", OnDuelMapCommand);
         AddCommand("css_duel_maps", "查看可切换的单挑地图。用法：/duel_maps", OnDuelMapsCommand);
         RegisterDuelWeaponCommands();
+        RegisterListener<Listeners.OnPlayerTakeDamagePre>(OnPlayerTakeDamagePre);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _outboundWorker = Task.Run(() => ProcessOutboundQueueAsync(_outboundCts.Token));
 
@@ -457,7 +460,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         return string.Join(" ", parts).Trim();
     }
 
-    private static object PlayerEquipment(CCSPlayerController? player)
+    private static PlayerEquipmentSnapshot PlayerEquipment(CCSPlayerController? player)
     {
         var pawn = player?.PlayerPawn?.Value;
         var weaponServices = pawn?.WeaponServices;
@@ -485,12 +488,14 @@ public sealed class CaorenCupPlugin : BasePlugin
             weapons = activeWeapon?.DesignerName is { Length: > 0 } name ? new[] { name } : Array.Empty<string>();
         }
 
-        return new
+        return new PlayerEquipmentSnapshot
         {
-            activeWeapon = activeWeapon?.DesignerName ?? string.Empty,
-            weapons,
-            armor = pawn?.ArmorValue ?? 0,
-            hasHelmet
+            ActiveWeapon = activeWeapon?.DesignerName ?? string.Empty,
+            Weapons = weapons,
+            GrenadeCount = CountGrenades(weapons),
+            ActiveWeaponIsKnife = IsKnifeWeapon(activeWeapon?.DesignerName),
+            Armor = pawn?.ArmorValue ?? 0,
+            HasHelmet = hasHelmet
         };
     }
 
@@ -499,6 +504,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         _currentRound++;
         if (_duelModeEnabled) _duelFormalRound = Math.Max(1, _scoreCt + _scoreT + 1);
+        StartDuelRoundProtection();
         RefreshRoundHealthState();
         EnforceTeamAssignments();
         ApplyDuelLoadoutsForRound();
@@ -560,6 +566,8 @@ public sealed class CaorenCupPlugin : BasePlugin
             weapon = @event.Weapon,
             attackerEquipment,
             victimEquipment,
+            victimActiveWeaponIsKnife = victimEquipment.ActiveWeaponIsKnife,
+            victimGrenadeCount = victimEquipment.GrenadeCount,
             mapName = SafeMapName()
         });
         return HookResult.Continue;
@@ -595,8 +603,56 @@ public sealed class CaorenCupPlugin : BasePlugin
             victimTeam = TeamName(victim.TeamNum),
             damage = effectiveDamage,
             rawDamage = @event.DmgHealth,
+            weapon = ReadStringProperty(@event, "Weapon"),
             health = @event.Health,
             maxHealth = victimMaxHealth,
+            mapName = SafeMapName()
+        });
+        return HookResult.Continue;
+    }
+
+    private HookResult OnPlayerTakeDamagePre(CCSPlayerPawn victimPawn, CTakeDamageInfo damageInfo)
+    {
+        if (!_duelModeEnabled || !IsDuelRoundProtectionActive()) return HookResult.Continue;
+        if (victimPawn == null || !victimPawn.IsValid) return HookResult.Continue;
+
+        var victim = victimPawn.Controller.Value as CCSPlayerController;
+        var attackerPawn = damageInfo.Attacker.Value?.As<CCSPlayerPawn>();
+        var attacker = attackerPawn?.Controller.Value as CCSPlayerController;
+        if (!IsRealPlayer(victim) || !IsRealPlayer(attacker) || victim == attacker) return HookResult.Continue;
+        if (!IsEnemySideKill(TeamName(attacker!.TeamNum), TeamName(victim!.TeamNum))) return HookResult.Continue;
+
+        damageInfo.Damage = 0;
+        ShowDuelProtectionHitNotice(attacker);
+        return HookResult.Continue;
+    }
+
+    [GameEventHandler]
+    public HookResult OnPlayerBlind(EventPlayerBlind @event, GameEventInfo info)
+    {
+        var victim = @event.Userid;
+        if (!IsRealPlayer(victim)) return HookResult.Continue;
+
+        var attacker = ReadControllerProperty(@event, "Attacker");
+        var duration = ReadFloatProperty(@event, "BlindDuration", "BlindTime", "Duration");
+        if (duration <= 0) return HookResult.Continue;
+
+        string? attackerSteamId = null;
+        string? attackerTeam = null;
+        if (IsRealPlayer(attacker))
+        {
+            attackerSteamId = attacker!.SteamID.ToString();
+            attackerTeam = TeamName(attacker.TeamNum);
+        }
+
+        QueueEvent("player_blind", new
+        {
+            round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
+            attackerSteamId,
+            attackerTeam,
+            victimSteamId = victim!.SteamID.ToString(),
+            victimTeam = TeamName(victim.TeamNum),
+            duration,
             mapName = SafeMapName()
         });
         return HookResult.Continue;
@@ -1241,6 +1297,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         _duelCurrentPrimary.Clear();
         _duelCurrentSecondary.Clear();
         _duelAwpRequests.Clear();
+        _duelRoundProtectionEndsAt = 0;
+        _duelProtectionNoticeAt.Clear();
         var totalRounds = pistol + rifle + sniper;
         Server.NextFrame(() =>
         {
@@ -1376,6 +1434,36 @@ public sealed class CaorenCupPlugin : BasePlugin
             }
             _duelLastAnnouncedStage = stage;
         });
+    }
+
+    private void StartDuelRoundProtection()
+    {
+        if (!_duelModeEnabled)
+        {
+            _duelRoundProtectionEndsAt = 0;
+            _duelProtectionNoticeAt.Clear();
+            return;
+        }
+
+        _duelRoundProtectionEndsAt = Server.CurrentTime + 0.6f;
+        _duelProtectionNoticeAt.Clear();
+    }
+
+    private bool IsDuelRoundProtectionActive()
+    {
+        return _duelModeEnabled && _duelRoundProtectionEndsAt > 0 && Server.CurrentTime < _duelRoundProtectionEndsAt;
+    }
+
+    private void ShowDuelProtectionHitNotice(CCSPlayerController attacker)
+    {
+        var steamId = attacker.SteamID.ToString();
+        var now = Server.CurrentTime;
+        if (_duelProtectionNoticeAt.TryGetValue(steamId, out var lastAt) && now - lastAt < 0.35f) return;
+        _duelProtectionNoticeAt[steamId] = now;
+
+        var message = "开局保护中，本次命中不造成伤害";
+        try { attacker.PrintToCenter(message); } catch { }
+        try { attacker.PrintToChat($" {ChatColors.Green}[草人杯]{ChatColors.Default} {message}"); } catch { }
     }
 
     private void RequestDuelWeapon(CCSPlayerController player, string alias, string weapon)
@@ -1701,6 +1789,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         _scoreT = 0;
         _duelFormalRound = 0;
         _duelLastAnnouncedStage = null;
+        _duelRoundProtectionEndsAt = 0;
+        _duelProtectionNoticeAt.Clear();
     }
 
     private async Task AckCommandAsync(string commandId)
@@ -1773,6 +1863,78 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         try { return Server.MapName ?? string.Empty; }
         catch { return string.Empty; }
+    }
+
+    private static CCSPlayerController? ReadControllerProperty(object source, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            try
+            {
+                var value = source.GetType().GetProperty(name)?.GetValue(source);
+                if (value is CCSPlayerController controller) return controller;
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    private static float ReadFloatProperty(object source, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            try
+            {
+                var value = source.GetType().GetProperty(name)?.GetValue(source);
+                if (value == null) continue;
+                return Convert.ToSingle(value);
+            }
+            catch { }
+        }
+        return 0f;
+    }
+
+    private static string ReadStringProperty(object source, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            try
+            {
+                var value = source.GetType().GetProperty(name)?.GetValue(source);
+                if (value != null) return value.ToString() ?? string.Empty;
+            }
+            catch { }
+        }
+        return string.Empty;
+    }
+
+    private static bool IsKnifeWeapon(string? weaponName)
+    {
+        if (string.IsNullOrWhiteSpace(weaponName)) return false;
+        var weapon = weaponName.ToLowerInvariant();
+        return weapon.Contains("knife") || weapon.Contains("bayonet");
+    }
+
+    private static bool IsGrenadeWeapon(string? weaponName)
+    {
+        if (string.IsNullOrWhiteSpace(weaponName)) return false;
+        var weapon = weaponName.ToLowerInvariant();
+        return weapon.Contains("flashbang")
+            || weapon.Contains("hegrenade")
+            || weapon.Contains("smokegrenade")
+            || weapon.Contains("molotov")
+            || weapon.Contains("incgrenade")
+            || weapon.Contains("decoy");
+    }
+
+    private static int CountGrenades(IEnumerable<string> weapons)
+    {
+        var count = 0;
+        foreach (var weapon in weapons)
+        {
+            if (IsGrenadeWeapon(weapon)) count++;
+        }
+        return count;
     }
 
     private void ShowDuelMapHelp(CCSPlayerController? player)
@@ -2025,6 +2187,27 @@ public sealed class PluginHeartbeatResponse
 
     [JsonPropertyName("currentRound")]
     public int CurrentRound { get; set; }
+}
+
+internal sealed class PlayerEquipmentSnapshot
+{
+    [JsonPropertyName("activeWeapon")]
+    public string ActiveWeapon { get; set; } = string.Empty;
+
+    [JsonPropertyName("weapons")]
+    public string[] Weapons { get; set; } = Array.Empty<string>();
+
+    [JsonPropertyName("grenadeCount")]
+    public int GrenadeCount { get; set; }
+
+    [JsonPropertyName("activeWeaponIsKnife")]
+    public bool ActiveWeaponIsKnife { get; set; }
+
+    [JsonPropertyName("armor")]
+    public int Armor { get; set; }
+
+    [JsonPropertyName("hasHelmet")]
+    public bool HasHelmet { get; set; }
 }
 
 internal enum DuelStage

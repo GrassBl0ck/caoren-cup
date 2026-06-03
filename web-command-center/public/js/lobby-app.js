@@ -2256,6 +2256,93 @@ if (window._caorenModifiersEnabled !== true) {
             else html += '<p class="postmatch-note">每格格式：左侧数字为 A 队行玩家击杀 B 队列玩家，右侧数字为 B 队列玩家反杀该 A 队行玩家。</p>';
             return html;
         }
+        function secondsText(seconds) {
+            const total = Math.max(0, Math.round(Number(seconds || 0)));
+            const minutes = Math.floor(total / 60);
+            const rest = total % 60;
+            if (minutes <= 0) return `${rest}秒`;
+            return `${minutes}分${rest}秒`;
+        }
+
+        function funFactPlayers(state) {
+            return Object.values(state.players || {}).filter(p => p.role !== 'Admin' && p.role !== 'Spectator' && p.stats);
+        }
+
+        function topFunFactPlayer(players, valueFn, minValue = 0) {
+            let best = null;
+            let bestValue = minValue;
+            players.forEach(player => {
+                const value = Number(valueFn(player) || 0);
+                if (value > bestValue) {
+                    best = player;
+                    bestValue = value;
+                }
+            });
+            return best ? { player: best, value: bestValue } : null;
+        }
+
+        function renderPostmatchFunFacts(state) {
+            const players = funFactPlayers(state);
+            if (!players.length) return '';
+            const facts = [];
+            const pushFact = (title, text, tone = '') => facts.push({ title, text, tone });
+
+            const blind = topFunFactPlayer(players, p => p.stats?.blindSeconds, 0);
+            if (blind) {
+                const stats = blind.player.stats || {};
+                pushFact('想妈妈啦', `${htmlEscape(blind.player.name)} 本局游戏共被闪白 <strong>${trimFixed(Number(stats.blindSeconds || 0), 1)} 秒</strong>，其中 <strong>${trimFixed(Number(stats.friendlyBlindSeconds || 0), 1)} 秒</strong>来自队友。`, 'blue');
+            }
+
+            const friendlyDamage = topFunFactPlayer(players, p => p.stats?.friendlyDamage, 0);
+            if (friendlyDamage) {
+                const stats = friendlyDamage.player.stats || {};
+                const kills = Number(stats.friendlyKills || 0);
+                pushFact('卧底！卧底！', `${htmlEscape(friendlyDamage.player.name)} 本局游戏中对队友造成了 <strong>${Math.round(Number(stats.friendlyDamage || 0))} 点</strong>伤害${kills > 0 ? `，击杀了 <strong>${kills} 名</strong>队友` : ''}。`, 'red');
+            }
+
+            const knifeDeaths = topFunFactPlayer(players, p => p.stats?.knifeDeaths, 0);
+            if (knifeDeaths) {
+                pushFact('匕瘾犯了', `${htmlEscape(knifeDeaths.player.name)} 本局游戏中，在持有近战武器时被击杀 <strong>${Math.round(knifeDeaths.value)} 次</strong>。`, 'amber');
+            }
+
+            const utilityDamageTaken = topFunFactPlayer(players, p => p.stats?.utilityDamageTaken, 0);
+            if (utilityDamageTaken) {
+                pushFact('不是我怎么——', `${htmlEscape(utilityDamageTaken.player.name)} 本局游戏中，受到 <strong>${Math.round(utilityDamageTaken.value)} 点</strong>道具伤害。`, 'purple');
+            }
+
+            const specialDeaths = topFunFactPlayer(players, p => p.stats?.specialDeaths, 0);
+            if (specialDeaths) {
+                pushFact('MAN！', `${htmlEscape(specialDeaths.player.name)} 本局游戏中，死于坠落 / 手雷 / 燃烧瓶共 <strong>${Math.round(specialDeaths.value)} 次</strong>。`, 'green');
+            }
+
+            const survivalRows = players
+                .map(player => ({ player, value: Number(player.stats?.survivalSeconds || 0) }))
+                .sort((a, b) => b.value - a.value);
+            if (survivalRows.length >= 2 && survivalRows[0].value - survivalRows[1].value > 120) {
+                const lead = survivalRows[0].value - survivalRows[1].value;
+                pushFact('上古尊者', `${htmlEscape(survivalRows[0].player.name)} 本局游戏中，共存活了 <strong>${secondsText(survivalRows[0].value)}</strong>，超过第二名 <strong>${secondsText(lead)}</strong>。`, 'cyan');
+            }
+
+            const wasteRows = players
+                .map(player => {
+                    const deaths = Number(player.stats?.grenadeDeaths || 0);
+                    const avg = deaths > 0 ? Number(player.stats?.deathGrenadeCount || 0) / deaths : 0;
+                    return { player, value: avg };
+                })
+                .sort((a, b) => b.value - a.value);
+            if (wasteRows.length && wasteRows[0].value > 1.5) {
+                pushFact('暴殄天物', `${htmlEscape(wasteRows[0].player.name)} 本局游戏中，死亡时平均携带 <strong>${trimFixed(wasteRows[0].value, 1)} 个</strong>道具。`, 'orange');
+            }
+
+            if (!facts.length) return renderPostmatchNotice('本局暂无满足条件的趣味数据。');
+            let html = '<div class="funfact-grid">';
+            facts.forEach(fact => {
+                html += `<div class="funfact-card ${fact.tone ? `funfact-${fact.tone}` : ''}"><div class="funfact-title">${htmlEscape(fact.title)}</div><div class="funfact-text">${fact.text}</div></div>`;
+            });
+            html += '</div>';
+            return html;
+        }
+
         function renderUndercoverTaskReview(state) {
             const undercovers = Object.values(state.players || {}).filter(p => p.gameRole === 'Undercover');
             if (!undercovers.length) return '';
@@ -2276,6 +2363,7 @@ if (window._caorenModifiersEnabled !== true) {
             let html = '<div class="postmatch-panel"><h3 style="margin-top:0;">赛后战绩</h3>' + renderHltvStatsTable(state) + '</div>';
             html += '<div class="postmatch-panel"><h3 style="margin-top:0;">对位矩阵</h3>' + renderKillMatrixTable(state) + '</div>';
             if (isUndercoverModeEnabledFromState(state)) html += renderUndercoverTaskReview(state);
+            html += '<div class="postmatch-panel"><h3 style="margin-top:0;">趣味数据</h3>' + renderPostmatchFunFacts(state) + '</div>';
             host.innerHTML = html;
         }
 
