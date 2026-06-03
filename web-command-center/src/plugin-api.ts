@@ -19,6 +19,7 @@ import {
     resolveRosterTeamByInitialSide,
 } from './game-flow-manager';
 import { ADMIN_PASSWORD, PLUGIN_TOKEN } from './game-constants';
+import { resolveDuelMapConfig } from './duel-config';
 
 type TeamAssignmentSide = 'CT' | 'T';
 
@@ -65,6 +66,7 @@ const getFormalRound = (session: any): number => {
 const getTeamASideForRound = (selectedSide: unknown, round: number): TeamAssignmentSide | null => {
     if (selectedSide !== 'CT' && selectedSide !== 'T') return null;
     const initial = selectedSide as TeamAssignmentSide;
+    if (getSession().matchOptions?.matchMode === 'duel') return initial;
     return round >= 13 ? oppositeSide(initial) : initial;
 };
 
@@ -263,6 +265,18 @@ export function registerPluginRoutes(app: express.Express, deps: {
         const ok = ackPluginCommand(req.body?.commandId);
         if (!ok) return res.status(404).json({ success: false, error: '未找到要确认的插件命令' });
         res.json({ success: true });
+    });
+
+    app.post('/api/plugin/duel-map', requirePluginAuth, (req, res) => {
+        const session = getSession();
+        const map = resolveDuelMapConfig(req.body?.map, req.body?.workshopId);
+        session.matchOptions.matchMode = 'duel';
+        session.matchOptions.undercoverModeEnabled = false;
+        session.matchOptions.duelMap = map.name;
+        session.matchOptions.duelMapWorkshopId = map.workshopId;
+        notifyMessage(`\u4e0b\u4e00\u5c40\u5355\u6311\u5730\u56fe\u5df2\u8bbe\u7f6e\u4e3a\uff1a${map.name}`);
+        broadcastState();
+        res.json({ success: true, map: map.name, workshopId: map.workshopId });
     });
 
     app.post('/api/admin/team-lock/sync', (req, res) => {

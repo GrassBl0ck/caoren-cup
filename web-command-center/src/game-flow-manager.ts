@@ -34,15 +34,27 @@ import {
     SIDE_PICK_VOTE_SECONDS,
     MAP_BAN_COUNT_PER_TURN,
 } from './game-constants';
+import {
+    DUEL_DEFAULT_MAP,
+    DUEL_DEFAULT_ROUND_TIME_MINUTES,
+    DUEL_DEFAULT_WORKSHOP_ID,
+    getDuelTotalRounds,
+    normalizeDuelMap,
+    normalizeDuelRoundTimeMinutes,
+    normalizeDuelRounds,
+    normalizeDuelUtilityMode,
+    resolveDuelMapConfig,
+} from './duel-config';
+import { enqueuePluginCommand } from './plugin-command-queue';
 
-// ========== �㲥��֪ͨע�� ==========
+// ========== Broadcast and notification hooks ==========
 let broadcast: (() => void) | null = null;
 let notifyMessage: ((msg: string) => void) | null = null;
 
 export const injectFlowBroadcast = (fn: () => void) => { broadcast = fn; };
 export const injectNotify = (fn: (msg: string) => void) => { notifyMessage = fn; };
 
-// ========== �ڲ����ߺ��� ==========
+// ========== Internal flow helpers ==========
 const randomizeCaptainForTeam = (team: 'A' | 'B') => {
     const session = getSession();
     const candidates = getGamePlayers(session).filter(
@@ -125,6 +137,12 @@ const getAvailableMaps = (): string[] => {
     return session.mapPool.filter(m => !session.bannedMaps.includes(m));
 };
 
+const isDuelMode = () => getSession().matchOptions?.matchMode === 'duel';
+const DUEL_READY_WAIT_SECONDS = Math.max(1, Number(process.env.DUEL_READY_WAIT_SECONDS || 90));
+const DUEL_FALLBACK_MAP_COMMAND = String(process.env.DUEL_FALLBACK_MAP_COMMAND || 'changelevel de_dust2').trim() || 'changelevel de_dust2';
+const DUEL_JOIN_EXTEND_THRESHOLD_SECONDS = Math.max(1, Number(process.env.DUEL_JOIN_EXTEND_THRESHOLD_SECONDS || 15));
+const DUEL_JOIN_EXTEND_SECONDS = Math.max(1, Number(process.env.DUEL_JOIN_EXTEND_SECONDS || 10));
+
 const getCurrentMapBanCount = (): number => {
     const availableCount = getAvailableMaps().length;
     return Math.min(MAP_BAN_COUNT_PER_TURN, Math.max(1, availableCount - 1));
@@ -150,7 +168,7 @@ const getMapBanVoteDurationSeconds = (): number => {
     return Math.max(1, MAP_BAN_LATER_SECONDS);
 };
 
-// ========== ѡ������ ==========
+// ========== Draft flow ==========
 const scheduleDraftToMapBan = () => {
     clearDraftPickTimer();
     const session = getSession();
@@ -179,7 +197,7 @@ const applyDraftPick = (pickedId?: string, reason: 'manual' | 'timeout' = 'manua
     session.draftIndex++;
 
     if (reason === 'timeout') {
-        notifyMessage?.(`ѡ�˵���ʱ������ϵͳΪ${currentTeam}���Զ�ѡ��${picked.name}`);
+        notifyMessage?.(`选人超时，系统已为 ${currentTeam} 队自动选择 ${picked.name}`);
     }
     return picked;
 };
@@ -253,7 +271,7 @@ const startCaptainDraftFunc = (shouldBroadcast = true) => {
     return true;
 };
 
-// ========== ��ͼBP���� ==========
+// ========== Map ban flow ==========
 const startMapVoteFunc = (team: RosterTeam) => {
     clearMapVoteTimer();
     const session = getSession();
@@ -293,7 +311,7 @@ const finishMapVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
         }
     }
 
-    notifyMessage?.(`��ͼͶƱ�������� Ban��${banMaps.length > 0 ? banMaps.join('��') : '��'}`);
+    notifyMessage?.(`地图投票结束，已 Ban：${banMaps.length > 0 ? banMaps.join('、') : '无'}`);
 
     session.mapVote = undefined;
     session.currentBanTeam = null;
@@ -320,7 +338,7 @@ const finishMapVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     }
 };
 
-// ========== ѡ������ ==========
+// ========== Side pick flow ==========
 const startSideVoteFunc = (team: RosterTeam = getSession().sidePickTeam || 'A') => {
     clearSideVoteTimer();
     const session = getSession();
@@ -361,7 +379,7 @@ const finishSideVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     session.timerEndAt = null;
     session.timerPhase = null;
     setRosterLiveSides(teamASide);
-    notifyMessage?.(`ѡ��ͶƱ������${session.sidePickTeam || 'A'}��ѡ�� ${selectedSide}`);
+    notifyMessage?.(`选边投票结束，${session.sidePickTeam || 'A'} 队选择 ${selectedSide}`);
     broadcast?.();
     advancePhase(GamePhase.SidePick, GamePhase.PreGameSetup);
 };
@@ -373,7 +391,7 @@ const setRosterLiveSides = (teamASide: Team) => {
     for (const p of getTeamPlayers(session, 'B')) p.team = teamBSide;
 };
 
-// ========== LiveGame ���ݸ��� ==========
+// ========== Live game data updates ==========
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
     scoreT: 0,
@@ -514,11 +532,17 @@ const updateMatchFinishState = () => {
     const winner = getMatchWinner(scoreA, scoreB);
     session.liveGameData.winTarget = winTarget;
     session.liveGameData.winnerTeam = winner;
-    session.liveGameData.matchFinished = !!winner;
+    session.liveGameData.matchFinished = session.matchOptions?.matchMode === 'duel'
+        ? (session.liveGameData.scoreA + session.liveGameData.scoreB) >= winTarget
+        : !!winner;
     syncCurrentRoundFromScores(session.liveGameData);
 };
 
 const getRequiredWinTarget = (scoreA: number, scoreB: number): number => {
+    const session = getSession();
+    if (session.matchOptions?.matchMode === 'duel') {
+        return getDuelTotalRounds(session.matchOptions.duelRounds);
+    }
     const minScore = Math.min(scoreA, scoreB);
     if (minScore < 12) return 13;
     return 16 + Math.floor((minScore - 12) / 3) * 3;
@@ -526,6 +550,13 @@ const getRequiredWinTarget = (scoreA: number, scoreB: number): number => {
 
 const getMatchWinner = (scoreA: number, scoreB: number): RosterTeam | null => {
     const target = getRequiredWinTarget(scoreA, scoreB);
+    const session = getSession();
+    if (session.matchOptions?.matchMode === 'duel') {
+        if (scoreA + scoreB < target) return null;
+        if (scoreA > scoreB) return 'A';
+        if (scoreB > scoreA) return 'B';
+        return null;
+    }
     if (scoreA >= target && scoreA > scoreB) return 'A';
     if (scoreB >= target && scoreB > scoreA) return 'B';
     return null;
@@ -535,9 +566,234 @@ const resolveRosterTeamByInitialSide = (side: Team, roundNumber?: number): Roste
     const session = getSession();
     if (!session.selectedSide) return null;
     let teamASide: Team = session.selectedSide;
+    if (session.matchOptions?.matchMode === 'duel') {
+        if (side === 'CT') return 'A';
+        if (side === 'T') return 'B';
+        return null;
+    }
     const round = Number(roundNumber || session.liveGameData?.currentRound || 0);
     if (round >= 13 && round <= 24) teamASide = oppositeSide(teamASide);
     return side === teamASide ? 'A' : 'B';
+};
+const setupDuelFromLobby = (): boolean => {
+    const session = getSession();
+    const duelPlayers = getGamePlayers(session).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
+    if (duelPlayers.length < 1) {
+        notifyMessage?.('单挑模式至少需要 1 名参赛玩家。');
+        return false;
+    }
+
+    for (const player of duelPlayers) {
+        const existingRoster = player.rosterTeam === 'A' || player.rosterTeam === 'B' ? player.rosterTeam : undefined;
+        removePlayerFromRosterTeams(player.playerId);
+        player.rosterTeam = existingRoster;
+        player.team = undefined;
+        player.gameRole = 'Soldier';
+        player.isReady = false;
+        player.undercoverTaskAckStage = undefined;
+        delete player.taskGrid;
+    }
+
+    for (const player of duelPlayers) player.role = 'Player';
+    let hasA = duelPlayers.some(player => player.rosterTeam === 'A');
+    let hasB = duelPlayers.some(player => player.rosterTeam === 'B');
+    for (const player of duelPlayers) {
+        if (player.rosterTeam) continue;
+        if (!hasA) {
+            player.rosterTeam = 'A';
+            hasA = true;
+        } else if (!hasB) {
+            player.rosterTeam = 'B';
+            hasB = true;
+        }
+        if (hasA && hasB) break;
+    }
+
+    for (const player of duelPlayers) {
+        if (player.rosterTeam === 'A') player.team = 'CT';
+        else if (player.rosterTeam === 'B') player.team = 'T';
+    }
+
+    session.teams.A.players = duelPlayers.filter(player => player.rosterTeam === 'A').map(player => player.playerId);
+    session.teams.B.players = duelPlayers.filter(player => player.rosterTeam === 'B').map(player => player.playerId);
+    session.captains.A = session.teams.A.players[0] || null;
+    session.captains.B = session.teams.B.players[0] || null;
+    session.selectedSide = 'CT';
+    session.sidePickTeam = 'A';
+    const duelMap = resolveDuelMapConfig(session.matchOptions?.duelMap || DUEL_DEFAULT_MAP, session.matchOptions?.duelMapWorkshopId);
+    session.matchOptions.duelMap = duelMap.name;
+    session.matchOptions.duelMapWorkshopId = duelMap.workshopId;
+    session.selectedMap = duelMap.name;
+    session.mapPool = [session.selectedMap];
+    session.bannedMaps = [];
+    session.banSequence = [];
+    session.undercoverCount = 0;
+    session.detectiveCount = 0;
+    session.rolesReleased = true;
+    session.questionsUsed = 0;
+    session.currentQuestion = null;
+    session.questionAnswer = null;
+    session.secondQuestionAnswered = false;
+    session.accusations = {};
+    return true;
+};
+
+const queueDuelRulesCommands = (delaySeconds = 0) => {
+    const session = getSession();
+    const rounds = normalizeDuelRounds(session.matchOptions?.duelRounds);
+    const totalRounds = getDuelTotalRounds(rounds);
+    const roundTime = normalizeDuelRoundTimeMinutes(session.matchOptions?.duelRoundTimeMinutes || DUEL_DEFAULT_ROUND_TIME_MINUTES);
+    const commands = [
+        { command: `mp_maxrounds ${totalRounds}`, label: `duel total rounds ${totalRounds}` },
+        { command: 'mp_winlimit 0', label: 'duel no win limit' },
+        { command: 'mp_match_can_clinch 0', label: 'duel force full rounds' },
+        { command: `mp_roundtime ${roundTime}`, label: `duel round time ${roundTime}` },
+        { command: 'mp_freezetime 2', label: 'duel freeze time' },
+        { command: 'mp_round_restart_delay 2', label: 'duel short round end' },
+        { command: 'mp_free_armor 0', label: 'duel no free armor' },
+        { command: 'mp_halftime 0', label: 'duel no halftime' },
+        { command: 'mp_autoteambalance 0', label: 'duel no auto balance' },
+        { command: 'mp_limitteams 0', label: 'duel no team limit' },
+        { command: 'sv_showimpacts 0', label: 'duel hide bullet impacts' },
+        { command: 'sv_showimpacts_time 0', label: 'duel clear bullet impact timer' },
+        { command: 'mp_warmup_end', label: 'duel end warmup' },
+        { command: 'mp_restartgame 1', label: 'duel restart' },
+    ];
+
+    for (const item of commands) {
+        enqueuePluginCommand('EXECUTE_SERVER_COMMAND', {
+            command: item.command,
+            label: item.label,
+            matchId: session.matchId,
+            delaySeconds,
+            requestedAt: Date.now(),
+        });
+    }
+};
+
+const queueDuelMapOnlySetup = () => {
+    const session = getSession();
+    const duelMap = resolveDuelMapConfig(session.matchOptions?.duelMap || DUEL_DEFAULT_MAP, session.matchOptions?.duelMapWorkshopId);
+    const waitSeconds = Math.max(1, Math.floor(DUEL_READY_WAIT_SECONDS));
+    session.matchOptions.duelMap = duelMap.name;
+    session.matchOptions.duelMapWorkshopId = duelMap.workshopId;
+    enqueuePluginCommand('EXECUTE_SERVER_COMMAND', {
+        command: duelMap.command,
+        label: `duel map ${duelMap.name}`,
+        matchId: session.matchId,
+        requestedAt: Date.now(),
+    });
+    const warmupCommands = [
+        { command: 'mp_warmup_pausetimer 0', label: 'duel warmup timer enabled' },
+        { command: `mp_warmuptime ${waitSeconds}`, label: `duel warmup ${waitSeconds}s` },
+        { command: 'mp_warmup_start', label: 'duel warmup start' },
+    ];
+    for (const item of warmupCommands) {
+        enqueuePluginCommand('EXECUTE_SERVER_COMMAND', {
+            command: item.command,
+            label: item.label,
+            matchId: session.matchId,
+            delaySeconds: 12,
+            requestedAt: Date.now(),
+        });
+    }
+};
+
+const queueDuelFormalStart = (delaySeconds = 0) => {
+    const session = getSession();
+    queueDuelRulesCommands(delaySeconds);
+    enqueuePluginCommand('CONFIGURE_DUEL_MODE', {
+        matchId: session.matchId,
+        rounds: normalizeDuelRounds(session.matchOptions?.duelRounds),
+        utilityMode: normalizeDuelUtilityMode(session.matchOptions?.duelUtilityMode),
+        requestedAt: Date.now(),
+    });
+};
+
+const rollbackDuelToLobby = (reason = '单挑等待结束后参赛玩家不足，已回到大厅。') => {
+    const session = getSession();
+    session.phase = GamePhase.Lobby;
+    session.matchId = uuidv4();
+    session.liveGameData = undefined;
+    session.timerEndAt = null;
+    session.timerPhase = null;
+    session.selectedMap = null;
+    session.selectedSide = null;
+    session.sidePickTeam = null;
+    session.teams.A.players = [];
+    session.teams.B.players = [];
+    session.captains.A = null;
+    session.captains.B = null;
+    session.mapPool = ['Dust II', 'Inferno', 'Mirage', 'Ancient', 'Anubis', 'Nuke', 'Overpass', 'Cache', 'Train'];
+    session.bannedMaps = [];
+    session.banSequence = [];
+    while (session.banSequence.length < session.mapPool.length - 1) session.banSequence.push('A', 'B');
+    session.banSequence.length = session.mapPool.length - 1;
+    for (const player of getGamePlayers(session)) {
+        if (player.role !== 'Admin') player.role = 'Player';
+        player.rosterTeam = undefined;
+        player.team = undefined;
+        player.gameRole = 'Soldier';
+        player.isReady = false;
+        player.undercoverTaskAckStage = undefined;
+        delete player.taskGrid;
+    }
+    session.matchOptions.duelMap = DUEL_DEFAULT_MAP;
+    session.matchOptions.duelMapWorkshopId = DUEL_DEFAULT_WORKSHOP_ID;
+    enqueuePluginCommand('EXECUTE_SERVER_COMMAND', {
+        command: DUEL_FALLBACK_MAP_COMMAND,
+        label: 'duel fallback dust2',
+        matchId: session.matchId,
+        requestedAt: Date.now(),
+    });
+    notifyMessage?.(reason);
+    broadcast?.();
+};
+
+const hasRequiredDuelPlayers = () => {
+    const session = getSession();
+    const players = getGamePlayers(session).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
+    return players.some(p => p.rosterTeam === 'A') &&
+        players.some(p => p.rosterTeam === 'B') &&
+        players.every(p => p.rosterTeam === 'A' || p.rosterTeam === 'B');
+};
+
+const beginDuelFormalMatch = (matchId: string) => {
+    const session = getSession();
+    if (session.phase !== GamePhase.LiveGame || session.matchId !== matchId || session.matchOptions?.matchMode !== 'duel') return;
+    const remainingMs = Number(session.timerEndAt || 0) - Date.now();
+    if (session.liveGameData?.duelWaitingForPlayers === true && remainingMs > 0) {
+        setTimeout(() => beginDuelFormalMatch(matchId), remainingMs);
+        return;
+    }
+    if (!hasRequiredDuelPlayers()) {
+        rollbackDuelToLobby('90 秒等待结束后，单挑分队仍未满足 A/B 双方都有玩家且无未分队参赛玩家，已终止单挑并回到大厅。');
+        return;
+    }
+    const rawPluginRound = resetFormalMatchCounters();
+    session.liveGameData!.rawPluginRound = 1;
+    session.liveGameData!.roundBaseOffset = 0;
+    session.liveGameData!.formalRoundStartRaw = 1;
+    queueDuelFormalStart(0);
+    enqueuePluginCommand('RESET_LIVE_MATCH_STATS', { currentRound: rawPluginRound });
+    session.timerEndAt = null;
+    session.timerPhase = null;
+    notifyMessage?.('单挑等待结束，双方已就位；服务器即将重启并从手枪第 1 回合开始正式统计。');
+    broadcast?.();
+};
+
+const extendDuelWaitingIfLateJoin = () => {
+    const session = getSession();
+    if (session.phase !== GamePhase.LiveGame || session.matchOptions?.matchMode !== 'duel') return false;
+    if (session.liveGameData?.duelWaitingForPlayers !== true || !session.timerEndAt) return false;
+    const remainingMs = session.timerEndAt - Date.now();
+    if (remainingMs < 0 || remainingMs >= DUEL_JOIN_EXTEND_THRESHOLD_SECONDS * 1000) return false;
+    session.timerEndAt += DUEL_JOIN_EXTEND_SECONDS * 1000;
+    session.liveGameData.duelWaitExtendedAt = Date.now();
+    session.liveGameData.duelWaitExtendCount = Number(session.liveGameData.duelWaitExtendCount || 0) + 1;
+    notifyMessage?.(`单挑等待剩余不足 ${DUEL_JOIN_EXTEND_THRESHOLD_SECONDS} 秒时有玩家加入，等待时间已延长 ${DUEL_JOIN_EXTEND_SECONDS} 秒。`);
+    broadcast?.();
+    return true;
 };
 
 const resetFormalMatchCounters = (): number => {
@@ -566,7 +822,7 @@ const resetFormalMatchCounters = (): number => {
     return raw;
 };
 
-// ========== ��ɫ���� ==========
+// ========== Role assignment ==========
 const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
     const session = getSession();
     const undercoverEnabled = session.matchOptions?.undercoverModeEnabled !== false;
@@ -607,7 +863,7 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
     broadcast?.();
 };
 
-// ========== �׶��ƽ����� ==========
+// ========== Phase progression ==========
 const resolveNextPhaseByMatchOptions = (from: GamePhase, requestedTo: GamePhase): GamePhase => {
     const session = getSession();
     const undercoverEnabled = session.matchOptions?.undercoverModeEnabled !== false;
@@ -621,6 +877,10 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
     let nextTo = resolveNextPhaseByMatchOptions(from, to);
     const session = getSession();
     if (session.phase !== from) return;
+    if (from === GamePhase.Lobby && isDuelMode()) {
+        if (!setupDuelFromLobby()) return;
+        nextTo = GamePhase.PreGameSetup;
+    }
     if (!canTransition(from, nextTo)) return;
 
     if (from === GamePhase.Roll) {
@@ -734,7 +994,20 @@ const performPhaseTransition = (to: GamePhase) => {
         case GamePhase.PreGameSetup:
             if (session.selectedSide) setRosterLiveSides(session.selectedSide);
             const undercoverEnabled = session.matchOptions?.undercoverModeEnabled !== false;
-            if (undercoverEnabled) {
+            if (isDuelMode()) {
+                session.undercoverCount = 0;
+                session.detectiveCount = 0;
+                session.rolesReleased = true;
+                Object.values(session.players).forEach(p => {
+                    if (p.role !== 'Spectator' && p.role !== 'Admin') p.gameRole = p.rosterTeam ? 'Soldier' : undefined;
+                    delete p.taskGrid;
+                    p.undercoverTaskAckStage = undefined;
+                    p.detectiveQuestionCount = 0;
+                    p.abandonCount = 0;
+                    p.replaceCount = 0;
+                    p.hintUsedCount = 0;
+                });
+            } else if (undercoverEnabled) {
                 session.rolesReleased = false;
                 Object.values(session.players).forEach(p => {
                     p.gameRole = undefined;
@@ -788,6 +1061,17 @@ const performPhaseTransition = (to: GamePhase) => {
                 if (!ue || p.gameRole !== 'Undercover') delete p.taskGrid;
             });
             session.liveGameData = createEmptyLiveGameData();
+            if (isDuelMode()) {
+                session.liveGameData.winTarget = getDuelTotalRounds(session.matchOptions?.duelRounds);
+                session.liveGameData.duelWaitingForPlayers = true;
+                session.liveGameData.duelWaitSeconds = DUEL_READY_WAIT_SECONDS;
+                session.timerEndAt = Date.now() + DUEL_READY_WAIT_SECONDS * 1000;
+                session.timerPhase = GamePhase.LiveGame;
+                queueDuelMapOnlySetup();
+                const matchId = session.matchId;
+                setTimeout(() => beginDuelFormalMatch(matchId), DUEL_READY_WAIT_SECONDS * 1000);
+                notifyMessage?.(`单挑准备等待 ${DUEL_READY_WAIT_SECONDS} 秒：玩家可以在这段时间进出服务器。时间到后双方都在才正式重启开赛。`);
+            }
             break;
         case GamePhase.MidGameQA:
             advancePhase(GamePhase.MidGameQA, GamePhase.PostGameAccusation);
@@ -822,7 +1106,7 @@ const performPhaseTransition = (to: GamePhase) => {
     broadcast?.();
 };
 
-// ========== ƥ��ѡ�� ==========
+// ========== Match options ==========
 const clearUndercoverModeState = () => {
     const session = getSession();
     session.undercoverCount = 0;
@@ -857,9 +1141,20 @@ const forceSkipUndercoverOnlyPhaseIfNeeded = () => {
 const applyMatchOptions = (rawOptions: unknown) => {
     const session = getSession();
     session.matchOptions = {
+        matchMode: (rawOptions as any)?.matchMode === 'duel' ? 'duel' : 'competitive',
         undercoverModeEnabled: (rawOptions as any)?.undercoverModeEnabled !== false,
         caorenModifiersEnabled: (rawOptions as any)?.caorenModifiersEnabled === true,
+        duelMap: resolveDuelMapConfig((rawOptions as any)?.duelMap || DUEL_DEFAULT_MAP, (rawOptions as any)?.duelMapWorkshopId).name,
+        duelMapWorkshopId: resolveDuelMapConfig((rawOptions as any)?.duelMap || DUEL_DEFAULT_MAP, (rawOptions as any)?.duelMapWorkshopId).workshopId,
+        duelRoundTimeMinutes: normalizeDuelRoundTimeMinutes((rawOptions as any)?.duelRoundTimeMinutes || DUEL_DEFAULT_ROUND_TIME_MINUTES),
+        duelRounds: normalizeDuelRounds((rawOptions as any)?.duelRounds),
+        duelUtilityMode: normalizeDuelUtilityMode((rawOptions as any)?.duelUtilityMode),
     };
+    if (session.matchOptions.matchMode === 'duel') {
+        session.matchOptions.undercoverModeEnabled = false;
+        clearUndercoverModeState();
+        return session.matchOptions;
+    }
     if (!session.matchOptions.undercoverModeEnabled) {
         clearUndercoverModeState();
         forceSkipUndercoverOnlyPhaseIfNeeded();
@@ -867,24 +1162,24 @@ const applyMatchOptions = (rawOptions: unknown) => {
     return session.matchOptions;
 };
 
-// ========== ͳһ���� ==========
+// ========== Unified exports ==========
 export {
-    // ���̴���
+    // Flow operations
     advancePhase,
     performPhaseTransition,
-    // ѡ��
+    // Draft
     applyDraftPick,
     finishDraftPick,
     startDraftPickTimerFunc as startDraftPickTimer,
-    // ��ͼ
+    // Map ban
     finishMapVote,
     startMapVoteFunc as startMapVote,
     getAvailableMaps,
-    // ѡ��
+    // Side pick
     finishSideVote,
     startSideVoteFunc as startSideVote,
     setRosterLiveSides,
-    // ��ɫ
+    // Roles
     randomRemainingRoles,
     // LiveGame
     normalizePluginRound,
@@ -893,12 +1188,13 @@ export {
     updateMatchFinishState,
     resolveRosterTeamByInitialSide,
     resetFormalMatchCounters,
-    // ƥ��ѡ��
+    extendDuelWaitingIfLateJoin,
+    // Match options
     applyMatchOptions,
     clearUndercoverModeState,
     forceSkipUndercoverOnlyPhaseIfNeeded,
     prepareReleasedRoleState,
-    // �������?
+    // Cleanup
     assignPlayerToRosterFlow as assignPlayerToRoster,
     removePlayerFromRosterTeams,
     getAvailableDraftPlayers,

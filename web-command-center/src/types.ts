@@ -16,6 +16,7 @@ export type PlayerRole = 'Player' | 'Spectator' | 'Admin';
 export type GameRole = 'Soldier' | 'Undercover' | 'Detective';
 export type Team = 'CT' | 'T' | 'Unassigned';
 export type RosterTeam = 'A' | 'B';
+export type MatchMode = 'competitive' | 'duel';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
 export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
 
@@ -135,6 +136,33 @@ export interface SideVoteState {
     timeoutAt: number;
 }
 
+export interface DuelRoundConfig {
+    pistol: number;
+    rifle: number;
+    sniper: number;
+}
+
+export type DuelUtilityMode = 'none' | 'random1' | 'random2' | 'random3' | 'full';
+
+export interface DuelMapConfig {
+    id: string;
+    name: string;
+    workshopId?: string;
+    command: string;
+}
+
+export interface DuelAdminVoteState {
+    candidateId: string;
+    votes: Record<string, boolean>;
+    startedAt: number;
+    timeoutAt: number;
+}
+
+export interface DuelAdminRequestState {
+    candidateId: string;
+    requestedAt: number;
+}
+
 export interface PluginLivePlayer {
     steamId: string;
     name: string;
@@ -172,8 +200,14 @@ export interface LiveGameData {
     [key: string]: any;
 }
 export interface MatchOptions {
+    matchMode?: MatchMode;
     undercoverModeEnabled: boolean;
     caorenModifiersEnabled: boolean;
+    duelMap?: string;
+    duelMapWorkshopId?: string;
+    duelRoundTimeMinutes?: number;
+    duelRounds?: DuelRoundConfig;
+    duelUtilityMode?: DuelUtilityMode;
 }
 
 export interface GameSession {
@@ -218,6 +252,10 @@ export interface GameSession {
     timerEndAt: number | null;
     timerPhase: GamePhase | null;
     adminLock: AdminLock;
+    duelTempAdminId?: string | null;
+    duelAdminVote?: DuelAdminVoteState;
+    duelAdminRequest?: DuelAdminRequestState;
+    duelTerminateRequest?: DuelAdminRequestState;
     liveGameData?: LiveGameData;
     rollTimeout?: any;
     createdAt: number;
@@ -232,6 +270,7 @@ export enum WsEvents {
     VOTE = 'VOTE',
     DRAFT_PICK = 'DRAFT_PICK',
     SIDE_PICK = 'SIDE_PICK',
+    DUEL_ACTION = 'DUEL_ACTION',
     TASK_ACTION = 'TASK_ACTION',
     SUBMIT_QUESTION = 'SUBMIT_QUESTION',
     UNDERCOVER_TASK_ACK = 'UNDERCOVER_TASK_ACK',

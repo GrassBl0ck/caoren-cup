@@ -18,6 +18,62 @@ const ws = io();
         window._postmatchMatrixMode = 'all';
         window._lobbyAnnouncement = null;
         window._activeAdminTab = localStorage.getItem('caoren-active-admin-tab') || 'flow';
+        const DUEL_DEFAULT_MAP = '5e_akm4_aim_duel';
+
+        const DUEL_MAPS = [
+            { name: '5e_akm4_aim_duel', workshopId: '3250543760' },
+            { name: 'aim_redline', workshopId: '3199551320' },
+            { name: '5e_aim_map', workshopId: '3250592791' },
+            { name: 'AIM Map', workshopId: '3084291314' },
+            { name: 'aim_awp [CS2 Port]', workshopId: '3444237717' }
+        ];
+
+        function duelMapByName(name) {
+            return DUEL_MAPS.find(map => map.name === name) || DUEL_MAPS[0];
+        }
+
+        function duelWorkshopIdForSelect(select) {
+            const option = select?.selectedOptions?.[0];
+            return option?.dataset?.workshopId || duelMapByName(select?.value || DUEL_DEFAULT_MAP).workshopId;
+        }
+
+        function duelWorkshopUrl(workshopId) {
+            return 'https://steamcommunity.com/sharedfiles/filedetails/?id=' + encodeURIComponent(workshopId || '');
+        }
+
+        function duelWorkshopNoticeHtml(map) {
+            const safeName = htmlEscape(map?.name || DUEL_DEFAULT_MAP);
+            const safeId = htmlEscape(map?.workshopId || '');
+            const href = duelWorkshopUrl(map?.workshopId || '');
+            return '\u5355\u6311\u5730\u56fe\u662f Steam \u521b\u610f\u5de5\u574a\u5730\u56fe\u3002\u672a\u8ba2\u9605\u7684\u73a9\u5bb6\u53ef\u80fd\u4f1a\u5361\u5728\u8fde\u63a5\u754c\u9762\uff0c\u8bf7\u53c2\u8d5b\u73a9\u5bb6\u5148\u8ba2\u9605\uff1a' +
+                '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + safeName + ' (' + safeId + ')</a>';
+        }
+
+        function selectedDuelMapFromSelect(select) {
+            return duelMapByName(select?.value || DUEL_DEFAULT_MAP);
+        }
+
+        function confirmDuelWorkshopReady(map) {
+            return confirm('\u672c\u5c40\u4f7f\u7528\u521b\u610f\u5de5\u574a\u5730\u56fe\uff1a' + (map?.name || DUEL_DEFAULT_MAP) + '\\n\\n\u672a\u8ba2\u9605\u7684\u73a9\u5bb6\u53ef\u80fd\u4f1a\u5361\u5728\u8fde\u63a5\u754c\u9762\u3002\\n\u8bf7\u786e\u8ba4\u6240\u6709\u53c2\u8d5b\u73a9\u5bb6\u90fd\u5df2\u8ba2\u9605\u8be5\u5730\u56fe\u540e\u518d\u7ee7\u7eed\u3002');
+        }
+
+        function canSeeDuelControlMapNotice(state, currentPlayer) {
+            if (!state || !currentPlayer) return false;
+            const opts = state.matchOptions || {};
+            const isDuelMode = opts.matchMode === 'duel';
+            const canManage = currentPlayer.playerId === state.duelTempAdminId || (!state.duelTempAdminId && currentPlayer.role === 'Admin');
+            return canManage && (isDuelMode || currentPlayer.playerId === state.duelTempAdminId) && ['Lobby', 'PreGameSetup', 'LiveGame', 'Scoreboard'].includes(state.phase);
+        }
+
+        function renderPublicDuelWorkshopNotice(state, currentPlayer) {
+            if (state?.matchOptions?.matchMode !== 'duel') return '';
+            if (canSeeDuelControlMapNotice(state, currentPlayer)) return '';
+            const map = duelMapByName(state.matchOptions.duelMap || DUEL_DEFAULT_MAP);
+            return '<div class="panel" style="margin-bottom:12px;border-color:#f59e0b;background:#fffbeb;">' +
+                '<div style="font-weight:800;color:#92400e;margin-bottom:6px;">\u5355\u6311\u5730\u56fe\u8ba2\u9605\u63d0\u9192</div>' +
+                '<div style="color:#78350f;line-height:1.7;">' + duelWorkshopNoticeHtml(map) + '</div>' +
+                '</div>';
+        }
 
         function switchAdminTab(tab) {
             const knownTabs = ['announcement', 'setup', 'flow', 'tasks', 'mods'];
@@ -340,6 +396,17 @@ const ws = io();
 
         }
 
+        function scheduleMatchOptionsAutosave(delayMs = 350) {
+            if (window._currentPlayer?.role !== 'Admin') return;
+            if ((window._currentGamePhase || 'Lobby') !== 'Lobby') return;
+            if (window._matchOptionsAutosaveTimer) clearTimeout(window._matchOptionsAutosaveTimer);
+            const status = document.getElementById('match-options-status');
+            if (status) status.innerHTML = '\u672c\u5c40\u6a21\u5f0f\u5df2\u4fee\u6539\uff0c\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58\u2026\u2026';
+            window._matchOptionsAutosaveTimer = setTimeout(() => {
+                saveMatchOptions({ silent: true });
+            }, delayMs);
+        }
+
 
 
 
@@ -351,73 +418,125 @@ const ws = io();
 
             const phase = state?.phase || 'Lobby';
             const editable = phase === 'Lobby';
-            const serverUndercoverEnabled = isUndercoverModeEnabledFromState(state);
-
-            const serverCaorenEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
-
+            const serverOptions = state?.matchOptions || {};
             const pendingMatchOptions = isAdmin ? getPendingMatchOptions() : null;
+            const optionValue = (key, fallback) =>
+                pendingMatchOptions && Object.prototype.hasOwnProperty.call(pendingMatchOptions, key)
+                    ? pendingMatchOptions[key]
+                    : fallback;
 
-            const undercoverEnabled = pendingMatchOptions && typeof pendingMatchOptions.undercoverModeEnabled === 'boolean'
-
-                ? pendingMatchOptions.undercoverModeEnabled
-
-                : serverUndercoverEnabled;
-
-            const caorenEnabled = pendingMatchOptions && typeof pendingMatchOptions.caorenModifiersEnabled === 'boolean'
-
-                ? pendingMatchOptions.caorenModifiersEnabled
-
-                : serverCaorenEnabled;
+            const duelEnabled = optionValue('matchMode', serverOptions.matchMode || 'competitive') === 'duel';
+            const undercoverEnabled = duelEnabled ? false : optionValue('undercoverModeEnabled', isUndercoverModeEnabledFromState(state));
+            const caorenEnabled = optionValue('caorenModifiersEnabled', serverOptions.caorenModifiersEnabled === true) === true;
+            const duelMap = optionValue('duelMap', serverOptions.duelMap || DUEL_DEFAULT_MAP);
+            const duelRoundTime = optionValue('duelRoundTimeMinutes', serverOptions.duelRoundTimeMinutes || 1);
+            const duelRounds = optionValue('duelRounds', serverOptions.duelRounds || { pistol: 8, rifle: 16, sniper: 12 });
+            const duelUtilityMode = optionValue('duelUtilityMode', serverOptions.duelUtilityMode || 'none');
 
             const status = document.getElementById('match-options-status');
+            const duelInput = document.getElementById('match-option-duel');
+            const duelRow = document.getElementById('duel-options-row');
+            const testBotsRow = document.getElementById('match-option-test-bots-row');
+            const duelMapInput = document.getElementById('match-option-duel-map');
+            const duelMapNotice = document.getElementById('duel-map-workshop-notice');
+            const duelRoundInput = document.getElementById('match-option-duel-round-time');
+            const duelPistolInput = document.getElementById('match-option-duel-pistol-rounds');
+            const duelRifleInput = document.getElementById('match-option-duel-rifle-rounds');
+            const duelSniperInput = document.getElementById('match-option-duel-sniper-rounds');
+            const duelUtilityInput = document.getElementById('match-option-duel-utility-mode');
             const undercoverInput = document.getElementById('match-option-undercover');
             const caorenInput = document.getElementById('match-option-caoren');
             const saveBtn = document.getElementById('save-match-options-btn');
+            const refreshBtn = document.getElementById('refresh-match-options-btn');
+            const optionsWarning = document.querySelector('#match-options-panel .match-options-warning');
 
             if (status) {
-                status.innerHTML = `当前阶段：<b>${phaseDisplayName(phase)}</b>，${editable ? '可以修改本局模式。' : '本局模式已锁定。'}`;
+                status.innerHTML = `\u5f53\u524d\u9636\u6bb5\uff1a<b>` + phaseDisplayName(phase) + `</b>\uff0c` + (editable ? `\u53ef\u4ee5\u4fee\u6539\u672c\u5c40\u6a21\u5f0f\u3002` : `\u672c\u5c40\u6a21\u5f0f\u5df2\u9501\u5b9a\u3002`);
+            }
+            if (saveBtn) saveBtn.textContent = '\u624b\u52a8\u4fdd\u5b58/\u91cd\u8bd5';
+            if (refreshBtn) refreshBtn.textContent = '\u91cd\u65b0\u8bfb\u53d6\u72b6\u6001';
+            if (optionsWarning) optionsWarning.textContent = '\u52fe\u9009\u6216\u4fee\u6539\u6570\u503c\u4f1a\u81ea\u52a8\u4fdd\u5b58\uff1b\u5982\u679c\u7f51\u7edc\u5361\u4f4f\uff0c\u53ef\u4ee5\u624b\u52a8\u91cd\u8bd5\u6216\u91cd\u65b0\u8bfb\u53d6\u72b6\u6001\u3002\u53ea\u80fd\u5728\u5927\u5385\u9636\u6bb5\u4fee\u6539\uff1b\u8fdb\u5165\u961f\u957f\u9009\u62e9\u540e\uff0c\u672c\u5c40\u6a21\u5f0f\u4f1a\u9501\u5b9a\u3002';
+            if (duelInput) {
+                duelInput.checked = duelEnabled;
+                duelInput.disabled = !editable;
+                duelInput.onchange = () => {
+                    const enabled = duelInput.checked === true;
+                    setPendingMatchOption('matchMode', enabled ? 'duel' : 'competitive');
+                    if (enabled) setPendingMatchOption('undercoverModeEnabled', false);
+                    syncMatchOptionsPanel({
+                        ...(state || {}),
+                        matchOptions: {
+                            ...serverOptions,
+                            ...(getPendingMatchOptions() || {}),
+                        }
+                    }, isAdmin);
+                    scheduleMatchOptionsAutosave(100);
+                };
+            }
+            if (duelRow) duelRow.style.display = duelEnabled ? '' : 'none';
+            if (testBotsRow) testBotsRow.style.display = duelEnabled ? '' : 'none';
+            if (duelMapInput) {
+                duelMapInput.value = duelMapByName(duelMap).name;
+                duelMapInput.disabled = !editable || !duelEnabled;
+                if (duelMapNotice) duelMapNotice.innerHTML = duelWorkshopNoticeHtml(selectedDuelMapFromSelect(duelMapInput));
+                duelMapInput.onchange = () => {
+                    setPendingMatchOption('duelMap', duelMapInput.value);
+                    setPendingMatchOption('duelMapWorkshopId', duelWorkshopIdForSelect(duelMapInput));
+                    if (duelMapNotice) duelMapNotice.innerHTML = duelWorkshopNoticeHtml(selectedDuelMapFromSelect(duelMapInput));
+                    scheduleMatchOptionsAutosave(100);
+                };
+            }
+            if (duelRoundInput) {
+                duelRoundInput.value = duelRoundTime;
+                duelRoundInput.disabled = !editable || !duelEnabled;
+                duelRoundInput.oninput = () => {
+                    setPendingMatchOption('duelRoundTimeMinutes', Number(duelRoundInput.value || 1));
+                    scheduleMatchOptionsAutosave(600);
+                };
+            }
+            const updateDuelRounds = () => {
+                setPendingMatchOption('duelRounds', {
+                    pistol: Number(duelPistolInput?.value || 8),
+                    rifle: Number(duelRifleInput?.value || 16),
+                    sniper: Number(duelSniperInput?.value || 12)
+                });
+                scheduleMatchOptionsAutosave(600);
+            };
+            if (duelPistolInput) { duelPistolInput.value = duelRounds.pistol ?? 8; duelPistolInput.disabled = !editable || !duelEnabled; duelPistolInput.oninput = updateDuelRounds; }
+            if (duelRifleInput) { duelRifleInput.value = duelRounds.rifle ?? 16; duelRifleInput.disabled = !editable || !duelEnabled; duelRifleInput.oninput = updateDuelRounds; }
+            if (duelSniperInput) { duelSniperInput.value = duelRounds.sniper ?? 12; duelSniperInput.disabled = !editable || !duelEnabled; duelSniperInput.oninput = updateDuelRounds; }
+            if (duelUtilityInput) {
+                duelUtilityInput.value = duelUtilityMode || 'none';
+                duelUtilityInput.disabled = !editable || !duelEnabled;
+                duelUtilityInput.onchange = () => {
+                    setPendingMatchOption('duelUtilityMode', duelUtilityInput.value || 'none');
+                    scheduleMatchOptionsAutosave(100);
+                };
             }
             if (undercoverInput) {
-
                 undercoverInput.checked = undercoverEnabled;
-
-                undercoverInput.disabled = !editable;
-
+                undercoverInput.disabled = !editable || duelEnabled;
                 undercoverInput.onchange = () => {
-
                     setPendingMatchOption('undercoverModeEnabled', undercoverInput.checked === true);
-
+                    scheduleMatchOptionsAutosave(100);
                 };
-
             }
             if (caorenInput) {
-
                 caorenInput.checked = caorenEnabled;
-
                 caorenInput.disabled = !editable;
-
                 caorenInput.onchange = () => {
-
                     const previewEnabled = caorenInput.checked === true;
                     setCaorenModContentVisibility(previewEnabled);
                     setPendingMatchOption('caorenModifiersEnabled', previewEnabled);
-
                     syncCaorenModPanel({
-
                         ...(state || {}),
-
                         matchOptions: {
-
-                            ...(state?.matchOptions || {}),
-
+                            ...serverOptions,
                             caorenModifiersEnabled: previewEnabled
-
                         }
-
                     }, isAdmin, previewEnabled);
-
+                    scheduleMatchOptionsAutosave(100);
                 };
-
             }
             if (saveBtn) saveBtn.disabled = !editable;
             syncCaorenModPanel(state, isAdmin, caorenEnabled);
@@ -428,46 +547,65 @@ const ws = io();
             try {
                 const res = await fetch('/api/match-options', { headers: { Accept: 'application/json' } });
                 const data = await res.json();
-                if (!data.success) throw new Error(data.error || '读取本局模式失败');
+                if (!data.success) throw new Error(data.error || '\u8bfb\u53d6\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
                 const pseudoState = { phase: data.phase, matchOptions: data.matchOptions };
                 syncMatchOptionsPanel(pseudoState, window._currentPlayer?.role === 'Admin');
             } catch (err) {
-                alert(err.message || '读取本局模式失败');
+                alert(err.message || '\u8bfb\u53d6\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
             }
         }
 
-        async function saveMatchOptions() {
+        async function saveMatchOptions(options = {}) {
+            const silent = options?.silent === true;
             const phase = window._currentGamePhase || 'Lobby';
             if (phase !== 'Lobby') {
-                alert('只能在大厅阶段修改本局模式。');
+                if (!silent) alert('\u53ea\u80fd\u5728\u5927\u5385\u9636\u6bb5\u4fee\u6539\u672c\u5c40\u6a21\u5f0f\u3002');
                 return;
             }
 
-            const adminPassword = getAdminPasswordForRequest();
-            if (!adminPassword) return;
+            const isLoggedInAdmin = window._currentPlayer?.role === 'Admin';
+            const adminPassword = isLoggedInAdmin ? '' : getAdminPasswordForRequest();
+            if (!isLoggedInAdmin && !adminPassword) return;
 
+            const duelEnabled = document.getElementById('match-option-duel')?.checked === true;
             const matchOptions = {
-                undercoverModeEnabled: !!document.getElementById('match-option-undercover')?.checked,
-                caorenModifiersEnabled: !!document.getElementById('match-option-caoren')?.checked
+                matchMode: duelEnabled ? 'duel' : 'competitive',
+                undercoverModeEnabled: duelEnabled ? false : !!document.getElementById('match-option-undercover')?.checked,
+                caorenModifiersEnabled: !!document.getElementById('match-option-caoren')?.checked,
+                duelMap: document.getElementById('match-option-duel-map')?.value || DUEL_DEFAULT_MAP,
+                duelMapWorkshopId: duelWorkshopIdForSelect(document.getElementById('match-option-duel-map')),
+                duelRoundTimeMinutes: Number(document.getElementById('match-option-duel-round-time')?.value || 1),
+                duelUtilityMode: document.getElementById('match-option-duel-utility-mode')?.value || 'none',
+                duelRounds: {
+                    pistol: Number(document.getElementById('match-option-duel-pistol-rounds')?.value || 8),
+                    rifle: Number(document.getElementById('match-option-duel-rifle-rounds')?.value || 16),
+                    sniper: Number(document.getElementById('match-option-duel-sniper-rounds')?.value || 12)
+                }
             };
+            if (duelEnabled && matchOptions.duelRounds.pistol + matchOptions.duelRounds.rifle + matchOptions.duelRounds.sniper < 30) {
+                if (!silent) alert('单挑模式的手枪+步枪+狙击回合总数必须大于等于 30。');
+                return;
+            }
+            const status = document.getElementById('match-options-status');
+            if (silent && status) status.innerHTML = '\u672c\u5c40\u6a21\u5f0f\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58\u2026\u2026';
 
             try {
                 const res = await fetch('/api/admin/match-options', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ adminPassword, matchOptions })
+                    body: JSON.stringify({ playerId: myPlayerId, adminPassword, matchOptions })
                 });
                 const data = await res.json();
-                if (!res.ok || !data.success) throw new Error(data.error || '保存本局模式失败');
+                if (!res.ok || !data.success) throw new Error(data.error || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
                 clearPendingMatchOptions();
-                alert('本局模式已保存。');
+                if (!silent) alert('\u672c\u5c40\u6a21\u5f0f\u5df2\u4fdd\u5b58\u3002');
+                if (silent && status) status.innerHTML = '\u672c\u5c40\u6a21\u5f0f\u5df2\u81ea\u52a8\u4fdd\u5b58\u3002';
                 syncMatchOptionsPanel({ phase: data.phase, matchOptions: data.matchOptions }, true);
             } catch (err) {
-                alert(err.message || '保存本局模式失败');
+                if (silent && status) status.innerHTML = '\u81ea\u52a8\u4fdd\u5b58\u5931\u8d25\uff1a' + htmlEscape(err.message || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
+                else alert(err.message || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
             }
         }
-
-
         function setCaorenModContentVisibility(caorenEnabled) {
             const visible = caorenEnabled === true;
             window._caorenModifiersEnabled = visible;
@@ -711,6 +849,17 @@ if (window._caorenModifiersEnabled !== true) {
             renderLobbyAnnouncement(data?.announcement);
         });
 
+        ws.on('NOTIFICATION', (data) => {
+            const message = data?.message || '';
+            if (!message) return;
+            const notice = document.getElementById('lobby-notification-display');
+            if (notice) {
+                notice.innerHTML = '<span style="display:inline-block;background:#fff8e1;border:1px solid #fbc02d;color:#e65100;padding:6px 10px;border-radius:6px;">' + htmlEscape(message) + '</span>';
+                notice.style.display = 'block';
+            }
+            alert(message);
+        });
+
         refreshLobbyAnnouncement();
 
         ws.on('GAME_STATE', (state) => {
@@ -735,7 +884,9 @@ if (window._caorenModifiersEnabled !== true) {
             const currentPlayer = state.players[myPlayerId];
             window._currentPlayer = currentPlayer || null;
             const isAdmin = currentPlayer?.role === 'Admin';
+            const isDuel = state?.matchOptions?.matchMode === 'duel';
             const undercoverEnabled = isUndercoverModeEnabledFromState(state);
+            const live = state.liveGameData || window._liveGameData || {};
             window._undercoverModeEnabled = undercoverEnabled;
             window._caorenModifiersEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
 
@@ -744,11 +895,13 @@ if (window._caorenModifiersEnabled !== true) {
                 if (isAdmin) identityHtml += ' <span style="color:#d32f2f;">(管理员)</span>';
                 else {
                     if (currentPlayer.rosterTeam) identityHtml += ' | <span style="font-weight:bold;">比赛队伍：' + currentPlayer.rosterTeam + '队</span>';
+                    if (!isDuel) {
                     const currentSide = getLiveSide(currentPlayer) || '未进队';
                     const expectedSide = getExpectedSide(currentPlayer, state).label;
                     const mismatchText = isSideMismatch(currentPlayer, state) ? ' <span style="color:#d32f2f; font-weight:bold;">站错边</span>' : '';
                     identityHtml += ' | <span style="font-weight:bold;">当前边：' + currentSide + '</span>';
                     identityHtml += ' | <span style="font-weight:bold;">应在边：' + expectedSide + '</span>' + mismatchText;
+                    }
 
                     if (currentPlayer.steamIdBound) identityHtml += ' | <span style="color:#2e7d32; font-weight:bold;">已绑定</span>';
                     else identityHtml += ' | <span style="color:#9ca3af; font-weight:bold;">未绑定</span>';
@@ -763,9 +916,10 @@ if (window._caorenModifiersEnabled !== true) {
             const visiblePlayers = Object.values(state.players)
                 .filter(p => isAdmin || p.role !== 'Admin')
                 .sort((a, b) => (teamSortWeight(a) - teamSortWeight(b)) || String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
-            let playerTable = '<h3 style="margin-top:0;">当前房间玩家</h3>';
+            let playerTable = renderPublicDuelWorkshopNotice(state, currentPlayer);
+            playerTable += '<h3 style="margin-top:0;">当前房间玩家</h3>';
             playerTable += '<div class="cc-table-wrap"><table class="cc-table"><thead><tr>' +
-                '<th>#</th><th>玩家名</th><th>比赛队伍</th><th>当前边</th><th>应在边</th><th>绑定状态</th><th>身份</th><th>准备</th>' + (isAdmin ? '<th>操作</th>' : '') +
+                '<th>#</th><th>玩家名</th><th>比赛队伍</th>' + (isDuel ? '' : '<th>当前边</th><th>应在边</th>') + '<th>绑定状态</th><th>身份</th><th>准备</th>' + ((isAdmin || (isDuel && currentPlayer?.playerId === state.duelTempAdminId)) ? '<th>操作</th>' : '') +
                 '</tr></thead><tbody>';
             visiblePlayers.forEach((p, idx) => {
                 const baseRoleClass = p.role === 'Admin' ? 'role-admin' : (p.gameRole === 'Undercover' ? 'role-undercover' : (p.gameRole === 'Detective' ? 'role-detective' : (p.gameRole === 'Soldier' ? 'role-soldier' : '')));
@@ -776,8 +930,12 @@ if (window._caorenModifiersEnabled !== true) {
                 const bind = p.steamIdBound ? '<span class="tag tag-green">已绑定</span>' : '<span class="tag tag-red">未绑定</span>';
                 const roleText = p.role === 'Admin' ? '<span class="tag tag-purple">管理员</span>' : (p.gameRole ? `<span class="tag tag-gray">${p.gameRole}</span>` : '<span class="tag tag-gray">未分配</span>');
                 const ready = renderReadyTag(p);
-                const adminOps = isAdmin && p.role !== 'Admin' ? `<td><button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button></td>` : (isAdmin ? '<td>-</td>' : '');
-                playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${p.name}</b></td><td>${roster}</td><td>${side}</td><td>${expectedSide}</td><td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
+                const canDuelAssign = isDuel && (isAdmin || currentPlayer?.playerId === state.duelTempAdminId) && (!state.duelTempAdminId || currentPlayer?.playerId === state.duelTempAdminId) && p.role !== 'Admin' && p.role !== 'Spectator' && ['PreGameSetup', 'LiveGame'].includes(state.phase) && (state.phase !== 'LiveGame' || live?.duelWaitingForPlayers);
+                const duelAssignOps = canDuelAssign ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;"><button onclick="adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;padding:4px 9px;">分到A</button><button onclick="adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;padding:4px 9px;">分到B</button>${p.rosterTeam ? `<button onclick="adminUnassignTeam('${p.playerId}')" style="background:#64748b;color:#fff;padding:4px 9px;">撤销分队</button>` : ''}</div>` : '';
+                const kickOp = isAdmin && p.role !== 'Admin' ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
+                const adminOps = (isAdmin || duelAssignOps) ? `<td>${duelAssignOps}${kickOp || '-'}</td>` : '';
+                const sideCells = isDuel ? '' : `<td>${side}</td><td>${expectedSide}</td>`;
+                playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${p.name}</b></td><td>${roster}</td>${sideCells}<td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
             });
             playerTable += '</tbody></table></div>';
             listDiv.innerHTML = playerTable;
@@ -822,6 +980,7 @@ if (window._caorenModifiersEnabled !== true) {
 
             if (state.phase === 'Lobby') {
                 let html = '';
+                html += renderDuelControlPanel(state, currentPlayer);
                 if (isAdmin) {
                     if (undercoverEnabled) {
                         html += '<div style="background:#e3f2fd; padding:15px; border-radius:5px; border:1px solid #90caf9;"><b>游戏人员配置：</b><br><br>' +
@@ -1051,7 +1210,7 @@ if (window._caorenModifiersEnabled !== true) {
 
             if (state.phase === 'PreGameSetup') {
                 const role = currentPlayer?.gameRole;
-                let html = '';
+                let html = renderDuelControlPanel(state, currentPlayer);
 
                 if (!undercoverEnabled) {
                     if (isAdmin) {
@@ -1119,7 +1278,11 @@ if (window._caorenModifiersEnabled !== true) {
             }
 
             if (state.phase === 'LiveGame') {
-                renderLiveGame(state);
+                let liveHtml = renderLiveGame(state);
+                if (isDuel && (isAdmin || currentPlayer?.playerId === state.duelTempAdminId)) {
+                    liveHtml = renderDuelControlPanel(state, currentPlayer) + liveHtml;
+                }
+                extraDiv.innerHTML = liveHtml;
             }
 
             if (state.phase === 'MidGameQA') {
@@ -1227,6 +1390,9 @@ if (window._caorenModifiersEnabled !== true) {
                         html += `<p style="margin:5px 0;"><b>${p.name}</b> 咬定了 <span style="color:#2e7d32;">${ownName}(己)</span> 和 <span style="color:#c62828;">${enemyName}(敌)</span></p>`;
                     }
                     html += '</div>';
+                }
+                if (currentPlayer?.playerId === state.duelTempAdminId) {
+                    html = renderDuelControlPanel(state, currentPlayer) + html;
                 }
                 extraDiv.innerHTML = html;
                 renderPostmatchPanels(state);
@@ -1801,6 +1967,70 @@ if (window._caorenModifiersEnabled !== true) {
             return Math.max(1, Number(live.currentRound || live.lastScoredRound || 1));
         }
 
+        function renderDuelControlPanel(state, currentPlayer) {
+            if (!currentPlayer) return '';
+            const opts = state.matchOptions || {};
+            const isDuelMode = opts.matchMode === 'duel';
+            const rounds = opts.duelRounds || { pistol: 8, rifle: 16, sniper: 12 };
+            const tempAdmin = state.duelTempAdminId ? state.players?.[state.duelTempAdminId] : null;
+            const canManage = currentPlayer.playerId === state.duelTempAdminId || (!state.duelTempAdminId && currentPlayer.role === 'Admin');
+            const hasPendingAdminDecision = state.duelAdminVote || state.duelAdminRequest || state.duelTerminateRequest;
+            if (state.phase === 'Lobby' && currentPlayer.role === 'Admin' && !state.duelTempAdminId && !hasPendingAdminDecision) {
+                return '';
+            }
+            let html = '<div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin:12px 0;">';
+            html += '<h3 style="margin-top:0;">单挑模式控制</h3>';
+            if (!isDuelMode) {
+                html += '<p style="color:#64748b;">当前未开启单挑模式。普通玩家仍可申请成为临时单挑管理员；通过后由临时管理员开启并管理单挑模式。</p>';
+            }
+            html += `<p>当前临时管理员：<b>${tempAdmin ? htmlEscape(tempAdmin.name) : '无'}</b></p>`;
+            if (state.duelAdminVote) {
+                const candidate = state.players?.[state.duelAdminVote.candidateId];
+                html += `<p>正在投票：${htmlEscape(candidate?.name || '玩家')} 申请成为临时管理员。</p>`;
+                if (currentPlayer.role !== 'Admin' && currentPlayer.role !== 'Spectator') html += '<button onclick="duelVoteTempAdmin(true)">同意</button>';
+            }
+            if (state.duelAdminRequest && currentPlayer.role === 'Admin') {
+                const candidate = state.players?.[state.duelAdminRequest.candidateId];
+                html += `<p>${htmlEscape(candidate?.name || '玩家')} 申请成为临时管理员。</p><button onclick="duelApproveTempAdmin(true)">同意</button> <button onclick="duelApproveTempAdmin(false)">拒绝</button>`;
+            }
+            if (!state.duelTempAdminId && currentPlayer.role !== 'Admin' && currentPlayer.role !== 'Spectator') {
+                html += '<button onclick="duelRequestTempAdmin()" style="background:#2563eb;color:#fff;">申请成为临时管理员</button> ';
+            }
+            if (state.duelTempAdminId && currentPlayer.role === 'Admin') {
+                html += '<button onclick="duelRevokeTempAdmin()" style="background:#b91c1c;color:#fff;">收回临时管理员</button> ';
+            }
+            if (canManage && (isDuelMode || currentPlayer.playerId === state.duelTempAdminId) && ['Lobby', 'PreGameSetup', 'LiveGame', 'Scoreboard'].includes(state.phase)) {
+                const currentMap = duelMapByName(opts.duelMap || DUEL_DEFAULT_MAP);
+                const mapOptions = DUEL_MAPS.map(map => `<option value="${htmlEscape(map.name)}" data-workshop-id="${htmlEscape(map.workshopId)}"${map.name === currentMap.name ? ' selected' : ''}>${htmlEscape(map.name)}</option>`).join('');
+                const utilityMode = opts.duelUtilityMode || 'none';
+                html += '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button onclick="adminAddTestBots(2)" style="background:#0f766e;color:#fff;">添加2个测试BOT</button><button onclick="adminAddTestBots(6)" style="background:#0f766e;color:#fff;">添加6个测试BOT</button><button onclick="adminClearTestBots()" style="background:#64748b;color:#fff;">清理测试BOT</button></div>';
+                html += '<p style="font-size:12px;color:#64748b;margin:6px 0 0;">测试BOT只用于网页流程，不会进入 CS2 服务器，也不会产生真实击杀数据。</p>';
+                if (['Lobby', 'PreGameSetup'].includes(state.phase)) {
+                    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:12px;">';
+                    html += `<label>地图<select id="duel-live-map" onchange="syncDuelLiveMapNotice()">${mapOptions}</select></label>`;
+                    html += `<label>手枪回合<input id="duel-live-pistol" type="number" value="${Number(rounds.pistol || 8)}"></label>`;
+                    html += `<label>步枪回合<input id="duel-live-rifle" type="number" value="${Number(rounds.rifle || 16)}"></label>`;
+                    html += `<label>狙击回合<input id="duel-live-sniper" type="number" value="${Number(rounds.sniper || 12)}"></label>`;
+                    html += `<label>道具<select id="duel-live-utility-mode"><option value="none"${utilityMode === 'none' ? ' selected' : ''}>不启用道具</option><option value="random1"${utilityMode === 'random1' ? ' selected' : ''}>随机 1 道具</option><option value="random2"${utilityMode === 'random2' ? ' selected' : ''}>随机 2 道具</option><option value="random3"${utilityMode === 'random3' ? ' selected' : ''}>随机 3 道具</option><option value="full"${utilityMode === 'full' ? ' selected' : ''}>4 道具</option></select></label>`;
+                    html += '</div><div style="margin-top:10px;"><button onclick="duelSetMap()">保存地图</button> <button onclick="duelSetRounds()">保存回合分配</button> <button onclick="duelSetUtilityMode()">保存道具</button></div>';
+                    html += `<p id="duel-live-map-workshop-notice" style="margin-top:8px;color:#b45309;line-height:1.6;">${duelWorkshopNoticeHtml(currentMap)}</p>`;
+                }
+                if (currentPlayer.playerId === state.duelTempAdminId) {
+                    const label = state.phase === 'Lobby' ? '\u5f00\u542f\u5355\u6311\u6d41\u7a0b' : (state.phase === 'PreGameSetup' ? '\u8fdb\u5165\u6b63\u5f0f\u5355\u6311' : '\u63a8\u8fdb\u5230\u4e0b\u4e00\u9636\u6bb5');
+                    html += `<div style="margin-top:10px;"><button onclick="advancePhase()" style="font-weight:bold;background:#facc15;color:#111827;">${label}</button></div>`;
+                }
+            }
+            if (state.duelTerminateRequest && currentPlayer.role === 'Admin') {
+                const candidate = state.players?.[state.duelTerminateRequest.candidateId];
+                html += `<p style="color:#b91c1c;">${htmlEscape(candidate?.name || '临时管理员')} 申请强制终止单挑游戏。</p><button onclick="duelApproveTerminate(true)">同意终止</button> <button onclick="duelApproveTerminate(false)">拒绝</button>`;
+            }
+            if (currentPlayer.playerId === state.duelTempAdminId && ['LiveGame', 'Scoreboard'].includes(state.phase)) {
+                html += '<div style="margin-top:10px;"><button onclick="duelRequestTerminate()" style="background:#b91c1c;color:#fff;">终止单挑游戏</button></div>';
+            }
+            html += '</div>';
+            return html;
+        }
+
         function calculateApproxKast(stats, rounds) {
             const kills = Number(stats.kills || 0);
             const deaths = Number(stats.deaths || 0);
@@ -2052,7 +2282,16 @@ if (window._caorenModifiersEnabled !== true) {
         window.setPostmatchStatsMode = setPostmatchStatsMode;
         window.setPostmatchMatrixMode = setPostmatchMatrixMode;
         window.renderPostmatchPanels = renderPostmatchPanels;
+        function resolveLiveWinnerTeam(live, scoreA, scoreB) {
+            if (live?.winnerTeam === 'A' || live?.winnerTeam === 'B') return live.winnerTeam;
+            if (!live?.matchFinished) return null;
+            if (scoreA > scoreB) return 'A';
+            if (scoreB > scoreA) return 'B';
+            return null;
+        }
+
         function liveDisplayRound(live) {
+            if (live?.duelWaitingForPlayers) return 0;
             const toInt = value => {
                 const n = Math.floor(Number(value || 0));
                 return Number.isFinite(n) ? Math.max(0, n) : 0;
@@ -2072,13 +2311,24 @@ if (window._caorenModifiersEnabled !== true) {
             const currentPlayer = window._currentPlayer;
             const undercoverEnabled = isUndercoverModeEnabledFromState(state);
             const displayRound = liveDisplayRound(live);
+            const isDuel = state?.matchOptions?.matchMode === 'duel';
+            const scoreA = isDuel ? Number(live.scoreCT || 0) : Number(live.scoreA || 0);
+            const scoreB = isDuel ? Number(live.scoreT || 0) : Number(live.scoreB || 0);
+            const liveRoundText = live.duelWaitingForPlayers
+                ? '等待开赛'
+                : '第 ' + (displayRound || 0) + ' 回合｜目标 ' + (live.winTarget || 13) + ' 分';
             let html = '<div class="live-header" style="background:#263238; color:#fff;">' +
-                '<span style="font-size:24px;">赛况：A队 <span style="color:#64b5f6;">' + (live.scoreA || 0) + '</span> - <span style="color:#ffb74d;">' + (live.scoreB || 0) + '</span> B队</span> ' +
-                '<span style="font-size:16px; color:#b0bec5;">CT/T参考：' + (live.scoreCT || 0) + ':' + (live.scoreT || 0) + '</span> ' +
-                '<span style="font-size:20px; color:#aed581;">第 ' + (displayRound || 0) + ' 回合｜目标 ' + (live.winTarget || 13) + ' 分</span> ' +
+                '<span style="font-size:24px;">赛况：A队 <span style="color:#64b5f6;">' + scoreA + '</span> - <span style="color:#ffb74d;">' + scoreB + '</span> B队</span> ' +
+                (isDuel ? '<span style="font-size:16px; color:#b0bec5;">CT=A队，T=B队</span> ' : '<span style="font-size:16px; color:#b0bec5;">CT/T参考：' + (live.scoreCT || 0) + ':' + (live.scoreT || 0) + '</span> ') +
+                '<span style="font-size:20px; color:#aed581;">' + liveRoundText + '</span> ' +
                 '<button onclick="showRules()" style="background:#455a64; color:#fff; border:1px solid #78909c;">📖 温习规则指引</button></div>';
+            if (live.duelWaitingForPlayers) {
+                html += '<div style="background:#eff6ff; border:1px solid #93c5fd; padding:12px; border-radius:6px; margin-bottom:12px; color:#1e3a8a;">单挑准备等待中：游戏内 warmup 倒计时就是等人/分队时间，玩家可以先进服务器，临时管理员可以继续把玩家分到 A/B 队并锁边。倒计时结束后，如果 A/B 双方都有玩家且没有未分队参赛玩家，服务器会重启并从手枪第 1 回合开始；否则自动回到大厅。</div>';
+            }
             if (live.matchFinished) {
-                html += '<div style="background:#fff8e1; border:1px solid #fbc02d; padding:12px; border-radius:6px; margin-bottom:12px; font-weight:bold; color:#e65100;">比赛已自动判定结束：' + (live.winnerTeam || '?') + '队获胜。请等待进入结算/指认流程。</div>';
+                const resolvedWinner = resolveLiveWinnerTeam(live, scoreA, scoreB);
+                const resolvedWinnerText = resolvedWinner ? resolvedWinner + '队获胜' : '双方平局';
+                html += '<div style="background:#fff8e1; border:1px solid #fbc02d; padding:12px; border-radius:6px; margin-bottom:12px; font-weight:bold; color:#e65100;">比赛已自动判定结束：' + resolvedWinnerText + '。请等待进入结算/指认流程。</div>';
             }
 
             if (undercoverEnabled && currentPlayer?.gameRole === 'Undercover') {
@@ -2145,10 +2395,9 @@ if (window._caorenModifiersEnabled !== true) {
 
             }
                 }
-            document.getElementById('extra-info').innerHTML = html;
-
             applySelectedTaskCellState();
             updateButtonStates();
+            return html;
         }
 
         function updateButtonStates() {
@@ -2203,6 +2452,11 @@ if (window._caorenModifiersEnabled !== true) {
         }
         function resume() { login(); }
         function advancePhase() {
+            const isDuelMode = window._currentGameState?.matchOptions?.matchMode === 'duel';
+            if ((window._currentGamePhase === 'Lobby' || window._currentGamePhase === 'PreGameSetup') && isDuelMode) {
+                const select = document.getElementById('duel-live-map') || document.getElementById('match-option-duel-map');
+                if (!confirmDuelWorkshopReady(selectedDuelMapFromSelect(select))) return;
+            }
             if (window._currentGamePhase === 'Scoreboard') {
                 const hasScores = Object.values(window._allPlayers || {}).some(p => p.finalScore !== undefined);
                 if (!hasScores) {
@@ -2217,12 +2471,67 @@ if (window._caorenModifiersEnabled !== true) {
             if (text !== 'TERMINATE') return alert('已取消终止操作');
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
         }
+        function duelRequestTempAdmin() { ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'REQUEST_TEMP_ADMIN' }); }
+        function duelVoteTempAdmin(agree) { ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'VOTE_TEMP_ADMIN', payload: { agree } }); }
+        function duelApproveTempAdmin(ok) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: ok ? 'DUEL_APPROVE_TEMP_ADMIN' : 'DUEL_REJECT_TEMP_ADMIN' }); }
+        function duelRevokeTempAdmin() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DUEL_REVOKE_TEMP_ADMIN' }); }
+        function duelSetMap() {
+            const select = document.getElementById('duel-live-map');
+            const map = select?.value || DUEL_DEFAULT_MAP;
+            const workshopId = duelWorkshopIdForSelect(select);
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DUEL_SET_MAP', payload: { map, workshopId } });
+        }
+        function syncDuelLiveMapNotice() {
+            const select = document.getElementById('duel-live-map');
+            const notice = document.getElementById('duel-live-map-workshop-notice');
+            if (!select || !notice) return;
+            notice.innerHTML = duelWorkshopNoticeHtml(selectedDuelMapFromSelect(select));
+        }
+        function duelSetRounds() {
+            const rounds = {
+                pistol: Number(document.getElementById('duel-live-pistol')?.value || 8),
+                rifle: Number(document.getElementById('duel-live-rifle')?.value || 16),
+                sniper: Number(document.getElementById('duel-live-sniper')?.value || 12)
+            };
+            if (rounds.pistol + rounds.rifle + rounds.sniper < 30) return alert('总回合数必须大于等于 30。');
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DUEL_SET_ROUNDS', payload: { rounds } });
+            duelSetUtilityMode();
+        }
+        function duelSetUtilityMode() {
+            const utilityMode = document.getElementById('duel-live-utility-mode')?.value || 'none';
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DUEL_SET_UTILITY_MODE', payload: { utilityMode } });
+        }
+        function duelRequestTerminate() {
+            const text = prompt('请输入 TERMINATE 确认终止单挑游戏：');
+            if (text !== 'TERMINATE') return;
+            ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'REQUEST_TERMINATE' });
+        }
+        function duelApproveTerminate(ok) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: ok ? 'DUEL_APPROVE_TERMINATE' : 'DUEL_REJECT_TERMINATE' }); }
+        Object.assign(window, {
+            login,
+            resume,
+            advancePhase,
+            terminateGame,
+            duelRequestTempAdmin,
+            duelVoteTempAdmin,
+            duelApproveTempAdmin,
+            duelRevokeTempAdmin,
+            duelSetMap,
+            syncDuelLiveMapNotice,
+            duelSetRounds,
+            duelSetUtilityMode,
+            duelRequestTerminate,
+            duelApproveTerminate,
+        });
         function doRoll() { ws.emit('ROLL', { playerId: myPlayerId, value: Math.floor(Math.random() * 100) + 1 }); }
         function pick(pickedId) { ws.emit('DRAFT_PICK', { playerId: myPlayerId, pickedId }); }
         function rerandomCaptain(team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RERANDOM_CAPTAIN', payload: { team } }); }
         function setCaptain(team) { const select = document.getElementById('cap' + team + '-select'); if (select && select.value) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_CAPTAIN', payload: { team, playerId: select.value } }); }
         function playAdminAudioCue() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'PLAY_AUDIO_CUE', payload: { cue: 'adminPrompt' } }); }
+        function adminAddTestBots(count) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADD_TEST_BOTS', payload: { count } }); }
+        function adminClearTestBots() { if (confirm('确认清理所有网页测试BOT？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'CLEAR_TEST_BOTS' }); }
         function adminAssignTeam(playerId, team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ASSIGN_ROSTER_TEAM', payload: { playerId, team } }); }
+        function adminUnassignTeam(playerId) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UNASSIGN_ROSTER_TEAM', payload: { playerId } }); }
         function adminStartCaptainDraft() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'START_CAPTAIN_DRAFT' }); }
         function kickPlayer(playerId, name) { if (confirm('确定要踢出玩家：' + name + '？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
         function voteMap(map) { ws.emit('VOTE', { playerId: myPlayerId, map }); }
@@ -2265,6 +2574,37 @@ if (window._caorenModifiersEnabled !== true) {
         function confirmQuit() { document.getElementById('quit-modal').style.display = 'block'; }
         function closeQuit() { document.getElementById('quit-modal').style.display = 'none'; }
         function doQuit() { const name = document.getElementById('quit-name-input').value.trim(); if (!name) return alert('请输入昵称确认'); ws.emit('PLAYER_QUIT', { playerId: myPlayerId, confirmName: name }); document.getElementById('quit-modal').style.display = 'none'; }
+
+        Object.assign(window, {
+            doRoll,
+            pick,
+            rerandomCaptain,
+            setCaptain,
+            playAdminAudioCue,
+            adminAddTestBots,
+            adminClearTestBots,
+            adminAssignTeam,
+            adminUnassignTeam,
+            adminStartCaptainDraft,
+            kickPlayer,
+            voteMap,
+            adminBanMap,
+            selectSide,
+            readyPlayer,
+            ackUndercoverTask,
+            updateRoleCounts,
+            setPlayerRole,
+            randomRemainingRoles,
+            releaseRoles,
+            updateLiveData,
+            resetFormalMatchCounters,
+            setDetectiveQuestionCount,
+            accuse,
+            uploadCsv,
+            confirmQuit,
+            closeQuit,
+            doQuit,
+        });
 
         window.handleCellClick = function (cellId) {
             window.selectedCellId = cellId;
@@ -2551,6 +2891,20 @@ if (window._caorenModifiersEnabled !== true) {
                 alert("JSON 语法在哭泣，请仔细排查标点符号与格式！\n\n异常回溯：\n" + e.message);
             }
         }
+
+        Object.assign(window, {
+            openTemplateModal,
+            closeTemplateModal,
+            switchTemplateTab,
+            renderTplPreview,
+            syncTplEditorVisibility,
+            downloadTemplateJson,
+            copyTemplateJson,
+            saveTemplateToLocal,
+            loadTemplateFromLocal,
+            saveTemplate,
+            saveTemplateFromJson,
+        });
 
         // 须知弹窗 (省略不重要的文案，保持原样逻辑即可)
         let rulesCurrentPage = 0;

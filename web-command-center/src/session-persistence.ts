@@ -37,6 +37,10 @@ const sanitizeSessionForSnapshot = (session: GameSession) => ({
         selectedMap: session.selectedMap,
         selectedSide: session.selectedSide,
         matchOptions: session.matchOptions,
+        duelTempAdminId: session.duelTempAdminId,
+        duelAdminVote: session.duelAdminVote,
+        duelAdminRequest: session.duelAdminRequest,
+        duelTerminateRequest: session.duelTerminateRequest,
         liveGameData: session.liveGameData,
         accusations: session.accusations,
         taskTemplate: session.taskTemplate,
@@ -62,6 +66,10 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     restored.matchOptions = restored.matchOptions || base.matchOptions;
     restored.accusations = restored.accusations || {};
     restored.adminLock = restored.adminLock || { holderId: null, acquiredAt: null };
+    restored.duelTempAdminId = restored.duelTempAdminId || null;
+    restored.duelAdminVote = undefined;
+    restored.duelAdminRequest = restored.duelAdminRequest;
+    restored.duelTerminateRequest = restored.duelTerminateRequest;
     restored.timerEndAt = null;
     restored.timerPhase = null;
     restored.rollTimeout = undefined;

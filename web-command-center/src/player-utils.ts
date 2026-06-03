@@ -1,7 +1,7 @@
 // player-utils.ts
 import { GameSession, Player, Team, RosterTeam } from './types';
 
-// ========== 查找玩家 ==========
+// ========== Player utilities ==========
 export const findPlayerById = (session: GameSession, id: string): Player | undefined =>
     session.players[id];
 
@@ -25,15 +25,18 @@ export const findPlayerByName = (session: GameSession, name: unknown): Player | 
 export const getGamePlayers = (session: GameSession): Player[] =>
     Object.values(session.players).filter(p => p.role !== 'Spectator' && p.role !== 'Admin');
 
-// 注意：原函数 hasAnyDetective 直接用了全局 gameSession，这里同样改为参数
+export const getDuelParticipants = (session: GameSession): Player[] =>
+    getGamePlayers(session).filter(p => p.rosterTeam === 'A' || p.rosterTeam === 'B');
+
+// Keep this helper session-scoped so callers do not read stale global state.
 export const hasAnyDetective = (session: GameSession): boolean =>
     Object.values(session.players).some(p => p.gameRole === 'Detective' && p.role !== 'Spectator' && p.role !== 'Admin');
 
-// 队伍玩家
+// Player queries
 export const getTeamPlayers = (session: GameSession, team: RosterTeam): Player[] =>
     getGamePlayers(session).filter(p => p.rosterTeam === team || session.teams[team].players.includes(p.playerId));
 
-// ========== Steam ID / Team 标准化 ==========
+// ========== Steam ID / team normalization ==========
 export const normalizeSteamId = (steamId: unknown): string => String(steamId || '').replace(/[^0-9]/g, '');
 
 export const findPlayerBySteamId = (session: GameSession, steamId: unknown): Player | undefined => {
@@ -52,7 +55,7 @@ export const normalizeTeam = (team: unknown): Team | undefined => {
 export const otherRosterTeam = (team: RosterTeam): RosterTeam => team === 'A' ? 'B' : 'A';
 export const oppositeSide = (side: Team): Team => side === 'CT' ? 'T' : 'CT';
 
-// ========== 权限 / 公开数据构建 ==========
+// ========== Permissions / public state helpers ==========
 export const shouldRevealRoleToViewer = (viewer: Player | undefined, target: Player, rolesReleased: boolean): boolean => {
     if (!target.gameRole) return false;
     if (viewer?.role === 'Admin') return true;
@@ -99,11 +102,12 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
             taskActionLog: revealTaskActionLog ? p.taskActionLog : undefined,
         };
     }
+    s.duelAdminOnline = Object.values(session.players).some(p => p.role === 'Admin' && p.isOnline);
     delete s.rollTimeout;
     return s;
 };
 
-// ========== CSV 解析辅助 ==========
+// ========== CSV export helpers ==========
 export const toNumber = (value: unknown): number => {
     const n = Number(String(value ?? '').trim());
     return Number.isFinite(n) ? n : 0;

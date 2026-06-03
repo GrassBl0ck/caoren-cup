@@ -1,11 +1,11 @@
 import { GamePhase, GameSession } from './types';
 
 const PHASE_TRANSITIONS: Partial<Record<GamePhase, GamePhase[]>> = {
-    [GamePhase.Lobby]: [GamePhase.CaptainSelection],
-    [GamePhase.CaptainSelection]: [GamePhase.Roll],
-    [GamePhase.Roll]: [GamePhase.PlayerDraft],
-    [GamePhase.PlayerDraft]: [GamePhase.MapBan],
-    [GamePhase.MapBan]: [GamePhase.SidePick],
+    [GamePhase.Lobby]: [GamePhase.CaptainSelection, GamePhase.PreGameSetup],
+    [GamePhase.CaptainSelection]: [GamePhase.Roll, GamePhase.PreGameSetup],
+    [GamePhase.Roll]: [GamePhase.PlayerDraft, GamePhase.PreGameSetup],
+    [GamePhase.PlayerDraft]: [GamePhase.MapBan, GamePhase.PreGameSetup],
+    [GamePhase.MapBan]: [GamePhase.SidePick, GamePhase.PreGameSetup],
     [GamePhase.SidePick]: [GamePhase.PreGameSetup],
     [GamePhase.PreGameSetup]: [GamePhase.LiveGame],
 

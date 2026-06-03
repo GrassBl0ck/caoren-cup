@@ -18,7 +18,7 @@ namespace CaorenCupPlugin;
 public sealed class CaorenCupPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Command Center Bridge";
-    public override string ModuleVersion => "0.3.8";
+    public override string ModuleVersion => "0.3.12";
     public override string ModuleAuthor => "CaorenCup";
     public override string ModuleDescription => "Bridge CS2 score, player binding and match stats to the CaorenCup web command center.";
 
@@ -48,6 +48,19 @@ public sealed class CaorenCupPlugin : BasePlugin
     private bool _teamLockEnabled;
     private int _teamAssignmentsValidFromRound;
     private int _teamAssignmentsValidUntilRound;
+    private bool _duelModeEnabled;
+    private int _duelPistolRounds = 8;
+    private int _duelRifleRounds = 16;
+    private int _duelSniperRounds = 12;
+    private string _duelUtilityMode = "none";
+    private int _duelFormalRound;
+    private DuelStage? _duelLastAnnouncedStage;
+    private readonly Random _duelRandom = new();
+    private readonly Dictionary<string, string> _duelPendingPrimary = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _duelPendingSecondary = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _duelCurrentPrimary = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _duelCurrentSecondary = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PendingAwpRequest> _duelAwpRequests = new(StringComparer.Ordinal);
     private bool _isUnloading;
     private const string DefaultNoticeSound = "training/bell_normal.vsnd_c";
     private static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
@@ -73,8 +86,74 @@ public sealed class CaorenCupPlugin : BasePlugin
         "css_wspd",
         "css_tag",
         "css_magic",
-        "css_bq"
+        "css_bq",
+        "mp_maxrounds",
+        "mp_winlimit",
+        "mp_roundtime",
+        "mp_freezetime",
+        "mp_round_restart_delay",
+        "mp_match_can_clinch",
+        "mp_free_armor",
+        "mp_halftime",
+        "mp_autoteambalance",
+        "mp_limitteams",
+        "sv_showimpacts",
+        "sv_showimpacts_time",
+        "mp_warmup_end",
+        "mp_warmup_start",
+        "mp_warmuptime",
+        "mp_warmup_pausetimer",
+        "mp_restartgame",
+        "changelevel",
+        "host_workshop_map"
 };
+    private static readonly DuelWorkshopMap[] DuelWorkshopMaps =
+    [
+        new("aim_redline", "3199551320"),
+        new("5e_akm4_aim_duel", "3250543760"),
+        new("5e_aim_map", "3250592791"),
+        new("AIM Map", "3084291314"),
+        new("aim_awp [CS2 Port]", "3444237717"),
+    ];
+    private static readonly Dictionary<string, string> DuelWeaponAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["usp"] = "weapon_usp_silencer",
+        ["glock"] = "weapon_glock",
+        ["p2k"] = "weapon_hkp2000",
+        ["elite"] = "weapon_elite",
+        ["fn57"] = "weapon_fiveseven",
+        ["cz75"] = "weapon_cz75a",
+        ["r8"] = "weapon_revolver",
+        ["tec9"] = "weapon_tec9",
+        ["deagle"] = "weapon_deagle",
+        ["p250"] = "weapon_p250",
+        ["ak"] = "weapon_ak47",
+        ["a1"] = "weapon_m4a1_silencer",
+        ["a4"] = "weapon_m4a1",
+        ["famas"] = "weapon_famas",
+        ["galil"] = "weapon_galilar",
+        ["aug"] = "weapon_aug",
+        ["553"] = "weapon_sg556",
+        ["ssg"] = "weapon_ssg08",
+        ["awp"] = "weapon_awp",
+        ["mac10"] = "weapon_mac10",
+        ["mp9"] = "weapon_mp9",
+        ["p90"] = "weapon_p90",
+        ["mp7"] = "weapon_mp7",
+        ["ump"] = "weapon_ump45",
+        ["bizon"] = "weapon_bizon",
+        ["negev"] = "weapon_negev",
+        ["mp5"] = "weapon_mp5sd",
+    };
+    private static readonly HashSet<string> DuelPistolAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "usp", "glock", "p2k", "elite", "fn57", "cz75", "r8", "tec9", "deagle", "p250"
+    };
+    private static readonly HashSet<string> DuelRifleAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ak", "a1", "a4", "famas", "galil", "aug", "553", "ssg", "awp",
+        "mac10", "mp9", "p90", "mp7", "ump", "bizon", "negev", "mp5"
+    };
 
     public override void Load(bool hotReload)
     {
@@ -90,17 +169,22 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|noready|nor [内容]", OnNoticeCommand);
+        AddCommand("css_guns", "查看单挑模式可切换枪械。用法：/guns", OnDuelGunsCommand);
+        AddCommand("css_agree_awp", "同意对方在步枪阶段使用 AWP。用法：/agree_awp", OnDuelAgreeAwpCommand);
+        AddCommand("css_duel_map", "切换单挑创意工坊地图。用法：/duel_map <序号|地图名|创意工坊ID>", OnDuelMapCommand);
+        AddCommand("css_duel_maps", "查看可切换的单挑地图。用法：/duel_maps", OnDuelMapsCommand);
+        RegisterDuelWeaponCommands();
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _outboundWorker = Task.Run(() => ProcessOutboundQueueAsync(_outboundCts.Token));
 
         _timers.Add(AddTimer(Math.Max(3, _config.HeartbeatSeconds), () =>
         {
             if (!_isUnloading) _ = SendHeartbeatAsync();
-        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
+        }, TimerFlags.REPEAT));
         _timers.Add(AddTimer(Math.Max(5, _config.HeartbeatSeconds), () =>
         {
             if (!_isUnloading) _ = SendSnapshotAsync();
-        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
+        }, TimerFlags.REPEAT));
         _timers.Add(AddTimer(1.0f, () =>
         {
             if (!_isUnloading) EnforceTeamAssignments();
@@ -255,6 +339,111 @@ public sealed class CaorenCupPlugin : BasePlugin
         _ = SendNoticeAsync(player, target, message);
     }
 
+    private void RegisterDuelWeaponCommands()
+    {
+        foreach (var alias in DuelWeaponAliases.Keys)
+        {
+            AddCommand("css_" + alias, $"单挑模式切换枪械：/{alias}", OnDuelWeaponCommand);
+        }
+    }
+
+    private void OnDuelGunsCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!_duelModeEnabled || !IsRealPlayer(player))
+        {
+            ReplyToPlayer(player, "[草人杯] 当前没有启用单挑枪械规则。");
+            return;
+        }
+
+        var stage = GetDuelStage();
+        if (stage == DuelStage.Pistol)
+        {
+            ReplyToPlayer(player, "[草人杯] 手枪阶段可切换：/usp /glock /p2k /elite /fn57 /cz75 /r8 /tec9 /deagle /p250");
+        }
+        else if (stage == DuelStage.Rifle)
+        {
+            ReplyToPlayer(player, "[草人杯] 步枪阶段可切换：/ak /a1 /a4 /famas /galil /aug /553 /ssg /awp");
+            ReplyToPlayer(player, "[草人杯] 也可切换：/mac10 /mp9 /p90 /mp7 /ump /bizon /negev /mp5");
+            ReplyToPlayer(player, "[草人杯] 副武器可切换：/usp /glock /p2k /elite /fn57 /cz75 /r8 /tec9 /deagle /p250");
+        }
+        else
+        {
+            ReplyToPlayer(player, "[草人杯] 狙击阶段可切换：/ssg /awp");
+        }
+    }
+
+    private void OnDuelWeaponCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!_duelModeEnabled || !IsRealPlayer(player)) return;
+        var alias = command.GetCommandString.TrimStart('!', '/').Replace("css_", "", StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
+        if (!DuelWeaponAliases.TryGetValue(alias, out var weapon)) return;
+        RequestDuelWeapon(player!, alias, weapon);
+    }
+
+    private void OnDuelAgreeAwpCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!_duelModeEnabled || !IsRealPlayer(player)) return;
+        var steamId = player!.SteamID.ToString();
+        var myTeam = player.Team;
+        var request = _duelAwpRequests.Values.FirstOrDefault(r => r.RequesterTeam != myTeam && r.RequiredApprovals.Contains(steamId));
+        if (request == null)
+        {
+            ReplyToPlayer(player, "[草人杯] 当前没有需要你确认的 AWP 申请。");
+            return;
+        }
+
+        request.Approvals.Add(steamId);
+        ReplyToPlayer(player, "[草人杯] 已同意对方下回合使用 AWP。");
+        var missing = request.RequiredApprovals.Where(id => !request.Approvals.Contains(id)).ToList();
+        if (missing.Count > 0)
+        {
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} AWP 申请还需 {missing.Count} 名对方玩家同意。");
+            return;
+        }
+
+        _duelPendingPrimary[request.RequesterSteamId] = "weapon_awp";
+        _duelAwpRequests.Remove(request.RequesterSteamId);
+        Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} AWP 申请已通过，下回合生效。");
+    }
+
+    private void OnDuelMapsCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        ShowDuelMapHelp(player);
+    }
+
+    private void OnDuelMapCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!IsRealPlayer(player))
+        {
+            command.ReplyToCommand("这条指令只能由玩家在游戏内执行。");
+            return;
+        }
+
+        if (!AdminManager.PlayerHasPermissions(player!, "@css/root"))
+        {
+            ReplyToPlayer(player, "[草人杯] 只有服务器管理员可以在游戏内切换单挑地图。");
+            return;
+        }
+
+        var input = command.ArgByIndex(1)?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            ShowDuelMapHelp(player);
+            return;
+        }
+
+        var map = ResolveDuelWorkshopMap(input);
+        if (map == null)
+        {
+            ReplyToPlayer(player, $"[草人杯] 没找到单挑地图：{input}");
+            ShowDuelMapHelp(player);
+            return;
+        }
+
+        ReplyToPlayer(player, $"[草人杯] 正在把下一局单挑地图设置为：{map.Name}。");
+        _ = SetDuelMapAsync(player!, map);
+    }
+
     private string BuildNoticeMessage(CommandInfo command)
     {
         if (command.ArgCount <= 2) return string.Empty;
@@ -309,11 +498,14 @@ public sealed class CaorenCupPlugin : BasePlugin
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
         _currentRound++;
+        if (_duelModeEnabled) _duelFormalRound = Math.Max(1, _scoreCt + _scoreT + 1);
         RefreshRoundHealthState();
         EnforceTeamAssignments();
+        ApplyDuelLoadoutsForRound();
+        AnnounceDuelRound();
         QueueEvent("round_start", new
         {
-            round = _currentRound,
+            round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
             mapName = SafeMapName(),
             players = BuildLivePlayers()
         });
@@ -358,7 +550,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         QueueEvent("player_death", new
         {
-            round = _currentRound,
+            round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
             attackerSteamId,
             attackerTeam,
             victimSteamId,
@@ -396,7 +588,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         QueueEvent("player_hurt", new
         {
-            round = _currentRound,
+            round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
             attackerSteamId,
             attackerTeam = TeamName(attacker.TeamNum),
             victimSteamId,
@@ -419,7 +611,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         QueueEvent("round_end", new
         {
-            round = _currentRound,
+            round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
             winner,
             scoreCT = _scoreCt,
             scoreT = _scoreT,
@@ -919,7 +1111,8 @@ public sealed class CaorenCupPlugin : BasePlugin
                     label = labelElement.GetString()?.Trim() ?? serverCommand;
                 }
 
-                ExecuteAllowedServerCommand(serverCommand, label);
+                var delaySeconds = ReadPayloadInt(command.Payload, "delaySeconds", 0);
+                ExecuteAllowedServerCommand(serverCommand, label, delaySeconds);
             }
             else if (string.Equals(command.Type, "APPLY_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
             {
@@ -928,6 +1121,10 @@ public sealed class CaorenCupPlugin : BasePlugin
             else if (string.Equals(command.Type, "CLEAR_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
             {
                 ClearTeamAssignments();
+            }
+            else if (string.Equals(command.Type, "CONFIGURE_DUEL_MODE", StringComparison.OrdinalIgnoreCase))
+            {
+                ConfigureDuelMode(command.Payload);
             }
             else
             {
@@ -1004,6 +1201,54 @@ public sealed class CaorenCupPlugin : BasePlugin
         });
     }
 
+    private void ConfigureDuelMode(JsonElement payload)
+    {
+        var pistol = 8;
+        var rifle = 16;
+        var sniper = 12;
+        if (payload.ValueKind == JsonValueKind.Object &&
+            payload.TryGetProperty("rounds", out var rounds) &&
+            rounds.ValueKind == JsonValueKind.Object)
+        {
+            pistol = ReadPayloadInt(rounds, "pistol", pistol);
+            rifle = ReadPayloadInt(rounds, "rifle", rifle);
+            sniper = ReadPayloadInt(rounds, "sniper", sniper);
+        }
+
+        if (pistol + rifle + sniper < 30)
+        {
+            pistol = 8;
+            rifle = 16;
+            sniper = 12;
+        }
+        var utilityMode = "none";
+        if (payload.ValueKind == JsonValueKind.Object &&
+            payload.TryGetProperty("utilityMode", out var utilityElement) &&
+            utilityElement.ValueKind == JsonValueKind.String)
+        {
+            utilityMode = NormalizeDuelUtilityMode(utilityElement.GetString());
+        }
+
+        _duelModeEnabled = true;
+        _duelPistolRounds = pistol;
+        _duelRifleRounds = rifle;
+        _duelSniperRounds = sniper;
+        _duelUtilityMode = utilityMode;
+        _duelFormalRound = 0;
+        _duelLastAnnouncedStage = null;
+        _duelPendingPrimary.Clear();
+        _duelPendingSecondary.Clear();
+        _duelCurrentPrimary.Clear();
+        _duelCurrentSecondary.Clear();
+        _duelAwpRequests.Clear();
+        var totalRounds = pistol + rifle + sniper;
+        Server.NextFrame(() =>
+        {
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 本局游戏共{totalRounds}回合，其中手枪{pistol}回合，步枪{rifle}回合，狙击枪{sniper}回合。");
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 从第一回合开始，每隔8回合会提示你可使用 /guns 来切换枪械。");
+        });
+    }
+
     private void EnforceTeamAssignments()
     {
         if (!_teamLockEnabled || _teamAssignments.Count == 0) return;
@@ -1074,6 +1319,325 @@ public sealed class CaorenCupPlugin : BasePlugin
         return Math.Max(_currentRound, nextRoundByScore);
     }
 
+    private DuelStage GetDuelStage()
+    {
+        var round = Math.Max(1, _duelFormalRound > 0 ? _duelFormalRound : Math.Max(_scoreCt + _scoreT + 1, _currentRound));
+        if (round <= _duelPistolRounds) return DuelStage.Pistol;
+        if (round <= _duelPistolRounds + _duelRifleRounds) return DuelStage.Rifle;
+        return DuelStage.Sniper;
+    }
+
+    private int GetDuelStageRound(DuelStage stage)
+    {
+        var round = Math.Max(1, _duelFormalRound > 0 ? _duelFormalRound : Math.Max(_scoreCt + _scoreT + 1, _currentRound));
+        return stage switch
+        {
+            DuelStage.Pistol => Math.Min(round, Math.Max(1, _duelPistolRounds)),
+            DuelStage.Rifle => Math.Min(Math.Max(1, round - _duelPistolRounds), Math.Max(1, _duelRifleRounds)),
+            DuelStage.Sniper => Math.Min(Math.Max(1, round - _duelPistolRounds - _duelRifleRounds), Math.Max(1, _duelSniperRounds)),
+            _ => round
+        };
+    }
+
+    private int GetDuelStageTotal(DuelStage stage)
+    {
+        return stage switch
+        {
+            DuelStage.Pistol => Math.Max(1, _duelPistolRounds),
+            DuelStage.Rifle => Math.Max(1, _duelRifleRounds),
+            DuelStage.Sniper => Math.Max(1, _duelSniperRounds),
+            _ => 1
+        };
+    }
+
+    private static string DuelStageLabel(DuelStage stage)
+    {
+        return stage switch
+        {
+            DuelStage.Pistol => "手枪",
+            DuelStage.Rifle => "步枪",
+            DuelStage.Sniper => "狙击枪",
+            _ => "单挑"
+        };
+    }
+
+    private void AnnounceDuelRound()
+    {
+        if (!_duelModeEnabled) return;
+        var stage = GetDuelStage();
+        var stageRound = GetDuelStageRound(stage);
+        var stageTotal = GetDuelStageTotal(stage);
+        Server.NextFrame(() =>
+        {
+            Server.ExecuteCommand($"css_csay {DuelStageLabel(stage)}第{stageRound}/{stageTotal}回合");
+            if (_duelFormalRound == 1 || (_duelFormalRound > 1 && (_duelFormalRound - 1) % 8 == 0) || _duelLastAnnouncedStage != stage)
+            {
+                Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 当前是{DuelStageLabel(stage)}阶段，请用 /guns 查看可选枪械。");
+            }
+            _duelLastAnnouncedStage = stage;
+        });
+    }
+
+    private void RequestDuelWeapon(CCSPlayerController player, string alias, string weapon)
+    {
+        var stage = GetDuelStage();
+        var steamId = player.SteamID.ToString();
+        if (stage == DuelStage.Pistol)
+        {
+            if (!DuelPistolAliases.Contains(alias))
+            {
+                ReplyToPlayer(player, "[草人杯] 当前是手枪阶段，请用 /guns 查看可选枪械。");
+                return;
+            }
+            _duelPendingSecondary[steamId] = weapon;
+            ReplyToPlayer(player, $"[草人杯] 已选择 {alias}，下回合生效。");
+            return;
+        }
+
+        if (stage == DuelStage.Sniper)
+        {
+            if (alias != "ssg" && alias != "awp")
+            {
+                ReplyToPlayer(player, "[草人杯] 当前是狙击阶段，只能选择 /ssg 或 /awp。");
+                return;
+            }
+            _duelPendingPrimary[steamId] = weapon;
+            ReplyToPlayer(player, $"[草人杯] 已选择 {alias}，下回合生效。");
+            return;
+        }
+
+        if (!DuelRifleAliases.Contains(alias))
+        {
+            if (DuelPistolAliases.Contains(alias))
+            {
+                _duelPendingSecondary[steamId] = weapon;
+                ReplyToPlayer(player, $"[草人杯] 已选择副武器 {alias}，下回合生效。");
+                return;
+            }
+            ReplyToPlayer(player, "[草人杯] 当前是步枪阶段，请用 /guns 查看可选枪械。");
+            return;
+        }
+        if (alias == "awp")
+        {
+            RequestDuelAwp(player);
+            return;
+        }
+
+        _duelPendingPrimary[steamId] = weapon;
+        ReplyToPlayer(player, $"[草人杯] 已选择 {alias}，下回合生效。");
+    }
+
+    private void RequestDuelAwp(CCSPlayerController player)
+    {
+        var steamId = player.SteamID.ToString();
+        var opponents = Utilities.GetPlayers()
+            .Where(IsRealPlayer)
+            .Where(p => p.Team != player.Team && (p.Team == CsTeam.Terrorist || p.Team == CsTeam.CounterTerrorist))
+            .Select(p => p.SteamID.ToString())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (opponents.Count == 0)
+        {
+            ReplyToPlayer(player, "[草人杯] 当前没有对方参赛玩家，不能申请 AWP。");
+            return;
+        }
+
+        _duelAwpRequests[steamId] = new PendingAwpRequest
+        {
+            RequesterSteamId = steamId,
+            RequesterTeam = player.Team,
+            RequiredApprovals = opponents,
+        };
+        Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} {SafePlayerName(player)} 申请下回合使用 AWP，对方所有玩家输入 /agree_awp 同意。");
+    }
+
+    private void ApplyDuelLoadoutsForRound()
+    {
+        if (!_duelModeEnabled) return;
+        var stage = GetDuelStage();
+        Server.NextFrame(() =>
+        {
+            foreach (var player in Utilities.GetPlayers().Where(IsRealPlayer))
+            {
+                if (player.Team != CsTeam.Terrorist && player.Team != CsTeam.CounterTerrorist) continue;
+                ApplyDuelLoadout(player, stage);
+            }
+        });
+    }
+
+    private void ApplyDuelLoadout(CCSPlayerController player, DuelStage stage)
+    {
+        var steamId = player.SteamID.ToString();
+        var primary = stage switch
+        {
+            DuelStage.Pistol => string.Empty,
+            DuelStage.Rifle => GetPendingOrCurrent(_duelPendingPrimary, _duelCurrentPrimary, steamId, "weapon_ak47"),
+            DuelStage.Sniper => GetPendingOrCurrentSniper(steamId),
+            _ => string.Empty
+        };
+        var secondary = stage switch
+        {
+            DuelStage.Sniper => string.Empty,
+            _ => GetPendingOrCurrent(_duelPendingSecondary, _duelCurrentSecondary, steamId, "weapon_usp_silencer")
+        };
+
+        try
+        {
+            player.RemoveWeapons();
+            player.GiveNamedItem("weapon_knife");
+            if (!string.IsNullOrWhiteSpace(primary)) player.GiveNamedItem(primary);
+            if (!string.IsNullOrWhiteSpace(secondary)) player.GiveNamedItem(secondary);
+            if (stage == DuelStage.Pistol) GivePlayerKevlar(player);
+            else player.GiveNamedItem("item_assaultsuit");
+            GiveDuelUtilities(player);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to apply duel loadout for {SteamId}", steamId);
+        }
+    }
+
+    private async Task SetDuelMapAsync(CCSPlayerController player, DuelWorkshopMap map)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("api/plugin/duel-map", new
+            {
+                map = map.Name,
+                workshopId = map.WorkshopId,
+                requestedBySteamId = player.SteamID.ToString(),
+                requestedByName = SafePlayerName(player),
+            }, _jsonOptions);
+            var body = await response.Content.ReadAsStringAsync();
+            if (response.IsSuccessStatusCode)
+            {
+                ReplyToPlayer(player, $"[草人杯] 已设置下一局单挑地图：{map.Name}。开始单挑流程时会自动切图。");
+                return;
+            }
+
+            var error = ExtractErrorMessage(body);
+            ReplyToPlayer(player, $"[草人杯] 设置单挑地图失败：{error}");
+        }
+        catch (Exception ex)
+        {
+            ReplyToPlayer(player, "[草人杯] 设置单挑地图失败：无法连接网页指挥台。");
+            Logger.LogError(ex, "Failed to set duel map via command center");
+        }
+    }
+
+    private static string GetPendingOrCurrent(
+        Dictionary<string, string> pending,
+        Dictionary<string, string> current,
+        string steamId,
+        string fallback)
+    {
+        if (pending.TryGetValue(steamId, out var pendingWeapon))
+        {
+            current[steamId] = pendingWeapon;
+            pending.Remove(steamId);
+            return pendingWeapon;
+        }
+        if (current.TryGetValue(steamId, out var currentWeapon)) return currentWeapon;
+        current[steamId] = fallback;
+        return fallback;
+    }
+
+    private string GetPendingOrCurrentSniper(string steamId)
+    {
+        if (_duelPendingPrimary.TryGetValue(steamId, out var pendingWeapon))
+        {
+            _duelPendingPrimary.Remove(steamId);
+            if (IsDuelSniperWeapon(pendingWeapon))
+            {
+                _duelCurrentPrimary[steamId] = pendingWeapon;
+                return pendingWeapon;
+            }
+        }
+        if (_duelCurrentPrimary.TryGetValue(steamId, out var currentWeapon) && IsDuelSniperWeapon(currentWeapon)) return currentWeapon;
+        _duelCurrentPrimary[steamId] = "weapon_awp";
+        return "weapon_awp";
+    }
+
+    private void GiveDuelUtilities(CCSPlayerController player)
+    {
+        var utility = BuildDuelUtilities(player);
+        foreach (var item in utility)
+        {
+            try { player.GiveNamedItem(item); }
+            catch (Exception ex) { Logger.LogDebug(ex, "Failed to give duel utility {Utility}", item); }
+        }
+    }
+
+    private List<string> BuildDuelUtilities(CCSPlayerController player)
+    {
+        var pool = new List<string> { "weapon_hegrenade", "weapon_smokegrenade", "weapon_incgrenade", "weapon_flashbang" };
+        var count = _duelUtilityMode switch
+        {
+            "random1" => 1,
+            "random2" => 2,
+            "random3" => 3,
+            "full" => 4,
+            _ => 0
+        };
+        if (count <= 0) return new List<string>();
+        if (_duelUtilityMode == "full") return pool;
+        var result = new List<string>();
+        while (result.Count < count && pool.Count > 0)
+        {
+            var index = _duelRandom.Next(pool.Count);
+            result.Add(pool[index]);
+            pool.RemoveAt(index);
+        }
+        return result;
+    }
+
+    private static void GivePlayerKevlar(CCSPlayerController player)
+    {
+        var pawn = player.PlayerPawn.Value;
+        if (pawn == null || !pawn.IsValid) return;
+        pawn.ArmorValue = 100;
+        try
+        {
+            dynamic dynPawn = pawn;
+            dynPawn.HasHelmet = false;
+        }
+        catch
+        {
+        }
+        try
+        {
+            Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_ArmorValue");
+            Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_bHasHelmet");
+        }
+        catch
+        {
+            try
+            {
+                Utilities.SetStateChanged(pawn, "CCSPlayerPawnBase", "m_ArmorValue");
+                Utilities.SetStateChanged(pawn, "CCSPlayerPawnBase", "m_bHasHelmet");
+            }
+            catch { }
+        }
+    }
+
+    private static bool IsDuelSniperWeapon(string weapon)
+    {
+        return string.Equals(weapon, "weapon_awp", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(weapon, "weapon_ssg08", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeDuelUtilityMode(string? mode)
+    {
+        return mode?.Trim().ToLowerInvariant() switch
+        {
+            "random1" => "random1",
+            "random2" => "random2",
+            "random3" => "random3",
+            "full" => "full",
+            _ => "none"
+        };
+    }
+
     private static int ReadPayloadInt(JsonElement payload, string propertyName, int fallback)
     {
         if (payload.ValueKind != JsonValueKind.Object ||
@@ -1092,7 +1656,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     }
 
 
-    private void ExecuteAllowedServerCommand(string serverCommand, string label)
+    private void ExecuteAllowedServerCommand(string serverCommand, string label, int delaySeconds = 0)
     {
         if (string.IsNullOrWhiteSpace(serverCommand))
         {
@@ -1108,7 +1672,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         Logger.LogInformation("Executing CaorenCup web command: {Command}", serverCommand);
-        Server.NextFrame(() =>
+        void ExecuteNow()
         {
             try
             {
@@ -1119,7 +1683,15 @@ public sealed class CaorenCupPlugin : BasePlugin
             {
                 Logger.LogError(ex, "Failed to execute CaorenCup web command: {Command}", serverCommand);
             }
-        });
+        }
+
+        if (delaySeconds > 0)
+        {
+            Server.NextFrame(() => AddTimer(delaySeconds, ExecuteNow));
+            return;
+        }
+
+        Server.NextFrame(ExecuteNow);
     }    private void ResetLiveMatchStats(int currentRound)
     {
         _stats.Clear();
@@ -1127,6 +1699,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         _currentRound = Math.Max(0, currentRound);
         _scoreCt = 0;
         _scoreT = 0;
+        _duelFormalRound = 0;
+        _duelLastAnnouncedStage = null;
     }
 
     private async Task AckCommandAsync(string commandId)
@@ -1199,6 +1773,39 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         try { return Server.MapName ?? string.Empty; }
         catch { return string.Empty; }
+    }
+
+    private void ShowDuelMapHelp(CCSPlayerController? player)
+    {
+        ReplyToPlayer(player, "[草人杯] 用法：/duel_map <序号|地图名|创意工坊ID>");
+        ReplyToPlayer(player, "[草人杯] 示例：/duel_map 1 或 /duel_map aim_redline 或 /duel_map 3199551320");
+        for (var i = 0; i < DuelWorkshopMaps.Length; i++)
+        {
+            var map = DuelWorkshopMaps[i];
+            ReplyToPlayer(player, $"[草人杯] {i + 1}. {map.Name} ({map.WorkshopId})");
+        }
+    }
+
+    private static DuelWorkshopMap? ResolveDuelWorkshopMap(string input)
+    {
+        var value = input.Trim();
+        if (int.TryParse(value, out var index) && index >= 1 && index <= DuelWorkshopMaps.Length)
+        {
+            return DuelWorkshopMaps[index - 1];
+        }
+
+        return DuelWorkshopMaps.FirstOrDefault(map =>
+            string.Equals(map.WorkshopId, value, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(map.Name, value, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(SlugifyDuelMapName(map.Name), SlugifyDuelMapName(value), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string SlugifyDuelMapName(string value)
+    {
+        return new string(value
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToLowerInvariant)
+            .ToArray());
     }
 
     private void ReplyToPlayer(CCSPlayerController? player, string message)
@@ -1329,6 +1936,8 @@ public sealed class WebPlayerState
     public string? UndercoverTaskAckStage { get; set; }
 }
 
+internal sealed record DuelWorkshopMap(string Name, string WorkshopId);
+
 public enum PluginOutboundKind
 {
     Event,
@@ -1416,4 +2025,23 @@ public sealed class PluginHeartbeatResponse
 
     [JsonPropertyName("currentRound")]
     public int CurrentRound { get; set; }
+}
+
+internal enum DuelStage
+{
+    Pistol,
+    Rifle,
+    Sniper
+}
+
+internal sealed class PendingAwpRequest
+{
+    public string RequesterSteamId { get; set; } = string.Empty;
+    public CsTeam RequesterTeam { get; set; }
+    public List<string> RequiredApprovals { get; set; } = new();
+    public HashSet<string> Approvals { get; set; } = new(StringComparer.Ordinal);
+}
+
+internal static partial class DuelWeaponTables
+{
 }

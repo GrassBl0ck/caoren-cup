@@ -82,7 +82,7 @@
         <input id="extra-input" type="hidden" />
     </div>
     <div id="lobby-area" style="display:none;">
-        <div class="toolbar-row panel" style="margin-bottom:14px;"><div><div class="status-chip">当前身份信息</div><p style="margin:10px 0 0; font-size:16px;">欢迎，<span id="my-name"></span>。你的网页登录码：<strong id="my-bindcode"></strong></p><div style="margin-top:8px; color:#334155; font-size:13px; line-height:1.7; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;"><b>请牢记 6 位网页登录码。</b> 玩家从游戏内 <code>!cclogin</code> 获取的码可用于进入大厅，也可在网页掉线后恢复。管理员使用管理员密码进入。</div></div><div id="timer-display"></div></div>
+        <div class="toolbar-row panel" style="margin-bottom:14px;"><div><div class="status-chip">当前身份信息</div><p style="margin:10px 0 0; font-size:16px;">欢迎，<span id="my-name"></span>。你的网页登录码：<strong id="my-bindcode"></strong></p><div style="margin-top:8px; color:#334155; font-size:13px; line-height:1.7; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;"><b>请牢记 6 位网页登录码。</b> 玩家从游戏内 <code>!cclogin</code> 获取的码可用于进入大厅，也可在网页掉线后恢复。管理员使用管理员密码进入。</div></div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;"><button id="v1333-lobby-connect-server-btn" type="button" disabled>重连服务器</button><div id="timer-display"></div><div id="lobby-notification-display" style="display:none;"></div></div></div>
         <p id="my-identity" style="font-weight:bold; color: #0056b3; font-size: 18px;"></p>
         <div class="player-list" id="player-list"></div>
         <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
@@ -134,6 +134,69 @@
             <div id="match-options-panel" class="match-options-panel">
                 <h4>本局模式设置</h4>
                 <div id="match-options-status" class="match-options-status">当前阶段：读取中……</div>
+
+                <label class="match-options-row">
+                    <input type="checkbox" id="match-option-duel">
+                    <div>
+                        <div class="match-options-title">&#21551;&#29992;&#21333;&#25361;&#27169;&#24335;</div>
+                        <div class="match-options-desc">&#24320;&#21551;&#21518;&#65292;&#26412;&#23616;&#21482;&#21462;&#21069;&#20004;&#21517;&#29609;&#23478;&#36827;&#34892; 1v1&#65292;&#36339;&#36807;&#38431;&#38271;&#36873;&#20154;&#12289;&#22320;&#22270; BP&#12289;&#36873;&#36793;&#21644;&#21351;&#24213;&#27969;&#31243;&#12290;&#27491;&#24335;&#24320;&#22987;&#26102;&#20250;&#19979;&#21457;&#30701;&#22238;&#21512;&#21333;&#25361;&#35268;&#21017;&#12290;</div>
+                    </div>
+                </label>
+
+                <div class="match-options-row" id="duel-options-row">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;width:100%;">
+                        <label>
+                            <div class="match-options-title">&#21333;&#25361;&#22320;&#22270;</div>
+                            <select id="match-option-duel-map">
+                                <option value="5e_akm4_aim_duel" data-workshop-id="3250543760">5e_akm4_aim_duel</option>
+                                <option value="aim_redline" data-workshop-id="3199551320">aim_redline</option>
+                                <option value="5e_aim_map" data-workshop-id="3250592791">5e_aim_map</option>
+                                <option value="AIM Map" data-workshop-id="3084291314">AIM Map</option>
+                                <option value="aim_awp [CS2 Port]" data-workshop-id="3444237717">aim_awp [CS2 Port]</option>
+                            </select>
+                            <div id="duel-map-workshop-notice" class="match-options-desc" style="margin-top:6px;"></div>
+                        </label>
+                        <label>
+                            <div class="match-options-title">&#22238;&#21512;&#20998;&#38047;</div>
+                            <input id="match-option-duel-round-time" type="number" min="0.25" max="5" step="0.25" value="1">
+                        </label>
+                        <label>
+                            <div class="match-options-title">手枪回合</div>
+                            <input id="match-option-duel-pistol-rounds" type="number" min="0" max="99" step="1" value="8">
+                        </label>
+                        <label>
+                            <div class="match-options-title">步枪回合</div>
+                            <input id="match-option-duel-rifle-rounds" type="number" min="0" max="99" step="1" value="16">
+                        </label>
+                        <label>
+                            <div class="match-options-title">狙击回合</div>
+                            <input id="match-option-duel-sniper-rounds" type="number" min="0" max="99" step="1" value="12">
+                        </label>
+                        <label>
+                            <div class="match-options-title">道具模式</div>
+                            <select id="match-option-duel-utility-mode">
+                                <option value="none">不启用道具</option>
+                                <option value="random1">每回合随机 1 道具</option>
+                                <option value="random2">每回合随机 2 道具</option>
+                                <option value="random3">每回合随机 3 道具</option>
+                                <option value="full">每回合 4 道具</option>
+                            </select>
+                            <div class="match-options-desc">不含诱饵弹，闪光最多 1 个。</div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="match-options-row" id="match-option-test-bots-row" style="display:none;">
+                    <div style="width:100%;">
+                        <div class="match-options-title">&#27979;&#35797;BOT</div>
+                        <div class="match-options-actions" style="margin-top:8px;">
+                            <button type="button" class="secondary-btn" onclick="adminAddTestBots(2)">&#28155;&#21152;2&#20010;&#27979;&#35797;BOT</button>
+                            <button type="button" class="secondary-btn" onclick="adminAddTestBots(6)">&#28155;&#21152;6&#20010;&#27979;&#35797;BOT</button>
+                            <button type="button" class="secondary-btn" onclick="adminClearTestBots()">&#28165;&#29702;&#27979;&#35797;BOT</button>
+                        </div>
+                        <div class="match-options-desc" style="margin-top:6px;">&#21482;&#29992;&#20110;&#32593;&#39029;&#27969;&#31243;&#27979;&#35797;&#65292;&#19981;&#20250;&#36827;&#20837; CS2 &#26381;&#21153;&#22120;&#65292;&#20063;&#19981;&#20250;&#20135;&#29983;&#30495;&#23454;&#20987;&#26432;&#25968;&#25454;&#12290;</div>
+                    </div>
+                </div>
 
                 <label class="match-options-row">
                     <input type="checkbox" id="match-option-undercover" checked>
@@ -411,7 +474,7 @@
         </div>
     </div>
 
-    <script src="/js/lobby-app.js?v=charset-20260523"></script>
+    <script src="/js/lobby-app.js?v=ui-cleanup-20260603"></script>
     </div>
 <!-- PHASE2_UNIFIED_CAOREN_MOD_PANEL_V4_START -->
 <script src="/js/caoren-unified-mod-panel.js"></script>
@@ -427,6 +490,6 @@
 <!-- PHASE2_SAFE_ADMIN_VISIBILITY_V3_END -->
 
 
-<script src="/js/game-code-login.js"></script>
+<script src="/js/game-code-login.js?v=desktop-refresh-20260603"></script>
 </body>
 </html>

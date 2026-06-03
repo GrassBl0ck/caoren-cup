@@ -1186,6 +1186,22 @@ module-configs/*.json
 
 ## Credits / Third-party Code / 第三方代码说明
 
+---
+
+## 单挑模式测试流程
+
+单挑模式上线或开玩前，先按下面文档执行测试：
+
+```text
+docs/duel-mode-test-flow.md
+```
+
+本地基础检查可以直接运行：
+
+```powershell
+.\scripts\test-duel-mode-local.ps1
+```
+
 CaorenCup includes code, implementation ideas, or adapted logic from the following third-party projects.  
 We sincerely thank the original authors for their work and contributions to the CS2 plugin community.
 

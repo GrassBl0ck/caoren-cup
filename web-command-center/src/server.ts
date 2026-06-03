@@ -9,7 +9,7 @@ import {
 } from './types';
 import { getSession } from './session-manager';
 import { restoreSessionSnapshot, scheduleSessionSnapshotSave } from './session-persistence';
-import { sanitizeForPublic } from './player-utils';
+import { findPlayerById, sanitizeForPublic } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
 import {
@@ -33,6 +33,7 @@ import {
     getPluginCommandQueueSummary,
 } from './plugin-command-queue';
 import { ADMIN_PASSWORD } from './game-constants';
+import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds, normalizeDuelMap, normalizeDuelRoundTimeMinutes, normalizeDuelRounds, normalizeDuelUtilityMode, normalizeDuelWorkshopId } from './duel-config';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -87,18 +88,38 @@ const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {
 injectFlowBroadcast(broadcastState);
 injectNotify(notifyMessage);
 
+const ensureMatchOptions = () => {
+    const session = getSession();
+    if (!session.matchOptions) {
+        session.matchOptions = {
+            matchMode: 'competitive',
+            undercoverModeEnabled: true,
+            caorenModifiersEnabled: false,
+            duelMap: DUEL_DEFAULT_MAP,
+            duelMapWorkshopId: DUEL_DEFAULT_WORKSHOP_ID,
+            duelRoundTimeMinutes: DUEL_DEFAULT_ROUND_TIME_MINUTES,
+            duelRounds: getDefaultDuelRounds(),
+            duelUtilityMode: DUEL_DEFAULT_UTILITY_MODE,
+        };
+    }
+    session.matchOptions.matchMode = session.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
+    session.matchOptions.undercoverModeEnabled = session.matchOptions.matchMode === 'duel'
+        ? false
+        : session.matchOptions.undercoverModeEnabled !== false;
+    session.matchOptions.caorenModifiersEnabled = session.matchOptions.caorenModifiersEnabled === true;
+    session.matchOptions.duelMap = normalizeDuelMap(session.matchOptions.duelMap);
+    session.matchOptions.duelMapWorkshopId = normalizeDuelWorkshopId(session.matchOptions.duelMapWorkshopId) || DUEL_DEFAULT_WORKSHOP_ID;
+    session.matchOptions.duelRoundTimeMinutes = normalizeDuelRoundTimeMinutes(session.matchOptions.duelRoundTimeMinutes);
+    session.matchOptions.duelRounds = normalizeDuelRounds(session.matchOptions.duelRounds);
+    session.matchOptions.duelUtilityMode = normalizeDuelUtilityMode(session.matchOptions.duelUtilityMode);
+    return session.matchOptions;
+};
+
 registerMatchOptionsRoutes(app, {
     adminPassword: ADMIN_PASSWORD,
     getPhase: () => getSession().phase,
-    ensureMatchOptions: () => {
-        const session = getSession();
-        if (!session.matchOptions) {
-            session.matchOptions = { undercoverModeEnabled: true, caorenModifiersEnabled: false };
-        }
-        session.matchOptions.undercoverModeEnabled = session.matchOptions.undercoverModeEnabled !== false;
-        session.matchOptions.caorenModifiersEnabled = session.matchOptions.caorenModifiersEnabled === true;
-        return session.matchOptions;
-    },
+    getPlayerById: (playerId: string) => findPlayerById(getSession(), playerId),
+    ensureMatchOptions,
     applyMatchOptions,
     notify: notifyMessage,
     broadcastState,
@@ -107,15 +128,7 @@ registerMatchOptionsRoutes(app, {
 registerCaorenModRoutes(app, {
     adminPassword: ADMIN_PASSWORD,
     getPhase: () => getSession().phase,
-    ensureMatchOptions: () => {
-        const session = getSession();
-        if (!session.matchOptions) {
-            session.matchOptions = { undercoverModeEnabled: true, caorenModifiersEnabled: false };
-        }
-        session.matchOptions.undercoverModeEnabled = session.matchOptions.undercoverModeEnabled !== false;
-        session.matchOptions.caorenModifiersEnabled = session.matchOptions.caorenModifiersEnabled === true;
-        return session.matchOptions;
-    },
+    ensureMatchOptions,
     enqueuePluginCommand,
     getPluginCommandQueueSummary,
     notify: notifyMessage,

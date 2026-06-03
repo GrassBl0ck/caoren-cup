@@ -154,6 +154,7 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
                     session.playerOrder.push(id);
                     return player;
                 })();
+                adminPlayer.isOnline = true;
                 socket.data.playerId = adminPlayer.playerId;
                 socket.join(adminPlayer.playerId);
                 socket.emit(WsEvents.LOGIN_RESPONSE, {
@@ -187,6 +188,7 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
                     role: 'Spectator',
                     bindCode: generateBindCode(),
                     isReady: false,
+                    isOnline: true,
                 };
                 session.players[playerId] = spectator;
                 session.playerOrder.push(playerId);
@@ -217,19 +219,25 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
             // 查找或创建玩家
             let player = findPlayerBySteamId(session, ticket.steamId);
             if (!player) {
+                if (session.phase === GamePhase.Lobby && session.duelAdminVote) {
+                    session.duelAdminVote = undefined;
+                    broadcastState();
+                }
                 player = {
                     playerId: uuidv4(),
                     name: ticket.name || `Steam ${ticket.steamId.slice(-6)}`,
-                    role: session.phase === GamePhase.Lobby ? 'Player' : 'Spectator',
+                    role: session.phase === GamePhase.Lobby && !(session.matchOptions?.matchMode === 'duel' && session.duelTempAdminId) ? 'Player' : 'Spectator',
                     steamId: ticket.steamId,
                     bindCode: generateBindCode(),
                     isReady: false,
+                    isOnline: true,
                 };
                 session.players[player.playerId] = player;
                 session.playerOrder.push(player.playerId);
             } else {
                 player.name = ticket.name || player.name;
                 player.steamId = ticket.steamId;
+                player.isOnline = true;
             }
             socket.data.playerId = player.playerId;
             socket.join(player.playerId);

@@ -10,6 +10,7 @@ import {
     normalizeLoginText,
     generateBindCode,
     getGamePlayers,
+    getDuelParticipants,
 } from './player-utils';
 import { calculateScores } from './scoring';
 import {
@@ -31,11 +32,13 @@ import {
     startDraftPickTimer,
     syncPendingDraftOrderWithRoster,
     setRosterLiveSides,
+    extendDuelWaitingIfLateJoin,
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
 import { ADMIN_PASSWORD } from './game-constants';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import { assignTaskGridToPlayer } from './task-system';
+import { normalizeDuelMap, normalizeDuelRounds, normalizeDuelUtilityMode, getDuelTotalRounds, resolveDuelMapConfig } from './duel-config';
 
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
@@ -57,6 +60,22 @@ const createEmptyLiveGameData = (): LiveGameData => ({
 });
 
 const isUndercoverModeEnabled = () => getSession().matchOptions?.undercoverModeEnabled !== false;
+const isDuelMode = () => getSession().matchOptions?.matchMode === 'duel';
+const isDuelWaitingForPlayers = () => {
+    const session = getSession();
+    return session.matchOptions?.matchMode === 'duel' &&
+        session.phase === GamePhase.LiveGame &&
+        session.liveGameData?.duelWaitingForPlayers === true;
+};
+
+const enableDuelModeForTempAdmin = () => {
+    const session = getSession();
+    session.matchOptions.matchMode = 'duel';
+    session.matchOptions.undercoverModeEnabled = false;
+    clearUndercoverModeState();
+};
+
+const isAdminOnline = () => Object.values(getSession().players).some(p => p.role === 'Admin' && p.isOnline);
 
 const getReadinessBlockers = () => {
     const session = getSession();
@@ -118,6 +137,83 @@ const appendTaskActionLog = (player: Player, cell: TaskCell, cellId: string, act
     });
 };
 
+const clearDuelTransientState = () => {
+    const session = getSession();
+    session.duelAdminVote = undefined;
+    session.duelAdminRequest = undefined;
+    session.duelTerminateRequest = undefined;
+};
+
+const clearDuelTempAdmin = () => {
+    const session = getSession();
+    session.duelTempAdminId = null;
+    clearDuelTransientState();
+};
+
+const isDuelTempAdmin = (playerId: string | undefined | null): boolean => {
+    const session = getSession();
+    return !!playerId && !!session.duelTempAdminId && session.duelTempAdminId === playerId;
+};
+
+const getEffectiveDuelManager = (): Player | undefined => {
+    const session = getSession();
+    if (session.duelTempAdminId) return findPlayerById(session, session.duelTempAdminId);
+    return Object.values(session.players).find(p => p.role === 'Admin');
+};
+
+const canOperateDuel = (player: Player | undefined): boolean => {
+    if (!player) return false;
+    const session = getSession();
+    if (session.duelTempAdminId) return player.playerId === session.duelTempAdminId;
+    return player.role === 'Admin';
+};
+
+const hasDuelParticipantJoined = () => {
+    const session = getSession();
+    if (session.phase !== GamePhase.Lobby) return false;
+    if (!session.duelAdminVote) return false;
+    session.duelAdminVote = undefined;
+    return true;
+};
+
+const setDuelTempAdmin = (playerId: string) => {
+    const session = getSession();
+    const player = findPlayerById(session, playerId);
+    if (!player || player.role === 'Admin' || player.role === 'Spectator') return false;
+    session.duelTempAdminId = playerId;
+    session.duelAdminVote = undefined;
+    session.duelAdminRequest = undefined;
+    return true;
+};
+
+const getDuelAdminElectors = (session: ReturnType<typeof getSession>) => {
+    const participants = getDuelParticipants(session);
+    if (participants.length > 0) return participants;
+    return getGamePlayers(session).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
+};
+
+const finishDuelAdminVoteIfPassed = () => {
+    const session = getSession();
+    const vote = session.duelAdminVote;
+    if (!vote) return;
+    const participants = getDuelAdminElectors(session);
+    if (participants.length === 0) return;
+    const allPassed = participants.every(p => vote.votes[p.playerId] === true);
+    if (allPassed) setDuelTempAdmin(vote.candidateId);
+    return allPassed;
+};
+
+const duelManagedActions = new Set([
+    'ADVANCE_PHASE',
+    'ASSIGN_ROSTER_TEAM',
+    'UNASSIGN_ROSTER_TEAM',
+    'SET_ROSTER_LIVE_SIDES',
+    'UPDATE_LIVE_DATA',
+    'RESET_FORMAL_MATCH_COUNTERS',
+    'DUEL_SET_MAP',
+    'DUEL_SET_ROUNDS',
+]);
+
 export function registerSocketHandlers(io: SocketIOServer, deps: {
     broadcastState: () => void;
     notifyMessage: (msg: string) => void;
@@ -152,6 +248,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
         for (const playerId of Object.keys(oldSession.players)) {
             io.to(playerId).emit(WsEvents.LOGIN_RESPONSE, { success: false, resetClient: true, message: reason });
         }
+        clearDuelTempAdmin();
         terminateAndClear();
         notifyMessage(reason);
         broadcastState();
@@ -174,6 +271,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员恢复身份需要输入管理员密码，或输入该管理员账号的绑定码' });
                     return;
                 }
+                existing.isOnline = true;
                 socket.data.playerId = existing.playerId;
                 socket.join(existing.playerId);
                 socket.emit(WsEvents.LOGIN_RESPONSE, {
@@ -195,15 +293,24 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             let role: PlayerRole = 'Player';
             if (extraParam === 'spec') role = 'Spectator';
             else if (extraParam === ADMIN_PASSWORD) role = 'Admin';
-            if (session.phase !== GamePhase.Lobby && role !== 'Admin') role = 'Spectator';
+            if (session.phase !== GamePhase.Lobby && role !== 'Admin' && !isDuelWaitingForPlayers()) role = 'Spectator';
+            if (hasDuelParticipantJoined()) notifyMessage('有新玩家加入大厅，单挑临时管理员投票已取消。');
+            if (isDuelMode() && session.duelTempAdminId && role !== 'Admin' && !isDuelWaitingForPlayers()) role = 'Spectator';
+            if (isDuelWaitingForPlayers() && role !== 'Admin') {
+                role = 'Player';
+            }
 
             const playerId = uuidv4();
             const bindCode = generateBindCode();
-            const newPlayer: Player = { playerId, name, role, bindCode, isReady: false };
+            const newPlayer: Player = { playerId, name, role, bindCode, isReady: false, isOnline: true };
+            if (isDuelWaitingForPlayers() && role === 'Player') {
+                newPlayer.gameRole = 'Soldier';
+            }
             session.players[playerId] = newPlayer;
             session.playerOrder.push(playerId);
             socket.data.playerId = playerId;
             socket.join(playerId);
+            if (isDuelWaitingForPlayers() && role === 'Player') extendDuelWaitingIfLateJoin();
             socket.emit(WsEvents.LOGIN_RESPONSE, {
                 success: true,
                 playerId,
@@ -219,28 +326,38 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
         socket.on(WsEvents.ADMIN_ACTION, (data: { playerId: string; action: string; payload?: any }) => {
             const session = getSession();
             const admin = findPlayerById(session, data.playerId);
-            if (!admin || admin.role !== 'Admin') {
+            const allowDuelManager = duelManagedActions.has(data.action) && canOperateDuel(admin);
+            if (!admin || (admin.role !== 'Admin' && !allowDuelManager)) {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有管理员才能执行此操作' });
+                return;
+            }
+            if (session.duelTempAdminId && admin.role === 'Admin' && duelManagedActions.has(data.action)) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '当前已有单挑临时管理员，管理员不能直接操作单挑相关设置。' });
                 return;
             }
 
             if (data.action === 'ADVANCE_PHASE') {
+                if (session.duelTempAdminId && admin.playerId === session.duelTempAdminId) enableDuelModeForTempAdmin();
                 const current = session.phase;
                 let nextPhase: GamePhase | null = null;
+                const duelMode = isDuelMode();
                 switch (current) {
-                    case GamePhase.Lobby: nextPhase = GamePhase.CaptainSelection; break;
+                    case GamePhase.Lobby: nextPhase = duelMode ? GamePhase.PreGameSetup : GamePhase.CaptainSelection; break;
                     case GamePhase.CaptainSelection: nextPhase = GamePhase.Roll; break;
                     case GamePhase.Roll: nextPhase = GamePhase.PlayerDraft; break;
                     case GamePhase.PlayerDraft: nextPhase = GamePhase.MapBan; break;
                     case GamePhase.MapBan: nextPhase = GamePhase.SidePick; break;
                     case GamePhase.SidePick: nextPhase = GamePhase.PreGameSetup; break;
                     case GamePhase.PreGameSetup: nextPhase = GamePhase.LiveGame; break;
-                    case GamePhase.LiveGame: nextPhase = isUndercoverModeEnabled() ? GamePhase.PostGameAccusation : GamePhase.Scoreboard; break;
-                    case GamePhase.MidGameQA: nextPhase = isUndercoverModeEnabled() ? GamePhase.PostGameAccusation : GamePhase.Scoreboard; break;
+                    case GamePhase.LiveGame: nextPhase = duelMode ? GamePhase.Scoreboard : (isUndercoverModeEnabled() ? GamePhase.PostGameAccusation : GamePhase.Scoreboard); break;
+                    case GamePhase.MidGameQA: nextPhase = duelMode ? GamePhase.Scoreboard : (isUndercoverModeEnabled() ? GamePhase.PostGameAccusation : GamePhase.Scoreboard); break;
                     case GamePhase.PostGameAccusation: nextPhase = GamePhase.Scoreboard; break;
                     case GamePhase.Scoreboard:
                         resetCurrentGame('管理员开启新一轮');
                         return;
+                }
+                if (duelMode && [GamePhase.CaptainSelection, GamePhase.Roll, GamePhase.PlayerDraft, GamePhase.MapBan, GamePhase.SidePick].includes(current)) {
+                    nextPhase = GamePhase.PreGameSetup;
                 }
 
                 if (!nextPhase) {
@@ -249,7 +366,16 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 }
 
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame) {
-                    if (isUndercoverModeEnabled()) {
+                    if (isDuelMode()) {
+                        clearUndercoverModeState();
+                        session.rolesReleased = true;
+                        const rosterPlayers = getGamePlayers(session).filter(p => p.rosterTeam === 'A' || p.rosterTeam === 'B');
+                        const blockers = rosterPlayers.filter(p => !p.isReady);
+                        if (blockers.length > 0) {
+                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${blockers.length} 名单挑玩家未准备：${blockers.map(p => p.name).join('、')}。` });
+                            return;
+                        }
+                    } else if (isUndercoverModeEnabled()) {
                         const unassigned = getGamePlayers(session).filter(p => !p.gameRole);
                         if (unassigned.length > 0) {
                             socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${unassigned.length} 名玩家未分配身份，请先由管理员分配/随机补齐。` });
@@ -278,7 +404,9 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (nextPhase === GamePhase.Scoreboard) {
                     try { calculateScores(session); } catch (err) { console.error('[ADVANCE_PHASE] calculateScores failed:', err); }
                 }
+                const wasScoreboard = String(current) === GamePhase.Scoreboard;
                 advancePhase(current, nextPhase, admin.name);
+                if (wasScoreboard) clearDuelTempAdmin();
                 return;
             }
 
@@ -296,6 +424,53 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     });
                     broadcastState();
                 }
+            } else if (data.action === 'ADD_TEST_BOTS') {
+                if (![GamePhase.Lobby, GamePhase.PreGameSetup, GamePhase.LiveGame].includes(session.phase)) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '只能在大厅、赛前准备或单挑等待开赛阶段添加测试BOT。' });
+                    return;
+                }
+                if (session.phase === GamePhase.LiveGame && !isDuelWaitingForPlayers()) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '正式比赛已经开始后不能添加测试BOT。' });
+                    return;
+                }
+                const count = Math.max(1, Math.min(10, Number(data.payload?.count || 2)));
+                const existing = Object.values(session.players).filter(p => p.isTestBot).length;
+                for (let i = 0; i < count; i++) {
+                    const id = uuidv4();
+                    const botIndex = existing + i + 1;
+                    const rosterTeam = isDuelMode() ? (botIndex % 2 === 1 ? 'A' : 'B') as RosterTeam : undefined;
+                    const bot: Player = {
+                        playerId: id,
+                        name: `测试BOT-${botIndex}`,
+                        role: 'Player',
+                        gameRole: isDuelMode() ? 'Soldier' : undefined,
+                        bindCode: `BOT${String(botIndex).padStart(3, '0')}`,
+                        steamId: `TESTBOT-${id.slice(0, 8)}`,
+                        rosterTeam,
+                        team: rosterTeam === 'A' ? 'CT' : rosterTeam === 'B' ? 'T' : undefined,
+                        isReady: true,
+                        isOnline: true,
+                        isTestBot: true,
+                        steamIdBound: true,
+                    };
+                    session.players[id] = bot;
+                    session.playerOrder.push(id);
+                    if (rosterTeam && !session.teams[rosterTeam].players.includes(id)) session.teams[rosterTeam].players.push(id);
+                }
+                if (isDuelMode()) setRosterLiveSides(session.selectedSide || 'CT');
+                notifyMessage(`管理员已添加 ${count} 个网页测试BOT。测试BOT只用于网页流程，不会进入 CS2 服务器。`);
+                broadcastState();
+            } else if (data.action === 'CLEAR_TEST_BOTS') {
+                const botIds = Object.values(session.players).filter(p => p.isTestBot).map(p => p.playerId);
+                for (const id of botIds) {
+                    removePlayerFromRosterTeams(id);
+                    delete session.players[id];
+                }
+                session.playerOrder = session.playerOrder.filter(id => !botIds.includes(id));
+                if (session.captains.A && botIds.includes(session.captains.A)) session.captains.A = null;
+                if (session.captains.B && botIds.includes(session.captains.B)) session.captains.B = null;
+                notifyMessage(`管理员已清理 ${botIds.length} 个网页测试BOT。`);
+                broadcastState();
             } else if (data.action === 'RERANDOM_CAPTAIN') {
                 if (session.phase !== GamePhase.CaptainSelection) return;
                 const target = data.payload?.team;
@@ -369,19 +544,53 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 notifyMessage('管理员已发放身份。玩家现在只能看到自己的身份。');
                 broadcastState();
             } else if (data.action === 'ASSIGN_ROSTER_TEAM') {
-                if (session.phase !== GamePhase.PlayerDraft) return;
+                const canAssignDuelWaiting = isDuelMode() &&
+                    (session.phase === GamePhase.PreGameSetup ||
+                        (session.phase === GamePhase.LiveGame && session.liveGameData?.duelWaitingForPlayers === true));
+                if (session.phase !== GamePhase.PlayerDraft && !canAssignDuelWaiting) return;
                 const targetId = String(data.payload?.playerId || '');
                 const team = data.payload?.team as RosterTeam;
                 if (team !== 'A' && team !== 'B') return;
-                if (!assignPlayerToRoster(targetId, team)) {
+                const target = findPlayerById(session, targetId);
+                if (canAssignDuelWaiting) {
+                    if (!target || target.role === 'Admin' || target.role === 'Spectator') {
+                        socket.emit(WsEvents.NOTIFICATION, { message: '无法分配该玩家：管理员或旁观者不能加入单挑队伍。' });
+                        return;
+                    }
+                    removePlayerFromRosterTeams(targetId);
+                    target.rosterTeam = team;
+                    target.gameRole = 'Soldier';
+                    target.isReady = false;
+                    if (!session.teams[team].players.includes(targetId)) session.teams[team].players.push(targetId);
+                } else if (!assignPlayerToRoster(targetId, team)) {
                     socket.emit(WsEvents.NOTIFICATION, { message: '\u65e0\u6cd5\u5206\u914d\u8be5\u73a9\u5bb6\uff1a\u961f\u957f\u3001\u7ba1\u7406\u5458\u6216\u65c1\u89c2\u8005\u4e0d\u80fd\u5728\u8fd9\u91cc\u76f4\u63a5\u6539\u961f\u3002' });
                     return;
                 }
                 syncPendingDraftOrderWithRoster();
-                notifyMessage(`\u7ba1\u7406\u5458\u5df2\u5c06 ${findPlayerById(session, targetId)?.name || '\u73a9\u5bb6'} \u5206\u5165 ${team} \u961f\u3002`);
-                if (isDraftComplete()) finishDraftPick('manual');
+                notifyMessage(`\u7ba1\u7406\u5458\u5df2\u5c06 ${target?.name || '\u73a9\u5bb6'} \u5206\u5165 ${team} \u961f\u3002`);
+                if (canAssignDuelWaiting) {
+                    setRosterLiveSides(session.selectedSide || 'CT');
+                    broadcastState();
+                } else if (isDraftComplete()) finishDraftPick('manual');
                 else if (session.draftCaptainsActive) startDraftPickTimer(true);
                 else broadcastState();
+            } else if (data.action === 'UNASSIGN_ROSTER_TEAM') {
+                const canAssignDuelWaiting = isDuelMode() &&
+                    (session.phase === GamePhase.PreGameSetup ||
+                        (session.phase === GamePhase.LiveGame && session.liveGameData?.duelWaitingForPlayers === true));
+                if (!canAssignDuelWaiting) return;
+                const targetId = String(data.payload?.playerId || '');
+                const target = findPlayerById(session, targetId);
+                if (!target || target.role === 'Admin' || target.role === 'Spectator') return;
+                removePlayerFromRosterTeams(targetId);
+                target.rosterTeam = undefined;
+                target.team = undefined;
+                target.gameRole = undefined;
+                target.isReady = false;
+                syncPendingDraftOrderWithRoster();
+                notifyMessage(`管理员已撤销 ${target.name} 的单挑分队。`);
+                setRosterLiveSides(session.selectedSide || 'CT');
+                broadcastState();
             } else if (data.action === 'START_CAPTAIN_DRAFT') {
                 if (session.phase !== GamePhase.PlayerDraft) return;
                 if (session.draftCaptainsActive) {
@@ -451,6 +660,65 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     setRosterLiveSides(data.payload.teamASide);
                     broadcastState();
                 }
+            } else if (data.action === 'DUEL_SET_MAP') {
+                if (!canOperateDuel(admin)) return;
+                enableDuelModeForTempAdmin();
+                if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
+                const map = resolveDuelMapConfig(data.payload?.map, data.payload?.workshopId);
+                session.matchOptions.duelMap = map.name;
+                session.matchOptions.duelMapWorkshopId = map.workshopId;
+                session.selectedMap = map.name;
+                session.mapPool = [map.name];
+                notifyMessage(`单挑地图已设置为 ${map.name}`);
+                broadcastState();
+            } else if (data.action === 'DUEL_SET_ROUNDS') {
+                if (!canOperateDuel(admin)) return;
+                enableDuelModeForTempAdmin();
+                if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
+                const rounds = normalizeDuelRounds(data.payload?.rounds);
+                session.matchOptions.duelRounds = rounds;
+                if (session.liveGameData) session.liveGameData.winTarget = getDuelTotalRounds(rounds);
+                notifyMessage(`单挑回合分配已更新：手枪 ${rounds.pistol} / 步枪 ${rounds.rifle} / 狙击 ${rounds.sniper}`);
+                broadcastState();
+            } else if (data.action === 'DUEL_SET_UTILITY_MODE') {
+                if (!canOperateDuel(admin)) return;
+                enableDuelModeForTempAdmin();
+                if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
+                const utilityMode = normalizeDuelUtilityMode(data.payload?.utilityMode);
+                session.matchOptions.duelUtilityMode = utilityMode;
+                const label = utilityMode === 'none'
+                    ? '不启用道具'
+                    : utilityMode === 'full'
+                        ? '每回合 4 道具'
+                        : `每回合随机 ${utilityMode.replace('random', '')} 道具`;
+                notifyMessage(`单挑道具模式已更新：${label}`);
+                broadcastState();
+            } else if (data.action === 'DUEL_REVOKE_TEMP_ADMIN') {
+                if (admin.role !== 'Admin') return;
+                clearDuelTempAdmin();
+                notifyMessage('管理员已收回单挑临时管理员。');
+                broadcastState();
+            } else if (data.action === 'DUEL_APPROVE_TEMP_ADMIN') {
+                if (admin.role !== 'Admin' || !session.duelAdminRequest) return;
+                if (setDuelTempAdmin(session.duelAdminRequest.candidateId)) {
+                    enableDuelModeForTempAdmin();
+                    const temp = findPlayerById(session, session.duelTempAdminId || '');
+                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
+                    broadcastState();
+                }
+            } else if (data.action === 'DUEL_REJECT_TEMP_ADMIN') {
+                if (admin.role !== 'Admin') return;
+                session.duelAdminRequest = undefined;
+                notifyMessage('管理员已拒绝单挑临时管理员申请。');
+                broadcastState();
+            } else if (data.action === 'DUEL_APPROVE_TERMINATE') {
+                if (admin.role !== 'Admin' || !session.duelTerminateRequest) return;
+                terminateCurrentGameAndKickAll('管理员同意后强制终止单挑游戏');
+            } else if (data.action === 'DUEL_REJECT_TERMINATE') {
+                if (admin.role !== 'Admin') return;
+                session.duelTerminateRequest = undefined;
+                notifyMessage('管理员已拒绝终止单挑游戏。');
+                broadcastState();
             }
         });
 
@@ -527,6 +795,81 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             if (data.side !== 'CT' && data.side !== 'T') return;
             session.sideVote.votes[data.playerId] = data.side;
             broadcastState();
+        });
+
+        socket.on(WsEvents.DUEL_ACTION, (data: { playerId: string; action: string; payload?: any }) => {
+            const session = getSession();
+            const player = findPlayerById(session, data.playerId);
+            if (!player || player.role === 'Admin' || player.role === 'Spectator') return;
+
+            if (data.action === 'REQUEST_TEMP_ADMIN') {
+                if (session.phase !== GamePhase.Lobby) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '只能在大厅阶段申请单挑临时管理员。' });
+                    return;
+                }
+                if (session.duelTempAdminId) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '当前已经有单挑临时管理员。' });
+                    return;
+                }
+                if (isAdminOnline()) {
+                    session.duelAdminRequest = { candidateId: player.playerId, requestedAt: Date.now() };
+                    notifyMessage(`${player.name} 申请成为单挑临时管理员，等待管理员同意。`);
+                    broadcastState();
+                    return;
+                }
+
+                const participants = getDuelAdminElectors(session);
+                if (participants.length === 0) {
+                    const gamePlayers = getGamePlayers(session).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
+                    if (gamePlayers.length > 0 && gamePlayers.every(p => p.playerId === player.playerId)) {
+                        enableDuelModeForTempAdmin();
+                        setDuelTempAdmin(player.playerId);
+                        notifyMessage(`${player.name} 已成为单挑模式临时管理员。`);
+                        broadcastState();
+                        return;
+                    }
+                }
+                if (!participants.some(p => p.playerId === player.playerId)) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '只有当前参赛玩家可以发起单挑临时管理员投票。' });
+                    return;
+                }
+                const timeoutAt = Date.now() + 30000;
+                session.duelAdminVote = {
+                    candidateId: player.playerId,
+                    votes: { [player.playerId]: true },
+                    startedAt: Date.now(),
+                    timeoutAt,
+                };
+                notifyMessage(`${player.name} 发起单挑临时管理员投票，30 秒内需要所有参赛玩家同意。`);
+                setTimeout(() => {
+                    const current = getSession();
+                    if (current.duelAdminVote?.candidateId !== player.playerId || current.duelAdminVote.timeoutAt !== timeoutAt) return;
+                    current.duelAdminVote = undefined;
+                    notifyMessage('单挑临时管理员投票超时，未通过。');
+                    broadcastState();
+                }, 30000);
+                if (finishDuelAdminVoteIfPassed()) {
+                    enableDuelModeForTempAdmin();
+                    const temp = findPlayerById(session, session.duelTempAdminId || '');
+                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
+                }
+                broadcastState();
+            } else if (data.action === 'VOTE_TEMP_ADMIN') {
+                const vote = session.duelAdminVote;
+                if (!vote) return;
+                if (!getDuelAdminElectors(session).some(p => p.playerId === player.playerId)) return;
+                vote.votes[player.playerId] = data.payload?.agree !== false;
+                if (finishDuelAdminVoteIfPassed()) {
+                    enableDuelModeForTempAdmin();
+                    const temp = findPlayerById(session, session.duelTempAdminId || '');
+                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
+                }
+                broadcastState();
+            } else if (data.action === 'REQUEST_TERMINATE') {
+                if (!isDuelMode()) return;
+                if (!isDuelTempAdmin(player.playerId)) return;
+                terminateCurrentGameAndKickAll('单挑临时管理员强制终止本局游戏');
+            }
         });
 
         socket.on('PLAYER_READY', (data: { playerId: string }) => {
@@ -700,6 +1043,13 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '你已退出游戏' });
         });
 
-        socket.on('disconnect', () => console.log(`客户端断开: ${socket.id}`));
+        socket.on('disconnect', () => {
+            const session = getSession();
+            const playerId = socket.data?.playerId;
+            const player = playerId ? findPlayerById(session, playerId) : undefined;
+            if (player) player.isOnline = false;
+            console.log(`客户端断开: ${socket.id}`);
+            broadcastState();
+        });
     });
 }

@@ -33,6 +33,9 @@ public class EspFeature : ICaorenFeature
     private CaorenCupPlugin _plugin = null!;
     private CaorenCupConfig _config = null!;
     private Timer? _glowTimer;
+    private bool _registered;
+    private bool _initialized;
+    private bool _disabledPersistedAutoStart;
 
     private class EspData
     {
@@ -51,6 +54,14 @@ public class EspFeature : ICaorenFeature
         _plugin.RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         _plugin.RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
         _plugin.RegisterListener<Listeners.CheckTransmit>(OnCheckTransmit);
+        _registered = true;
+        _initialized = true;
+        if (_disabledPersistedAutoStart)
+        {
+            try { _plugin.SaveConfig(); } catch { }
+            _disabledPersistedAutoStart = false;
+        }
+        ApplyConfigStatus();
         _plugin.AddCommand("css_esp", "控制 ESP 模块", OnEspCommand);
     }
 
@@ -58,17 +69,32 @@ public class EspFeature : ICaorenFeature
     {
         if (config == null || config.Esp == null) return;
         _config = config;
-        ApplyConfigStatus();
+        if (_config.Esp.Enabled)
+        {
+            _config.Esp.Enabled = false;
+            _disabledPersistedAutoStart = true;
+        }
     }
 
     public void OnUnload()
     {
-        ClearAllGlowEntities();
+        if (_config?.Esp != null) _config.Esp.Enabled = false;
+        try { _plugin.SaveConfig(); } catch { }
         if (_glowTimer != null)
         {
             _glowTimer.Kill();
             _glowTimer = null;
         }
+        ClearAllGlowEntities();
+        if (_registered)
+        {
+            try { _plugin.DeregisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn); } catch { }
+            try { _plugin.DeregisterEventHandler<EventPlayerDeath>(OnPlayerDeath); } catch { }
+            try { _plugin.DeregisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect); } catch { }
+            try { _plugin.RemoveListener<Listeners.CheckTransmit>(OnCheckTransmit); } catch { }
+            _registered = false;
+        }
+        _initialized = false;
     }
 
     public void SetEnabled(bool enabled)
@@ -83,6 +109,7 @@ public class EspFeature : ICaorenFeature
     private void ApplyConfigStatus()
     {
         if (_config == null || _config.Esp == null) return;
+        if (!_initialized) return;
 
         if (_config.Esp.Enabled)
         {

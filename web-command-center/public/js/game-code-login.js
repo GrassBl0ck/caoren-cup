@@ -18,6 +18,30 @@
     });
   }
 
+  function ensureDesktopClientRefreshButton() {
+    if (!isDesktopClient() || byId('desktop-client-refresh-btn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'desktop-client-refresh-btn';
+    btn.type = 'button';
+    btn.textContent = '\u5237\u65b0\u9875\u9762';
+    btn.title = '\u9875\u9762\u5361\u4f4f\u6216\u72b6\u6001\u4e0d\u5bf9\u65f6\uff0c\u70b9\u8fd9\u91cc\u91cd\u65b0\u8f7d\u5165\u3002';
+    btn.style.position = 'fixed';
+    btn.style.top = '12px';
+    btn.style.right = '112px';
+    btn.style.zIndex = '9999';
+    btn.style.padding = '9px 14px';
+    btn.style.borderRadius = '999px';
+    btn.style.border = '1px solid rgba(148,163,184,.55)';
+    btn.style.background = '#0f172a';
+    btn.style.color = '#fff';
+    btn.style.fontWeight = '800';
+    btn.style.boxShadow = '0 8px 22px rgba(15,23,42,.18)';
+    btn.addEventListener('click', function () {
+      window.location.reload();
+    });
+    document.body.appendChild(btn);
+  }
+
   function getLoginSocket() {
     try {
       if (typeof ws !== 'undefined' && ws && ws.emit) return ws;
@@ -32,6 +56,7 @@
     var dot = byId('v1333-server-dot');
     var label = byId('v1333-server-status');
     var btn = byId('v1333-connect-server-btn');
+    var lobbyBtn = byId('v1333-lobby-connect-server-btn');
     if (dot) {
       dot.style.background = online ? '#16a34a' : '#dc2626';
       dot.style.boxShadow = online ? '0 0 0 3px rgba(22,163,74,.18)' : '0 0 0 3px rgba(220,38,38,.16)';
@@ -43,6 +68,10 @@
         ? (joinAllowed ? (online ? '通过 Steam 协议连接服务器' : '服务器可连接，桥接插件未就绪，战绩可能暂不可用') : '服务器离线或桥接插件未连接')
         : '未配置 GAME_SERVER_CONNECT_URL 或 GAME_SERVER_ADDRESS';
     }
+    if (lobbyBtn) {
+      lobbyBtn.disabled = !(joinAllowed && hasConnectUrl);
+      lobbyBtn.title = hasConnectUrl ? '通过 Steam 协议重连草人杯服务器' : '未配置服务器连接地址';
+    }
   }
 
   function bootGameCodeLogin() {
@@ -50,6 +79,7 @@
     var panel = byId('v1333-game-code-login-panel');
     if (!panel) return;
     hideDesktopClientDownloadInClient();
+    ensureDesktopClientRefreshButton();
 
     Array.prototype.forEach.call(loginArea.querySelectorAll('button'), function (el) {
       if (el.id !== 'v1333-connect-server-btn' && el.id !== 'v1335-enter-lobby-btn') el.style.display = 'none';
@@ -57,6 +87,7 @@
 
     var input = byId('v1333-game-login-code-input');
     var connectBtn = byId('v1333-connect-server-btn');
+    var lobbyConnectBtn = byId('v1333-lobby-connect-server-btn');
     var enterBtn = byId('v1335-enter-lobby-btn');
     var lastStatus = null;
 
@@ -88,6 +119,12 @@
           return;
         }
         window.location.href = url;
+      });
+    }
+
+    if (lobbyConnectBtn) {
+      lobbyConnectBtn.addEventListener('click', function () {
+        if (connectBtn) connectBtn.click();
       });
     }
 
