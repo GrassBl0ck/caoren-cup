@@ -63,7 +63,12 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     restored.playerOrder = Array.isArray(restored.playerOrder) ? restored.playerOrder : Object.keys(restored.players);
     restored.teams = restored.teams || base.teams;
     restored.captains = restored.captains || base.captains;
-    restored.matchOptions = restored.matchOptions || base.matchOptions;
+    restored.matchOptions = {
+        ...base.matchOptions,
+        ...(restored.matchOptions || {}),
+    };
+    restored.matchOptions.matchMode = restored.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
+    restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
     restored.accusations = restored.accusations || {};
     restored.adminLock = restored.adminLock || { holderId: null, acquiredAt: null };
     restored.duelTempAdminId = restored.duelTempAdminId || null;

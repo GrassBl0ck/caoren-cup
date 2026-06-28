@@ -1,5 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 
+import { getSession } from './session-manager';
+import { canEnqueueServerCommand } from './match-command-policy';
+
 export type BridgeCommandStatus = 'queued' | 'sent' | 'acked';
 
 export interface BridgeCommand {
@@ -71,6 +74,14 @@ export const enqueuePluginCommand = (
   payload: Record<string, any>
 ): BridgeCommand => {
   prunePluginCommandQueue();
+
+  if (type === 'EXECUTE_SERVER_COMMAND') {
+    const command = String(payload?.command || '');
+    const policy = canEnqueueServerCommand(getSession(), command);
+    if (!policy.allowed) {
+      throw new Error(policy.reason || '当前比赛模式不允许下发该服务器命令。');
+    }
+  }
 
   const cmd: BridgeCommand = {
     id: uuidv4(),

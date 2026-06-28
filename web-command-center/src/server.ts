@@ -93,6 +93,7 @@ const ensureMatchOptions = () => {
     if (!session.matchOptions) {
         session.matchOptions = {
             matchMode: 'competitive',
+            matchController: 'matchzy',
             undercoverModeEnabled: true,
             caorenModifiersEnabled: false,
             duelMap: DUEL_DEFAULT_MAP,
@@ -103,6 +104,7 @@ const ensureMatchOptions = () => {
         };
     }
     session.matchOptions.matchMode = session.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
+    session.matchOptions.matchController = session.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
     session.matchOptions.undercoverModeEnabled = session.matchOptions.matchMode === 'duel'
         ? false
         : session.matchOptions.undercoverModeEnabled !== false;

@@ -7,7 +7,8 @@
     "start": "tsx src/server.ts",
     "dev": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
-    "test:caoren-modules": "node scripts/check-caoren-modules.cjs"
+    "test:caoren-modules": "node scripts/check-caoren-modules.cjs",
+    "test:match-command-policy": "tsx src/match-command-policy.test.ts"
   },
   "dependencies": {
     "express": "^4.18.3",

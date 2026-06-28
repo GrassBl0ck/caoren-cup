@@ -406,6 +406,9 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 }
                 const wasScoreboard = String(current) === GamePhase.Scoreboard;
                 advancePhase(current, nextPhase, admin.name);
+                if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame && !isDuelMode()) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '网页流程已推进到 MatchZy Ready 阶段。请玩家在游戏内使用 MatchZy ready 流程，网页不会直接重启或开赛。' });
+                }
                 if (wasScoreboard) clearDuelTempAdmin();
                 return;
             }

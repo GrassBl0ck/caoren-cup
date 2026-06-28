@@ -1081,6 +1081,9 @@ const performPhaseTransition = (to: GamePhase) => {
                 const matchId = session.matchId;
                 setTimeout(() => beginDuelFormalMatch(matchId), DUEL_READY_WAIT_SECONDS * 1000);
                 notifyMessage?.(`单挑准备等待 ${DUEL_READY_WAIT_SECONDS} 秒：玩家可以在这段时间进出服务器。时间到后双方都在才正式重启开赛。`);
+            } else {
+                session.liveGameData.matchController = 'matchzy';
+                notifyMessage?.('网页流程已完成。标准竞技比赛由 MatchZy 接管，请玩家在游戏内使用 MatchZy ready 流程。');
             }
             break;
         case GamePhase.MidGameQA:
@@ -1152,6 +1155,7 @@ const applyMatchOptions = (rawOptions: unknown) => {
     const session = getSession();
     session.matchOptions = {
         matchMode: (rawOptions as any)?.matchMode === 'duel' ? 'duel' : 'competitive',
+        matchController: (rawOptions as any)?.matchMode === 'duel' ? 'caoren' : 'matchzy',
         undercoverModeEnabled: (rawOptions as any)?.undercoverModeEnabled !== false,
         caorenModifiersEnabled: (rawOptions as any)?.caorenModifiersEnabled === true,
         duelMap: resolveDuelMapConfig((rawOptions as any)?.duelMap || DUEL_DEFAULT_MAP, (rawOptions as any)?.duelMapWorkshopId).name,

@@ -1214,7 +1214,7 @@ if (window._caorenModifiersEnabled !== true) {
 
                 if (!undercoverEnabled) {
                     if (isAdmin) {
-                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">确认玩家准备和选边无误后，可以直接推进进入正式比赛。</p></div><hr>';
+                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">确认玩家网页准备和选边无误后，可以推进到 MatchZy Ready 阶段；真实开赛仍由游戏内 MatchZy ready 流程控制。</p></div><hr>';
                     }
 
                     html += '<h3 style="text-align:center; color:#2e7d32;">本局为普通比赛模式</h3>';
@@ -1222,11 +1222,11 @@ if (window._caorenModifiersEnabled !== true) {
 
                     html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
                     if (currentPlayer?.role !== 'Admin' && !currentPlayer?.isReady) {
-                        html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">✔️ 我已准备，等待正式比赛</button>';
+                        html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">✔️ 我已完成网页准备，等待 MatchZy Ready</button>';
                     } else {
-                        html += '<h3 style="color:#4caf50;">✅ 您已准备就绪，等待全员就位</h3>';
+                        html += '<h3 style="color:#4caf50;">✅ 您已完成网页准备，等待全员就位</h3>';
                     }
-                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
+                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">网页已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
                     extraDiv.innerHTML = html;
                 } else {
                     if (isAdmin) {
@@ -1272,7 +1272,7 @@ if (window._caorenModifiersEnabled !== true) {
                     } else {
                         html += '<h3 style="color:#4caf50;">\u2705 \u60a8\u5df2\u51c6\u5907\u5c31\u7eea\uff0c\u7b49\u5f85\u5168\u5458\u5c31\u4f4d</h3>';
                     }
-                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
+                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">网页已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
                     extraDiv.innerHTML = html;
                 }
             }
