@@ -19,6 +19,7 @@ export const createInitialSession = (): GameSession => {
         matchId: uuidv4(),
         matchOptions: {
             matchMode: 'competitive',
+            matchController: 'matchzy',
             undercoverModeEnabled: true,
             caorenModifiersEnabled: false,
             duelMap: DUEL_DEFAULT_MAP,

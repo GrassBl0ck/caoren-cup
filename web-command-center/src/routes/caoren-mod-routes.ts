@@ -8,6 +8,8 @@ import type {
 } from '../plugin-command-queue';
 
 type MatchOptionsLike = {
+  matchMode?: 'competitive' | 'duel';
+  matchController?: 'matchzy' | 'caoren';
   undercoverModeEnabled?: boolean;
   caorenModifiersEnabled?: boolean;
 };

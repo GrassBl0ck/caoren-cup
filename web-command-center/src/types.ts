@@ -17,6 +17,7 @@ export type GameRole = 'Soldier' | 'Undercover' | 'Detective';
 export type Team = 'CT' | 'T' | 'Unassigned';
 export type RosterTeam = 'A' | 'B';
 export type MatchMode = 'competitive' | 'duel';
+export type MatchController = 'matchzy' | 'caoren';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
 export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
 
@@ -201,6 +202,7 @@ export interface LiveGameData {
 }
 export interface MatchOptions {
     matchMode?: MatchMode;
+    matchController?: MatchController;
     undercoverModeEnabled: boolean;
     caorenModifiersEnabled: boolean;
     duelMap?: string;
