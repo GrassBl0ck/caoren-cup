@@ -1796,6 +1796,34 @@
             color: #fff;
         }
 
+        .postmatch-fun-scroll {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .postmatch-fun-scroll .hltv-style-table {
+            min-width: 1320px;
+        }
+
+        .postmatch-fun-scroll .sticky-player-col {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            background: #f8fbff;
+            box-shadow: 1px 0 0 #dbe5ef;
+        }
+
+        .postmatch-fun-scroll th.sticky-player-col {
+            z-index: 4;
+            background: #eef4fb;
+        }
+
+        .postmatch-subvalue {
+            color: var(--muted);
+            font-weight: 600;
+        }
+
         .funfact-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

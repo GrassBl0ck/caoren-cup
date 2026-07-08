@@ -25,6 +25,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly HttpClient _http = new();
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
     private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
+    private readonly Dictionary<ulong, PlayerButtons> _previousButtonsBySteamId = new();
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
     private readonly Channel<PluginOutboundMessage> _outboundQueue = Channel.CreateUnbounded<PluginOutboundMessage>(new UnboundedChannelOptions
@@ -170,13 +171,14 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_cccode", "获取草人杯网页登录码。用法：!cccode", OnGameLoginCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
-        AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|noready|nor [内容]", OnNoticeCommand);
+        AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
         AddCommand("css_guns", "查看单挑模式可切换枪械。用法：/guns", OnDuelGunsCommand);
         AddCommand("css_agree_awp", "同意对方在步枪阶段使用 AWP。用法：/agree_awp", OnDuelAgreeAwpCommand);
         AddCommand("css_duel_map", "切换单挑创意工坊地图。用法：/duel_map <序号|地图名|创意工坊ID>", OnDuelMapCommand);
         AddCommand("css_duel_maps", "查看可切换的单挑地图。用法：/duel_maps", OnDuelMapsCommand);
         RegisterDuelWeaponCommands();
         RegisterListener<Listeners.OnPlayerTakeDamagePre>(OnPlayerTakeDamagePre);
+        RegisterListener<Listeners.OnTick>(OnTick);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _outboundWorker = Task.Run(() => ProcessOutboundQueueAsync(_outboundCts.Token));
 
@@ -188,6 +190,10 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             if (!_isUnloading) _ = SendSnapshotAsync();
         }, TimerFlags.REPEAT));
+        _timers.Add(AddTimer(1.0f, () =>
+        {
+            if (!_isUnloading) QueueCrouchSamples();
+        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
         _timers.Add(AddTimer(1.0f, () =>
         {
             if (!_isUnloading) EnforceTeamAssignments();
@@ -333,7 +339,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         if (command.ArgCount < 2)
         {
-            ReplyToPlayer(player, "[草人杯] 用法：/notice all|undercover|und|detective|det|noready|nor [提示内容]");
+            ReplyToPlayer(player, "[草人杯] 用法：/notice all|undercover|und|detective|det|task|nor [提示内容]");
             return;
         }
 
@@ -559,6 +565,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
             attackerSteamId,
             attackerTeam,
+            attackerSpeed = PlayerHorizontalSpeed(attacker),
             victimSteamId,
             victimTeam,
             assisterSteamId,
@@ -571,6 +578,72 @@ public sealed class CaorenCupPlugin : BasePlugin
             mapName = SafeMapName()
         });
         return HookResult.Continue;
+    }
+
+    [GameEventHandler]
+    public HookResult OnWeaponFire(EventWeaponFire @event, GameEventInfo info)
+    {
+        var player = @event.Userid;
+        if (!IsRealPlayer(player)) return HookResult.Continue;
+
+        var weapon = ReadStringProperty(@event, "Weapon");
+        if (string.IsNullOrWhiteSpace(weapon))
+        {
+            weapon = PlayerEquipment(player).ActiveWeapon;
+        }
+
+        QueueEvent("weapon_fire", new
+        {
+            round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
+            steamId = player!.SteamID.ToString(),
+            team = TeamName(player.TeamNum),
+            weapon,
+            isGrenade = IsGrenadeWeapon(weapon),
+            mapName = SafeMapName()
+        });
+        return HookResult.Continue;
+    }
+
+    private void OnTick()
+    {
+        foreach (var player in Utilities.GetPlayers())
+        {
+            if (!IsRealPlayer(player)) continue;
+            var steamId = player.SteamID;
+            var previous = _previousButtonsBySteamId.TryGetValue(steamId, out var value) ? value : 0;
+            var current = player.Buttons;
+            var jumpWasPressed = (previous & PlayerButtons.Jump) != 0;
+            var jumpIsPressed = (current & PlayerButtons.Jump) != 0;
+            if (!jumpWasPressed && jumpIsPressed)
+            {
+                QueueEvent("player_jump", new
+                {
+                    round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
+                    steamId = player.SteamID.ToString(),
+                    team = TeamName(player.TeamNum),
+                    mapName = SafeMapName()
+                });
+            }
+            _previousButtonsBySteamId[steamId] = current;
+        }
+    }
+
+    private void QueueCrouchSamples()
+    {
+        foreach (var player in Utilities.GetPlayers())
+        {
+            if (!IsRealPlayer(player)) continue;
+            var buttons = player.Buttons;
+            if ((buttons & PlayerButtons.Duck) == 0) continue;
+            QueueEvent("player_crouch_sample", new
+            {
+                round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
+                steamId = player.SteamID.ToString(),
+                team = TeamName(player.TeamNum),
+                seconds = 1.0,
+                mapName = SafeMapName()
+            });
+        }
     }
 
     [GameEventHandler]
@@ -895,7 +968,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         var recipients = SelectNoticeRecipients(target, out var targetLabel);
         if (targetLabel == null)
         {
-            ReplyToPlayer(caller, "[草人杯] 目标无效。可用：all / undercover / und / detective / det / noready / nor");
+            ReplyToPlayer(caller, "[草人杯] 目标无效。可用：all / undercover / und / detective / det / task / nor");
             return;
         }
 
@@ -926,7 +999,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             "all" => "全体玩家",
             "undercover" or "und" => "卧底玩家",
             "detective" or "det" => "侦探玩家",
-            "noready" or "nor" => "未准备玩家",
+            "task" or "nor" => "未确认任务玩家",
             _ => null
         };
 
@@ -937,7 +1010,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             "all" => true,
             "undercover" or "und" => string.Equals(p.GameRole, "Undercover", StringComparison.OrdinalIgnoreCase),
             "detective" or "det" => string.Equals(p.GameRole, "Detective", StringComparison.OrdinalIgnoreCase),
-            "noready" or "nor" => !p.IsReady || (string.Equals(p.GameRole, "Undercover", StringComparison.OrdinalIgnoreCase) && !string.Equals(p.UndercoverTaskAckStage, "read", StringComparison.OrdinalIgnoreCase)),
+            "task" or "nor" => string.Equals(p.GameRole, "Undercover", StringComparison.OrdinalIgnoreCase) && !string.Equals(p.UndercoverTaskAckStage, "read", StringComparison.OrdinalIgnoreCase),
             _ => false
         }).ToList();
 
@@ -967,7 +1040,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         "undercover" or "und" => "请立即查看网页上的卧底任务与确认状态。",
         "detective" or "det" => "请注意裁判提示，准备进行侦探相关流程。",
-        "noready" or "nor" => "你还没有完成准备，请回网页完成准备或任务确认。",
+        "task" or "nor" => "你还没有确认网页上的卧底任务，请打开草人杯网页完成确认。",
         _ => "请注意裁判提示，立即查看网页指挥台。"
     };
 
@@ -1906,6 +1979,24 @@ public sealed class CaorenCupPlugin : BasePlugin
             catch { }
         }
         return string.Empty;
+    }
+
+    private static double PlayerHorizontalSpeed(CCSPlayerController? player)
+    {
+        try
+        {
+            var pawn = player?.PlayerPawn?.Value;
+            if (pawn == null) return 0;
+            dynamic dynPawn = pawn;
+            var velocity = dynPawn.AbsVelocity;
+            var x = Convert.ToDouble(velocity.X);
+            var y = Convert.ToDouble(velocity.Y);
+            return Math.Sqrt(x * x + y * y);
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     private static bool IsKnifeWeapon(string? weaponName)

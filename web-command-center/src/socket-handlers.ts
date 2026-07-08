@@ -393,11 +393,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     } else {
                         clearUndercoverModeState();
                         session.rolesReleased = true;
-                        const blockers = getReadinessBlockers();
-                        if (blockers.length > 0) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${blockers.length} 名玩家未准备：${blockers.map(p => p.name).join('、')}。` });
-                            return;
-                        }
                     }
                 }
 
@@ -407,7 +402,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const wasScoreboard = String(current) === GamePhase.Scoreboard;
                 advancePhase(current, nextPhase, admin.name);
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame && !isDuelMode()) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '网页流程已推进到 MatchZy Ready 阶段。请玩家在游戏内使用 MatchZy ready 流程，网页不会直接重启或开赛。' });
+                    socket.emit(WsEvents.NOTIFICATION, { message: '网页流程已完成。请管理员在游戏内使用 MatchZy .start 开始比赛，网页不会直接重启或开赛。' });
                 }
                 if (wasScoreboard) clearDuelTempAdmin();
                 return;

@@ -8,6 +8,7 @@
     "dev": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "test:caoren-modules": "node scripts/check-caoren-modules.cjs",
+    "test:postmatch-fun-stats": "node scripts/check-postmatch-fun-stats.cjs",
     "test:match-command-policy": "tsx src/match-command-policy.test.ts"
   },
   "dependencies": {
