@@ -112,6 +112,19 @@ const ws = io();
         applyTheme(localStorage.getItem('caoren-theme') || 'light');
 
 
+        function showLobbyNotice(message, tone = 'info') {
+            const notice = document.getElementById('lobby-notification-display');
+            if (!notice || !message) return false;
+            const styles = {
+                info: 'background:#fff8e1;border:1px solid #fbc02d;color:#e65100;',
+                success: 'background:#ecfdf5;border:1px solid #34d399;color:#047857;',
+                error: 'background:#fef2f2;border:1px solid #f87171;color:#b91c1c;'
+            };
+            notice.innerHTML = '<span style="display:inline-block;' + (styles[tone] || styles.info) + 'padding:6px 10px;border-radius:6px;">' + htmlEscape(message) + '</span>';
+            notice.style.display = 'block';
+            return true;
+        }
+
         function syncedNow() {
             return Date.now() + serverClockOffset;
         }
@@ -227,6 +240,17 @@ const ws = io();
             const base = player?.isReady ? '<span class="tag tag-green">\u5df2\u51c6\u5907</span>' : '<span class="tag tag-gray">-</span>';
             const ack = renderUndercoverAckTag(player);
             return ack ? base + '<br>' + ack : base;
+        }
+
+        function isCompetitiveMatchzyState(state) {
+            const options = state?.matchOptions || {};
+            return options.matchMode !== 'duel' && options.matchController !== 'caoren';
+        }
+
+        function renderMatchStartTag(player, state) {
+            if (player?.role === 'Admin' || player?.role === 'Spectator') return '<span class="tag tag-gray">-</span>';
+            if (state?.phase === 'LiveGame') return '<span class="tag tag-green">比赛中</span>';
+            return '<span class="tag tag-orange">等待 .start</span>';
         }
 
         function renderUndercoverAckControl(player) {
@@ -346,10 +370,11 @@ const ws = io();
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '保存大厅公告失败');
                 renderLobbyAnnouncement(data.announcement);
-                alert('大厅公告已保存。');
+                if (status) status.textContent = '大厅公告已保存。';
+                showLobbyNotice('大厅公告已保存。', 'success');
             } catch (err) {
                 if (status) status.textContent = err.message || '保存大厅公告失败';
-                alert(err.message || '保存大厅公告失败');
+                showLobbyNotice(err.message || '保存大厅公告失败', 'error');
             }
         }
 
@@ -551,7 +576,7 @@ const ws = io();
                 const pseudoState = { phase: data.phase, matchOptions: data.matchOptions };
                 syncMatchOptionsPanel(pseudoState, window._currentPlayer?.role === 'Admin');
             } catch (err) {
-                alert(err.message || '\u8bfb\u53d6\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
+                showLobbyNotice(err.message || '\u8bfb\u53d6\u672c\u5c40\u6a21\u5f0f\u5931\u8d25', 'error');
             }
         }
 
@@ -559,7 +584,7 @@ const ws = io();
             const silent = options?.silent === true;
             const phase = window._currentGamePhase || 'Lobby';
             if (phase !== 'Lobby') {
-                if (!silent) alert('\u53ea\u80fd\u5728\u5927\u5385\u9636\u6bb5\u4fee\u6539\u672c\u5c40\u6a21\u5f0f\u3002');
+                if (!silent) showLobbyNotice('\u53ea\u80fd\u5728\u5927\u5385\u9636\u6bb5\u4fee\u6539\u672c\u5c40\u6a21\u5f0f\u3002', 'error');
                 return;
             }
 
@@ -583,7 +608,7 @@ const ws = io();
                 }
             };
             if (duelEnabled && matchOptions.duelRounds.pistol + matchOptions.duelRounds.rifle + matchOptions.duelRounds.sniper < 30) {
-                if (!silent) alert('单挑模式的手枪+步枪+狙击回合总数必须大于等于 30。');
+                if (!silent) showLobbyNotice('单挑模式的手枪+步枪+狙击回合总数必须大于等于 30。', 'error');
                 return;
             }
             const status = document.getElementById('match-options-status');
@@ -598,12 +623,12 @@ const ws = io();
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
                 clearPendingMatchOptions();
-                if (!silent) alert('\u672c\u5c40\u6a21\u5f0f\u5df2\u4fdd\u5b58\u3002');
+                if (!silent) showLobbyNotice('\u672c\u5c40\u6a21\u5f0f\u5df2\u4fdd\u5b58\u3002', 'success');
                 if (silent && status) status.innerHTML = '\u672c\u5c40\u6a21\u5f0f\u5df2\u81ea\u52a8\u4fdd\u5b58\u3002';
                 syncMatchOptionsPanel({ phase: data.phase, matchOptions: data.matchOptions }, true);
             } catch (err) {
                 if (silent && status) status.innerHTML = '\u81ea\u52a8\u4fdd\u5b58\u5931\u8d25\uff1a' + htmlEscape(err.message || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
-                else alert(err.message || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
+                else showLobbyNotice(err.message || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25', 'error');
             }
         }
         function setCaorenModContentVisibility(caorenEnabled) {
@@ -747,7 +772,7 @@ const ws = io();
             const phase = window._currentGamePhase || 'Lobby';
             // Phase gate removed: admins may dispatch CaorenCup modifiers during live matches.
 if (window._caorenModifiersEnabled !== true) {
-                alert('本局未启用 CaorenCup 修改。请先在本局模式设置中开启。');
+                showLobbyNotice('本局未启用 CaorenCup 修改。请先在本局模式设置中开启。', 'error');
                 return;
             }
             if (module === 'reset_all' && !confirm('确认重置所有 CaorenCup 修改？这会执行游戏内 reset_plu。')) {
@@ -775,9 +800,9 @@ if (window._caorenModifiersEnabled !== true) {
                 if (status) {
                     status.innerHTML = `已加入下发队列：<b>${data.label}</b><br>实际执行命令：<code>${data.command}</code><br>等待桥接插件下一次心跳拉取并执行。`;
                 }
-                alert('已加入下发队列：' + data.label);
+                showLobbyNotice('已加入下发队列：' + data.label, 'success');
             } catch (err) {
-                alert(err.message || 'CaorenCup 修改下发失败');
+                showLobbyNotice(err.message || 'CaorenCup 修改下发失败', 'error');
             }
         }
 
@@ -801,7 +826,7 @@ if (window._caorenModifiersEnabled !== true) {
                 if (status) status.textContent = `已加入下发队列：${data.assignments.length} 人，当前回合 ${data.round || 0}${data.halftimeSwapped ? '，已按下半场换边' : ''}。${missing}${unassigned}`;
             } catch (err) {
                 if (status) status.textContent = err.message || '同步分队失败';
-                alert(err.message || '同步分队失败');
+                showLobbyNotice(err.message || '同步分队失败', 'error');
             }
         }
 
@@ -820,7 +845,7 @@ if (window._caorenModifiersEnabled !== true) {
                 if (status) status.textContent = '解除强制分队命令已加入下发队列。';
             } catch (err) {
                 if (status) status.textContent = err.message || '解除强制分队失败';
-                alert(err.message || '解除强制分队失败');
+                showLobbyNotice(err.message || '解除强制分队失败', 'error');
             }
         }
 
@@ -852,12 +877,7 @@ if (window._caorenModifiersEnabled !== true) {
         ws.on('NOTIFICATION', (data) => {
             const message = data?.message || '';
             if (!message) return;
-            const notice = document.getElementById('lobby-notification-display');
-            if (notice) {
-                notice.innerHTML = '<span style="display:inline-block;background:#fff8e1;border:1px solid #fbc02d;color:#e65100;padding:6px 10px;border-radius:6px;">' + htmlEscape(message) + '</span>';
-                notice.style.display = 'block';
-            }
-            alert(message);
+            showLobbyNotice(message);
         });
 
         refreshLobbyAnnouncement();
@@ -918,8 +938,10 @@ if (window._caorenModifiersEnabled !== true) {
                 .sort((a, b) => (teamSortWeight(a) - teamSortWeight(b)) || String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
             let playerTable = renderPublicDuelWorkshopNotice(state, currentPlayer);
             playerTable += '<h3 style="margin-top:0;">当前房间玩家</h3>';
+            const useMatchZyStartStatus = isCompetitiveMatchzyState(state);
+            const readyHeader = useMatchZyStartStatus ? '开赛状态' : '准备';
             playerTable += '<div class="cc-table-wrap"><table class="cc-table"><thead><tr>' +
-                '<th>#</th><th>玩家名</th><th>比赛队伍</th>' + (isDuel ? '' : '<th>当前边</th><th>应在边</th>') + '<th>绑定状态</th><th>身份</th><th>准备</th>' + ((isAdmin || (isDuel && currentPlayer?.playerId === state.duelTempAdminId)) ? '<th>操作</th>' : '') +
+                '<th>#</th><th>玩家名</th><th>比赛队伍</th>' + (isDuel ? '' : '<th>当前边</th><th>应在边</th>') + '<th>绑定状态</th><th>身份</th><th>' + readyHeader + '</th>' + ((isAdmin || (isDuel && currentPlayer?.playerId === state.duelTempAdminId)) ? '<th>操作</th>' : '') +
                 '</tr></thead><tbody>';
             visiblePlayers.forEach((p, idx) => {
                 const baseRoleClass = p.role === 'Admin' ? 'role-admin' : (p.gameRole === 'Undercover' ? 'role-undercover' : (p.gameRole === 'Detective' ? 'role-detective' : (p.gameRole === 'Soldier' ? 'role-soldier' : '')));
@@ -929,7 +951,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const expectedSide = renderExpectedSideTag(p, state);
                 const bind = p.steamIdBound ? '<span class="tag tag-green">已绑定</span>' : '<span class="tag tag-red">未绑定</span>';
                 const roleText = p.role === 'Admin' ? '<span class="tag tag-purple">管理员</span>' : (p.gameRole ? `<span class="tag tag-gray">${p.gameRole}</span>` : '<span class="tag tag-gray">未分配</span>');
-                const ready = renderReadyTag(p);
+                const ready = useMatchZyStartStatus ? renderMatchStartTag(p, state) : renderReadyTag(p);
                 const canDuelAssign = isDuel && (isAdmin || currentPlayer?.playerId === state.duelTempAdminId) && (!state.duelTempAdminId || currentPlayer?.playerId === state.duelTempAdminId) && p.role !== 'Admin' && p.role !== 'Spectator' && ['PreGameSetup', 'LiveGame'].includes(state.phase) && (state.phase !== 'LiveGame' || live?.duelWaitingForPlayers);
                 const duelAssignOps = canDuelAssign ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;"><button onclick="adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;padding:4px 9px;">分到A</button><button onclick="adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;padding:4px 9px;">分到B</button>${p.rosterTeam ? `<button onclick="adminUnassignTeam('${p.playerId}')" style="background:#64748b;color:#fff;padding:4px 9px;">撤销分队</button>` : ''}</div>` : '';
                 const kickOp = isAdmin && p.role !== 'Admin' ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
@@ -1214,19 +1236,20 @@ if (window._caorenModifiersEnabled !== true) {
 
                 if (!undercoverEnabled) {
                     if (isAdmin) {
-                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">确认玩家网页准备和选边无误后，可以推进到 MatchZy Ready 阶段；真实开赛仍由游戏内 MatchZy ready 流程控制。</p></div><hr>';
+                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">标准竞技不再要求网页准备；请确认玩家已绑定、分队无误，然后由管理员在游戏内输入 MatchZy <code>.start</code> 开始比赛。</p></div><hr>';
                     }
 
                     html += '<h3 style="text-align:center; color:#2e7d32;">本局为普通比赛模式</h3>';
-                    html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；比赛结束后直接进入积分结算。</p>';
+                    html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；玩家绑定并站到对应队伍后，等待管理员在游戏内使用 MatchZy <code>.start</code> 开赛。</p>';
 
                     html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
-                    if (currentPlayer?.role !== 'Admin' && !currentPlayer?.isReady) {
-                        html += '<button onclick="readyPlayer()" style="font-size:24px; padding:15px 40px; background:#4caf50; color:#fff; border-radius:8px; box-shadow:0 4px 6px rgba(0,0,0,0.2);">✔️ 我已完成网页准备，等待 MatchZy Ready</button>';
+                    if (currentPlayer?.role !== 'Admin' && currentPlayer?.role !== 'Spectator') {
+                        html += '<h3 style="color:#1565c0;">请回到游戏内等待管理员开赛</h3>';
+                        html += '<p style="color:#64748b;">不需要输入 <code>.r</code>，也不需要点击网页准备。</p>';
                     } else {
-                        html += '<h3 style="color:#4caf50;">✅ 您已完成网页准备，等待全员就位</h3>';
+                        html += '<h3 style="color:#4caf50;">确认无误后，在游戏内输入 <code>.start</code></h3>';
                     }
-                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">网页已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
+                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">比赛开始后，网页会自动进入正式比赛阶段。</p></div>';
                     extraDiv.innerHTML = html;
                 } else {
                     if (isAdmin) {
@@ -2268,79 +2291,74 @@ if (window._caorenModifiersEnabled !== true) {
             return Object.values(state.players || {}).filter(p => p.role !== 'Admin' && p.role !== 'Spectator' && p.stats);
         }
 
-        function topFunFactPlayer(players, valueFn, minValue = 0) {
-            let best = null;
-            let bestValue = minValue;
-            players.forEach(player => {
-                const value = Number(valueFn(player) || 0);
-                if (value > bestValue) {
-                    best = player;
-                    bestValue = value;
-                }
+        function pctText(numerator, denominator) {
+            const den = Number(denominator || 0);
+            if (den <= 0) return '-';
+            return `${trimFixed((Number(numerator || 0) / den) * 100, 0)}%`;
+        }
+
+        function statCell(value, detail = null) {
+            return detail === null || detail === undefined ? htmlEscape(value) : `${htmlEscape(value)} <span class="postmatch-subvalue">(${htmlEscape(detail)})</span>`;
+        }
+
+        function slashCell(left, right) {
+            return `${htmlEscape(left)} <span class="postmatch-subvalue">/</span> ${htmlEscape(right)}`;
+        }
+
+        function secondsCell(value, detail = null) {
+            const main = `${trimFixed(Number(value || 0), 1)}s`;
+            const sub = detail === null || detail === undefined ? null : `${trimFixed(Number(detail || 0), 1)}s`;
+            return statCell(main, sub);
+        }
+
+        function renderPostmatchFunStatsTable(state) {
+            const players = funFactPlayers(state);
+            if (!players.length) return renderPostmatchNotice('本局暂无娱乐数据。');
+            const columns = [
+                { label: '玩家', tip: '玩家', cell: p => `<b>${htmlEscape(p.name)}</b>`, sticky: true },
+                { label: '友伤（道具）', tip: '对队友造成总伤害（道具伤害）', cell: p => statCell(Math.round(Number(p.stats?.friendlyDamage || 0)), Math.round(Number(p.stats?.friendlyUtilityDamage || 0))) },
+                { label: '受闪（队友）', tip: '受到闪白时间（来自队友的）', cell: p => secondsCell(p.stats?.blindSeconds, p.stats?.friendlyBlindSeconds) },
+                { label: '蹲下时间', tip: '蹲下时间', cell: p => secondsText(p.stats?.crouchSeconds || 0) },
+                { label: '跳跃次数', tip: '跳跃次数', cell: p => Math.round(Number(p.stats?.jumpCount || 0)) },
+                { label: '受道具伤', tip: '受到道具伤害', cell: p => Math.round(Number(p.stats?.utilityDamageTaken || 0)) },
+                { label: '电击枪/被', tip: '电击枪造成击杀次数（被电击枪击杀次数）', cell: p => slashCell(Math.round(Number(p.stats?.zeusKills || 0)), Math.round(Number(p.stats?.zeusDeaths || 0))) },
+                { label: '匕首/被', tip: '匕首击杀次数（被匕首击杀次数）', cell: p => slashCell(Math.round(Number(p.stats?.knifeKills || 0)), Math.round(Number(p.stats?.knifeDeathsByKnife || 0))) },
+                { label: '命中率（命中/总）', tip: '子弹命中率（命中子弹/总发射子弹）', cell: p => statCell(pctText(p.stats?.shotsHit, p.stats?.shotsFired), `${Math.round(Number(p.stats?.shotsHit || 0))}/${Math.round(Number(p.stats?.shotsFired || 0))}`) },
+                { label: '首杀/首死', tip: '首杀次数（首死次数）', cell: p => slashCell(Math.round(Number(p.stats?.entryWins || 0)), Math.round(Number(p.stats?.firstDeaths || 0))) },
+                { label: '投掷道具次数', tip: '投掷道具次数', cell: p => Math.round(Number(p.stats?.grenadesThrown || 0)) },
+                { label: '闪光（队友）', tip: '造成闪白时间（造成队友的）', cell: p => secondsCell(p.stats?.flashSecondsGiven, p.stats?.friendlyFlashSecondsGiven) },
+                { label: '保枪率', tip: '当输掉回合时，仍然存活计算', cell: p => pctText(p.stats?.saveRounds || p.stats?.lostRoundsAlive, p.stats?.lostRoundsPlayed) },
+                { label: '击杀子弹数', tip: '平均击杀所用子弹数', cell: p => {
+                    const count = Number(p.stats?.killShotsCount || 0);
+                    return count > 0 ? trimFixed(Number(p.stats?.killShotsTotal || 0) / count, 1) : '-';
+                } },
+                { label: '狙杀占比（AWP）', tip: '狙杀占比（仅统计AWP时这个数据）', cell: p => pctText(p.stats?.awpKills, p.stats?.kills) },
+                { label: '急停击杀率', tip: '当玩家击杀敌方玩家时，速度不高于85，视作急停击杀', cell: p => pctText(p.stats?.counterStrafeKills, p.stats?.kills) },
+            ];
+
+            const rows = players.slice().sort((a, b) => {
+                const teamOrder = String(a.rosterTeam || 'Z').localeCompare(String(b.rosterTeam || 'Z'));
+                if (teamOrder !== 0) return teamOrder;
+                return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN');
             });
-            return best ? { player: best, value: bestValue } : null;
+            let html = `<div class="score-detail-wrap hltv-style-wrap postmatch-fun-scroll"><table class="hl-table hltv-style-table"><thead><tr><th class="team-heading" colspan="${columns.length}">娱乐数据</th></tr><tr>`;
+            columns.forEach(col => {
+                html += `<th${col.sticky ? ' class="sticky-player-col"' : ''} title="${htmlEscape(col.tip)}">${htmlEscape(col.label)}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            rows.forEach(player => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    html += `<td${col.sticky ? ' class="sticky-player-col"' : ''}>${col.cell(player)}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            return html;
         }
 
         function renderPostmatchFunFacts(state) {
-            const players = funFactPlayers(state);
-            if (!players.length) return '';
-            const facts = [];
-            const pushFact = (title, text, tone = '') => facts.push({ title, text, tone });
-
-            const blind = topFunFactPlayer(players, p => p.stats?.blindSeconds, 0);
-            if (blind) {
-                const stats = blind.player.stats || {};
-                pushFact('想妈妈啦', `${htmlEscape(blind.player.name)} 本局游戏共被闪白 <strong>${trimFixed(Number(stats.blindSeconds || 0), 1)} 秒</strong>，其中 <strong>${trimFixed(Number(stats.friendlyBlindSeconds || 0), 1)} 秒</strong>来自队友。`, 'blue');
-            }
-
-            const friendlyDamage = topFunFactPlayer(players, p => p.stats?.friendlyDamage, 0);
-            if (friendlyDamage) {
-                const stats = friendlyDamage.player.stats || {};
-                const kills = Number(stats.friendlyKills || 0);
-                pushFact('卧底！卧底！', `${htmlEscape(friendlyDamage.player.name)} 本局游戏中对队友造成了 <strong>${Math.round(Number(stats.friendlyDamage || 0))} 点</strong>伤害${kills > 0 ? `，击杀了 <strong>${kills} 名</strong>队友` : ''}。`, 'red');
-            }
-
-            const knifeDeaths = topFunFactPlayer(players, p => p.stats?.knifeDeaths, 0);
-            if (knifeDeaths) {
-                pushFact('匕瘾犯了', `${htmlEscape(knifeDeaths.player.name)} 本局游戏中，在持有近战武器时被击杀 <strong>${Math.round(knifeDeaths.value)} 次</strong>。`, 'amber');
-            }
-
-            const utilityDamageTaken = topFunFactPlayer(players, p => p.stats?.utilityDamageTaken, 0);
-            if (utilityDamageTaken) {
-                pushFact('不是我怎么——', `${htmlEscape(utilityDamageTaken.player.name)} 本局游戏中，受到 <strong>${Math.round(utilityDamageTaken.value)} 点</strong>道具伤害。`, 'purple');
-            }
-
-            const specialDeaths = topFunFactPlayer(players, p => p.stats?.specialDeaths, 0);
-            if (specialDeaths) {
-                pushFact('MAN！', `${htmlEscape(specialDeaths.player.name)} 本局游戏中，死于坠落 / 手雷 / 燃烧瓶共 <strong>${Math.round(specialDeaths.value)} 次</strong>。`, 'green');
-            }
-
-            const survivalRows = players
-                .map(player => ({ player, value: Number(player.stats?.survivalSeconds || 0) }))
-                .sort((a, b) => b.value - a.value);
-            if (survivalRows.length >= 2 && survivalRows[0].value - survivalRows[1].value > 120) {
-                const lead = survivalRows[0].value - survivalRows[1].value;
-                pushFact('上古尊者', `${htmlEscape(survivalRows[0].player.name)} 本局游戏中，共存活了 <strong>${secondsText(survivalRows[0].value)}</strong>，超过第二名 <strong>${secondsText(lead)}</strong>。`, 'cyan');
-            }
-
-            const wasteRows = players
-                .map(player => {
-                    const deaths = Number(player.stats?.grenadeDeaths || 0);
-                    const avg = deaths > 0 ? Number(player.stats?.deathGrenadeCount || 0) / deaths : 0;
-                    return { player, value: avg };
-                })
-                .sort((a, b) => b.value - a.value);
-            if (wasteRows.length && wasteRows[0].value > 1.5) {
-                pushFact('暴殄天物', `${htmlEscape(wasteRows[0].player.name)} 本局游戏中，死亡时平均携带 <strong>${trimFixed(wasteRows[0].value, 1)} 个</strong>道具。`, 'orange');
-            }
-
-            if (!facts.length) return renderPostmatchNotice('本局暂无满足条件的趣味数据。');
-            let html = '<div class="funfact-grid">';
-            facts.forEach(fact => {
-                html += `<div class="funfact-card ${fact.tone ? `funfact-${fact.tone}` : ''}"><div class="funfact-title">${htmlEscape(fact.title)}</div><div class="funfact-text">${fact.text}</div></div>`;
-            });
-            html += '</div>';
-            return html;
+            return renderPostmatchFunStatsTable(state);
         }
 
         function renderUndercoverTaskReview(state) {
@@ -2556,7 +2574,7 @@ if (window._caorenModifiersEnabled !== true) {
         }
         function terminateGame() {
             const text = prompt('危险操作：这会强制终止本局、踢出所有玩家、清空房间。所有人必须重新进入。请输入 TERMINATE 确认：');
-            if (text !== 'TERMINATE') return alert('已取消终止操作');
+            if (text !== 'TERMINATE') return;
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
         }
         function duelRequestTempAdmin() { ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'REQUEST_TEMP_ADMIN' }); }
@@ -2581,7 +2599,7 @@ if (window._caorenModifiersEnabled !== true) {
                 rifle: Number(document.getElementById('duel-live-rifle')?.value || 16),
                 sniper: Number(document.getElementById('duel-live-sniper')?.value || 12)
             };
-            if (rounds.pistol + rounds.rifle + rounds.sniper < 30) return alert('总回合数必须大于等于 30。');
+            if (rounds.pistol + rounds.rifle + rounds.sniper < 30) return showLobbyNotice('总回合数必须大于等于 30。', 'error');
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DUEL_SET_ROUNDS', payload: { rounds } });
             duelSetUtilityMode();
         }
@@ -2638,14 +2656,14 @@ if (window._caorenModifiersEnabled !== true) {
         function uploadCsv() {
             const fileInput = document.getElementById('csv-file-input');
             const file = fileInput?.files?.[0];
-            if (!file) return alert('请先选择一份合法的 MatchZy CSV 文件！');
+            if (!file) return showLobbyNotice('请先选择一份合法的 MatchZy CSV 文件。', 'error');
             const formData = new FormData();
             formData.append('csvfile', file);
             fetch('/api/upload-csv', { method: 'POST', body: formData })
                 .then(res => res.json())
                 .then(data => {
                     if (data.success) {
-                        alert(`导入解析大获成功！已精确匹配 ${data.matchedPlayers} 名场上玩家数据。`);
+                        showLobbyNotice(`导入解析成功，已匹配 ${data.matchedPlayers} 名场上玩家数据。`, 'success');
                         if (data.report) {
                             const blob = new Blob([data.report], { type: 'text/plain;charset=utf-8' });
                             const url = URL.createObjectURL(blob);
@@ -2654,9 +2672,9 @@ if (window._caorenModifiersEnabled !== true) {
                             URL.revokeObjectURL(url);
                         }
                     } else {
-                        alert('解析失败：' + (data.error || '未知错误'));
+                        showLobbyNotice('解析失败：' + (data.error || '未知错误'), 'error');
                     }
-                }).catch(err => alert('服务器通信失败：' + err));
+                }).catch(err => showLobbyNotice('服务器通信失败：' + err, 'error'));
         }
 
         function confirmQuit() { document.getElementById('quit-modal').style.display = 'block'; }
@@ -2699,27 +2717,27 @@ if (window._caorenModifiersEnabled !== true) {
             applySelectedTaskCellState();
             updateButtonStates();
         };
-        window.markComplete = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'MARK_COMPLETE', cellId }); };
-        window.undoComplete = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'UNDO_COMPLETE', cellId }); };
-        window.abandonTask = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'ABANDON', cellId }); };
-        window.requestHint = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REQUEST_HINT', cellId }); };
-        window.replaceTask = function () { const cellId = window.selectedCellId; if (!cellId) return alert('请先选中一个格子。'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REPLACE', cellId }); };
+        window.markComplete = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'MARK_COMPLETE', cellId }); };
+        window.undoComplete = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'UNDO_COMPLETE', cellId }); };
+        window.abandonTask = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'ABANDON', cellId }); };
+        window.requestHint = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REQUEST_HINT', cellId }); };
+        window.replaceTask = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REPLACE', cellId }); };
         window.changeN = function (action) {
             const cellId = window.selectedCellId;
-            if (!cellId) return alert('请先点击一个带N的格子');
+            if (!cellId) return showLobbyNotice('请先点击一个带 N 的格子。', 'error');
             let nValue = undefined;
             if (action === 'N_SET') {
                 const n = prompt('请输入准确的 N 值 (整数):');
                 if (n === null) return;
                 nValue = parseInt(n);
-                if (isNaN(nValue)) return alert('请输入有效数字');
+                if (isNaN(nValue)) return showLobbyNotice('请输入有效数字。', 'error');
             }
             ws.emit('TASK_ACTION', { playerId: myPlayerId, action: action, cellId, nValue });
         };
 
         // ========== 真·可视化模板编辑器相关 ==========
         function openTemplateModal() {
-            if (!window._currentTaskTemplate) return alert("模板尚未加载完成，请稍后再试...");
+            if (!window._currentTaskTemplate) return showLobbyNotice('模板尚未加载完成，请稍后再试。', 'error');
             window._editingTemplate = JSON.parse(JSON.stringify(window._currentTaskTemplate));
             document.getElementById('template-json-textarea').value = JSON.stringify(window._editingTemplate, null, 4);
 
@@ -2909,7 +2927,7 @@ if (window._caorenModifiersEnabled !== true) {
 
         function downloadTemplateJson() {
             const data = getTemplateExportTarget();
-            if (!data) return alert('当前没有可导出的模板。');
+            if (!data) return showLobbyNotice('当前没有可导出的模板。', 'error');
             const blob = new Blob([JSON.stringify(data, null, 4)], { type: 'application/json;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -2923,28 +2941,28 @@ if (window._caorenModifiersEnabled !== true) {
 
         async function copyTemplateJson() {
             const data = getTemplateExportTarget();
-            if (!data) return alert('当前没有可复制的模板。');
+            if (!data) return showLobbyNotice('当前没有可复制的模板。', 'error');
             const json = JSON.stringify(data, null, 4);
             try {
                 await navigator.clipboard.writeText(json);
-                alert('模板 JSON 已复制到剪贴板。');
+                showLobbyNotice('模板 JSON 已复制到剪贴板。', 'success');
             } catch (err) {
                 document.getElementById('template-json-textarea').value = json;
-                alert('浏览器未授权剪贴板，已将 JSON 填入文本框，请手动复制。');
+                showLobbyNotice('浏览器未授权剪贴板，已将 JSON 填入文本框，请手动复制。', 'error');
             }
         }
 
         function saveTemplateToLocal() {
             const data = getTemplateExportTarget();
-            if (!data) return alert('当前没有可保存的模板。');
+            if (!data) return showLobbyNotice('当前没有可保存的模板。', 'error');
             localStorage.setItem('caorenCupTaskTemplateBackup', JSON.stringify(data));
             localStorage.setItem('caorenCupTaskTemplateBackupAt', new Date().toLocaleString());
-            alert('模板已保存到当前浏览器本地。');
+            showLobbyNotice('模板已保存到当前浏览器本地。', 'success');
         }
 
         function loadTemplateFromLocal() {
             const raw = localStorage.getItem('caorenCupTaskTemplateBackup');
-            if (!raw) return alert('当前浏览器没有本地备份。');
+            if (!raw) return showLobbyNotice('当前浏览器没有本地备份。', 'error');
             try {
                 const parsed = JSON.parse(raw);
                 window._editingTemplate = parsed;
@@ -2955,9 +2973,9 @@ if (window._caorenModifiersEnabled !== true) {
                     selectTplCell(window._editingCellId || 'A1');
                 }
                 const savedAt = localStorage.getItem('caorenCupTaskTemplateBackupAt') || '未知时间';
-                alert('已读取本地模板备份。保存时间：' + savedAt);
+                showLobbyNotice('已读取本地模板备份。保存时间：' + savedAt, 'success');
             } catch (e) {
-                alert('本地备份读取失败：' + e.message);
+                showLobbyNotice('本地备份读取失败：' + e.message, 'error');
             }
         }
 
@@ -2976,7 +2994,7 @@ if (window._caorenModifiersEnabled !== true) {
                 ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_TASK_TEMPLATE', payload: { taskTemplate: parsed } });
                 closeTemplateModal();
             } catch (e) {
-                alert("JSON 语法在哭泣，请仔细排查标点符号与格式！\n\n异常回溯：\n" + e.message);
+                showLobbyNotice('JSON 语法错误：' + e.message, 'error');
             }
         }
 

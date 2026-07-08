@@ -954,6 +954,18 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
     performPhaseTransition(nextTo);
 };
 
+export const markStandardMatchLiveFromMatchZy = (): boolean => {
+    const session = getSession();
+    if (session.phase !== GamePhase.PreGameSetup) return false;
+    if (session.matchOptions?.matchMode === 'duel') return false;
+
+    session.phase = GamePhase.LiveGame;
+    performPhaseTransition(GamePhase.LiveGame);
+    broadcast?.();
+    notifyMessage?.('MatchZy 已由管理员 .start 开赛，网页已自动进入正式比赛阶段。');
+    return true;
+};
+
 const performPhaseTransition = (to: GamePhase) => {
     const session = getSession();
     switch (to) {
@@ -1083,7 +1095,7 @@ const performPhaseTransition = (to: GamePhase) => {
                 notifyMessage?.(`单挑准备等待 ${DUEL_READY_WAIT_SECONDS} 秒：玩家可以在这段时间进出服务器。时间到后双方都在才正式重启开赛。`);
             } else {
                 session.liveGameData.matchController = 'matchzy';
-                notifyMessage?.('网页流程已完成。标准竞技比赛由 MatchZy 接管，请玩家在游戏内使用 MatchZy ready 流程。');
+                notifyMessage?.('网页流程已完成。标准竞技比赛由 MatchZy 接管，请管理员在游戏内使用 .start 开始比赛。');
             }
             break;
         case GamePhase.MidGameQA:

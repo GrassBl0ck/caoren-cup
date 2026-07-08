@@ -17,6 +17,7 @@ import {
     normalizePluginRound,
     updateMatchFinishState,
     resolveRosterTeamByInitialSide,
+    markStandardMatchLiveFromMatchZy,
 } from './game-flow-manager';
 import { ADMIN_PASSWORD, PLUGIN_TOKEN } from './game-constants';
 import { resolveDuelMapConfig } from './duel-config';
@@ -202,15 +203,35 @@ const createEmptyMatchStats = () => ({
     equipmentSwing: 0,
     situationSwing: 0,
     friendlyDamage: 0,
+    friendlyUtilityDamage: 0,
     friendlyKills: 0,
     blindSeconds: 0,
     friendlyBlindSeconds: 0,
+    flashSecondsGiven: 0,
+    friendlyFlashSecondsGiven: 0,
     knifeDeaths: 0,
+    knifeKills: 0,
+    knifeDeathsByKnife: 0,
+    zeusKills: 0,
+    zeusDeaths: 0,
     utilityDamageTaken: 0,
     specialDeaths: 0,
     survivalSeconds: 0,
     deathGrenadeCount: 0,
     grenadeDeaths: 0,
+    crouchSeconds: 0,
+    jumpCount: 0,
+    shotsFired: 0,
+    shotsHit: 0,
+    grenadesThrown: 0,
+    firstDeaths: 0,
+    saveRounds: 0,
+    lostRoundsAlive: 0,
+    lostRoundsPlayed: 0,
+    killShotsTotal: 0,
+    killShotsCount: 0,
+    awpKills: 0,
+    counterStrafeKills: 0,
 });
 
 function nonNegativeInt(value: unknown): number {
@@ -366,15 +387,20 @@ export function registerPluginRoutes(app: express.Express, deps: {
 
     app.post('/api/plugin/event', requirePluginAuth, (req, res) => {
         const session = getSession();
+        const type = String(req.body?.type || '');
+        const payload = req.body?.payload || {};
+
+        const promotedFromPreGame = session.phase === GamePhase.PreGameSetup &&
+            type === 'round_start' &&
+            session.matchOptions?.matchMode !== 'duel' &&
+            markStandardMatchLiveFromMatchZy();
+
         if (!isPluginLivePhase(session.phase)) return res.json({ success: true, ignored: true, reason: `当前阶段 ${session.phase} 不接收实时事件` });
-        if (req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
+        if (!promotedFromPreGame && req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
         if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
         if (isPluginStatsLocked(session)) return res.json({ success: true, ignored: true, reason: '赛后战绩已锁定' });
         session.liveGameData.pluginConnected = true;
         session.liveGameData.lastPluginHeartbeatAt = Date.now();
-
-        const type = String(req.body?.type || '');
-        const payload = req.body?.payload || {};
 
         if (!isFormalStatsStarted(session)) {
             if (type === 'round_start' && Array.isArray(payload.players)) {
@@ -396,6 +422,15 @@ export function registerPluginRoutes(app: express.Express, deps: {
                 break;
             case 'player_blind':
                 applyBlindEvent(session, payload);
+                break;
+            case 'weapon_fire':
+                applyWeaponFireEvent(session, payload);
+                break;
+            case 'player_jump':
+                applyJumpEvent(session, payload);
+                break;
+            case 'player_crouch_sample':
+                applyCrouchSampleEvent(session, payload);
                 break;
             case 'round_end':
                 applyRoundEndEvent(session, payload, notifyMessage);
@@ -691,6 +726,45 @@ function isSpecialDeathWeapon(rawWeapon: any): boolean {
     return weapon.includes('fall') || weapon.includes('world') || weapon.includes('trigger_hurt') || weapon.includes('hegrenade') || weapon.includes('molotov') || weapon.includes('incgrenade') || weapon.includes('inferno');
 }
 
+function isFlashWeapon(rawWeapon: any): boolean {
+    return normalizeWeaponName(rawWeapon).includes('flashbang');
+}
+
+function isZeusWeapon(rawWeapon: any): boolean {
+    const weapon = normalizeWeaponName(rawWeapon);
+    return weapon.includes('taser') || weapon.includes('zeus');
+}
+
+function isKnifeKillWeapon(rawWeapon: any): boolean {
+    const weapon = normalizeWeaponName(rawWeapon);
+    return weapon.includes('knife') || weapon.includes('bayonet');
+}
+
+function isAwpWeapon(rawWeapon: any): boolean {
+    return normalizeWeaponName(rawWeapon).includes('awp');
+}
+
+function isBulletWeapon(rawWeapon: any): boolean {
+    const weapon = normalizeWeaponName(rawWeapon);
+    if (!weapon) return false;
+    if (isUtilityWeapon(weapon) || isFlashWeapon(weapon) || isKnifeKillWeapon(weapon) || isZeusWeapon(weapon)) return false;
+    if (weapon.includes('c4') || weapon.includes('bomb')) return false;
+    return true;
+}
+
+function currentKillShotCount(roundStats: any, steamId: string | null | undefined): number {
+    const normalized = normalizeSteamId(steamId);
+    if (!normalized) return 0;
+    return Math.max(0, nonNegativeInt(roundStats.shotsSinceKillBySteamId?.[normalized]));
+}
+
+function resetKillShotCount(roundStats: any, steamId: string | null | undefined) {
+    const normalized = normalizeSteamId(steamId);
+    if (!normalized) return;
+    if (!roundStats.shotsSinceKillBySteamId) roundStats.shotsSinceKillBySteamId = {};
+    roundStats.shotsSinceKillBySteamId[normalized] = 0;
+}
+
 function recordSurvivalTime(session: any, roundStats: any, steamId: string | null | undefined, side: string | null | undefined, endedAt = Date.now()) {
     const normalizedSteamId = normalizeSteamId(steamId);
     if (!normalizedSteamId || roundStats.survivalFinalizedBySteamId?.[normalizedSteamId]) return;
@@ -854,6 +928,30 @@ function applyKillEvent(session: any, payload: any) {
             incrementStat(attackerStats, 'headShotKills');
             incrementStat(attackerSideStats, 'headShotKills');
         }
+        if (isZeusWeapon(payload.weapon)) {
+            incrementStat(attackerStats, 'zeusKills');
+            incrementStat(attackerSideStats, 'zeusKills');
+        }
+        if (isKnifeKillWeapon(payload.weapon)) {
+            incrementStat(attackerStats, 'knifeKills');
+            incrementStat(attackerSideStats, 'knifeKills');
+        }
+        if (isAwpWeapon(payload.weapon)) {
+            incrementStat(attackerStats, 'awpKills');
+            incrementStat(attackerSideStats, 'awpKills');
+        }
+        const killShots = currentKillShotCount(roundStats, payload.attackerSteamId);
+        if (killShots > 0) {
+            incrementStat(attackerStats, 'killShotsTotal', killShots);
+            incrementStat(attackerStats, 'killShotsCount');
+            incrementStat(attackerSideStats, 'killShotsTotal', killShots);
+            incrementStat(attackerSideStats, 'killShotsCount');
+        }
+        if (Number(payload.attackerSpeed || 0) <= 85) {
+            incrementStat(attackerStats, 'counterStrafeKills');
+            incrementStat(attackerSideStats, 'counterStrafeKills');
+        }
+        resetKillShotCount(roundStats, payload.attackerSteamId);
         const attackerSteamId = normalizeSteamId(payload.attackerSteamId);
         if (attackerSteamId) {
             roundStats.killCountBySteamId[attackerSteamId] = Number(roundStats.killCountBySteamId[attackerSteamId] || 0) + 1;
@@ -893,6 +991,14 @@ function applyKillEvent(session: any, payload: any) {
             incrementStat(victimStats, 'specialDeaths');
             incrementStat(victimSideStats, 'specialDeaths');
         }
+        if (isZeusWeapon(payload.weapon)) {
+            incrementStat(victimStats, 'zeusDeaths');
+            incrementStat(victimSideStats, 'zeusDeaths');
+        }
+        if (isKnifeKillWeapon(payload.weapon)) {
+            incrementStat(victimStats, 'knifeDeathsByKnife');
+            incrementStat(victimSideStats, 'knifeDeathsByKnife');
+        }
         if (!isFriendlyKill) {
             incrementStat(victimStats, 'deaths');
             incrementStat(victimSideStats, 'deaths');
@@ -912,6 +1018,8 @@ function applyKillEvent(session: any, payload: any) {
             roundStats.firstDeathVictimSeen = true;
             incrementStat(victimStats, 'entryCount');
             incrementStat(victimSideStats, 'entryCount');
+            incrementStat(victimStats, 'firstDeaths');
+            incrementStat(victimSideStats, 'firstDeaths');
         }
     }
     if (isFriendlyKill && attacker) {
@@ -966,9 +1074,17 @@ function applyDamageEvent(session: any, payload: any) {
     if (!attacker) return;
     const attackerStats = ensurePlayerStats(attacker);
     const attackerSideStats = ensureSideStats(attacker, attackerSide);
+    if (isBulletWeapon(payload.weapon)) {
+        incrementStat(attackerStats, 'shotsHit');
+        incrementStat(attackerSideStats, 'shotsHit');
+    }
     if (attackerSide === victimSide) {
         incrementStat(attackerStats, 'friendlyDamage', damage);
         incrementStat(attackerSideStats, 'friendlyDamage', damage);
+        if (isUtilityWeapon(payload.weapon)) {
+            incrementStat(attackerStats, 'friendlyUtilityDamage', damage);
+            incrementStat(attackerSideStats, 'friendlyUtilityDamage', damage);
+        }
         return;
     }
     incrementStat(attackerStats, 'damage', damage);
@@ -987,9 +1103,84 @@ function applyBlindEvent(session: any, payload: any) {
     const victimSideStats = ensureSideStats(victim, victimSide);
     incrementStat(victimStats, 'blindSeconds', duration);
     incrementStat(victimSideStats, 'blindSeconds', duration);
-    if (attacker && attacker.playerId !== victim.playerId && attackerSide && victimSide && attackerSide === victimSide) {
-        incrementStat(victimStats, 'friendlyBlindSeconds', duration);
-        incrementStat(victimSideStats, 'friendlyBlindSeconds', duration);
+    if (attacker && attacker.playerId !== victim.playerId && attackerSide && victimSide) {
+        const attackerStats = ensurePlayerStats(attacker);
+        const attackerSideStats = ensureSideStats(attacker, attackerSide);
+        incrementStat(attackerStats, 'flashSecondsGiven', duration);
+        incrementStat(attackerSideStats, 'flashSecondsGiven', duration);
+        if (attackerSide === victimSide) {
+            incrementStat(victimStats, 'friendlyBlindSeconds', duration);
+            incrementStat(victimSideStats, 'friendlyBlindSeconds', duration);
+            incrementStat(attackerStats, 'friendlyFlashSecondsGiven', duration);
+            incrementStat(attackerSideStats, 'friendlyFlashSecondsGiven', duration);
+        }
+    }
+}
+
+function applyWeaponFireEvent(session: any, payload: any) {
+    const player = findPlayerBySteamId(session, payload.steamId);
+    if (!player) return;
+    const side = normalizeTeam(payload.team);
+    if (side) player.team = side;
+    const stats = ensurePlayerStats(player);
+    const sideStats = ensureSideStats(player, side);
+    const weapon = payload.weapon;
+    const isGrenade = payload.isGrenade === true || isUtilityWeapon(weapon) || isFlashWeapon(weapon);
+    if (isGrenade) {
+        incrementStat(stats, 'grenadesThrown');
+        incrementStat(sideStats, 'grenadesThrown');
+        return;
+    }
+    if (!isBulletWeapon(weapon)) return;
+    incrementStat(stats, 'shotsFired');
+    incrementStat(sideStats, 'shotsFired');
+    const live = session.liveGameData;
+    const round = Math.max(1, normalizePluginRound(Number(payload.round || live?.currentRound || 1)));
+    const roundStats = getRoundStats(live, round);
+    const steamId = normalizeSteamId(payload.steamId);
+    if (!steamId) return;
+    if (!roundStats.shotsSinceKillBySteamId) roundStats.shotsSinceKillBySteamId = {};
+    roundStats.shotsSinceKillBySteamId[steamId] = Number(roundStats.shotsSinceKillBySteamId[steamId] || 0) + 1;
+}
+
+function applyJumpEvent(session: any, payload: any) {
+    const player = findPlayerBySteamId(session, payload.steamId);
+    if (!player) return;
+    const side = normalizeTeam(payload.team);
+    if (side) player.team = side;
+    incrementStat(ensurePlayerStats(player), 'jumpCount');
+    incrementStat(ensureSideStats(player, side), 'jumpCount');
+}
+
+function applyCrouchSampleEvent(session: any, payload: any) {
+    const player = findPlayerBySteamId(session, payload.steamId);
+    if (!player) return;
+    const side = normalizeTeam(payload.team);
+    if (side) player.team = side;
+    const seconds = Math.max(0, Number(payload.seconds || 0));
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    incrementStat(ensurePlayerStats(player), 'crouchSeconds', seconds);
+    incrementStat(ensureSideStats(player, side), 'crouchSeconds', seconds);
+}
+
+function finalizeSaveRounds(session: any, roundStats: any, winnerSide: string | null) {
+    if (!roundStats || roundStats.saveRoundsFinalized || (winnerSide !== 'CT' && winnerSide !== 'T')) return;
+    roundStats.saveRoundsFinalized = true;
+    const loserSide = winnerSide === 'CT' ? 'T' : 'CT';
+    for (const steamId of Object.keys(roundStats.roundStartedSteamIds || {})) {
+        const side = roundStats.sideBySteamId?.[steamId] || (roundStats.aliveBySide?.CT?.[steamId] !== undefined ? 'CT' : (roundStats.aliveBySide?.T?.[steamId] !== undefined ? 'T' : undefined));
+        if (side !== loserSide) continue;
+        const player = findPlayerBySteamId(session, steamId);
+        if (!player) continue;
+        const alive = roundStats.aliveBySide?.[side]?.[steamId] === true;
+        incrementStat(ensurePlayerStats(player), 'lostRoundsPlayed');
+        incrementStat(ensureSideStats(player, side), 'lostRoundsPlayed');
+        if (alive) {
+            incrementStat(ensurePlayerStats(player), 'saveRounds');
+            incrementStat(ensurePlayerStats(player), 'lostRoundsAlive');
+            incrementStat(ensureSideStats(player, side), 'saveRounds');
+            incrementStat(ensureSideStats(player, side), 'lostRoundsAlive');
+        }
     }
 }
 function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) => void) {
@@ -1009,6 +1200,7 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
         if (roundStats) finalizeOneVsXWins(session, roundStats, winnerSide);
         if (roundStats) finalizeEnemyMultiKills(session, roundStats);
         if (roundStats) finalizeSurvivalTimes(session, roundStats);
+        if (roundStats) finalizeSaveRounds(session, roundStats, winnerSide);
         if (winnerSide === 'CT') live.scoreCT += 1;
         else if (winnerSide === 'T') live.scoreT += 1;
         let winnerRoster = resolveRosterTeamByInitialSide(winnerSide, formalRound);
