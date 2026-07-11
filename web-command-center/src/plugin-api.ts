@@ -21,6 +21,8 @@ import {
 } from './game-flow-manager';
 import { ADMIN_PASSWORD, PLUGIN_TOKEN } from './game-constants';
 import { resolveDuelMapConfig } from './duel-config';
+import { lobbyIdentityService } from './identity/identity-runtime';
+import { applyMembershipToPlayer } from './identity/session-integration';
 
 type TeamAssignmentSide = 'CT' | 'T';
 
@@ -350,7 +352,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
         res.json({ success: true, commandId: queued.id, queuedAt: queued.createdAt });
     });
 
-    app.post('/api/plugin/bind', requirePluginAuth, (req, res) => {
+    app.post('/api/plugin/bind', requirePluginAuth, async (req, res) => {
         const bindCode = String(req.body?.bindCode || '').trim();
         const steamId = normalizeSteamId(req.body?.steamId);
         const inGameName = String(req.body?.name || '').trim();
@@ -358,15 +360,44 @@ export function registerPluginRoutes(app: express.Express, deps: {
         const session = getSession();
         const player = getGamePlayers(session).find(p => p.bindCode === bindCode);
         if (!player) return res.status(404).json({ success: false, error: '绑定码无效或已过期' });
-        player.steamId = steamId;
-        if (inGameName && !player.name) player.name = inGameName;
+        let membershipId = player.membershipId;
+        if (!membershipId) {
+            const membership = await lobbyIdentityService.createTemporaryMembership({
+                sessionId: session.sessionId,
+                nickname: player.name || inGameName || `Steam ${steamId.slice(-6)}`,
+            });
+            membershipId = membership.membershipId;
+        }
+        const confirmed = await lobbyIdentityService.confirmTrustedIdentity(membershipId, steamId, inGameName);
+        if (!confirmed.ok || !confirmed.membership) {
+            return res.status(409).json({ success: false, error: confirmed.reason || '身份确认失败' });
+        }
+        applyMembershipToPlayer(player, confirmed.membership);
         broadcastState();
         res.json({ success: true, playerId: player.playerId, name: player.name, steamId: player.steamId });
     });
 
-    app.post('/api/plugin/snapshot', requirePluginAuth, (req, res) => {
+    app.post('/api/plugin/snapshot', requirePluginAuth, async (req, res) => {
         const session = getSession();
-        if (!isPluginLivePhase(session.phase)) return res.json({ success: true, ignored: true, reason: `当前阶段 ${session.phase} 不接收实时战绩` });
+        const players = Array.isArray(req.body?.players) ? req.body.players : [];
+        const confirmationChallenges = await lobbyIdentityService.getConfirmationChallenges(session.sessionId, players);
+        const confirmedMemberships = await lobbyIdentityService.confirmLongTermPresence(
+            session.sessionId,
+            players.map((player: any) => player?.steamId),
+        );
+        for (const membership of confirmedMemberships) {
+            const sessionPlayer = Object.values(session.players).find((player) => player.membershipId === membership.membershipId);
+            if (sessionPlayer) applyMembershipToPlayer(sessionPlayer, membership);
+        }
+        if (!isPluginLivePhase(session.phase)) {
+            if (confirmedMemberships.length > 0) broadcastState();
+            return res.json({
+                success: true,
+                ignored: true,
+                reason: `当前阶段 ${session.phase} 不接收实时战绩`,
+                confirmationChallenges,
+            });
+        }
         if (req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
         if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
         if (isPluginStatsLocked(session)) return res.json({ success: true, ignored: true, reason: '赛后战绩已锁定' });
@@ -378,11 +409,14 @@ export function registerPluginRoutes(app: express.Express, deps: {
         if (req.body?.mapName) session.liveGameData.mapName = String(req.body.mapName);
         session.liveGameData.pluginConnected = true;
         session.liveGameData.lastPluginHeartbeatAt = Date.now();
-        const players = Array.isArray(req.body?.players) ? req.body.players : [];
         updateLivePlayersFromSnapshot(session, players, { updateStats: false });
         updateMatchFinishState();
         broadcastState();
-        res.json({ success: true, matchedPlayers: getGamePlayers(session).filter(p => p.steamId && p.stats).length });
+        res.json({
+            success: true,
+            matchedPlayers: getGamePlayers(session).filter(p => p.steamId && p.stats).length,
+            confirmationChallenges,
+        });
     });
 
     app.post('/api/plugin/event', requirePluginAuth, (req, res) => {

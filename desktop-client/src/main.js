@@ -1,11 +1,22 @@
-const { app, BrowserWindow, dialog, shell } = require('electron');
+const { app, BrowserWindow, dialog, shell, ipcMain, safeStorage } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFile } = require('node:child_process');
+const { randomUUID } = require('node:crypto');
 const { COMMAND_CENTER_URL } = require('./client-config');
+const { DeviceCredentialStore } = require('./device-credentials');
+const { DesktopAuthClient } = require('./desktop-auth-client');
+const { discoverSteamAccounts, selectSteamAccount, toRendererSteamAccount } = require('./steam-accounts');
 
 const PLACEHOLDER_URL = 'https://your-caoren-command-center.example.com';
 const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/1.0';
 const commandCenterUrl = normalizeCommandCenterUrl(process.env.CAOREN_COMMAND_CENTER_URL || COMMAND_CENTER_URL);
 
 let mainWindow = null;
+let deviceCredentialStore = null;
+let desktopAuthClient = null;
+let steamAccounts = [];
+let selectedSteamAccount = null;
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
@@ -38,6 +49,77 @@ function isExternalProtocol(targetUrl) {
   return /^(steam|steamlink):\/\//i.test(targetUrl);
 }
 
+function isTrustedIpcEvent(event) {
+  if (!commandCenterUrl) return false;
+  try {
+    return new URL(event.senderFrame.url).origin === new URL(commandCenterUrl).origin;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function requireTrustedIpc(event) {
+  if (!isTrustedIpcEvent(event)) throw new Error('IPC_SOURCE_NOT_ALLOWED');
+}
+
+async function listSteamAccounts() {
+  const remembered = deviceCredentialStore.load();
+  const discovery = await discoverSteamAccounts({ fs, execFile, env: process.env });
+  if (!discovery.ok) {
+    steamAccounts = [];
+    selectedSteamAccount = null;
+    return discovery;
+  }
+  steamAccounts = discovery.accounts.map((account) => ({ ...account, accountRef: randomUUID() }));
+  const selection = selectSteamAccount(steamAccounts, remembered.ok ? remembered.credential.selectedSteamId : undefined);
+  selectedSteamAccount = selection.selected || null;
+  return {
+    ok: true,
+    accounts: steamAccounts.map(toRendererSteamAccount),
+    selected: selectedSteamAccount ? toRendererSteamAccount(selectedSteamAccount) : null,
+    requiresSelection: selection.requiresSelection,
+    reason: selection.reason,
+  };
+}
+
+function selectAccount(accountRef) {
+  const selected = steamAccounts.find((account) => account.accountRef === String(accountRef || ''));
+  if (!selected) return { ok: false, reason: 'steam_account_not_found' };
+  selectedSteamAccount = selected;
+  return { ok: true, selected: toRendererSteamAccount(selected) };
+}
+
+function registerDesktopIpc() {
+  ipcMain.handle('caoren:steam:list', async (event) => {
+    requireTrustedIpc(event);
+    return listSteamAccounts();
+  });
+  ipcMain.handle('caoren:steam:select', (event, payload) => {
+    requireTrustedIpc(event);
+    return selectAccount(payload?.accountRef);
+  });
+  ipcMain.handle('caoren:auth:login', async (event, payload) => {
+    requireTrustedIpc(event);
+    if (payload?.accountRef) {
+      const selected = selectAccount(payload.accountRef);
+      if (!selected.ok) return selected;
+    }
+    const claim = selectedSteamAccount
+      ? { steamId: selectedSteamAccount.steamId, personaName: selectedSteamAccount.personaName }
+      : undefined;
+    if (payload?.purpose === 'steamClaim') return desktopAuthClient.createSteamClaimTicket(claim);
+    return desktopAuthClient.authenticateDevice(claim);
+  });
+  ipcMain.handle('caoren:auth:enroll', async (event, payload) => {
+    requireTrustedIpc(event);
+    return desktopAuthClient.enrollDevice(payload?.enrollmentCode, selectedSteamAccount?.steamId);
+  });
+  ipcMain.handle('caoren:auth:logout', async (event) => {
+    requireTrustedIpc(event);
+    return desktopAuthClient.logoutDevice();
+  });
+}
+
 function createMissingConfigWindow() {
   mainWindow = new BrowserWindow({
     width: 760,
@@ -49,7 +131,8 @@ function createMissingConfigWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true
+      sandbox: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
@@ -118,7 +201,8 @@ function createCommandCenterWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true
+      sandbox: true,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
@@ -165,6 +249,18 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.caorencup.client');
   }
+
+  deviceCredentialStore = new DeviceCredentialStore({
+    fs,
+    safeStorage,
+    filePath: path.join(app.getPath('userData'), 'device-credentials.dat'),
+  });
+  desktopAuthClient = new DesktopAuthClient({
+    baseUrl: commandCenterUrl || '',
+    fetch: globalThis.fetch,
+    credentialStore: deviceCredentialStore,
+  });
+  registerDesktopIpc();
 
   if (commandCenterUrl) createCommandCenterWindow();
   else createMissingConfigWindow();

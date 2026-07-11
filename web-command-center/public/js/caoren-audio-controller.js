@@ -386,11 +386,12 @@
     document.head.appendChild(style);
 
     const panel = document.createElement("div");
-    panel.className = "cc-audio-panel";
+    const startsMinimized = Boolean(document.getElementById("login-area"));
+    panel.className = `cc-audio-panel${startsMinimized ? " minimized" : ""}`;
     panel.innerHTML = `
       <div class="cc-audio-title">
         <div>草人杯音频 <span id="cc-audio-phase">未进入阶段</span></div>
-        <button id="cc-audio-minimize" class="cc-audio-btn secondary" style="width:auto;padding:4px 8px;">—</button>
+        <button id="cc-audio-minimize" class="cc-audio-btn secondary" style="width:auto;padding:4px 8px;">${startsMinimized ? "+" : "—"}</button>
       </div>
       <div class="cc-audio-body">
         <button id="cc-audio-enable" class="cc-audio-btn">${state.enabled ? "重新启用音乐" : "启用音乐"}</button>

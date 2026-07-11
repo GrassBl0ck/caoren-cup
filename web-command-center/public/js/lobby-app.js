@@ -857,10 +857,6 @@ if (window._caorenModifiersEnabled !== true) {
                 const displayName = data.name || data.player?.name || (data.message || '').split('，')[0].replace('欢迎，', '').replace('！已恢复你的房间身份。', '').replace('！你的绑定码是:', '').trim();
                 document.getElementById('my-name').textContent = displayName || document.getElementById('name-input').value.trim() || '未命名玩家';
                 document.getElementById('my-bindcode').textContent = data.loginCode || data.bindCode || '未分配';
-                const codeLine = document.getElementById('my-bindcode')?.parentElement;
-                if (codeLine && !data.loginCode && data.bindCode) {
-                    codeLine.childNodes[2].textContent = '。你的旧绑定码：';
-                }
             } else {
                 if (data.resetClient || data.message === '你已退出游戏' || String(data.message || '').includes('终止')) {
                     resetToLogin(data.message || '你已退出房间，请重新进入');

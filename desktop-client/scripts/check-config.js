@@ -20,8 +20,12 @@ if (packageJson.build?.win?.signAndEditExecutable !== false) {
 }
 
 const mainJs = readFileSync(join(__dirname, '..', 'src', 'main.js'), 'utf8');
-if (!mainJs.includes('nodeIntegration: false') || !mainJs.includes('contextIsolation: true')) {
-  throw new Error('desktop-client BrowserWindow must keep nodeIntegration disabled and contextIsolation enabled.');
+if (!mainJs.includes('nodeIntegration: false') || !mainJs.includes('contextIsolation: true') || !mainJs.includes('sandbox: true')) {
+  throw new Error('desktop-client BrowserWindow must keep nodeIntegration disabled, contextIsolation enabled and sandbox enabled.');
+}
+
+if (!mainJs.includes("preload: path.join(__dirname, 'preload.js')") || !mainJs.includes('isTrustedIpcEvent')) {
+  throw new Error('desktop-client must use the fixed preload and validate IPC sender origin.');
 }
 
 if (!mainJs.includes('steam|steamlink')) {

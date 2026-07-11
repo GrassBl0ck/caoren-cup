@@ -1,163 +1,282 @@
-/* v1.3.5 game-code-login client start */
 (function () {
   function byId(id) { return document.getElementById(id); }
-
-  function isDesktopClient() {
-    return /\bCaorenCupDesktopClient\/1\.0\b/.test(navigator.userAgent || '');
-  }
-
-  function hideDesktopClientDownloadInClient() {
-    if (!isDesktopClient()) return;
-    var downloadIds = [
-      'caoren-desktop-client-download',
-      'caoren-desktop-client-github-download'
-    ];
-    downloadIds.forEach(function (id) {
-      var downloadLink = byId(id);
-      if (downloadLink) downloadLink.style.display = 'none';
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
     });
   }
-
-  function ensureDesktopClientRefreshButton() {
-    if (!isDesktopClient() || byId('desktop-client-refresh-btn')) return;
-    var btn = document.createElement('button');
-    btn.id = 'desktop-client-refresh-btn';
-    btn.type = 'button';
-    btn.textContent = '\u5237\u65b0\u9875\u9762';
-    btn.title = '\u9875\u9762\u5361\u4f4f\u6216\u72b6\u6001\u4e0d\u5bf9\u65f6\uff0c\u70b9\u8fd9\u91cc\u91cd\u65b0\u8f7d\u5165\u3002';
-    btn.style.position = 'fixed';
-    btn.style.top = '12px';
-    btn.style.right = '112px';
-    btn.style.zIndex = '9999';
-    btn.style.padding = '9px 14px';
-    btn.style.borderRadius = '999px';
-    btn.style.border = '1px solid rgba(148,163,184,.55)';
-    btn.style.background = '#0f172a';
-    btn.style.color = '#fff';
-    btn.style.fontWeight = '800';
-    btn.style.boxShadow = '0 8px 22px rgba(15,23,42,.18)';
-    btn.addEventListener('click', function () {
-      window.location.reload();
-    });
-    document.body.appendChild(btn);
-  }
-
+  function desktopApi() { return window.caorenDesktop || null; }
+  function isDesktopClient() { return !!desktopApi() || /\bCaorenCupDesktopClient\/1\.0\b/.test(navigator.userAgent || ''); }
   function getLoginSocket() {
     try {
       if (typeof ws !== 'undefined' && ws && ws.emit) return ws;
       if (typeof socket !== 'undefined' && socket && socket.emit) return socket;
-    } catch (_err) {}
-    if (window.__caorenCupSocket && window.__caorenCupSocket.emit) return window.__caorenCupSocket;
-    if (window.socket && window.socket.emit) return window.socket;
-    return null;
+    } catch (_error) {}
+    return window.__caorenCupSocket || window.socket || null;
   }
 
-  function setStatus(text, online, hasConnectUrl, joinAllowed) {
+  var selectedSteamAccount = null;
+  var deviceLoginAvailable = false;
+  var lastServerStatus = null;
+
+  function setDesktopStatus(message, tone) {
+    var element = byId('desktop-auth-status');
+    if (!element) return;
+    element.textContent = message;
+    element.classList.toggle('is-error', tone === 'error');
+    element.classList.toggle('is-success', tone === 'success');
+  }
+
+  function accountLabel(account) {
+    var time = account.timestamp ? new Date(Number(account.timestamp) * 1000).toLocaleDateString('zh-CN') : '时间未知';
+    return (account.personaName || '未命名账号') + ' · ' + (account.maskedSteamId || '未提供') + ' · ' + time;
+  }
+
+  function renderSteamAccounts(result) {
+    var status = byId('steam-account-status');
+    var select = byId('steam-account-select');
+    if (!status || !select) return;
+    if (!result || !result.ok) {
+      selectedSteamAccount = null;
+      select.style.display = 'none';
+      status.textContent = result && result.reason === 'steam_config_unreadable'
+        ? 'Steam 配置无法读取，可继续以临时身份进入。'
+        : '未找到 Steam，可继续以临时身份进入。';
+      return;
+    }
+    var accounts = result.accounts || [];
+    selectedSteamAccount = result.selected || null;
+    select.innerHTML = (result.requiresSelection ? '<option value="">请选择 Steam 账号</option>' : '') + accounts.map(function (account) {
+      return '<option value="' + escapeHtml(account.accountRef) + '"' + (selectedSteamAccount && account.accountRef === selectedSteamAccount.accountRef ? ' selected' : '') + '>' + escapeHtml(accountLabel(account)) + '</option>';
+    }).join('');
+    if (result.requiresSelection) {
+      select.style.display = 'block';
+      status.textContent = '检测到多个无法唯一判断的 Steam 账号，请选择本场使用的账号。';
+      selectedSteamAccount = null;
+    } else {
+      select.style.display = accounts.length > 1 ? 'block' : 'none';
+      status.textContent = selectedSteamAccount ? accountLabel(selectedSteamAccount) : '没有可用账号。';
+    }
+  }
+
+  async function refreshSteamAccounts(tryDeviceLogin) {
+    var api = desktopApi();
+    if (!api) {
+      renderSteamAccounts({ ok: false, reason: 'desktop_unavailable' });
+      byId('steam-account-status').textContent = '普通浏览器不会读取本机 Steam；可直接使用邀请码进入临时大厅。';
+      setDesktopStatus(deviceLoginAvailable ? '当前为浏览器访问，设备自动登录仅在桌面客户端可用。' : '设备自动登录尚不可用。');
+      return;
+    }
+    setDesktopStatus('正在读取本机 Steam 账号和设备凭据...');
+    var result = await api.listSteamAccounts();
+    renderSteamAccounts(result);
+    if (tryDeviceLogin && !result.requiresSelection) await attemptDeviceLogin();
+  }
+
+  async function selectSteamAccount(accountRef) {
+    var api = desktopApi();
+    if (!api) return;
+    var result = await api.selectSteamAccount(accountRef);
+    if (result.ok) {
+      selectedSteamAccount = result.selected;
+      byId('steam-account-status').textContent = accountLabel(selectedSteamAccount);
+      setDesktopStatus('Steam 账号已选择，可使用邀请码进入或尝试设备登录。');
+      await attemptDeviceLogin();
+    }
+  }
+
+  async function attemptDeviceLogin() {
+    var api = desktopApi();
+    if (!api || !deviceLoginAvailable) return;
+    setDesktopStatus('正在尝试设备自动登录...');
+    var result = await api.authenticateDevice(selectedSteamAccount && selectedSteamAccount.accountRef);
+    if (result.ok) {
+      var loginSocket = getLoginSocket();
+      if (!loginSocket) {
+        setDesktopStatus('页面连接尚未准备好，请点击重新检测。', 'error');
+        return;
+      }
+      setDesktopStatus('设备凭据有效，正在进入当前大厅...', 'success');
+      loginSocket.emit('DEVICE_SOCKET_LOGIN', { ticket: result.socketTicket });
+      return;
+    }
+    var messages = {
+      not_found: '这台设备还没有长期登录凭据，请使用邀请码进入并完成首次确认。',
+      revoked: '这台设备的登录凭据已被撤销，请使用邀请码或游戏码恢复。',
+      expired: '设备登录凭据已过期，请使用邀请码或游戏码恢复。',
+      https_required: '当前线上地址是 HTTP，生产设备自动登录必须先配置 HTTPS。',
+      credential_corrupt: '本机设备凭据无法解密，请退出设备登录后重新建档。',
+      safe_storage_unavailable: 'Windows 安全凭据存储不可用，不能保存长期登录令牌。',
+      network_error: '自动登录请求失败，可继续使用邀请码进入。'
+    };
+    setDesktopStatus(messages[result.reason] || '未能自动登录，可继续使用邀请码进入。', result.reason === 'https_required' ? 'error' : '');
+  }
+
+  async function enterByInvite() {
+    var inviteCode = String(byId('lobby-invite-code-input')?.value || '').trim().toUpperCase();
+    var nickname = String(byId('lobby-nickname-input')?.value || '').trim();
+    if (!inviteCode || !nickname) return alert('请输入本场邀请码和昵称。');
+    if (byId('steam-account-select')?.style.display !== 'none' && !selectedSteamAccount) return alert('请先选择本场使用的 Steam 账号。');
+    var loginSocket = getLoginSocket();
+    if (!loginSocket) return alert('大厅连接尚未初始化，请刷新页面重试。');
+    var steamClaimTicket;
+    if (selectedSteamAccount && desktopApi()) {
+      var claimResult = await desktopApi().authenticateDevice(selectedSteamAccount.accountRef, 'steamClaim');
+      if (claimResult.ok) steamClaimTicket = claimResult.steamClaimTicket;
+      else setDesktopStatus('Steam 声明暂时无法提交，仍将以临时身份进入：' + (claimResult.reason || '未知错误'), 'error');
+    }
+    loginSocket.emit('LOBBY_INVITE_LOGIN', {
+      inviteCode: inviteCode,
+      nickname: nickname,
+      steamClaimTicket: steamClaimTicket
+    });
+  }
+
+  function enterByLegacyCode() {
+    var credential = String(byId('v1333-game-login-code-input')?.value || '').trim();
+    if (!credential) return alert('请输入游戏内返回的码或管理员密码。');
+    var loginSocket = getLoginSocket();
+    if (!loginSocket) return alert('大厅连接尚未初始化，请刷新页面重试。');
+    loginSocket.emit('GAME_CODE_LOGIN', { credential: credential });
+  }
+
+  function submitSteamConfirmation() {
+    var code = String(byId('steam-confirm-code-input')?.value || '').trim().toUpperCase();
+    if (!code) return alert('请输入 CS2 中显示的 6 位 Steam 确认码。');
+    getLoginSocket()?.emit('STEAM_CONFIRM_CODE', { code: code });
+  }
+
+  async function logoutDevice() {
+    var api = desktopApi();
+    if (!api) return;
+    var result = await api.logoutDevice();
+    if (!result.ok) return alert('退出设备登录失败：' + (result.reason || '未知错误'));
+    if (result.remoteRevocationPending) alert('本机已退出登录，但服务端令牌尚未确认撤销。请管理员在身份诊断中撤销该设备。');
+    window.location.reload();
+  }
+
+  function setServerStatus(text, online, hasConnectUrl, joinAllowed) {
     var dot = byId('v1333-server-dot');
     var label = byId('v1333-server-status');
-    var btn = byId('v1333-connect-server-btn');
-    var lobbyBtn = byId('v1333-lobby-connect-server-btn');
+    ['v1333-connect-server-btn', 'v1333-lobby-connect-server-btn'].forEach(function (id) {
+      var button = byId(id);
+      if (button) button.disabled = !(joinAllowed && hasConnectUrl);
+    });
     if (dot) {
       dot.style.background = online ? '#16a34a' : '#dc2626';
       dot.style.boxShadow = online ? '0 0 0 3px rgba(22,163,74,.18)' : '0 0 0 3px rgba(220,38,38,.16)';
     }
     if (label) label.textContent = text;
-    if (btn) {
-      btn.disabled = !(joinAllowed && hasConnectUrl);
-      btn.title = hasConnectUrl
-        ? (joinAllowed ? (online ? '通过 Steam 协议连接服务器' : '服务器可连接，桥接插件未就绪，战绩可能暂不可用') : '服务器离线或桥接插件未连接')
-        : '未配置 GAME_SERVER_CONNECT_URL 或 GAME_SERVER_ADDRESS';
-    }
-    if (lobbyBtn) {
-      lobbyBtn.disabled = !(joinAllowed && hasConnectUrl);
-      lobbyBtn.title = hasConnectUrl ? '通过 Steam 协议重连草人杯服务器' : '未配置服务器连接地址';
-    }
   }
 
-  function bootGameCodeLogin() {
-    var loginArea = byId('login-area') || document.body;
-    var panel = byId('v1333-game-code-login-panel');
-    if (!panel) return;
-    hideDesktopClientDownloadInClient();
-    ensureDesktopClientRefreshButton();
-
-    Array.prototype.forEach.call(loginArea.querySelectorAll('button'), function (el) {
-      if (el.id !== 'v1333-connect-server-btn' && el.id !== 'v1335-enter-lobby-btn') el.style.display = 'none';
-    });
-
-    var input = byId('v1333-game-login-code-input');
-    var connectBtn = byId('v1333-connect-server-btn');
-    var lobbyConnectBtn = byId('v1333-lobby-connect-server-btn');
-    var enterBtn = byId('v1335-enter-lobby-btn');
-    var lastStatus = null;
-
-    function refreshStatus() {
-      fetch('/api/public/server-status', { cache: 'no-store' })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          lastStatus = data || {};
-          var hasConnectUrl = !!lastStatus.connectUrl;
-          if (lastStatus.pluginReady || lastStatus.online) {
-            setStatus('草人杯服务器在线，战绩插件已连接', true, hasConnectUrl, true);
-          } else if (lastStatus.joinAllowed !== false && hasConnectUrl) {
-            setStatus('服务器可连接，桥接插件未就绪，战绩可能暂不可用', false, hasConnectUrl, true);
-          } else {
-            setStatus('草人杯服务器离线或插件未连接', false, hasConnectUrl, false);
-          }
-        })
-        .catch(function () {
-          lastStatus = null;
-          setStatus('无法读取服务器状态', false, false, false);
-        });
-    }
-
-    if (connectBtn) {
-      connectBtn.addEventListener('click', function () {
-        var url = lastStatus && lastStatus.connectUrl;
-        if (!url) {
-          alert('服务器连接地址未配置。请在网页端环境变量里设置 GAME_SERVER_CONNECT_URL，推荐使用 steam://connect/IP:端口。');
-          return;
-        }
-        window.location.href = url;
-      });
-    }
-
-    if (lobbyConnectBtn) {
-      lobbyConnectBtn.addEventListener('click', function () {
-        if (connectBtn) connectBtn.click();
-      });
-    }
-
-    function enterLobby() {
-      var credential = input ? input.value.trim() : '';
-      if (!credential) {
-        alert('请输入游戏内返回的码或管理员密码。');
-        if (input) input.focus();
-        return;
-      }
-      var loginSocket = getLoginSocket();
-      if (!loginSocket) {
-        alert('网页 Socket 尚未初始化，请按 Ctrl+F5 强制刷新后重试。');
-        return;
-      }
-      loginSocket.emit('GAME_CODE_LOGIN', { credential: credential });
-    }
-
-    if (input) {
-      input.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') enterLobby();
-      });
-    }
-
-    if (enterBtn) {
-      enterBtn.addEventListener('click', enterLobby);
-    }
-
-    refreshStatus();
-    setInterval(refreshStatus, 5000);
+  function refreshServerStatus() {
+    fetch('/api/public/server-status', { cache: 'no-store' }).then(function (response) { return response.json(); }).then(function (data) {
+      lastServerStatus = data || {};
+      var hasUrl = !!lastServerStatus.connectUrl;
+      if (lastServerStatus.pluginReady || lastServerStatus.online) setServerStatus('草人杯服务器在线，桥接插件已连接', true, hasUrl, true);
+      else if (lastServerStatus.joinAllowed !== false && hasUrl) setServerStatus('服务器可连接，桥接插件暂未就绪', false, hasUrl, true);
+      else setServerStatus('草人杯服务器离线或插件未连接', false, hasUrl, false);
+    }).catch(function () { setServerStatus('无法读取服务器状态', false, false, false); });
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootGameCodeLogin);
-  else bootGameCodeLogin();
+  function connectServer() {
+    if (!lastServerStatus?.connectUrl) return alert('服务器连接地址未配置。');
+    window.location.href = lastServerStatus.connectUrl;
+  }
+
+  function updateIdentityUi(player) {
+    if (!player) return;
+    var identity = byId('my-identity-level');
+    var confirmation = byId('my-confirmation-state');
+    var reason = byId('my-confirmation-reason');
+    var panel = byId('steam-confirm-panel');
+    var identityText = player.identityLevel === 'longTerm' ? '长期玩家' : '临时参赛者';
+    var confirmationLabels = { pending: '本场待确认', confirmed: '本场已确认', unavailable: '未提供 Steam 声明', mismatch: 'Steam 不一致' };
+    if (identity) identity.textContent = identityText;
+    if (confirmation) {
+      confirmation.textContent = confirmationLabels[player.confirmationState] || '确认状态未知';
+      confirmation.className = 'tag ' + (player.confirmationState === 'confirmed' ? 'tag-green' : (player.confirmationState === 'mismatch' ? 'tag-red' : 'tag-gray'));
+    }
+    if (reason) {
+      reason.textContent = player.confirmationReason ? '未确认原因：' + player.confirmationReason : '';
+      reason.style.display = player.confirmationReason ? 'block' : 'none';
+    }
+    if (panel) panel.style.display = player.identityLevel === 'temporary' && player.confirmationState === 'pending' ? 'flex' : 'none';
+    if (byId('device-logout-btn')) byId('device-logout-btn').style.display = isDesktopClient() && player.identityLevel === 'longTerm' ? 'inline-flex' : 'none';
+  }
+
+  function renderIdentityAdmin(data) {
+    if (data.lobbyAccess && byId('admin-lobby-invite')) {
+      byId('admin-lobby-invite').textContent = '本场邀请码：' + data.lobbyAccess.inviteCode + '，有效至 ' + new Date(data.lobbyAccess.inviteExpiresAt).toLocaleString('zh-CN');
+    }
+    if (!data.memberships || !byId('identity-admin-list')) return;
+    var rows = data.memberships.map(function (member) {
+      var devices = (member.devices || []).filter(function (device) { return device.status !== 'revoked'; });
+      var operations = member.identityLevel === 'temporary'
+        ? '<button type="button" onclick="clearIdentityClaim(\'' + escapeHtml(member.membershipId) + '\')">清除声明</button>'
+        : devices.map(function (device, index) {
+          return '<button type="button" onclick="revokeIdentityDevice(\'' + escapeHtml(member.identityId) + '\',\'' + escapeHtml(device.tokenId) + '\')">撤销设备 ' + (index + 1) + '</button>';
+        }).join(' ') + (devices.length ? ' <button type="button" onclick="revokeIdentityTokens(\'' + escapeHtml(member.identityId) + '\')">撤销全部</button>' : '无有效设备');
+      return '<tr><td>' + escapeHtml(member.nickname) + '</td><td>' + escapeHtml(member.identityLevel) + '</td><td>' + escapeHtml(member.confirmationState) + '</td><td>' + escapeHtml(member.confirmationReason || '-') + '</td><td>' + escapeHtml(member.claimedSteamIdMasked || '-') + '</td><td>' + operations + '</td></tr>';
+    }).join('');
+    byId('identity-admin-list').innerHTML = '<table class="identity-admin-table"><thead><tr><th>昵称</th><th>身份</th><th>本场确认</th><th>原因</th><th>SteamID</th><th>恢复操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function refreshIdentityAdmin() { getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'GET_STATUS' }); }
+  function rotateIdentityInvite() { if (confirm('确认更换本场邀请码？旧邀请码会立即失效。')) getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'ROTATE_INVITE' }); }
+  function clearIdentityClaim(membershipId) { getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'CLEAR_CLAIM', membershipId: membershipId }); }
+  function revokeIdentityDevice(identityId, tokenId) { if (confirm('确认撤销这一台设备的登录令牌？')) getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_DEVICE', identityId: identityId, tokenId: tokenId }); }
+  function revokeIdentityTokens(identityId) { if (confirm('确认撤销该长期身份的全部设备令牌？')) getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_ALL_TOKENS', identityId: identityId }); }
+  Object.assign(window, { refreshIdentityAdmin, rotateIdentityInvite, clearIdentityClaim, revokeIdentityDevice, revokeIdentityTokens });
+
+  async function boot() {
+    if (isDesktopClient()) {
+      ['caoren-desktop-client-download', 'caoren-desktop-client-github-download'].forEach(function (id) { if (byId(id)) byId(id).style.display = 'none'; });
+    }
+    try {
+      var capabilities = await fetch('/api/public/auth-capabilities', { cache: 'no-store' }).then(function (response) { return response.json(); });
+      deviceLoginAvailable = capabilities.deviceAuthAvailable === true;
+      if (!deviceLoginAvailable && capabilities.requiresHttps) setDesktopStatus('当前生产地址为 HTTP：邀请码可用，设备自动登录需配置 HTTPS。', 'error');
+    } catch (_error) {
+      setDesktopStatus('无法读取登录安全状态，可继续使用邀请码。', 'error');
+    }
+
+    byId('steam-account-refresh-btn')?.addEventListener('click', function () { refreshSteamAccounts(true); });
+    byId('steam-account-select')?.addEventListener('change', function (event) { selectSteamAccount(event.target.value); });
+    byId('lobby-invite-enter-btn')?.addEventListener('click', enterByInvite);
+    byId('v1335-enter-lobby-btn')?.addEventListener('click', enterByLegacyCode);
+    byId('steam-confirm-code-btn')?.addEventListener('click', submitSteamConfirmation);
+    byId('device-logout-btn')?.addEventListener('click', logoutDevice);
+    byId('v1333-connect-server-btn')?.addEventListener('click', connectServer);
+    byId('v1333-lobby-connect-server-btn')?.addEventListener('click', connectServer);
+    byId('lobby-nickname-input')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') enterByInvite(); });
+    byId('v1333-game-login-code-input')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') enterByLegacyCode(); });
+    byId('steam-confirm-code-input')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') submitSteamConfirmation(); });
+
+    var loginSocket = getLoginSocket();
+    if (loginSocket?.on) {
+      loginSocket.on('DEVICE_ENROLLMENT_READY', async function (data) {
+        var api = desktopApi();
+        if (!api) return setDesktopStatus('长期身份已确认；请使用桌面客户端保存设备自动登录。');
+        var result = await api.enrollDevice(data.enrollmentCode);
+        setDesktopStatus(result.ok ? '设备凭据已安全保存，以后打开客户端会自动进入大厅。' : '身份已确认，但设备凭据保存失败：' + (result.reason || '未知错误'), result.ok ? 'success' : 'error');
+      });
+      loginSocket.on('IDENTITY_ADMIN_ACTION', function (data) {
+        if (data.success && data.action === 'GET_STATUS') renderIdentityAdmin(data);
+        else if (data.success) refreshIdentityAdmin();
+      });
+      loginSocket.on('GAME_STATE', function () {
+        setTimeout(function () {
+          updateIdentityUi(window._currentPlayer);
+          if (window._currentPlayer?.role === 'Admin') refreshIdentityAdmin();
+        }, 0);
+      });
+    }
+    await refreshSteamAccounts(true);
+    refreshServerStatus();
+    setInterval(refreshServerStatus, 5000);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
-/* v1.3.5 game-code-login client end */

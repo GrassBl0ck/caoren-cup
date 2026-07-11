@@ -1,6 +1,7 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
@@ -46,6 +47,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly HashSet<string> _teamAssignmentBypass = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WebPlayerState> _webPlayersBySteamId = new(StringComparer.Ordinal);
     private readonly List<WebPlayerState> _lastNoticeMissingTargets = new();
+    private readonly ConcurrentDictionary<string, long> _shownIdentityChallenges = new(StringComparer.Ordinal);
     private bool _teamLockEnabled;
     private int _teamAssignmentsValidFromRound;
     private int _teamAssignmentsValidUntilRound;
@@ -913,6 +915,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             var text = await response.Content.ReadAsStringAsync();
             if (response.IsSuccessStatusCode)
             {
+                ProcessIdentityConfirmationChallenges(text);
                 LogDebug("Snapshot OK: {Text}", text);
             }
             else
@@ -1179,6 +1182,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
             if (response.IsSuccessStatusCode)
             {
+                ProcessIdentityConfirmationChallenges(text);
                 LogDebug("Snapshot seq={Sequence} OK: {Text}", sequence, text);
             }
             else
@@ -1203,6 +1207,58 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (now - _lastPlayerHurtWarningUtc < TimeSpan.FromSeconds(10)) return false;
         _lastPlayerHurtWarningUtc = now;
         return true;
+    }
+
+    private void ProcessIdentityConfirmationChallenges(string responseText)
+    {
+        PluginSnapshotResponse? snapshot;
+        try
+        {
+            snapshot = JsonSerializer.Deserialize<PluginSnapshotResponse>(responseText, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to parse identity confirmation challenges");
+            return;
+        }
+
+        var challenges = snapshot?.ConfirmationChallenges?.ToArray() ?? [];
+        if (challenges.Length == 0) return;
+        Server.NextFrame(() => ShowIdentityConfirmationChallenges(challenges));
+    }
+
+    private void ShowIdentityConfirmationChallenges(IReadOnlyList<PluginIdentityConfirmationChallenge> challenges)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        foreach (var expiredId in _shownIdentityChallenges.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray())
+        {
+            _shownIdentityChallenges.TryRemove(expiredId, out _);
+        }
+
+        foreach (var challenge in challenges)
+        {
+            if (string.IsNullOrWhiteSpace(challenge.ChallengeId) ||
+                string.IsNullOrWhiteSpace(challenge.SteamId) ||
+                string.IsNullOrWhiteSpace(challenge.Code) ||
+                challenge.ExpiresAt <= now ||
+                _shownIdentityChallenges.ContainsKey(challenge.ChallengeId))
+            {
+                continue;
+            }
+
+            var player = Utilities.GetPlayers().FirstOrDefault(candidate =>
+                IsRealPlayer(candidate) && string.Equals(candidate.SteamID.ToString(), challenge.SteamId, StringComparison.Ordinal));
+            if (player == null) continue;
+
+            if (!_shownIdentityChallenges.TryAdd(challenge.ChallengeId, challenge.ExpiresAt)) continue;
+            var code = challenge.Code.Trim().ToUpperInvariant();
+            ReplyToPlayer(player, "[草人杯] =================================");
+            ReplyToPlayer(player, $"[草人杯]  本场 Steam 确认码： {code}");
+            ReplyToPlayer(player, "[草人杯]  请回到草人杯客户端输入，只需首次绑定时确认一次");
+            ReplyToPlayer(player, "[草人杯]  10 分钟内有效；不要把确认码告诉其他人");
+            ReplyToPlayer(player, "[草人杯] =================================");
+            ReplyToPlayerCenter(player, $"Steam 确认码：{code}\n请回草人杯客户端输入");
+        }
     }
 
     private async Task ProcessPluginCommandAsync(PluginCommand command)
@@ -2084,8 +2140,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         ReplyToPlayer(player, "[草人杯] =================================");
         ReplyToPlayer(player, $"[草人杯]  你的网页登录码： {displayCode}");
         ReplyToPlayer(player, "[草人杯]  请立即回网页输入这个码进入大厅");
-        ReplyToPlayer(player, "[草人杯]  网页掉线后也可继续使用这个码恢复");
-        ReplyToPlayer(player, $"[草人杯]  有效期：{validText}；重新获取新码后旧码失效");
+        ReplyToPlayer(player, "[草人杯]  这是单次登录码；网页验证成功后立即失效");
+        ReplyToPlayer(player, $"[草人杯]  未使用时有效期：{validText}；重新获取新码后旧码失效");
         ReplyToPlayer(player, "[草人杯] =================================");
         ReplyToPlayerCenter(player, $"网页登录码：{displayCode}\n请回网页输入");
     }
@@ -2245,6 +2301,27 @@ public sealed class PluginGameLoginCodeResponse
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }
+}
+
+public sealed class PluginSnapshotResponse
+{
+    [JsonPropertyName("confirmationChallenges")]
+    public List<PluginIdentityConfirmationChallenge> ConfirmationChallenges { get; set; } = [];
+}
+
+public sealed class PluginIdentityConfirmationChallenge
+{
+    [JsonPropertyName("challengeId")]
+    public string ChallengeId { get; set; } = string.Empty;
+
+    [JsonPropertyName("steamId")]
+    public string SteamId { get; set; } = string.Empty;
+
+    [JsonPropertyName("code")]
+    public string Code { get; set; } = string.Empty;
+
+    [JsonPropertyName("expiresAt")]
+    public long ExpiresAt { get; set; }
 }
 
 public sealed class PluginCommand

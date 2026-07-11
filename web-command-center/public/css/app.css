@@ -2725,3 +2725,70 @@ body[data-theme="dark"] .funfact-text {
 body[data-theme="dark"] .funfact-text strong {
     color: #ffffff !important;
 }
+/* Lobby identity and desktop login */
+.identity-login-status,
+.steam-account-section,
+.lobby-invite-form,
+.legacy-login-details,
+.identity-admin-panel {
+    border: 1px solid #d8dee9;
+    border-radius: 6px;
+    background: #f8fafc;
+}
+
+.identity-login-status {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    color: #334155;
+}
+
+.identity-login-status.is-error { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+.identity-login-status.is-success { border-color: #86efac; background: #f0fdf4; color: #166534; }
+
+.steam-account-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding: 12px;
+}
+
+.muted-line { color: #64748b; font-size: 13px; line-height: 1.6; }
+
+.lobby-invite-form {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) auto;
+    gap: 10px;
+    align-items: end;
+    padding: 14px;
+    background: #fff;
+}
+
+.lobby-invite-form label { display: grid; gap: 6px; color: #334155; font-size: 13px; font-weight: 700; }
+.lobby-invite-form input { width: 100%; box-sizing: border-box; }
+.legacy-login-details { margin-top: 12px; padding: 10px 12px; }
+.legacy-login-details summary { cursor: pointer; font-weight: 700; color: #475569; }
+.legacy-login-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.legacy-login-row input { flex: 1 1 280px; }
+.legacy-login-details p { margin: 10px 0 0; color: #64748b; font-size: 13px; }
+
+.identity-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+.identity-reason { margin-top: 8px; color: #b91c1c; font-size: 13px; font-weight: 700; }
+.steam-confirm-panel { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.steam-confirm-panel input { min-width: 230px; }
+.legacy-bind-line { margin: 8px 0 0; color: #64748b; font-size: 12px; }
+.identity-toolbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+.identity-admin-panel { margin-bottom: 14px; padding: 12px; }
+.identity-admin-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.identity-admin-header > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; }
+.identity-admin-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+.identity-admin-table th, .identity-admin-table td { padding: 8px; border-bottom: 1px solid #e2e8f0; text-align: left; font-size: 13px; }
+
+@media (max-width: 760px) {
+    .steam-account-section { align-items: stretch; flex-direction: column; }
+    .lobby-invite-form { grid-template-columns: 1fr; }
+    .identity-admin-header { align-items: stretch; flex-direction: column; }
+    .identity-toolbar-actions { justify-content: flex-start; }
+}

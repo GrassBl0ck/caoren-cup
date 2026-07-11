@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameSession, GamePhase, Player, RosterTeam } from './types';
 import { getDefaultTaskTemplate } from './task-system';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds } from './duel-config';
+import { createLobbyAccess } from './identity/lobby-access';
 
 let gameSession: GameSession;
 
@@ -17,6 +18,7 @@ export const createInitialSession = (): GameSession => {
         sessionId: uuidv4(),
         phase: GamePhase.Lobby,
         matchId: uuidv4(),
+        lobbyAccess: createLobbyAccess(),
         matchOptions: {
             matchMode: 'competitive',
             matchController: 'matchzy',
@@ -94,6 +96,10 @@ export const resetSessionWithPlayers = (reason?: string): GameSession => {
             name: old.name,
             role: old.role,
             steamId: old.steamId,
+            identityId: old.identityId,
+            identityLevel: old.identityLevel,
+            confirmationState: old.identityLevel === 'longTerm' ? 'pending' : old.confirmationState,
+            confirmationReason: old.identityLevel === 'longTerm' ? undefined : old.confirmationReason,
             bindCode: old.bindCode || Math.floor(1000 + Math.random() * 9000).toString(),
             isReady: false,
         };
