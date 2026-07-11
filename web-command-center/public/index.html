@@ -56,20 +56,28 @@
                 <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.6.3.zip" download style="display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:6px;background:#0f172a;color:#fff;text-decoration:none;font-weight:700;">下载桌面客户端</a>
                 <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.6.3" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:6px;background:#475569;color:#fff;text-decoration:none;font-weight:700;">GitHub 备用下载</a>
             </div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <input id="v1333-game-login-code-input" type="text" placeholder="输入游戏内返回的码或管理员密码" style="width:min(460px,100%);box-sizing:border-box;" autocomplete="one-time-code" />
-                <button id="v1335-enter-lobby-btn" type="button">加入大厅</button>
+            <div id="desktop-auth-status" class="identity-login-status" aria-live="polite">正在检查设备登录状态...</div>
+            <div id="steam-account-section" class="steam-account-section">
+                <div>
+                    <strong>本机 Steam 账号</strong>
+                    <div id="steam-account-status" class="muted-line">等待桌面客户端读取</div>
+                </div>
+                <select id="steam-account-select" style="display:none;min-width:260px;"></select>
+                <button id="steam-account-refresh-btn" type="button" title="重新读取本机 Steam 账号">重新检测</button>
             </div>
-            <div class="login-steps">
-                <strong style="font-size:18px;">玩家进入步骤</strong>
-                <ol>
-                    <li>点击“连接至草人杯服务器”，进入 CS2 服务器。</li>
-                    <li>在游戏聊天框输入 <code>!cclogin</code>。</li>
-                    <li>复制游戏内显示的 <b>6 位网页登录码</b>。</li>
-                    <li>回到这里输入网页登录码，点击“加入大厅”或按 Enter。</li>
-                </ol>
-                <p style="margin:8px 0 0;color:#64748b;font-size:14px;line-height:1.7;">管理员在同一输入框输入管理员密码即可直接进入。旧 4 位绑定码只作为兼容信息，不再作为玩家登录主入口。</p>
+            <div class="lobby-invite-form">
+                <label>本场邀请码<input id="lobby-invite-code-input" type="text" maxlength="8" autocomplete="one-time-code" placeholder="8 位邀请码"></label>
+                <label>昵称<input id="lobby-nickname-input" type="text" maxlength="32" autocomplete="nickname" placeholder="本场显示昵称"></label>
+                <button id="lobby-invite-enter-btn" type="button">进入大厅</button>
             </div>
+            <details class="legacy-login-details">
+                <summary>使用游戏内登录码或管理员登录</summary>
+                <div class="legacy-login-row">
+                    <input id="v1333-game-login-code-input" type="text" placeholder="6 位游戏码或管理员密码" autocomplete="one-time-code" />
+                    <button id="v1335-enter-lobby-btn" type="button">验证并进入</button>
+                </div>
+                <p>首次识别失败、换电脑或 Steam 账号不一致时，可在 CS2 输入 <code>!cclogin</code> 或 <code>!cccode</code> 获取游戏码。</p>
+            </details>
             <section id="lobby-announcement-public" class="lobby-announcement" style="display:none;" aria-live="polite">
                 <div class="lobby-announcement-header">
                     <span class="status-chip">大厅公告</span>
@@ -82,11 +90,32 @@
         <input id="extra-input" type="hidden" />
     </div>
     <div id="lobby-area" style="display:none;">
-        <div class="toolbar-row panel" style="margin-bottom:14px;"><div><div class="status-chip">当前身份信息</div><p style="margin:10px 0 0; font-size:16px;">欢迎，<span id="my-name"></span>。你的网页登录码：<strong id="my-bindcode"></strong></p><div style="margin-top:8px; color:#334155; font-size:13px; line-height:1.7; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 10px;"><b>请牢记 6 位网页登录码。</b> 玩家从游戏内 <code>!cclogin</code> 获取的码可用于进入大厅，也可在网页掉线后恢复。管理员使用管理员密码进入。</div></div><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end;"><button id="v1333-lobby-connect-server-btn" type="button" disabled>重连服务器</button><div id="timer-display"></div><div id="lobby-notification-display" style="display:none;"></div></div></div>
+        <div class="toolbar-row panel identity-toolbar" style="margin-bottom:14px;">
+            <div>
+                <div class="status-chip">当前身份</div>
+                <p style="margin:10px 0 6px;font-size:16px;">欢迎，<span id="my-name"></span></p>
+                <div class="identity-badges"><span id="my-identity-level" class="tag tag-gray">身份读取中</span><span id="my-confirmation-state" class="tag tag-gray">确认状态读取中</span></div>
+                <div id="my-confirmation-reason" class="identity-reason" style="display:none;"></div>
+                <div id="steam-confirm-panel" class="steam-confirm-panel" style="display:none;">
+                    <input id="steam-confirm-code-input" type="text" maxlength="6" placeholder="输入 CS2 显示的确认码" autocomplete="one-time-code">
+                    <button id="steam-confirm-code-btn" type="button">确认 Steam 身份</button>
+                </div>
+                <p class="legacy-bind-line">故障恢复码：<strong id="my-bindcode"></strong></p>
+            </div>
+            <div class="identity-toolbar-actions">
+                <button id="v1333-lobby-connect-server-btn" type="button" disabled>连接 CS2</button>
+                <button id="device-logout-btn" type="button" style="display:none;">退出设备登录</button>
+                <div id="timer-display"></div><div id="lobby-notification-display" style="display:none;"></div>
+            </div>
+        </div>
         <p id="my-identity" style="font-weight:bold; color: #0056b3; font-size: 18px;"></p>
         <div class="player-list" id="player-list"></div>
         <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
             <h3 style="margin-top:0;">管理员控制区</h3>
+            <section class="identity-admin-panel">
+                <div class="identity-admin-header"><div><strong>大厅身份与邀请码</strong><div id="admin-lobby-invite" class="muted-line">邀请码读取中</div></div><div><button type="button" onclick="refreshIdentityAdmin()">刷新</button><button type="button" onclick="rotateIdentityInvite()">更换邀请码</button></div></div>
+                <div id="identity-admin-list" class="muted-line">身份状态读取中</div>
+            </section>
 
             <div class="admin-tabs" role="tablist" aria-label="管理员功能标签">
                 <button type="button" class="admin-tab-btn" data-admin-tab="announcement" role="tab" aria-controls="admin-tab-announcement" onclick="switchAdminTab('announcement')">公告</button>

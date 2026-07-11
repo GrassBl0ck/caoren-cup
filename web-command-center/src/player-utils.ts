@@ -82,6 +82,9 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
     const revealAllPostgame = session.phase === 'Scoreboard';
     const s: any = { ...session };
     s.serverNow = Date.now();
+    s.lobbyAccess = viewer?.role === 'Admin'
+        ? { ...session.lobbyAccess }
+        : { inviteExpiresAt: session.lobbyAccess?.inviteExpiresAt };
     s.players = {};
     for (const [id, p] of Object.entries(session.players)) {
         const revealRole = revealAllPostgame || shouldRevealRoleToViewer(viewer, p, session.rolesReleased);
@@ -89,11 +92,14 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
         const revealTaskActionLog = revealAllPostgame || shouldRevealTaskActionLogToViewer(viewer, p, session.rolesReleased);
         s.players[id] = {
             playerId: p.playerId, name: p.name, role: p.role,
+            identityLevel: p.identityLevel,
+            confirmationState: p.confirmationState,
+            confirmationReason: viewer?.role === 'Admin' || p.playerId === viewerId ? p.confirmationReason : undefined,
             gameRole: revealRole ? p.gameRole : undefined,
             rosterTeam: p.rosterTeam, team: p.team, isReady: p.isReady,
             undercoverTaskAckStage: p.undercoverTaskAckStage,
             steamIdBound: !!p.steamId,
-            steamId: p.steamId,
+            steamId: revealAllPostgame || viewer?.role === 'Admin' || p.playerId === viewerId ? p.steamId : undefined,
             finalScore: p.finalScore, scoreBreakdown: p.scoreBreakdown,
             stats: p.stats,
             sideStats: p.sideStats,

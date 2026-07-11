@@ -34,8 +34,11 @@ import {
 } from './plugin-command-queue';
 import { ADMIN_PASSWORD } from './game-constants';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds, normalizeDuelMap, normalizeDuelRoundTimeMinutes, normalizeDuelRounds, normalizeDuelUtilityMode, normalizeDuelWorkshopId } from './duel-config';
+import { registerIdentityAuthRoutes } from './identity/auth-routes';
+import { initializeIdentityRuntime } from './identity/identity-runtime';
 
 const app = express();
+if (process.env.TRUST_PROXY === 'loopback') app.set('trust proxy', 'loopback');
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static('public', {
     setHeaders: (res, filePath) => {
@@ -60,6 +63,7 @@ app.use(express.static('public', {
     }
 }));
 const upload = multer({ storage: multer.memoryStorage() });
+registerIdentityAuthRoutes(app);
 
 restoreSessionSnapshot();
 
@@ -185,4 +189,9 @@ setInterval(() => {
 }, 1000);
 
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => console.log(`草人杯指挥台已启动: http://localhost:${PORT}`));
+initializeIdentityRuntime()
+    .then(() => httpServer.listen(PORT, () => console.log(`草人杯指挥台已启动: http://localhost:${PORT}`)))
+    .catch((error) => {
+        console.error('[IdentityStore] 身份库加载失败，服务未启动：', error);
+        process.exitCode = 1;
+    });

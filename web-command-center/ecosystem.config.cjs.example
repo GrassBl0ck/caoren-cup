@@ -8,6 +8,7 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: "3000",
+        TRUST_PROXY: "loopback",
         ADMIN_PASSWORD: "CHANGE_ME_ADMIN_PASSWORD",
         PLUGIN_TOKEN: "CHANGE_ME_TO_A_LONG_RANDOM_SECRET",
         DRAFT_PICK_SECONDS: "20",
