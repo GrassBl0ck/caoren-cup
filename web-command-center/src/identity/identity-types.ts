@@ -1,3 +1,5 @@
+import { PasswordCredential } from './password-auth';
+
 export type IdentityLevel = 'temporary' | 'longTerm';
 export type ConfirmationState = 'pending' | 'confirmed' | 'unavailable' | 'mismatch';
 
@@ -10,6 +12,10 @@ export interface IdentityRecord {
     identityId: string;
     displayName: string;
     steamId?: string;
+    fixedAccount?: {
+        enabled: boolean;
+        password: PasswordCredential;
+    };
     createdAt: number;
     updatedAt: number;
 }
@@ -59,6 +65,13 @@ export interface DeviceTokenRecord {
 }
 
 export interface IdentityStoreData {
+    schemaVersion: 2;
+    identities: Record<string, IdentityRecord>;
+    memberships: Record<string, LobbyMembershipRecord>;
+    deviceTokens: Record<string, DeviceTokenRecord>;
+}
+
+export interface IdentityStoreDataV1 {
     schemaVersion: 1;
     identities: Record<string, IdentityRecord>;
     memberships: Record<string, LobbyMembershipRecord>;

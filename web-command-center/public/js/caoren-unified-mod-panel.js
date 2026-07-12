@@ -376,6 +376,8 @@
   }
 
   function findCaorenPanel() {
+    const exactPanel = document.getElementById('caoren-mod-panel');
+    if (exactPanel) return exactPanel;
     const nodes = Array.from(document.querySelectorAll('section, div, main, article'));
     let best = null;
     let bestScore = -1;

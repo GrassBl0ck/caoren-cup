@@ -382,6 +382,19 @@
       .cc-audio-panel.minimized .cc-audio-body {
         display: none;
       }
+      @media (max-width: 600px) {
+        .cc-audio-panel {
+          position: relative;
+          right: auto;
+          bottom: auto;
+          width: auto;
+          max-width: none;
+          margin: 12px;
+        }
+        .cc-audio-panel.minimized {
+          width: auto;
+        }
+      }
     `;
     document.head.appendChild(style);
 

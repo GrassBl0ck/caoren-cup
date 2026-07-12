@@ -35,3 +35,19 @@ export const attachMembershipToSession = (session: GameSession, membership: Lobb
     player.isOnline = true;
     return player;
 };
+
+export const removeIdentityFromSession = (session: GameSession, identityId: string): Player | undefined => {
+    const player = Object.values(session.players).find((candidate) =>
+        candidate.identityId === identityId && candidate.role !== 'Admin',
+    );
+    if (!player) return undefined;
+    const playerId = player.playerId;
+    delete session.players[playerId];
+    session.playerOrder = session.playerOrder.filter((candidate) => candidate !== playerId);
+    session.teams.A.players = session.teams.A.players.filter((candidate) => candidate !== playerId);
+    session.teams.B.players = session.teams.B.players.filter((candidate) => candidate !== playerId);
+    if (session.captains.A === playerId) session.captains.A = null;
+    if (session.captains.B === playerId) session.captains.B = null;
+    delete session.accusations[playerId];
+    return player;
+};

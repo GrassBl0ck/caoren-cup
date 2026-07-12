@@ -53,6 +53,8 @@
   }
 
   function isCurrentUserAdmin() {
+    var controls = document.getElementById('admin-controls');
+    if (controls && controls.classList.contains('is-admin-session')) return true;
     var line = findCurrentUserLine();
     if (!line) return false;
     return /(管理员|admin)/i.test(line);
