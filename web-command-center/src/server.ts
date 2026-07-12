@@ -36,6 +36,8 @@ import { ADMIN_PASSWORD } from './game-constants';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds, normalizeDuelMap, normalizeDuelRoundTimeMinutes, normalizeDuelRounds, normalizeDuelUtilityMode, normalizeDuelWorkshopId } from './duel-config';
 import { registerIdentityAuthRoutes } from './identity/auth-routes';
 import { initializeIdentityRuntime } from './identity/identity-runtime';
+import { lobbyIdentityService } from './identity/identity-runtime';
+import { applyMembershipToPlayer, removeIdentityFromSession } from './identity/session-integration';
 
 const app = express();
 if (process.env.TRUST_PROXY === 'loopback') app.set('trust proxy', 'loopback');
@@ -63,8 +65,6 @@ app.use(express.static('public', {
     }
 }));
 const upload = multer({ storage: multer.memoryStorage() });
-registerIdentityAuthRoutes(app);
-
 restoreSessionSnapshot();
 
 const httpServer = createServer(app);
@@ -84,6 +84,27 @@ const broadcastState = () => {
 const notifyMessage = (msg: string) => {
     io.emit(WsEvents.NOTIFICATION, { message: msg });
 };
+
+registerIdentityAuthRoutes(app, {
+    onFixedAccountChanged: ({ operation, identityId, enabled }) => {
+        const session = getSession();
+        if (operation === 'set_enabled' && enabled === false) {
+            const removed = removeIdentityFromSession(session, identityId);
+            if (removed) {
+                io.to(removed.playerId).emit(WsEvents.LOGIN_RESPONSE, {
+                    success: false,
+                    resetClient: true,
+                    message: '你的固定成员账户已被管理员禁用，本场不能重新进入。',
+                });
+            }
+        } else if (operation === 'rename' || operation === 'create') {
+            const player = Object.values(session.players).find((candidate) => candidate.identityId === identityId);
+            const membership = player?.membershipId ? lobbyIdentityService.getMembership(player.membershipId) : undefined;
+            if (player && membership) applyMembershipToPlayer(player, membership);
+        }
+        broadcastState();
+    },
+});
 
 const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {
     io.emit(WsEvents.LOBBY_ANNOUNCEMENT, { announcement });

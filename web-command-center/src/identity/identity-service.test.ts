@@ -356,3 +356,192 @@ test('temporary identities older than thirty days are pruned without deleting lo
     assert.deepEqual(result, { memberships: 1, identities: 1 });
     assert.equal(Object.values(store.snapshot().identities).some((identity) => identity.steamId === '76561198000000011'), true);
 });
+
+test('administrator provisions a fixed account without storing the plaintext password', async (t) => {
+    const { dir, store, service } = await makeService('fixed-provision');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+    const result = await service.createOrUpdateFixedAccount({
+        steamId: '76561198000000040',
+        nickname: '固定成员甲',
+        password: 'initial-pass',
+    });
+
+    assert.equal(result.created, true);
+    assert.equal(result.identity.steamId, '76561198000000040');
+    assert.equal(result.identity.displayName, '固定成员甲');
+    assert.equal(result.identity.fixedAccount?.enabled, true);
+    assert.equal(JSON.stringify(store.snapshot()).includes('initial-pass'), false);
+});
+
+test('provisioning an existing long-term Steam identity sets its password without duplication', async (t) => {
+    const { dir, store, service } = await makeService('fixed-existing');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const draft = await service.createTemporaryMembership({ sessionId: 'existing-session', nickname: 'Old Name' });
+    const promoted = await service.confirmTrustedIdentity(draft.membershipId, '76561198000000041', 'Old Name');
+    const identityCount = Object.keys(store.snapshot().identities).length;
+
+    const result = await service.createOrUpdateFixedAccount({
+        steamId: '76561198000000041',
+        nickname: '管理员昵称',
+        password: 'another-pass',
+        sessionId: 'existing-session',
+    });
+
+    assert.equal(result.created, false);
+    assert.equal(result.identity.identityId, promoted.identity?.identityId);
+    assert.equal(result.identity.displayName, '管理员昵称');
+    assert.equal(Object.keys(store.snapshot().identities).length, identityCount);
+    assert.equal(service.getMembership(draft.membershipId)?.nickname, '管理员昵称');
+});
+
+test('fixed account provisioning validates SteamID64 and nickname strictly', async (t) => {
+    const { dir, service } = await makeService('fixed-validation');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+    await assert.rejects(service.createOrUpdateFixedAccount({
+        steamId: '7656119-8000000042', nickname: 'Bad Steam', password: 'initial-pass',
+    }), /steam_id_invalid/);
+    await assert.rejects(service.createOrUpdateFixedAccount({
+        steamId: '76561198000000042', nickname: '<b>Bad</b>', password: 'initial-pass',
+    }), /nickname_invalid/);
+});
+
+test('correct fixed password creates and reuses a pending membership for the current session', async (t) => {
+    const { dir, service } = await makeService('fixed-login');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    await service.createOrUpdateFixedAccount({
+        steamId: '76561198000000043', nickname: 'Login Member', password: 'correct-pass',
+    });
+
+    const wrong = await service.authenticateFixedAccount({
+        sessionId: 'fixed-session', steamId: '76561198000000043', password: 'wrong-pass',
+    });
+    assert.deepEqual(wrong, { ok: false, reason: 'password_incorrect' });
+
+    const first = await service.authenticateFixedAccount({
+        sessionId: 'fixed-session', steamId: '76561198000000043', password: 'correct-pass',
+    });
+    const second = await service.authenticateFixedAccount({
+        sessionId: 'fixed-session', steamId: '76561198000000043', password: 'correct-pass',
+    });
+    assert.equal(first.ok, true);
+    assert.equal(second.ok, true);
+    if (!first.ok || !second.ok) throw new Error('fixed login should succeed');
+    assert.equal(first.membership.membershipId, second.membership.membershipId);
+    assert.equal(first.membership.identityLevel, 'longTerm');
+    assert.equal(first.membership.confirmationState, 'pending');
+    assert.equal(first.membership.claimedSteamId, '76561198000000043');
+});
+
+test('blocked fixed membership cannot be bypassed but a new session gets a fresh membership', async (t) => {
+    const { dir, service } = await makeService('fixed-blocked');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    await service.createOrUpdateFixedAccount({
+        steamId: '76561198000000044', nickname: 'Blocked Member', password: 'correct-pass',
+    });
+    const first = await service.authenticateFixedAccount({
+        sessionId: 'blocked-session', steamId: '76561198000000044', password: 'correct-pass',
+    });
+    if (!first.ok) throw new Error('first login should succeed');
+    await service.blockMembership(first.membership.membershipId);
+
+    assert.deepEqual(await service.authenticateFixedAccount({
+        sessionId: 'blocked-session', steamId: '76561198000000044', password: 'correct-pass',
+    }), { ok: false, reason: 'blocked_for_session' });
+
+    const next = await service.authenticateFixedAccount({
+        sessionId: 'next-session', steamId: '76561198000000044', password: 'correct-pass',
+    });
+    assert.equal(next.ok, true);
+    if (!next.ok) throw new Error('next-session login should succeed');
+    assert.notEqual(next.membership.membershipId, first.membership.membershipId);
+    assert.equal(next.membership.confirmationState, 'pending');
+});
+
+test('disabled account rejects login and re-enabling does not clear the current block', async (t) => {
+    const { dir, service } = await makeService('fixed-disabled');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const provisioned = await service.createOrUpdateFixedAccount({
+        steamId: '76561198000000045', nickname: 'Disabled Member', password: 'correct-pass',
+    });
+    const login = await service.authenticateFixedAccount({
+        sessionId: 'disable-session', steamId: '76561198000000045', password: 'correct-pass',
+    });
+    if (!login.ok) throw new Error('initial login should succeed');
+
+    const disabled = await service.setFixedAccountEnabled(provisioned.identity.identityId, false, 'disable-session');
+    assert.equal(disabled?.membership?.blockedAt !== undefined, true);
+    assert.deepEqual(await service.authenticateFixedAccount({
+        sessionId: 'disable-session', steamId: '76561198000000045', password: 'correct-pass',
+    }), { ok: false, reason: 'account_disabled' });
+
+    await service.createOrUpdateFixedAccount({
+        steamId: '76561198000000045', nickname: 'Disabled Member Renamed', password: 'replacement-pass',
+        sessionId: 'disable-session',
+    });
+    assert.deepEqual(await service.authenticateFixedAccount({
+        sessionId: 'disable-session', steamId: '76561198000000045', password: 'replacement-pass',
+    }), { ok: false, reason: 'account_disabled' });
+
+    await service.setFixedAccountEnabled(provisioned.identity.identityId, true, 'disable-session');
+    assert.deepEqual(await service.authenticateFixedAccount({
+        sessionId: 'disable-session', steamId: '76561198000000045', password: 'replacement-pass',
+    }), { ok: false, reason: 'blocked_for_session' });
+});
+
+test('password reset invalidates the old password and survives store reload', async (t) => {
+    const { dir, store, service } = await makeService('fixed-reset');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const account = await service.createOrUpdateFixedAccount({
+        steamId: '76561198000000046', nickname: 'Reset Member', password: 'old-password',
+    });
+    await service.resetFixedAccountPassword(account.identity.identityId, 'new-password');
+    await store.flush();
+
+    const reloadedStore = new IdentityStore(path.join(dir, 'identity-store.json'));
+    await reloadedStore.load();
+    const reloaded = new LobbyIdentityService(reloadedStore);
+
+    assert.deepEqual(await reloaded.authenticateFixedAccount({
+        sessionId: 'reset-session', steamId: '76561198000000046', password: 'old-password',
+    }), { ok: false, reason: 'password_incorrect' });
+    assert.equal((await reloaded.authenticateFixedAccount({
+        sessionId: 'reset-session', steamId: '76561198000000046', password: 'new-password',
+    })).ok, true);
+});
+
+test('same-session nickname collision rejects fixed login and rename', async (t) => {
+    const { dir, service } = await makeService('fixed-nickname-collision');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    await service.createTemporaryMembership({ sessionId: 'collision-session', nickname: 'Taken Name' });
+    const account = await service.createOrUpdateFixedAccount({
+        steamId: '76561198000000047', nickname: 'Taken Name', password: 'correct-pass',
+    });
+
+    assert.deepEqual(await service.authenticateFixedAccount({
+        sessionId: 'collision-session', steamId: '76561198000000047', password: 'correct-pass',
+    }), { ok: false, reason: 'nickname_in_use' });
+    await assert.rejects(
+        service.renameFixedAccount(account.identity.identityId, 'Taken Name', 'collision-session'),
+        /nickname_in_use/,
+    );
+});
+
+test('lobby SteamID list includes active claims and excludes left or blocked memberships', async (t) => {
+    const { dir, service } = await makeService('lobby-steamids');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const active = await service.createTemporaryMembership({
+        sessionId: 'list-session', nickname: 'Active', steamClaim: { steamId: '76561198000000048' },
+    });
+    const blocked = await service.createTemporaryMembership({
+        sessionId: 'list-session', nickname: 'Blocked Claim', steamClaim: { steamId: '76561198000000049' },
+    });
+    const left = await service.createTemporaryMembership({
+        sessionId: 'list-session', nickname: 'Left Claim', steamClaim: { steamId: '76561198000000050' },
+    });
+    await service.blockMembership(blocked.membershipId);
+    await service.leaveMembership(left.membershipId);
+
+    assert.deepEqual(service.listLobbySteamIds('list-session'), [active.claimedSteamId]);
+});

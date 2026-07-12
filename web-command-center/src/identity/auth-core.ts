@@ -10,6 +10,16 @@ export interface SocketLoginTicket {
     sessionId: string;
 }
 
+export type FixedAccountAdminOperation = 'create' | 'rename' | 'reset_password' | 'set_enabled';
+
+export interface FixedAccountAdminTicket {
+    sessionId: string;
+    adminPlayerId: string;
+    operation: FixedAccountAdminOperation;
+    identityId?: string;
+    steamId?: string;
+}
+
 export class EphemeralTicketService<T> {
     private readonly values = new Map<string, { value: T; expiresAt: number }>();
     private readonly now: () => number;

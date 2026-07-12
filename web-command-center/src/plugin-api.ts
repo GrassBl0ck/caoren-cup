@@ -257,12 +257,14 @@ export function registerPluginRoutes(app: express.Express, deps: {
         const session = getSession();
         res.json({
             success: true,
+            generatedAt: Date.now(),
             sessionId: session.sessionId,
             matchId: session.matchId,
             phase: session.phase,
             selectedMap: session.selectedMap,
             selectedSide: session.selectedSide,
             liveGameData: session.liveGameData,
+            lobbySteamIds: lobbyIdentityService.listLobbySteamIds(session.sessionId),
             players: getGamePlayers(session).map(p => ({
                 playerId: p.playerId,
                 name: p.name,

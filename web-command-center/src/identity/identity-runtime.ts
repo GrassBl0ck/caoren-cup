@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { EphemeralTicketService, SocketLoginTicket } from './auth-core';
+import { EphemeralTicketService, FixedAccountAdminTicket, SocketLoginTicket } from './auth-core';
 import { LobbyIdentityService } from './identity-service';
 import { IdentityStore } from './identity-store';
 import { SteamAccountClaim } from './identity-types';
@@ -11,6 +11,8 @@ const identityStorePath = process.env.IDENTITY_STORE_PATH
 export const identityStore = new IdentityStore(identityStorePath);
 export const lobbyIdentityService = new LobbyIdentityService(identityStore);
 export const socketLoginTickets = new EphemeralTicketService<SocketLoginTicket>();
+export const fixedMemberSocketTickets = new EphemeralTicketService<SocketLoginTicket>();
+export const fixedAccountAdminTickets = new EphemeralTicketService<FixedAccountAdminTicket>();
 export const deviceEnrollmentTickets = new EphemeralTicketService<{ identityId: string }>();
 export const steamClaimTickets = new EphemeralTicketService<SteamAccountClaim>();
 

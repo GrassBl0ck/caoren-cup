@@ -122,7 +122,8 @@ function Assert-ZipClean {
         $badEntries = @()
         foreach ($entry in $zip.Entries) {
             $name = $entry.FullName
-            if ($name -match '(^|/)(node_modules|\.vs|bin|obj|runtime|release-build|release-output)(/|$)' -or
+            if ($name.Contains('\') -or
+                $name -match '(^|/)(node_modules|\.vs|bin|obj|runtime|release-build|release-output)(/|$)' -or
                 $name -match '(^|/)backup(_|-|_before_)' -or
                 $name -match '\.(bak|backup|log|zip|rar|7z)(-|$|\.)' -or
                 $name -match '(^|/)(\.env|caoren_config\.json|ecosystem\.config\.cjs)$') {
@@ -138,6 +139,36 @@ function Assert-ZipClean {
     }
 }
 
+function Compress-DirectoryPortable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Source,
+        [Parameter(Mandatory = $true)]
+        [string]$Destination
+    )
+
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $sourceFull = (Resolve-Path $Source).Path
+    $archive = [System.IO.Compression.ZipFile]::Open(
+        $Destination,
+        [System.IO.Compression.ZipArchiveMode]::Create
+    )
+    try {
+        Get-ChildItem -LiteralPath $sourceFull -File -Recurse | Sort-Object FullName | ForEach-Object {
+            $entryName = (Get-RelativePathCompat -BasePath $sourceFull -TargetPath $_.FullName).Replace('\', '/')
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $archive,
+                $_.FullName,
+                $entryName,
+                [System.IO.Compression.CompressionLevel]::Optimal
+            ) | Out-Null
+        }
+    } finally {
+        $archive.Dispose()
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $releaseOutput | Out-Null
 New-Item -ItemType Directory -Force -Path $releaseBuild | Out-Null
 
@@ -148,7 +179,7 @@ if (Test-Path -LiteralPath $pluginZip) {
     throw "Output already exists: $pluginZip"
 }
 
-Copy-CleanTree -Source $webRoot -Destination $webStage -AdditionalTopLevelExcludes @('CaorenCupPlugin')
+Copy-CleanTree -Source $webRoot -Destination $webStage -AdditionalTopLevelExcludes @('CaorenCupPlugin', 'CaorenCupPlugin.Tests')
 
 if (Test-Path -LiteralPath $pluginPublish) {
     Remove-Item -LiteralPath $pluginPublish -Recurse -Force
@@ -162,8 +193,8 @@ try {
     Pop-Location
 }
 
-Compress-Archive -Path (Join-Path $webStage '*') -DestinationPath $webZip -Force
-Compress-Archive -Path (Join-Path $pluginPublish '*') -DestinationPath $pluginZip -Force
+Compress-DirectoryPortable -Source $webStage -Destination $webZip
+Compress-DirectoryPortable -Source $pluginPublish -Destination $pluginZip
 
 Assert-ZipClean -ZipPath $webZip
 Assert-ZipClean -ZipPath $pluginZip

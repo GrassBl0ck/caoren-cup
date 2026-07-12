@@ -17,7 +17,9 @@ const ws = io();
         window._postmatchStatsMode = 'all';
         window._postmatchMatrixMode = 'all';
         window._lobbyAnnouncement = null;
-        window._activeAdminTab = localStorage.getItem('caoren-active-admin-tab') || 'flow';
+        const ADMIN_VIEWS = ['overview', 'access', 'setup', 'flow', 'announcement', 'tasks', 'mods'];
+        const savedAdminView = localStorage.getItem('caoren-active-admin-tab');
+        window._activeAdminView = ADMIN_VIEWS.includes(savedAdminView) ? savedAdminView : 'overview';
         const DUEL_DEFAULT_MAP = '5e_akm4_aim_duel';
 
         const DUEL_MAPS = [
@@ -75,41 +77,53 @@ const ws = io();
                 '</div>';
         }
 
-        function switchAdminTab(tab) {
-            const knownTabs = ['announcement', 'setup', 'flow', 'tasks', 'mods'];
-            const activeTab = knownTabs.includes(tab) ? tab : 'flow';
-            window._activeAdminTab = activeTab;
-            localStorage.setItem('caoren-active-admin-tab', activeTab);
+        function switchAdminView(view) {
+            const activeView = ADMIN_VIEWS.includes(view) ? view : 'overview';
+            window._activeAdminView = activeView;
+            localStorage.setItem('caoren-active-admin-tab', activeView);
 
-            document.querySelectorAll('[data-admin-tab]').forEach(btn => {
-                const active = btn.getAttribute('data-admin-tab') === activeTab;
+            document.querySelectorAll('[data-admin-view]').forEach(btn => {
+                const active = btn.getAttribute('data-admin-view') === activeView;
                 btn.classList.toggle('active', active);
                 btn.setAttribute('aria-selected', active ? 'true' : 'false');
                 btn.setAttribute('tabindex', active ? '0' : '-1');
             });
 
-            document.querySelectorAll('[data-admin-tab-panel]').forEach(panel => {
-                const active = panel.getAttribute('data-admin-tab-panel') === activeTab;
+            document.querySelectorAll('[data-admin-view-panel]').forEach(panel => {
+                const active = panel.getAttribute('data-admin-view-panel') === activeView;
                 panel.classList.toggle('active', active);
                 panel.hidden = !active;
             });
+
+            const select = document.getElementById('admin-view-select');
+            if (select) select.value = activeView;
         }
 
+        function switchAdminTab(tab) {
+            switchAdminView(tab);
+        }
+
+        window.switchAdminView = switchAdminView;
         window.switchAdminTab = switchAdminTab;
 
-        function applyTheme(theme) {
+        function applyTheme(theme, persist = true) {
             const value = theme === 'dark' ? 'dark' : 'light';
             document.body.dataset.theme = value;
-            localStorage.setItem('caoren-theme', value);
+            if (persist) localStorage.setItem('caoren-theme', value);
             const btn = document.getElementById('theme-toggle');
-            if (btn) btn.textContent = value === 'dark' ? '浅色模式' : '深色模式';
+            if (btn) {
+                btn.textContent = value === 'dark' ? '浅色模式' : '深色模式';
+                btn.setAttribute('aria-label', value === 'dark' ? '切换到浅色模式' : '切换到深色模式');
+            }
         }
 
         function toggleTheme() {
             applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
         }
 
-        applyTheme(localStorage.getItem('caoren-theme') || 'light');
+        const savedTheme = localStorage.getItem('caoren-theme');
+        const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        applyTheme(savedTheme || systemTheme, false);
 
 
         function showLobbyNotice(message, tone = 'info') {
@@ -906,6 +920,14 @@ if (window._caorenModifiersEnabled !== true) {
             window._undercoverModeEnabled = undercoverEnabled;
             window._caorenModifiersEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
 
+            const lobbyArea = document.getElementById('lobby-area');
+            const adminControls = document.getElementById('admin-controls');
+            lobbyArea?.classList.toggle('is-admin-session', isAdmin);
+            adminControls?.classList.toggle('is-admin-session', isAdmin);
+            if (adminControls && currentPlayer) adminControls.style.display = 'block';
+            const phaseSummary = document.getElementById('lobby-phase-summary');
+            if (phaseSummary) phaseSummary.textContent = '当前阶段 · ' + state.phase;
+
             if (currentPlayer) {
                 let identityHtml = '你是：<b>' + currentPlayer.name + '</b>';
                 if (isAdmin) identityHtml += ' <span style="color:#d32f2f;">(管理员)</span>';
@@ -925,6 +947,7 @@ if (window._caorenModifiersEnabled !== true) {
                     else if (state.phase === 'PreGameSetup' && !state.rolesReleased) identityHtml += ' | 身份未发放';
                 }
                 document.getElementById('my-identity').innerHTML = identityHtml;
+                document.getElementById('my-identity').hidden = isAdmin;
             }
 
             const listDiv = document.getElementById('player-list');
@@ -959,23 +982,41 @@ if (window._caorenModifiersEnabled !== true) {
             listDiv.innerHTML = playerTable;
 
             if (isAdmin) {
-                document.getElementById('admin-controls').style.display = 'block';
                 const btn = document.getElementById('advance-phase-btn');
                 if (btn) btn.textContent = '推进阶段 (当前: ' + state.phase + ')';
                 const templateBtn = document.getElementById('template-config-btn');
                 if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
                 const taskTemplateBtn = document.getElementById('task-template-config-btn');
                 if (taskTemplateBtn) taskTemplateBtn.style.display = undercoverEnabled ? '' : 'none';
-                switchAdminTab(window._activeAdminTab || 'flow');
+                const players = Object.values(state.players || {}).filter(player => player.role !== 'Admin');
+                const pending = players.filter(player => player.confirmationState && player.confirmationState !== 'confirmed').length;
+                const overviewPhase = document.getElementById('overview-phase');
+                const overviewPlayerCount = document.getElementById('overview-player-count');
+                const overviewPendingCount = document.getElementById('overview-pending-count');
+                if (overviewPhase) overviewPhase.textContent = state.phase;
+                if (overviewPlayerCount) overviewPlayerCount.textContent = String(players.length);
+                if (overviewPendingCount) overviewPendingCount.textContent = String(pending);
+                switchAdminView(window._activeAdminView || 'overview');
                 syncMatchOptionsPanel(state, true);
                 renderAdminUndercoverTaskPanel(state);
             } else {
-                document.getElementById('admin-controls').style.display = 'none';
+                if (listDiv) {
+                    listDiv.hidden = false;
+                    listDiv.classList.add('active');
+                }
+                adminControls?.querySelectorAll('[data-admin-view-panel]:not(.public-roster-panel):not(.public-stage-panel)').forEach(panel => {
+                    panel.hidden = true;
+                    panel.classList.remove('active');
+                });
+                const stageContent = document.getElementById('stage-content');
+                if (stageContent) {
+                    stageContent.hidden = false;
+                    stageContent.classList.add('active');
+                }
                 syncMatchOptionsPanel(state, false);
                 renderAdminUndercoverTaskPanel(state);
             }
 
-            const lobbyArea = document.getElementById('lobby-area');
             let phaseDiv = document.getElementById('phase-info');
             if (!phaseDiv) {
                 phaseDiv = document.createElement('div');

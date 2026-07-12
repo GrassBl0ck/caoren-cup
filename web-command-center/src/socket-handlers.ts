@@ -43,6 +43,8 @@ import { LobbyInviteGuard, rotateLobbyInvite } from './identity/lobby-access';
 import { lastForwardedValue, socketLoginTicketMatchesSession } from './identity/auth-core';
 import {
     deviceEnrollmentTickets,
+    fixedAccountAdminTickets,
+    fixedMemberSocketTickets,
     lobbyIdentityService,
     socketLoginTickets,
     steamClaimTickets,
@@ -346,10 +348,20 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             }
             try {
                 const ticketClaim = data?.steamClaimTicket ? steamClaimTickets.consume(data.steamClaimTicket) : undefined;
+                const directSteamId = String((data as any)?.claimedSteamId || '').trim();
+                if (directSteamId && !/^7656119\d{10}$/.test(directSteamId)) {
+                    socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: 'SteamID64 格式无效。', inviteError: 'steam_id_invalid' });
+                    return;
+                }
+                const steamClaim = directSteamId ? { steamId: directSteamId } : ticketClaim;
+                if (!steamClaim) {
+                    socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '请输入 7656119 开头的 17 位 SteamID64。', inviteError: 'steam_id_required' });
+                    return;
+                }
                 const membership = await lobbyIdentityService.createTemporaryMembership({
                     sessionId: session.sessionId,
                     nickname: String(data?.nickname || ''),
-                    steamClaim: ticketClaim,
+                    steamClaim,
                 });
                 const player = attachMembershipToSession(session, membership);
                 if (!player.bindCode) player.bindCode = generateBindCode();
@@ -380,6 +392,26 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             }
             const player = attachMembershipToSession(getSession(), membership);
             establishSocketIdentity(socket, player, `欢迎回来，${player.name}！已通过设备令牌自动进入当前大厅。`);
+        });
+
+        socket.on(WsEvents.FIXED_MEMBER_SOCKET_LOGIN, (data: { ticket?: string }) => {
+            const ticket = fixedMemberSocketTickets.consume(data?.ticket);
+            if (!ticket || !socketLoginTicketMatchesSession(ticket, getSession().sessionId)) {
+                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '固定成员登录票据无效或已过期，请重新输入密码。' });
+                return;
+            }
+            const membership = lobbyIdentityService.getMembership(ticket.membershipId);
+            const identity = membership?.claimedSteamId
+                ? lobbyIdentityService.findIdentityBySteamId(membership.claimedSteamId)
+                : undefined;
+            if (!membership || membership.blockedAt || membership.leftAt ||
+                !identity?.fixedAccount?.enabled || identity.identityId !== membership.identityId) {
+                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '该固定成员账户当前不能进入本场大厅。' });
+                return;
+            }
+            const player = attachMembershipToSession(getSession(), membership);
+            if (!player.bindCode) player.bindCode = generateBindCode();
+            establishSocketIdentity(socket, player, `欢迎，${player.name}！已通过固定成员密码进入当前大厅。`);
         });
 
         socket.on(WsEvents.STEAM_CONFIRM_CODE, async (data: { code?: string }) => {
@@ -413,11 +445,49 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             broadcastState();
         });
 
-        socket.on(WsEvents.IDENTITY_ADMIN_ACTION, async (data: { action?: string; membershipId?: string; identityId?: string; tokenId?: string }) => {
+        socket.on(WsEvents.IDENTITY_ADMIN_ACTION, async (data: {
+            action?: string;
+            membershipId?: string;
+            identityId?: string;
+            tokenId?: string;
+            operation?: string;
+            steamId?: string;
+            requestId?: string;
+        }) => {
             const session = getSession();
             const admin = socket.data.playerId ? findPlayerById(session, socket.data.playerId) : undefined;
             if (!admin || admin.role !== 'Admin') {
                 socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, error: 'admin_required' });
+                return;
+            }
+            if (data?.action === 'ISSUE_FIXED_ACCOUNT_TICKET') {
+                const operations = new Set(['create', 'rename', 'reset_password', 'set_enabled']);
+                if (!operations.has(String(data.operation || ''))) {
+                    socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, action: data.action, requestId: data.requestId, error: 'operation_invalid' });
+                    return;
+                }
+                const operation = data.operation as 'create' | 'rename' | 'reset_password' | 'set_enabled';
+                const steamId = String(data.steamId || '').trim();
+                const identityId = String(data.identityId || '').trim();
+                if ((operation === 'create' && !/^7656119\d{10}$/.test(steamId)) ||
+                    (operation !== 'create' && !identityId)) {
+                    socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, action: data.action, requestId: data.requestId, error: 'target_invalid' });
+                    return;
+                }
+                const issued = fixedAccountAdminTickets.issue({
+                    sessionId: session.sessionId,
+                    adminPlayerId: admin.playerId,
+                    operation,
+                    steamId: operation === 'create' ? steamId : undefined,
+                    identityId: operation === 'create' ? undefined : identityId,
+                }, 30_000);
+                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, {
+                    success: true,
+                    action: data.action,
+                    requestId: data.requestId,
+                    adminTicket: issued.ticket,
+                    expiresAt: issued.expiresAt,
+                });
                 return;
             }
             if (data?.action === 'GET_STATUS') {
@@ -431,7 +501,25 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     claimedSteamIdMasked: membership.claimedSteamId ? `****${membership.claimedSteamId.slice(-4)}` : '',
                     devices: lobbyIdentityService.listDeviceTokens(membership.identityId),
                 }));
-                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: true, action: data.action, memberships, lobbyAccess: session.lobbyAccess });
+                const fixedAccounts = lobbyIdentityService.listFixedAccounts(session.sessionId).map((account) => ({
+                    identityId: account.identityId,
+                    steamId: account.steamId,
+                    nickname: account.nickname,
+                    enabled: account.enabled,
+                    passwordUpdatedAt: account.passwordUpdatedAt,
+                    membershipId: account.membership?.membershipId,
+                    isOnline: Object.values(session.players).some((player) => player.identityId === account.identityId && player.isOnline),
+                    confirmationState: account.membership?.confirmationState,
+                    confirmationReason: account.membership?.confirmationReason,
+                    blocked: !!account.membership?.blockedAt,
+                }));
+                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, {
+                    success: true,
+                    action: data.action,
+                    memberships,
+                    fixedAccounts,
+                    lobbyAccess: session.lobbyAccess,
+                });
                 return;
             }
             if (data?.action === 'ROTATE_INVITE') {
