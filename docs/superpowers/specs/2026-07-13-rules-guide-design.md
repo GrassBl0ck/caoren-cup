@@ -17,7 +17,7 @@
 
 ### 公开赛前指引页
 
-页面地址为 `/rules.html`，无需登录或 Socket 连接。登录页顶部和进入大厅后的顶部导航均提供“赛前指引”链接，链接始终在当前页面可见。
+页面地址为 `/rules.html`，无需登录或 Socket 连接。现有 `index.html` 的品牌头部位于登录区和大厅区之外，会在登录前后持续显示；该持久头部提供“赛前指引”链接，无需按登录状态重复创建或切换链接。
 
 桌面端采用页面顶部品牌导航、左侧页内目录、右侧阅读内容的布局；手机端将页内目录改为横向滚动导航。页面首屏包含“开赛前 3 分钟”的说明和完整规则 PDF 下载按钮，页面底部重复下载按钮。
 
@@ -51,8 +51,7 @@ PDF 顶部标注“草人杯完整规则”和生成日期；内容使用真实�
 | --- | --- |
 | `web-command-center/public/rules.html` | 无登录要求的赛前指引页面语义结构与静态文案。 |
 | `web-command-center/public/css/app.css` | 规则页的浅/深色变量适配、目录、卡片、步骤与移动端样式；复用既有主题变量。 |
-| `web-command-center/public/index.html` | 登录前顶部增加“赛前指引”入口，不改变现有表单 ID 或登录请求。 |
-| `web-command-center/public/js/lobby-app.js` | 进入大厅后的顶部导航增加同一公开链接；不改变 Socket 状态和比赛逻辑。 |
+| `web-command-center/public/index.html` | 在登录前后共用的持久品牌头部增加“赛前指引”入口，不改变现有表单 ID、登录请求或大厅状态。 |
 | `docs/rules/caoren-cup-full-rules.md` | UTF-8 的完整规则唯一维护源。 |
 | `scripts/build-rules-pdf.*` | 从 Markdown 构建公开 PDF 的可重复脚本；不得把临时目录、私有配置或系统路径写入 PDF。 |
 | `web-command-center/public/downloads/caoren-cup-full-rules.pdf` | 规则页提供的公开下载资产。 |
