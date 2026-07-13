@@ -2621,6 +2621,10 @@ body.rules-page-body[data-theme="dark"] {
     .rules-main {
         padding-top: 30px;
     }
+
+    .rules-command-list {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 760px) {
@@ -2679,8 +2683,7 @@ body.rules-page-body[data-theme="dark"] {
 
     .rules-card-grid,
     .rules-mode-grid,
-    .rules-shared-steps,
-    .rules-command-list {
+    .rules-shared-steps {
         grid-template-columns: 1fr;
     }
 }

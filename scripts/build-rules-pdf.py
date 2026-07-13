@@ -49,7 +49,7 @@ def _is_table_separator(line: str) -> bool:
 def _is_block_start(line: str) -> bool:
     stripped = line.strip()
     return bool(
-        re.match(r'^#{1,3}\s+', stripped)
+        re.match(r'^#{1,4}\s+', stripped)
         or re.match(r'^[-*]\s+', stripped)
         or re.match(r'^\d+\.\s+', stripped)
         or stripped.startswith('> ')
@@ -67,7 +67,7 @@ def parse_markdown(source: str) -> list[MarkdownBlock]:
             index += 1
             continue
 
-        heading = re.match(r'^(#{1,3})\s+(.+)$', line)
+        heading = re.match(r'^(#{1,4})\s+(.+)$', line)
         if heading:
             blocks.append(MarkdownBlock('heading', heading.group(2).strip(), len(heading.group(1))))
             index += 1
@@ -171,6 +171,11 @@ def build_styles(font_name: str) -> dict[str, ParagraphStyle]:
             leading=18, textColor=colors.HexColor('#334155'), spaceBefore=10,
             spaceAfter=5, keepWithNext=True,
         ),
+        'heading4': ParagraphStyle(
+            'RulesHeading4', parent=sample['Heading4'], fontName=font_name, fontSize=10,
+            leading=16, textColor=colors.HexColor('#334155'), spaceBefore=8,
+            spaceAfter=4, keepWithNext=True,
+        ),
         'body': ParagraphStyle(
             'RulesBody', parent=sample['BodyText'], fontName=font_name, fontSize=9.5,
             leading=16, textColor=colors.HexColor('#263548'), spaceAfter=7,
@@ -205,6 +210,8 @@ def build_styles(font_name: str) -> dict[str, ParagraphStyle]:
 
 def _inline_markup(value: str) -> str:
     escaped = html.escape(value, quote=False)
+    escaped_angle_url = re.compile(r'&lt;(https?://[^\s<>]+)&gt;')
+    escaped = escaped_angle_url.sub(r'<font color="#1d4ed8">\1</font>', escaped)
     escaped = re.sub(r'`([^`]+)`', r'<font color="#1d4ed8">\1</font>', escaped)
     escaped = re.sub(r'\*\*([^*]+)\*\*', r'<b>\1</b>', escaped)
     return escaped
@@ -296,7 +303,7 @@ def build_story(
     for block in blocks[start_index:]:
         if block.kind == 'heading':
             heading_index += 1
-            story.append(_make_heading(block.text, min(block.level, 3), styles, f'heading-{heading_index}'))
+            story.append(_make_heading(block.text, min(block.level, 4), styles, f'heading-{heading_index}'))
         elif block.kind == 'paragraph':
             story.append(Paragraph(_inline_markup(block.text), styles['body']))
         elif block.kind == 'bullet':
