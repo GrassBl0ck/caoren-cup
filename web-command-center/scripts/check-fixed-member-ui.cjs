@@ -60,9 +60,34 @@ for (const token of [
   'blocked_for_session',
   'nickname_in_use',
   'rate_limited',
-  '尚未检测到该固定账户的 SteamID',
+  '正在验证成员账号...',
+  "account_not_found: '成员账号不存在。'",
+  "password_incorrect: '成员密码错误。'",
+  "account_disabled: '该成员账号已禁用。'",
+  "nickname_in_use: '该成员昵称已在本场使用，请联系管理员修改。'",
+  '成员账号登录失败。',
+  '成员账号登录请求失败',
+  "longTerm' ? '成员账号' : '邀请码加入'",
+  '尚未检测到该成员账号的 SteamID',
+  '成员密码和邀请码仍可正常使用',
+  '可继续使用邀请码加入',
 ]) {
   if (!js.includes(token)) throw new Error(`missing fixed member UI behavior: ${token}`);
+}
+
+for (const obsolete of [
+  '正在验证固定成员账户...',
+  "account_not_found: '固定成员账户不存在。'",
+  "password_incorrect: '固定成员密码错误。'",
+  "account_disabled: '该固定成员账户已禁用。'",
+  "nickname_in_use: '该固定昵称已在本场使用，请联系管理员修改。'",
+  '固定成员登录失败。',
+  '固定成员登录请求失败',
+  "longTerm' ? '长期玩家' : '临时参赛者'",
+  '固定成员密码和邀请码仍可正常使用',
+  '可继续以临时身份进入',
+]) {
+  if (js.includes(obsolete)) throw new Error(`player-facing login copy still uses internal identity wording: ${obsolete}`);
 }
 
 if (!css.includes('.fixed-member-form')) throw new Error('missing fixed member responsive styles');
