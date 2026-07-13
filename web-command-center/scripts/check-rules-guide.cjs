@@ -17,4 +17,14 @@ for (const text of ['固定成员', '临时参赛者', '不平衡竞技', '卧�
 assert.match(html, /href="\/downloads\/caoren-cup-full-rules\.pdf"/);
 assert.ok(!html.includes('/socket.io/socket.io.js'), '公开规则页不应连接 Socket');
 assert.ok(!html.includes('管理员工作区'), '快速指引不应展示管理员内容');
+
+const indexPath = path.join(publicDir, 'index.html');
+const indexHtml = fs.readFileSync(indexPath, 'utf8');
+const guideLink = indexHtml.match(/<a\b[^>]*id="rules-guide-link"[^>]*href="([^"]+)"[^>]*>/);
+assert.ok(guideLink, '登录页持久顶栏缺少赛前指引入口');
+assert.equal(guideLink[1], '/rules.html', '赛前指引入口地址不正确');
+assert.ok(
+  indexHtml.indexOf('id="rules-guide-link"') < indexHtml.indexOf('id="login-area"'),
+  '赛前指引入口应位于登录区之前的持久顶栏'
+);
 console.log('rules guide contract checks passed');

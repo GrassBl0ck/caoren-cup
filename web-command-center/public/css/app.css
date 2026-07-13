@@ -3388,6 +3388,41 @@ body[data-theme="dark"] {
     color: var(--text-muted);
 }
 
+.site-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.header-text-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--workspace-radius);
+    background: var(--surface);
+    color: var(--text-default);
+    font-weight: 700;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.header-text-link:hover {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.header-text-link:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
 .theme-toggle {
     position: static;
     flex: 0 0 auto;
@@ -4089,6 +4124,17 @@ body[data-theme="dark"] .admin-nav-btn.active {
 
     .site-brand .page-subtitle {
         display: none;
+    }
+
+    .site-header-actions {
+        gap: 6px;
+    }
+
+    .header-text-link,
+    .site-header-actions .theme-toggle {
+        min-height: 38px;
+        padding-inline: 10px;
+        white-space: nowrap;
     }
 
     .login-panel {
