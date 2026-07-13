@@ -13,6 +13,7 @@
     "test:fixed-member-ui": "node scripts/check-fixed-member-ui.cjs",
     "test:rules-content": "node scripts/check-rules-content.cjs",
     "test:rules-pdf": "node scripts/check-rules-pdf.cjs",
+    "test:rules-guide": "node scripts/check-rules-guide.cjs",
     "test:lobby-identity": "tsx --test src/identity/*.test.ts src/v1333-game-login.test.ts"
   },
   "dependencies": {
