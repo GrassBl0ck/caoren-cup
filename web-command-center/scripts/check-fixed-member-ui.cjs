@@ -7,6 +7,7 @@ const js = fs.readFileSync(path.join(root, 'public', 'js', 'game-code-login.js')
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 
 const requiredHtmlIds = [
+  'login-choice-guide',
   'login-mode-fixed',
   'login-mode-temporary',
   'login-panel-fixed',
@@ -29,6 +30,24 @@ const requiredHtmlIds = [
 
 for (const id of requiredHtmlIds) {
   if (!html.includes(`id="${id}"`)) throw new Error(`missing fixed member UI id: ${id}`);
+}
+
+const choiceGuideIndex = html.indexOf('id="login-choice-guide"');
+const modeSwitchIndex = html.indexOf('class="login-mode-switch"');
+if (choiceGuideIndex < 0) throw new Error('缺少始终显示的登录方式选择说明');
+if (choiceGuideIndex >= modeSwitchIndex) throw new Error('登录方式选择说明必须位于切换按钮上方');
+
+for (const text of [
+  '管理员给了你草人杯成员密码',
+  '管理员给了你本场邀请码',
+  '成员账号登录',
+  '使用邀请码加入',
+  '不需要邀请码，也不需要填写昵称',
+  '大厅昵称由管理员预设',
+  '登录并进入大厅',
+  '使用邀请码进入大厅',
+]) {
+  if (!html.includes(text)) throw new Error(`缺少玩家登录说明：${text}`);
 }
 
 for (const token of [

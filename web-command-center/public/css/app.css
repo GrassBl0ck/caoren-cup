@@ -3636,6 +3636,35 @@ body[data-theme="dark"] .login-panel {
     padding: 22px 0;
 }
 
+.login-choice-guide {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--workspace-radius);
+    background: var(--surface-muted);
+    color: var(--text-default);
+}
+
+.login-choice-guide-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.login-choice-guide-options p {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+.login-choice-guide-options span {
+    display: block;
+    margin-bottom: 3px;
+    color: var(--text-strong);
+    font-weight: 800;
+}
+
 .login-mode-switch {
     display: inline-grid;
     grid-template-columns: repeat(2, minmax(130px, 1fr));
@@ -4146,6 +4175,10 @@ body[data-theme="dark"] .admin-nav-btn.active {
 
     .login-mode-switch {
         width: 100%;
+    }
+
+    .login-choice-guide-options {
+        grid-template-columns: 1fr;
     }
 
     .login-utility-row,
