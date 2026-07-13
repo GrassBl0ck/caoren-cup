@@ -9,8 +9,8 @@ const source = fs.readFileSync(sourcePath, 'utf8');
 
 for (const text of [
   '# 草人杯完整规则',
-  '固定成员',
-  '临时参赛者',
+  '成员账号登录',
+  '使用邀请码加入',
   'SteamID64',
   '本场确认',
   'connect 119.45.166.182:27015',

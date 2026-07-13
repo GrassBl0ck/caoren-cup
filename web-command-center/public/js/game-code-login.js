@@ -61,8 +61,8 @@
       selectedSteamAccount = null;
       select.style.display = 'none';
       status.textContent = result && result.reason === 'steam_config_unreadable'
-        ? 'Steam 配置无法读取，可继续以临时身份进入。'
-        : '未找到 Steam，可继续以临时身份进入。';
+        ? 'Steam 配置无法读取，可继续使用邀请码加入。'
+        : '未找到 Steam，可继续使用邀请码加入。';
       return;
     }
     var accounts = result.accounts || [];
@@ -84,7 +84,7 @@
     var api = desktopApi();
     if (!api) {
       renderSteamAccounts({ ok: false, reason: 'desktop_unavailable' });
-      byId('steam-account-status').textContent = '普通浏览器不会读取本机 Steam；可直接使用邀请码进入临时大厅。';
+      byId('steam-account-status').textContent = '普通浏览器不会读取本机 Steam；可直接使用邀请码加入。';
       setDesktopStatus(deviceLoginAvailable ? '当前为浏览器访问，设备自动登录仅在桌面客户端可用。' : '设备自动登录尚不可用。');
       return;
     }
@@ -148,7 +148,7 @@
     if (Array.from(password).length < 8 || Array.from(password).length > 128) return setFixedLoginError('密码长度必须为 8 到 128 个字符。');
     var button = byId('fixed-member-login-btn');
     if (button) button.disabled = true;
-    setFixedLoginError('正在验证固定成员账户...');
+    setFixedLoginError('正在验证成员账号...');
     try {
       var response = await fetch('/api/fixed-member-auth/login', {
         method: 'POST',
@@ -159,22 +159,22 @@
       var data = await response.json();
       if (!response.ok || !data.success) {
         var messages = {
-          account_not_found: '固定成员账户不存在。',
-          password_incorrect: '固定成员密码错误。',
-          account_disabled: '该固定成员账户已禁用。',
+          account_not_found: '成员账号不存在。',
+          password_incorrect: '成员密码错误。',
+          account_disabled: '该成员账号已禁用。',
           blocked_for_session: '该成员本场已被禁止进入。',
-          nickname_in_use: '该固定昵称已在本场使用，请联系管理员修改。',
+          nickname_in_use: '该成员昵称已在本场使用，请联系管理员修改。',
           rate_limited: '登录失败次数过多，请稍后再试。',
           steam_id_invalid: 'SteamID64 格式无效。'
         };
-        return setFixedLoginError(messages[data.error] || '固定成员登录失败。');
+        return setFixedLoginError(messages[data.error] || '成员账号登录失败。');
       }
       var loginSocket = getLoginSocket();
       if (!loginSocket) return setFixedLoginError('大厅连接尚未初始化，请刷新页面重试。');
       setFixedLoginError('验证成功，正在进入当前大厅...', true);
       loginSocket.emit('FIXED_MEMBER_SOCKET_LOGIN', { ticket: data.socketTicket });
     } catch (_error) {
-      setFixedLoginError('固定成员登录请求失败，请检查网络后重试。');
+      setFixedLoginError('成员账号登录请求失败，请检查网络后重试。');
     } finally {
       if (passwordInput) passwordInput.value = '';
       if (button) button.disabled = false;
@@ -258,10 +258,10 @@
     var confirmation = byId('my-confirmation-state');
     var reason = byId('my-confirmation-reason');
     var panel = byId('steam-confirm-panel');
-    var identityText = player.identityLevel === 'longTerm' ? '长期玩家' : '临时参赛者';
+    var identityText = player.identityLevel === 'longTerm' ? '成员账号' : '邀请码加入';
     var confirmationLabels = { pending: '本场待确认', confirmed: '本场已确认', unavailable: '未提供 Steam 声明', mismatch: 'Steam 不一致' };
     if (player.identityLevel === 'longTerm' && player.confirmationState === 'pending') {
-      confirmationLabels.pending = '尚未检测到该固定账户的 SteamID';
+      confirmationLabels.pending = '尚未检测到该成员账号的 SteamID';
     }
     if (identity) identity.textContent = identityText;
     if (confirmation) {
@@ -448,7 +448,7 @@
     try {
       var capabilities = await fetch('/api/public/auth-capabilities', { cache: 'no-store' }).then(function (response) { return response.json(); });
       deviceLoginAvailable = capabilities.deviceAuthAvailable === true;
-      if (!deviceLoginAvailable && capabilities.requiresHttps) setDesktopStatus('当前为 HTTP：设备自动登录不可用，固定成员密码和邀请码仍可正常使用。');
+      if (!deviceLoginAvailable && capabilities.requiresHttps) setDesktopStatus('当前为 HTTP：设备自动登录不可用，成员密码和邀请码仍可正常使用。');
     } catch (_error) {
       setDesktopStatus('无法读取登录安全状态，可继续使用邀请码。', 'error');
     }

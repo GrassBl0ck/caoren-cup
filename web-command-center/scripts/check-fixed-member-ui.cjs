@@ -7,6 +7,7 @@ const js = fs.readFileSync(path.join(root, 'public', 'js', 'game-code-login.js')
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 
 const requiredHtmlIds = [
+  'login-choice-guide',
   'login-mode-fixed',
   'login-mode-temporary',
   'login-panel-fixed',
@@ -31,6 +32,24 @@ for (const id of requiredHtmlIds) {
   if (!html.includes(`id="${id}"`)) throw new Error(`missing fixed member UI id: ${id}`);
 }
 
+const choiceGuideIndex = html.indexOf('id="login-choice-guide"');
+const modeSwitchIndex = html.indexOf('class="login-mode-switch"');
+if (choiceGuideIndex < 0) throw new Error('缺少始终显示的登录方式选择说明');
+if (choiceGuideIndex >= modeSwitchIndex) throw new Error('登录方式选择说明必须位于切换按钮上方');
+
+for (const text of [
+  '管理员给了你草人杯成员密码',
+  '管理员给了你本场邀请码',
+  '成员账号登录',
+  '使用邀请码加入',
+  '不需要邀请码，也不需要填写昵称',
+  '大厅昵称由管理员预设',
+  '登录并进入大厅',
+  '使用邀请码进入大厅',
+]) {
+  if (!html.includes(text)) throw new Error(`缺少玩家登录说明：${text}`);
+}
+
 for (const token of [
   '/api/fixed-member-auth/login',
   'FIXED_MEMBER_SOCKET_LOGIN',
@@ -41,9 +60,34 @@ for (const token of [
   'blocked_for_session',
   'nickname_in_use',
   'rate_limited',
-  '尚未检测到该固定账户的 SteamID',
+  '正在验证成员账号...',
+  "account_not_found: '成员账号不存在。'",
+  "password_incorrect: '成员密码错误。'",
+  "account_disabled: '该成员账号已禁用。'",
+  "nickname_in_use: '该成员昵称已在本场使用，请联系管理员修改。'",
+  '成员账号登录失败。',
+  '成员账号登录请求失败',
+  "longTerm' ? '成员账号' : '邀请码加入'",
+  '尚未检测到该成员账号的 SteamID',
+  '成员密码和邀请码仍可正常使用',
+  '可继续使用邀请码加入',
 ]) {
   if (!js.includes(token)) throw new Error(`missing fixed member UI behavior: ${token}`);
+}
+
+for (const obsolete of [
+  '正在验证固定成员账户...',
+  "account_not_found: '固定成员账户不存在。'",
+  "password_incorrect: '固定成员密码错误。'",
+  "account_disabled: '该固定成员账户已禁用。'",
+  "nickname_in_use: '该固定昵称已在本场使用，请联系管理员修改。'",
+  '固定成员登录失败。',
+  '固定成员登录请求失败',
+  "longTerm' ? '长期玩家' : '临时参赛者'",
+  '固定成员密码和邀请码仍可正常使用',
+  '可继续以临时身份进入',
+]) {
+  if (js.includes(obsolete)) throw new Error(`player-facing login copy still uses internal identity wording: ${obsolete}`);
 }
 
 if (!css.includes('.fixed-member-form')) throw new Error('missing fixed member responsive styles');
