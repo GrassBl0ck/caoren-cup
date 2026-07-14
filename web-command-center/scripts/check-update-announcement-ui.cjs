@@ -88,6 +88,26 @@ assert.doesNotMatch(css, /\[style\*=["'][^"']*background/i, '不得用内联背�
 assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b/i, '更新公告样式不得写死仅适合单一主题的颜色');
 assert.doesNotMatch(css, /rgba\s*\(/i, '更新公告样式不得使用绕过主题变量的原始 rgba 颜色');
 
+function findRuleBody(selector) {
+    const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = css.match(new RegExp(`${escapedSelector}\\s*\\{([^{}]*)\\}`));
+    assert.ok(match, `缺少深色主题公告样式：${selector}`);
+    return match[1];
+}
+
+const darkBackdropRule = findRuleBody('body[data-theme="dark"] .update-announcement-backdrop');
+assert.match(
+    darkBackdropRule,
+    /background:\s*color-mix\(in srgb,\s*var\(--surface-muted\)\s+(?:[6-9]\d|100)%,\s*transparent\)\s*;/,
+    '深色主题遮罩必须使用较高比例的 --surface-muted color-mix',
+);
+const darkDrawerRule = findRuleBody('body[data-theme="dark"] .update-announcement-drawer');
+assert.match(
+    darkDrawerRule,
+    /box-shadow:[^;]*color-mix\(in srgb,\s*var\(--surface-muted\)\s+\d+%,\s*transparent\)\s*;/,
+    '深色主题抽屉阴影必须使用 --surface-muted color-mix',
+);
+
 const readState = require(readStatePath);
 const announcements = [
     { id: 'a', reminderRevision: 1 },

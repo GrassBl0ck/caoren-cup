@@ -29,6 +29,12 @@ body.update-announcement-open { overflow: hidden; }
     color: var(--text-default);
     box-shadow: -18px 0 48px color-mix(in srgb, var(--text-strong) 22%, transparent);
 }
+body[data-theme="dark"] .update-announcement-backdrop {
+    background: color-mix(in srgb, var(--surface-muted) 82%, transparent);
+}
+body[data-theme="dark"] .update-announcement-drawer {
+    box-shadow: -18px 0 48px color-mix(in srgb, var(--surface-muted) 72%, transparent);
+}
 .update-announcement-drawer-header,
 .update-announcement-admin-header,
 .update-announcement-editor-heading,
