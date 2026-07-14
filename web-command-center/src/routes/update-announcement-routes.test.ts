@@ -41,7 +41,7 @@ const createFixture = async (name: string, unavailable = false): Promise<RouteFi
     await service.initialize();
 
     const app = express();
-    app.use(express.json());
+    app.use(express.json({ limit: '1mb' }));
     const broadcasts: PublicUpdateAnnouncement[][] = [];
     registerUpdateAnnouncementRoutes(app, {
         adminPassword: 'admin-test-password',
@@ -251,7 +251,7 @@ test('oversized announcement JSON returns the same safe generic JSON error', asy
         announcement: {
             version: 'v1.9.0',
             title: '超大请求',
-            sections: { webHtml: 'x'.repeat(120_000) },
+            sections: { webHtml: 'x'.repeat(1_048_576 + 1_024) },
         },
     });
     const response = await fetch(`${fixture.baseUrl}/api/admin/update-announcements/save`, {

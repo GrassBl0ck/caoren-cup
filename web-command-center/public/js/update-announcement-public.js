@@ -17,6 +17,9 @@
     let storageUnavailable = false;
     let latestRequestId = 0;
     let socketRevision = 0;
+    let hasAuthoritativeList = false;
+    let snapshotSessionId = 0;
+    let openSnapshotSession = null;
 
     function loadReadState() {
         if (storageUnavailable) return Object.assign({}, memoryReadState);
@@ -151,6 +154,9 @@
     async function refreshPublicAnnouncements() {
         const requestId = ++latestRequestId;
         const socketRevisionAtStart = socketRevision;
+        const snapshotSessionIdAtStart = openSnapshotSession
+            ? openSnapshotSession.sessionId
+            : null;
         try {
             const response = await fetch('/api/update-announcements', {
                 headers: { Accept: 'application/json' },
@@ -165,6 +171,18 @@
                 requestId,
                 latestRequestId,
             )) return;
+            if (!hasAuthoritativeList) {
+                hasAuthoritativeList = true;
+                openSnapshotSession = readApi.captureFirstAuthoritativeSnapshot(
+                    openSnapshotSession,
+                    snapshotSessionIdAtStart,
+                    data.announcements,
+                    loadReadState(),
+                );
+                openUnreadSnapshot = openSnapshotSession
+                    ? openSnapshotSession.snapshot
+                    : [];
+            }
             applyAnnouncements(data.announcements);
         } catch (_error) {
             if (!readApi.isFetchCurrent(
@@ -183,12 +201,14 @@
         drawer.hidden = false;
         backdrop.hidden = false;
         document.body.classList.add('update-announcement-open');
-        const unread = new Set(readApi.findUnread(announcements, loadReadState()));
-        openUnreadSnapshot = announcements
-            .filter(function (item) { return unread.has(item.id); })
-            .map(function (item) {
-                return { id: item.id, reminderRevision: item.reminderRevision };
-            });
+        snapshotSessionId += 1;
+        openSnapshotSession = readApi.createOpenSnapshotSession(
+            snapshotSessionId,
+            hasAuthoritativeList,
+            announcements,
+            loadReadState(),
+        );
+        openUnreadSnapshot = openSnapshotSession.snapshot;
         renderAnnouncements();
         updateUnreadDot();
         closeButton.focus();
@@ -199,6 +219,8 @@
         if (drawer.hidden) return;
         saveReadState(readApi.markRead(loadReadState(), openUnreadSnapshot));
         openUnreadSnapshot = [];
+        openSnapshotSession = null;
+        snapshotSessionId += 1;
         drawer.hidden = true;
         backdrop.hidden = true;
         document.body.classList.remove('update-announcement-open');

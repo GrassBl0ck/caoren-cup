@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { sanitizeAnnouncementHtml } from '../announcement-html';
 import { createSeedUpdateAnnouncementData } from './update-announcement-seeds';
 import {
     UnsupportedUpdateAnnouncementSchemaError,
@@ -54,7 +55,14 @@ const parseData = (text: string): UpdateAnnouncementStoreData => {
     const versions = new Set<string>();
     for (const [id, value] of Object.entries(parsed.announcements)) {
         validateAnnouncement(id, value);
-        const version = (value as Record<string, unknown>).version as string;
+        const announcement = value as Record<string, unknown>;
+        const sections = announcement.sections as Record<string, string>;
+        for (const html of [sections.webHtml, sections.gamePluginHtml, sections.bridgePluginHtml]) {
+            if (sanitizeAnnouncementHtml(html) !== html) {
+                throw new Error('update announcement store schema is invalid');
+            }
+        }
+        const version = announcement.version as string;
         if (versions.has(version)) throw new Error('update announcement store schema is invalid');
         versions.add(version);
     }

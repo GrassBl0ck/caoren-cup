@@ -105,9 +105,11 @@ export class UpdateAnnouncementService {
                 version: announcement.version,
                 title: announcement.title,
                 sections: {
-                    webHtml: announcement.sections.webHtml || EMPTY_SECTION_HTML,
-                    gamePluginHtml: announcement.sections.gamePluginHtml || EMPTY_SECTION_HTML,
-                    bridgePluginHtml: announcement.sections.bridgePluginHtml || EMPTY_SECTION_HTML,
+                    webHtml: sanitizeAnnouncementHtml(announcement.sections.webHtml) || EMPTY_SECTION_HTML,
+                    gamePluginHtml: sanitizeAnnouncementHtml(announcement.sections.gamePluginHtml)
+                        || EMPTY_SECTION_HTML,
+                    bridgePluginHtml: sanitizeAnnouncementHtml(announcement.sections.bridgePluginHtml)
+                        || EMPTY_SECTION_HTML,
                 },
                 reminderRevision: announcement.reminderRevision,
                 publishedAt: announcement.publishedAt as number,

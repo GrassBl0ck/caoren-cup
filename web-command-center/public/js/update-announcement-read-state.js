@@ -41,6 +41,29 @@
         return next;
     }
 
+    function createOpenSnapshotSession(sessionId, hasAuthoritativeList, announcements, read) {
+        const waitingForInitialSnapshot = !hasAuthoritativeList;
+        const unread = new Set(findUnread(announcements, read));
+        return {
+            sessionId: sessionId,
+            waitingForInitialSnapshot: waitingForInitialSnapshot,
+            snapshot: waitingForInitialSnapshot
+                ? []
+                : (announcements || [])
+                    .filter(function (item) { return unread.has(item.id); })
+                    .map(function (item) {
+                        return { id: item.id, reminderRevision: item.reminderRevision };
+                    }),
+        };
+    }
+
+    function captureFirstAuthoritativeSnapshot(session, sessionId, announcements, read) {
+        if (!session
+            || session.sessionId !== sessionId
+            || !session.waitingForInitialSnapshot) return session;
+        return createOpenSnapshotSession(sessionId, true, announcements, read);
+    }
+
     function isFetchCurrent(startSocketRevision, currentSocketRevision, requestId, latestRequestId) {
         return startSocketRevision === currentSocketRevision && requestId === latestRequestId;
     }
@@ -51,5 +74,7 @@
         markRead: markRead,
         mergeReadState: mergeReadState,
         isFetchCurrent: isFetchCurrent,
+        createOpenSnapshotSession: createOpenSnapshotSession,
+        captureFirstAuthoritativeSnapshot: captureFirstAuthoritativeSnapshot,
     };
 });

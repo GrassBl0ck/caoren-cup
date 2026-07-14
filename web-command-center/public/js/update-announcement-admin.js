@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    const mutationStateApi = window.CaorenUpdateAnnouncementAdminMutationState;
+
     async function adminRequest(path, payload) {
         const adminPassword = document.getElementById('extra-input')?.value
             || prompt('请输入管理员密码：')
@@ -17,6 +19,7 @@
     }
 
     const adminStatus = document.getElementById('update-announcement-admin-status');
+    const adminPanel = document.getElementById('update-announcement-admin-panel');
     const adminList = document.getElementById('update-announcement-admin-list');
     const filter = document.getElementById('update-announcement-filter');
     const form = document.getElementById('update-announcement-editor-form');
@@ -32,6 +35,7 @@
     let originalVersion = '';
     let previouslyPublished = false;
     let latestAdminAnnouncementRequestId = 0;
+    let mutationState = { pending: false, generation: 0 };
 
     const statusLabels = { draft: '草稿', published: '已发布', hidden: '隐藏' };
     const editorBySection = {
@@ -58,6 +62,23 @@
         if (className) button.className = className;
         button.addEventListener('click', handler);
         return button;
+    }
+
+    function syncMutationButtons() {
+        adminPanel.querySelectorAll('button').forEach(function (button) {
+            if (mutationState.pending) {
+                if (!button.disabled) button.dataset.updateAnnouncementMutationLocked = 'true';
+                button.disabled = true;
+            } else if (button.dataset.updateAnnouncementMutationLocked === 'true') {
+                button.disabled = false;
+                delete button.dataset.updateAnnouncementMutationLocked;
+            }
+        });
+    }
+
+    function setMutationState(next) {
+        mutationState = next;
+        syncMutationButtons();
     }
 
     function renderAdminList() {
@@ -104,6 +125,7 @@
             article.append(head, meta, actions);
             adminList.append(article);
         });
+        syncMutationButtons();
     }
 
     function openEditor(item) {
@@ -150,16 +172,19 @@
     }
 
     async function saveAnnouncement() {
-        const versionChanged = previouslyPublished
-            && originalVersion
-            && versionInput.value.trim() !== originalVersion;
-        let confirmedVersionChange = false;
-        if (versionChanged) {
-            confirmedVersionChange = confirm('发布后的版本号已改变。保存后会重新提醒所有玩家，确定继续吗？');
-            if (!confirmedVersionChange) return;
-        }
-        adminStatus.textContent = '正在保存更新公告……';
+        const mutation = mutationStateApi.begin(mutationState);
+        if (!mutation.accepted) return;
+        setMutationState(mutation.state);
         try {
+            const versionChanged = previouslyPublished
+                && originalVersion
+                && versionInput.value.trim() !== originalVersion;
+            let confirmedVersionChange = false;
+            if (versionChanged) {
+                confirmedVersionChange = confirm('发布后的版本号已改变。保存后会重新提醒所有玩家，确定继续吗？');
+                if (!confirmedVersionChange) return;
+            }
+            adminStatus.textContent = '正在保存更新公告……';
             await adminRequest('/api/admin/update-announcements/save', {
                 announcement: {
                     id: idInput.value || undefined,
@@ -174,31 +199,44 @@
                     confirmVersionChange: confirmedVersionChange,
                 },
             });
+            if (!mutationStateApi.isCurrent(mutationState, mutation.generation)) return;
             closeEditor();
             await refreshAdminAnnouncements();
+            if (!mutationStateApi.isCurrent(mutationState, mutation.generation)) return;
             adminStatus.textContent = '更新公告已保存。';
         } catch (error) {
+            if (!mutationStateApi.isCurrent(mutationState, mutation.generation)) return;
             adminStatus.textContent = error.message || '更新公告保存失败。';
+        } finally {
+            setMutationState(mutationStateApi.finish(mutationState, mutation.generation));
         }
     }
 
     async function changeStatus(item, targetStatus) {
+        const mutation = mutationStateApi.begin(mutationState);
+        if (!mutation.accepted) return;
+        setMutationState(mutation.state);
         const action = targetStatus === 'hidden' ? '隐藏' : item.status === 'hidden' ? '重新发布' : '发布';
-        if (!confirm('确定要' + action + ' ' + item.version + ' 吗？')) return;
-        const remindAgain = item.status === 'hidden' && targetStatus === 'published'
-            ? confirm('是否同时重新提醒所有玩家？选择“取消”只表示不重复提醒，公告仍会重新发布。')
-            : false;
-        adminStatus.textContent = '正在' + action + '更新公告……';
         try {
+            if (!confirm('确定要' + action + ' ' + item.version + ' 吗？')) return;
+            const remindAgain = item.status === 'hidden' && targetStatus === 'published'
+                ? confirm('是否同时重新提醒所有玩家？选择“取消”只表示不重复提醒，公告仍会重新发布。')
+                : false;
+            adminStatus.textContent = '正在' + action + '更新公告……';
             await adminRequest('/api/admin/update-announcements/status', {
                 id: item.id,
                 status: targetStatus,
                 remindAgain: remindAgain,
             });
+            if (!mutationStateApi.isCurrent(mutationState, mutation.generation)) return;
             await refreshAdminAnnouncements();
+            if (!mutationStateApi.isCurrent(mutationState, mutation.generation)) return;
             adminStatus.textContent = '更新公告已' + action + '。';
         } catch (error) {
+            if (!mutationStateApi.isCurrent(mutationState, mutation.generation)) return;
             adminStatus.textContent = error.message || '更新公告状态修改失败。';
+        } finally {
+            setMutationState(mutationStateApi.finish(mutationState, mutation.generation));
         }
     }
 

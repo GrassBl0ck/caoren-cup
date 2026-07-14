@@ -18,7 +18,7 @@ const makeService = async (name: string) => {
         logger: { warn: () => undefined },
     });
     await service.initialize();
-    return { dir, service, setNow: (value: number) => { now = value; } };
+    return { dir, service, store, setNow: (value: number) => { now = value; } };
 };
 
 const emptySections = { webHtml: '', gamePluginHtml: '', bridgePluginHtml: '' };
@@ -134,6 +134,20 @@ test('public projection hides private states and supplies all three sections', a
     assert.equal(item?.sections.bridgePluginHtml, '<p>本版本无玩家可见更新</p>');
     await runtime.service.setStatus({ id: draft.announcement.id, status: 'hidden' });
     assert.equal(runtime.service.listPublic().some((entry) => entry.id === draft.announcement.id), false);
+});
+
+test('public projection sanitizes stored HTML again as defense in depth', async (t) => {
+    const runtime = await makeService('projection-defense');
+    t.after(() => fs.rmSync(runtime.dir, { recursive: true, force: true }));
+    const id = '00000000-0000-4000-8000-000000001804';
+    await runtime.store.mutate((draft) => {
+        draft.announcements[id].sections.webHtml = '<p>安全正文</p><img src=x onerror=alert(1)>';
+        draft.announcements[id].sections.bridgePluginHtml = '<a href="javascript:alert(2)">危险链接</a>';
+    });
+
+    const item = runtime.service.listPublic().find((announcement) => announcement.id === id);
+    assert.equal(item?.sections.webHtml, '<p>安全正文</p>');
+    assert.equal(item?.sections.bridgePluginHtml, '<a>危险链接</a>');
 });
 
 test('public projection sorts equal publication times by arbitrary-size semantic versions', async (t) => {

@@ -7,12 +7,14 @@ const indexPath = path.join(publicDir, 'index.html');
 const cssPath = path.join(publicDir, 'css', 'update-announcements.css');
 const readStatePath = path.join(publicDir, 'js', 'update-announcement-read-state.js');
 const publicJsPath = path.join(publicDir, 'js', 'update-announcement-public.js');
+const adminMutationStatePath = path.join(publicDir, 'js', 'update-announcement-admin-mutation-state.js');
 const adminJsPath = path.join(publicDir, 'js', 'update-announcement-admin.js');
 const lobbyJsPath = path.join(publicDir, 'js', 'lobby-app.js');
 
 const index = fs.readFileSync(indexPath, 'utf8');
 const publicJs = fs.readFileSync(publicJsPath, 'utf8');
 assert.ok(fs.existsSync(adminJsPath), '缺少更新公告管理员控制器');
+assert.ok(fs.existsSync(adminMutationStatePath), '缺少管理员公告 mutation 状态模块');
 const adminJs = fs.readFileSync(adminJsPath, 'utf8');
 const lobbyJs = fs.readFileSync(lobbyJsPath, 'utf8');
 
@@ -75,9 +77,11 @@ assert.ok(
     '公开更新公告控制器必须在大厅创建共享 Socket 后加载',
 );
 const adminControllerIndex = index.indexOf('src="/js/update-announcement-admin.js"');
+const adminMutationStateIndex = index.indexOf('src="/js/update-announcement-admin-mutation-state.js"');
 assert.ok(
-    adminControllerIndex > publicControllerIndex,
-    '管理员更新公告控制器必须在公共控制器之后加载',
+    adminMutationStateIndex > publicControllerIndex
+        && adminControllerIndex > adminMutationStateIndex,
+    '管理员 mutation 状态模块必须在公共控制器之后、管理员控制器之前加载',
 );
 assert.doesNotMatch(
     index,
@@ -166,6 +170,39 @@ assert.doesNotMatch(
 const isAdminAnnouncementRequestCurrent = loadPureFunction(adminJs, 'isAdminAnnouncementRequestCurrent');
 assert.equal(isAdminAnnouncementRequestCurrent(2, 2), true, '最新管理员公告请求必须可写回');
 assert.equal(isAdminAnnouncementRequestCurrent(1, 2), false, '旧管理员公告请求必须被丢弃');
+const adminMutationState = require(adminMutationStatePath);
+const initialMutationState = { pending: false, generation: 0 };
+const firstMutation = adminMutationState.begin(initialMutationState);
+assert.equal(firstMutation.accepted, true, '首个管理员写操作必须获得共享锁');
+assert.deepEqual(firstMutation.state, { pending: true, generation: 1 });
+const doubleClickMutation = adminMutationState.begin(firstMutation.state);
+assert.equal(doubleClickMutation.accepted, false, '快速双击不得启动第二个 mutation');
+assert.deepEqual(doubleClickMutation.state, firstMutation.state, '拒绝双击时不得推进代次');
+const firstFinished = adminMutationState.finish(firstMutation.state, firstMutation.generation);
+const newerMutation = adminMutationState.begin(firstFinished);
+assert.equal(
+    adminMutationState.isCurrent(newerMutation.state, firstMutation.generation),
+    false,
+    '旧 mutation 结果不得写入较新的代次',
+);
+assert.equal(
+    adminMutationState.isCurrent(newerMutation.state, newerMutation.generation),
+    true,
+    '当前 mutation 结果必须允许写入',
+);
+assert.deepEqual(
+    adminMutationState.finish(newerMutation.state, firstMutation.generation),
+    newerMutation.state,
+    '旧 mutation 的 finally 不得释放较新的共享锁',
+);
+assert.ok(
+    adminJs.includes('mutationStateApi.begin')
+        && adminJs.includes('mutationStateApi.isCurrent')
+        && adminJs.includes('mutationStateApi.finish')
+        && adminJs.includes("querySelectorAll('button')")
+        && adminJs.includes('button.disabled = true'),
+    '管理员控制器必须使用共享锁、代次保护并禁用操作按钮',
+);
 const refreshAdminMatch = adminJs.match(/async function refreshAdminAnnouncements\(\) \{[\s\S]*?\n    }\n\n    async function saveAnnouncement/);
 assert.ok(refreshAdminMatch, '缺少管理员公告刷新流程');
 assert.match(refreshAdminMatch[0], /const requestId = \+\+latestAdminAnnouncementRequestId;/, '刷新必须递增请求代次');
@@ -283,5 +320,57 @@ assert.deepEqual(
 assert.equal(readState.isFetchCurrent(2, 2, 5, 5), true);
 assert.equal(readState.isFetchCurrent(2, 3, 5, 5), false);
 assert.equal(readState.isFetchCurrent(2, 2, 5, 6), false);
+
+const delayedSeeds = [{ id: 'seed', reminderRevision: 1 }];
+assert.equal(
+    typeof readState.createOpenSnapshotSession,
+    'function',
+    '缺少创建打开快照会话的纯状态函数',
+);
+assert.equal(
+    typeof readState.captureFirstAuthoritativeSnapshot,
+    'function',
+    '缺少补建首次权威快照的纯状态函数',
+);
+let delayedOpenSession = readState.createOpenSnapshotSession(1, false, [], {});
+assert.deepEqual(delayedOpenSession, {
+    sessionId: 1,
+    waitingForInitialSnapshot: true,
+    snapshot: [],
+}, '首次 GET 未完成时打开，必须等待首份权威快照');
+delayedOpenSession = readState.captureFirstAuthoritativeSnapshot(
+    delayedOpenSession,
+    1,
+    delayedSeeds,
+    {},
+);
+assert.deepEqual(delayedOpenSession.snapshot, delayedSeeds, '延迟首次 GET 返回后必须补建打开快照');
+assert.deepEqual(
+    readState.markRead({}, delayedOpenSession.snapshot),
+    { seed: 1 },
+    '关闭抽屉后必须记录延迟首次 GET 快照中的 revision',
+);
+const afterSocketRevision = readState.captureFirstAuthoritativeSnapshot(
+    delayedOpenSession,
+    1,
+    [{ id: 'seed', reminderRevision: 2 }, { id: 'socket-new', reminderRevision: 1 }],
+    {},
+);
+assert.deepEqual(
+    afterSocketRevision.snapshot,
+    delayedSeeds,
+    '快照建立后到达的 Socket revision 不得加入当前打开会话',
+);
+const reopenedSession = readState.createOpenSnapshotSession(2, false, [], {});
+assert.deepEqual(
+    readState.captureFirstAuthoritativeSnapshot(reopenedSession, 1, delayedSeeds, {}),
+    reopenedSession,
+    '关闭并重新打开后，旧会话的异步结果不得写入新快照',
+);
+assert.ok(
+    publicJs.includes('createOpenSnapshotSession')
+        && publicJs.includes('captureFirstAuthoritativeSnapshot'),
+    '公开控制器必须接入首次权威快照状态逻辑',
+);
 
 console.log('PASS: 更新公告 UI 合约与纯已读逻辑通过');
