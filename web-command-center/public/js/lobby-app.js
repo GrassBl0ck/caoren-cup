@@ -97,6 +97,10 @@ const ws = io();
 
             const select = document.getElementById('admin-view-select');
             if (select) select.value = activeView;
+
+            window.dispatchEvent(new CustomEvent('caoren:admin-view-changed', {
+                detail: { view: activeView }
+            }));
         }
 
         function switchAdminTab(tab) {

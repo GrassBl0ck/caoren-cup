@@ -7,9 +7,14 @@ const indexPath = path.join(publicDir, 'index.html');
 const cssPath = path.join(publicDir, 'css', 'update-announcements.css');
 const readStatePath = path.join(publicDir, 'js', 'update-announcement-read-state.js');
 const publicJsPath = path.join(publicDir, 'js', 'update-announcement-public.js');
+const adminJsPath = path.join(publicDir, 'js', 'update-announcement-admin.js');
+const lobbyJsPath = path.join(publicDir, 'js', 'lobby-app.js');
 
 const index = fs.readFileSync(indexPath, 'utf8');
 const publicJs = fs.readFileSync(publicJsPath, 'utf8');
+assert.ok(fs.existsSync(adminJsPath), '缺少更新公告管理员控制器');
+const adminJs = fs.readFileSync(adminJsPath, 'utf8');
+const lobbyJs = fs.readFileSync(lobbyJsPath, 'utf8');
 const requiredIds = [
     'update-announcement-trigger',
     'update-announcement-unread-dot',
@@ -63,10 +68,62 @@ assert.ok(
     lobbyControllerIndex < publicControllerIndex,
     '公开更新公告控制器必须在大厅创建共享 Socket 后加载',
 );
+const adminControllerIndex = index.indexOf('src="/js/update-announcement-admin.js"');
+assert.ok(
+    adminControllerIndex > publicControllerIndex,
+    '管理员更新公告控制器必须在公共控制器之后加载',
+);
 assert.doesNotMatch(
     index,
     /update-announcement[^\n>]*(?:delete|删除)/i,
     '更新公告 UI 不得包含删除操作',
+);
+
+for (const endpoint of [
+    '/api/admin/update-announcements/list',
+    '/api/admin/update-announcements/save',
+    '/api/admin/update-announcements/status',
+]) {
+    assert.ok(adminJs.includes(endpoint), `管理员控制器缺少接口：${endpoint}`);
+}
+for (const status of ['draft', 'published', 'hidden']) {
+    assert.ok(adminJs.includes(status), `管理员控制器缺少状态：${status}`);
+}
+for (const token of [
+    'confirmVersionChange',
+    'remindAgain',
+    '发布后的版本号已改变。保存后会重新提醒所有玩家，确定继续吗？',
+    '选择“取消”只表示不重复提醒，公告仍会重新发布。',
+]) {
+    assert.ok(adminJs.includes(token), `管理员控制器缺少行为：${token}`);
+}
+assert.match(adminJs, /method:\s*['"]POST['"]/, '管理员接口必须使用 POST');
+assert.match(adminJs, /body:\s*JSON\.stringify\(/, '管理员接口密码与参数必须放入 JSON 请求体');
+assert.doesNotMatch(adminJs, /(?:query|searchParams|URLSearchParams)[\s\S]{0,120}adminPassword/i, '管理员密码不得放入 URL 参数');
+assert.doesNotMatch(adminJs, /fetch\([^\n]*(?:delete|\/delete)/i, '管理员控制器不得请求永久删除接口');
+assert.equal(
+    (adminJs.match(/\bcloseEditor\(\)/g) || []).length,
+    2,
+    '编辑器只能由 closeEditor 定义和保存成功分支关闭，失败时必须保留表单',
+);
+const changeStatusMatch = adminJs.match(/async function changeStatus\([\s\S]*?\n    }\n\n    function formatUpdateAnnouncementEditor/);
+assert.ok(changeStatusMatch, '缺少更新公告状态切换流程');
+assert.doesNotMatch(
+    changeStatusMatch[0],
+    /const remindAgain =[\s\S]*?if\s*\(\s*!remindAgain\s*\)\s*return/,
+    '重新发布的第二次确认取消只能表示不提醒，不能取消重新发布',
+);
+assert.ok(
+    adminJs.includes('title.textContent = item.version + \' · \' + item.title')
+        && adminJs.includes('chip.textContent = statusLabels[item.status] || item.status')
+        && adminJs.includes('published.textContent = formatChinaTimestamp(item.publishedAt)')
+        && adminJs.includes('meta.textContent = \'最后编辑：\' + formatChinaTimestamp(item.updatedAt)'),
+    '管理员列表的版本、标题、状态和时间必须通过 textContent 渲染',
+);
+assert.ok(
+    lobbyJs.includes("new CustomEvent('caoren:admin-view-changed'")
+        && lobbyJs.includes('detail: { view: activeView }'),
+    '切换管理员视图后必须派发 caoren:admin-view-changed',
 );
 
 for (const token of [
@@ -105,6 +162,7 @@ assert.ok(
 const css = fs.readFileSync(cssPath, 'utf8');
 assert.match(css, /@media\s*\(max-width:\s*768px\)/, '缺少 768px 响应式规则');
 assert.match(css, /@media\s*\(max-width:\s*420px\)/, '缺少窄屏响应式规则');
+assert.match(css, /@media\s*\(max-width:\s*360px\)/, '缺少 360px 管理工具栏响应式规则');
 const mobile768Start = css.search(/@media\s*\(max-width:\s*768px\)/);
 const mobile420Start = css.search(/@media\s*\(max-width:\s*420px\)/);
 const mobile768Css = css.slice(mobile768Start, mobile420Start);

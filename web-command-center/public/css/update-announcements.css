@@ -141,6 +141,10 @@ body[data-theme="dark"] .update-announcement-drawer {
     .update-announcement-drawer { padding: 16px; }
     .update-announcement-item-toggle,
     .update-announcement-admin-item-head { grid-template-columns: 1fr; }
+    .update-announcement-admin-item {
+        display: grid;
+        gap: 10px;
+    }
     .update-announcement-time { white-space: normal; }
 }
 
@@ -149,5 +153,14 @@ body[data-theme="dark"] .update-announcement-drawer {
     .update-announcement-editor-heading { align-items: stretch; flex-direction: column; }
     .update-announcement-admin-actions,
     .update-announcement-admin-actions > * { width: 100%; }
+    .update-announcement-rich-editor { min-height: 120px; }
+}
+
+@media (max-width: 360px) {
+    .update-announcement-rich-toolbar,
+    .update-announcement-admin-actions,
+    .update-announcement-editor-actions {
+        flex-wrap: wrap;
+    }
     .update-announcement-rich-editor { min-height: 120px; }
 }
