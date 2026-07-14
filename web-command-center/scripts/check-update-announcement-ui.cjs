@@ -65,8 +65,28 @@ assert.doesNotMatch(
 const css = fs.readFileSync(cssPath, 'utf8');
 assert.match(css, /@media\s*\(max-width:\s*768px\)/, '缺少 768px 响应式规则');
 assert.match(css, /@media\s*\(max-width:\s*420px\)/, '缺少窄屏响应式规则');
+const mobile768Start = css.search(/@media\s*\(max-width:\s*768px\)/);
+const mobile420Start = css.search(/@media\s*\(max-width:\s*420px\)/);
+const mobile768Css = css.slice(mobile768Start, mobile420Start);
+const minHeight44Selectors = new Set();
+for (const match of mobile768Css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!/min-height:\s*44px\s*;?/.test(match[2])) continue;
+    match[1].split(',').forEach((selector) => minHeight44Selectors.add(selector.trim()));
+}
+[
+    '.update-announcement-drawer button',
+    '.update-announcement-admin-panel button',
+    '.update-announcement-admin-panel input',
+    '.update-announcement-admin-panel select',
+].forEach((selector) => {
+    assert.ok(
+        minHeight44Selectors.has(selector),
+        `768px 下缺少公告控件 44px 点击高度覆盖：${selector}`,
+    );
+});
 assert.doesNotMatch(css, /\[style\*=["'][^"']*background/i, '不得用内联背景属性选择器适配主题');
 assert.doesNotMatch(css, /#[0-9a-f]{3,8}\b/i, '更新公告样式不得写死仅适合单一主题的颜色');
+assert.doesNotMatch(css, /rgba\s*\(/i, '更新公告样式不得使用绕过主题变量的原始 rgba 颜色');
 
 const readState = require(readStatePath);
 const announcements = [

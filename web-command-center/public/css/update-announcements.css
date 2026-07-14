@@ -12,7 +12,7 @@ body.update-announcement-open { overflow: hidden; }
     position: fixed;
     z-index: 990;
     inset: 0;
-    background: rgba(15, 23, 42, 0.42);
+    background: color-mix(in srgb, var(--text-strong) 42%, transparent);
     backdrop-filter: blur(2px);
 }
 .update-announcement-drawer {
@@ -27,7 +27,7 @@ body.update-announcement-open { overflow: hidden; }
     border-left: 1px solid var(--border-subtle);
     background: var(--surface-raised);
     color: var(--text-default);
-    box-shadow: -18px 0 48px rgba(15, 23, 42, 0.22);
+    box-shadow: -18px 0 48px color-mix(in srgb, var(--text-strong) 22%, transparent);
 }
 .update-announcement-drawer-header,
 .update-announcement-admin-header,
@@ -122,9 +122,11 @@ body.update-announcement-open { overflow: hidden; }
         width: 100%;
         max-width: none;
     }
-    .update-announcement-close,
     .update-announcement-trigger,
-    .update-announcement-admin-actions button {
+    .update-announcement-drawer button,
+    .update-announcement-admin-panel button,
+    .update-announcement-admin-panel input,
+    .update-announcement-admin-panel select {
         min-height: 44px;
     }
     .update-announcement-admin-row {
