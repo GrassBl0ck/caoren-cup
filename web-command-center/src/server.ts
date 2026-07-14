@@ -1,5 +1,6 @@
 // server.ts
 import { createServer } from 'http';
+import path from 'node:path';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import multer from 'multer';
@@ -17,6 +18,7 @@ import {
     readLobbyAnnouncement,
     registerLobbyAnnouncementRoutes,
 } from './routes/lobby-announcement-routes';
+import { registerUpdateAnnouncementRoutes } from './routes/update-announcement-routes';
 import { registerPluginRoutes } from './plugin-api';
 import { registerSocketHandlers } from './socket-handlers';
 import { registerGameCodeLogin } from './v1333-game-login';
@@ -38,6 +40,9 @@ import { registerIdentityAuthRoutes } from './identity/auth-routes';
 import { initializeIdentityRuntime } from './identity/identity-runtime';
 import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer, removeIdentityFromSession } from './identity/session-integration';
+import { UpdateAnnouncementService } from './update-announcements/update-announcement-service';
+import { UpdateAnnouncementStore } from './update-announcements/update-announcement-store';
+import type { PublicUpdateAnnouncement } from './update-announcements/update-announcement-types';
 
 const app = express();
 if (process.env.TRUST_PROXY === 'loopback') app.set('trust proxy', 'loopback');
@@ -71,6 +76,16 @@ const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
 });
+
+const updateAnnouncementStore = new UpdateAnnouncementStore(
+    process.env.UPDATE_ANNOUNCEMENT_STORE_PATH
+        || path.resolve(__dirname, '..', 'runtime', 'update-announcements.json'),
+);
+const updateAnnouncementService = new UpdateAnnouncementService(updateAnnouncementStore);
+
+const broadcastUpdateAnnouncements = (announcements: PublicUpdateAnnouncement[]) => {
+    io.emit(WsEvents.UPDATE_ANNOUNCEMENTS, { announcements });
+};
 
 const broadcastState = () => {
     const session = getSession();
@@ -168,6 +183,12 @@ registerLobbyAnnouncementRoutes(app, {
     broadcastAnnouncement,
 });
 
+registerUpdateAnnouncementRoutes(app, {
+    adminPassword: ADMIN_PASSWORD,
+    service: updateAnnouncementService,
+    broadcastPublic: broadcastUpdateAnnouncements,
+});
+
 registerPluginRoutes(app, {
     broadcastState,
     notifyMessage,
@@ -180,6 +201,11 @@ registerSocketHandlers(io, {
 
 io.on('connection', (socket) => {
     socket.emit(WsEvents.LOBBY_ANNOUNCEMENT, { announcement: readLobbyAnnouncement() });
+    if (updateAnnouncementService.isAvailable()) {
+        socket.emit(WsEvents.UPDATE_ANNOUNCEMENTS, {
+            announcements: updateAnnouncementService.listPublic(),
+        });
+    }
 });
 
 registerGameCodeLogin(app, io, {
@@ -210,9 +236,12 @@ setInterval(() => {
 }, 1000);
 
 const PORT = process.env.PORT || 3000;
-initializeIdentityRuntime()
+Promise.all([
+    initializeIdentityRuntime(),
+    updateAnnouncementService.initialize(),
+])
     .then(() => httpServer.listen(PORT, () => console.log(`草人杯指挥台已启动: http://localhost:${PORT}`)))
     .catch((error) => {
-        console.error('[IdentityStore] 身份库加载失败，服务未启动：', error);
+        console.error('[Startup] 核心服务初始化失败，服务未启动：', error);
         process.exitCode = 1;
     });

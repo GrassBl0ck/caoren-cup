@@ -1,0 +1,172 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { UpdateAnnouncementStore } from './update-announcement-store';
+
+const makeDir = (name: string) => {
+    const dir = path.resolve(__dirname, '..', '..', 'runtime', `update-announcement-${name}-${process.pid}-${Date.now()}`);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+};
+
+test('a missing store is seeded once with v1.8.2 through v1.8.4', async (t) => {
+    const dir = makeDir('seed');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'update-announcements.json');
+    const first = new UpdateAnnouncementStore(file);
+    await first.load();
+    assert.deepEqual(
+        Object.values(first.snapshot().announcements).map((item) => item.version).sort(),
+        ['v1.8.2', 'v1.8.3', 'v1.8.4'],
+    );
+    const seeded = Object.fromEntries(Object.values(first.snapshot().announcements).map((item) => [item.version, item]));
+    assert.equal(seeded['v1.8.2'].publishedAt, Date.parse('2026-07-12T19:25:21Z'));
+    assert.equal(seeded['v1.8.3'].publishedAt, Date.parse('2026-07-13T18:24:55Z'));
+    assert.equal(seeded['v1.8.4'].publishedAt, Date.parse('2026-07-13T20:10:18Z'));
+    assert.equal(seeded['v1.8.4'].status, 'published');
+    assert.equal(seeded['v1.8.4'].reminderRevision, 1);
+    assert.equal(seeded['v1.8.4'].createdAt, seeded['v1.8.4'].publishedAt);
+    assert.equal(seeded['v1.8.4'].updatedAt, seeded['v1.8.4'].publishedAt);
+    const original = fs.readFileSync(file, 'utf8');
+    const second = new UpdateAnnouncementStore(file);
+    await second.load();
+    assert.equal(fs.readFileSync(file, 'utf8'), original);
+});
+
+test('a corrupt primary restores a valid previous copy', async (t) => {
+    const dir = makeDir('previous');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'update-announcements.json');
+    const store = new UpdateAnnouncementStore(file);
+    await store.load();
+    fs.copyFileSync(file, path.join(dir, 'update-announcements.previous.json'));
+    fs.writeFileSync(file, '{broken', 'utf8');
+    const restored = new UpdateAnnouncementStore(file);
+    await restored.load();
+    assert.equal(Object.keys(restored.snapshot().announcements).length, 3);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).schemaVersion, 1);
+});
+
+test('an unsafe primary restores a valid previous copy', async (t) => {
+    const dir = makeDir('unsafe-primary');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'update-announcements.json');
+    const previous = path.join(dir, 'update-announcements.previous.json');
+    const store = new UpdateAnnouncementStore(file);
+    await store.load();
+    fs.copyFileSync(file, previous);
+
+    const unsafe = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const id = '00000000-0000-4000-8000-000000001804';
+    unsafe.announcements[id].sections.webHtml = '<p>看似有效</p><img src=x onerror=alert(1)>';
+    fs.writeFileSync(file, JSON.stringify(unsafe, null, 2), 'utf8');
+
+    const restored = new UpdateAnnouncementStore(file);
+    await restored.load();
+
+    assert.equal(
+        restored.snapshot().announcements[id].sections.webHtml,
+        '<p>玩家现在可以按“收到成员密码”或“收到本场邀请码”选择入口，并能一直看到登录方式说明。</p>',
+    );
+    assert.equal(fs.readFileSync(file, 'utf8').includes('onerror'), false);
+});
+
+test('an unknown schema is preserved and never downgraded from previous', async (t) => {
+    const dir = makeDir('unknown');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'update-announcements.json');
+    fs.writeFileSync(file, JSON.stringify({ schemaVersion: 99, announcements: {} }), 'utf8');
+    fs.writeFileSync(path.join(dir, 'update-announcements.previous.json'), JSON.stringify({ schemaVersion: 1, announcements: {} }), 'utf8');
+    await assert.rejects(new UpdateAnnouncementStore(file).load(), /unsupported/);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).schemaVersion, 99);
+});
+
+test('two corrupt copies fail without replacing either file', async (t) => {
+    const dir = makeDir('both-corrupt');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'update-announcements.json');
+    const previous = path.join(dir, 'update-announcements.previous.json');
+    fs.writeFileSync(file, '{primary-broken', 'utf8');
+    fs.writeFileSync(previous, '{previous-broken', 'utf8');
+    await assert.rejects(new UpdateAnnouncementStore(file).load());
+    assert.equal(fs.readFileSync(file, 'utf8'), '{primary-broken');
+    assert.equal(fs.readFileSync(previous, 'utf8'), '{previous-broken');
+});
+
+test('two unsafe copies fail without replacing either file', async (t) => {
+    const dir = makeDir('both-unsafe');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'update-announcements.json');
+    const previous = path.join(dir, 'update-announcements.previous.json');
+    const store = new UpdateAnnouncementStore(file);
+    await store.load();
+
+    const primaryData = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const previousData = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const id = '00000000-0000-4000-8000-000000001804';
+    primaryData.announcements[id].sections.webHtml = '<img src=x onerror=alert(1)>';
+    previousData.announcements[id].sections.bridgePluginHtml = '<a href="javascript:alert(2)">危险</a>';
+    const primaryText = JSON.stringify(primaryData, null, 2);
+    const previousText = JSON.stringify(previousData, null, 2);
+    fs.writeFileSync(file, primaryText, 'utf8');
+    fs.writeFileSync(previous, previousText, 'utf8');
+
+    await assert.rejects(new UpdateAnnouncementStore(file).load());
+    assert.equal(fs.readFileSync(file, 'utf8'), primaryText);
+    assert.equal(fs.readFileSync(previous, 'utf8'), previousText);
+});
+
+test('a failed write keeps memory unchanged and a later write can recover', async (t) => {
+    const dir = makeDir('write-failure');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    let failRename = false;
+    const controlledFs = new Proxy(fs, {
+        get(target, property, receiver) {
+            if (property === 'renameSync') {
+                return (...args: Parameters<typeof fs.renameSync>) => {
+                    if (failRename) throw new Error('simulated rename failure');
+                    return fs.renameSync(...args);
+                };
+            }
+            return Reflect.get(target, property, receiver);
+        },
+    });
+    const store = new UpdateAnnouncementStore(
+        path.join(dir, 'update-announcements.json'),
+        { fs: controlledFs },
+    );
+    await store.load();
+    const id = '00000000-0000-4000-8000-000000001804';
+    const before = store.snapshot();
+
+    failRename = true;
+    await assert.rejects(store.mutate((draft) => {
+        draft.announcements[id].title = '不应进入内存';
+    }), /simulated rename failure/);
+    assert.deepEqual(store.snapshot(), before);
+
+    failRename = false;
+    await store.mutate((draft) => {
+        draft.announcements[id].title = '恢复成功';
+    });
+    assert.equal(store.snapshot().announcements[id].title, '恢复成功');
+});
+
+test('persist rejects an unsafe candidate before writing and keeps memory unchanged', async (t) => {
+    const dir = makeDir('candidate-validation');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'update-announcements.json');
+    const store = new UpdateAnnouncementStore(file);
+    await store.load();
+    const beforeMemory = store.snapshot();
+    const beforeFile = fs.readFileSync(file, 'utf8');
+    const id = '00000000-0000-4000-8000-000000001804';
+
+    await assert.rejects(store.mutate((draft) => {
+        draft.announcements[id].sections.webHtml = '<img src=x onerror=alert(1)>';
+    }));
+
+    assert.deepEqual(store.snapshot(), beforeMemory);
+    assert.equal(fs.readFileSync(file, 'utf8'), beforeFile);
+});
