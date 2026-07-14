@@ -17,6 +17,15 @@ interface RegisterUpdateAnnouncementRoutesDeps {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     !!value && typeof value === 'object' && !Array.isArray(value);
 
+const SECTION_KEYS: Array<keyof UpdateAnnouncementSections> = [
+    'webHtml',
+    'gamePluginHtml',
+    'bridgePluginHtml',
+];
+
+const hasOwn = (record: Record<string, unknown>, key: string) =>
+    Object.prototype.hasOwnProperty.call(record, key);
+
 const normalizeSaveInput = (raw: unknown): SaveUpdateAnnouncementInput | null => {
     if (!isRecord(raw)
         || typeof raw.version !== 'string'
@@ -24,15 +33,17 @@ const normalizeSaveInput = (raw: unknown): SaveUpdateAnnouncementInput | null =>
         || !isRecord(raw.sections)) {
         return null;
     }
-    const sections: UpdateAnnouncementSections = {
-        webHtml: '',
-        gamePluginHtml: '',
-        bridgePluginHtml: '',
-    };
-    for (const key of Object.keys(sections) as Array<keyof UpdateAnnouncementSections>) {
+    if ((hasOwn(raw, 'id') && (typeof raw.id !== 'string' || !raw.id.trim()))
+        || (hasOwn(raw, 'remindAgain') && typeof raw.remindAgain !== 'boolean')
+        || (hasOwn(raw, 'confirmVersionChange') && typeof raw.confirmVersionChange !== 'boolean')) {
+        return null;
+    }
+    const sections: Partial<UpdateAnnouncementSections> = {};
+    for (const key of SECTION_KEYS) {
+        if (!hasOwn(raw.sections, key)) continue;
         const value = raw.sections[key];
-        if (value !== undefined && typeof value !== 'string') return null;
-        if (typeof value === 'string') sections[key] = value;
+        if (typeof value !== 'string') return null;
+        sections[key] = value;
     }
     return {
         id: typeof raw.id === 'string' ? raw.id : undefined,

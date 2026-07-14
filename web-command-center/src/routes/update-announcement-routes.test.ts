@@ -115,6 +115,102 @@ test('save route rejects malformed announcement fields with a JSON 400 response'
     }
 });
 
+test('save route preserves omitted sections while editing an existing draft', async (t) => {
+    const fixture = await createFixture('partial-sections');
+    t.after(async () => {
+        await closeServer(fixture.server);
+        fs.rmSync(fixture.dir, { recursive: true, force: true });
+    });
+    const post = async (announcement: Record<string, unknown>) => {
+        const response = await fetch(`${fixture.baseUrl}/api/admin/update-announcements/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminPassword: 'admin-test-password', announcement }),
+        });
+        return { response, body: await response.json() as any };
+    };
+
+    const created = await post({
+        version: 'v1.9.10',
+        title: '三端完整公告',
+        sections: {
+            webHtml: '<p>网页原文</p>',
+            gamePluginHtml: '<p>游戏插件原文</p>',
+            bridgePluginHtml: '<p>桥接插件原文</p>',
+        },
+    });
+    assert.equal(created.response.status, 200);
+
+    const partialEdit = await post({
+        id: created.body.announcement.id,
+        version: 'v1.9.10',
+        title: '三端完整公告',
+        sections: { webHtml: '<p>网页新文</p>' },
+    });
+    assert.equal(partialEdit.response.status, 200);
+    assert.deepEqual(partialEdit.body.announcement.sections, {
+        webHtml: '<p>网页新文</p>',
+        gamePluginHtml: '<p>游戏插件原文</p>',
+        bridgePluginHtml: '<p>桥接插件原文</p>',
+    });
+
+    const emptySectionsEdit = await post({
+        id: created.body.announcement.id,
+        version: 'v1.9.10',
+        title: '仅修改标题',
+        sections: {},
+    });
+    assert.equal(emptySectionsEdit.response.status, 200);
+    assert.deepEqual(emptySectionsEdit.body.announcement.sections, partialEdit.body.announcement.sections);
+});
+
+test('save route rejects invalid optional fields without creating announcements', async (t) => {
+    const fixture = await createFixture('invalid-optional-fields');
+    t.after(async () => {
+        await closeServer(fixture.server);
+        fs.rmSync(fixture.dir, { recursive: true, force: true });
+    });
+    const post = async (route: string, body: Record<string, unknown>) => {
+        const response = await fetch(fixture.baseUrl + route, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminPassword: 'admin-test-password', ...body }),
+        });
+        return { status: response.status, body: await response.json() as any };
+    };
+    const before = await post('/api/admin/update-announcements/list', {});
+    assert.equal(before.status, 200);
+
+    const invalidAnnouncements = [
+        { id: 190, version: 'v1.9.20', title: '数字 ID', sections: {} },
+        { id: '', version: 'v1.9.21', title: '空 ID', sections: {} },
+        { id: '   ', version: 'v1.9.22', title: '空白 ID', sections: {} },
+        { version: 'v1.9.23', title: '错误提醒类型', sections: {}, remindAgain: 'true' },
+        { version: 'v1.9.24', title: '错误确认类型', sections: {}, confirmVersionChange: 1 },
+    ];
+    const invalidResults = [];
+    for (const announcement of invalidAnnouncements) {
+        invalidResults.push(await post('/api/admin/update-announcements/save', { announcement }));
+    }
+    const after = await post('/api/admin/update-announcements/list', {});
+
+    assert.deepEqual({
+        statuses: invalidResults.map((result) => result.status),
+        beforeCount: before.body.announcements.length,
+        afterCount: after.body.announcements.length,
+    }, {
+        statuses: [400, 400, 400, 400, 400],
+        beforeCount: before.body.announcements.length,
+        afterCount: before.body.announcements.length,
+    });
+    for (const result of invalidResults) {
+        assert.deepEqual(result.body, {
+            success: false,
+            error: '更新公告参数格式错误',
+        });
+    }
+});
+
 test('malformed announcement JSON returns a safe generic JSON error', async (t) => {
     const fixture = await createFixture('malformed-json');
     t.after(async () => {
