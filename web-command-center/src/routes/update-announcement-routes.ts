@@ -1,11 +1,11 @@
 import type { ErrorRequestHandler, Express, RequestHandler, Response } from 'express';
 import { UpdateAnnouncementService } from '../update-announcements/update-announcement-service';
 import {
+    runUpdateAnnouncementAdminOperation,
+    toUpdateAnnouncementAdminFailure,
+} from '../update-announcements/update-announcement-admin-operations';
+import {
     PublicUpdateAnnouncement,
-    SaveUpdateAnnouncementInput,
-    UpdateAnnouncementSections,
-    UpdateAnnouncementUnavailableError,
-    UpdateAnnouncementValidationError,
 } from '../update-announcements/update-announcement-types';
 
 interface RegisterUpdateAnnouncementRoutesDeps {
@@ -17,62 +17,11 @@ interface RegisterUpdateAnnouncementRoutesDeps {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     !!value && typeof value === 'object' && !Array.isArray(value);
 
-const SECTION_KEYS: Array<keyof UpdateAnnouncementSections> = [
-    'webHtml',
-    'gamePluginHtml',
-    'bridgePluginHtml',
-];
-
-const hasOwn = (record: Record<string, unknown>, key: string) =>
-    Object.prototype.hasOwnProperty.call(record, key);
-
-const normalizeSaveInput = (raw: unknown): SaveUpdateAnnouncementInput | null => {
-    if (!isRecord(raw)
-        || typeof raw.version !== 'string'
-        || typeof raw.title !== 'string'
-        || !isRecord(raw.sections)) {
-        return null;
-    }
-    if ((hasOwn(raw, 'id') && (typeof raw.id !== 'string' || !raw.id.trim()))
-        || (hasOwn(raw, 'remindAgain') && typeof raw.remindAgain !== 'boolean')
-        || (hasOwn(raw, 'confirmVersionChange') && typeof raw.confirmVersionChange !== 'boolean')) {
-        return null;
-    }
-    const sections: Partial<UpdateAnnouncementSections> = {};
-    for (const key of SECTION_KEYS) {
-        if (!hasOwn(raw.sections, key)) continue;
-        const value = raw.sections[key];
-        if (typeof value !== 'string') return null;
-        sections[key] = value;
-    }
-    return {
-        id: typeof raw.id === 'string' ? raw.id : undefined,
-        version: raw.version,
-        title: raw.title,
-        sections,
-        remindAgain: raw.remindAgain === true,
-        confirmVersionChange: raw.confirmVersionChange === true,
-    };
-};
-
 const sendUpdateAnnouncementError = (res: Response, error: unknown): void => {
-    if (error instanceof UpdateAnnouncementValidationError) {
-        res.status(error.code === 'version_duplicate' ? 409 : 400).json({
-            success: false,
-            error: error.message,
-        });
-        return;
-    }
-    if (error instanceof UpdateAnnouncementUnavailableError) {
-        res.status(503).json({
-            success: false,
-            error: '更新公告暂时无法读取',
-        });
-        return;
-    }
-    res.status(500).json({
+    const failure = toUpdateAnnouncementAdminFailure(error);
+    res.status(failure.status).json({
         success: false,
-        error: '更新公告操作失败',
+        error: failure.error,
     });
 };
 
@@ -100,9 +49,10 @@ export function registerUpdateAnnouncementRoutes(
         }
     };
 
-    const adminListHandler: RequestHandler = (_req, res) => {
+    const adminListHandler: RequestHandler = async (_req, res) => {
         try {
-            res.json({ success: true, announcements: deps.service.listAdmin() });
+            const result = await runUpdateAnnouncementAdminOperation(deps.service, 'list', {});
+            res.json({ success: true, announcements: result.announcements });
         } catch (error) {
             sendUpdateAnnouncementError(res, error);
         }
@@ -110,15 +60,7 @@ export function registerUpdateAnnouncementRoutes(
 
     const saveHandler: RequestHandler = async (req, res) => {
         try {
-            const announcement = normalizeSaveInput(req.body?.announcement);
-            if (!announcement) {
-                res.status(400).json({
-                    success: false,
-                    error: '更新公告参数格式错误',
-                });
-                return;
-            }
-            const result = await deps.service.saveAnnouncement(announcement);
+            const result = await runUpdateAnnouncementAdminOperation(deps.service, 'save', req.body);
             if (result.publicChanged) deps.broadcastPublic(deps.service.listPublic());
             res.json({ success: true, announcement: result.announcement });
         } catch (error) {
@@ -128,11 +70,7 @@ export function registerUpdateAnnouncementRoutes(
 
     const statusHandler: RequestHandler = async (req, res) => {
         try {
-            const result = await deps.service.setStatus({
-                id: String(req.body?.id || ''),
-                status: req.body?.status,
-                remindAgain: req.body?.remindAgain === true,
-            });
+            const result = await runUpdateAnnouncementAdminOperation(deps.service, 'status', req.body);
             if (result.publicChanged) deps.broadcastPublic(deps.service.listPublic());
             res.json({ success: true, announcement: result.announcement });
         } catch (error) {
