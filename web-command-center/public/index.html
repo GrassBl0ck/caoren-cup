@@ -37,6 +37,7 @@
 </script>
     <script defer src="/js/caoren-audio-controller.js"></script>
     <link rel="stylesheet" href="/css/app.css">
+    <link rel="stylesheet" href="/css/update-announcements.css">
     <link rel="stylesheet" href="/css/caoren-mod-panel.css">
     <link rel="stylesheet" href="/css/caoren-motion.css">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
@@ -50,6 +51,10 @@
         </div>
         <div class="site-header-actions">
             <a id="rules-guide-link" class="header-text-link" href="/rules.html">赛前指引</a>
+            <button id="update-announcement-trigger" class="header-text-link update-announcement-trigger" type="button" aria-haspopup="dialog" aria-controls="update-announcement-drawer">
+                更新公告
+                <span id="update-announcement-unread-dot" class="update-announcement-unread-dot" hidden aria-label="有未读更新"></span>
+            </button>
             <button id="theme-toggle" class="theme-toggle" type="button" onclick="toggleTheme()">深色模式</button>
         </div>
     </header>
@@ -267,6 +272,79 @@
                     <button type="button" class="secondary-btn" onclick="refreshLobbyAnnouncement()">刷新公告</button>
                 </div>
             </div>
+            <section id="update-announcement-admin-panel" class="match-options-panel update-announcement-admin-panel" aria-labelledby="update-announcement-admin-title">
+                <div class="update-announcement-admin-header">
+                    <div>
+                        <span class="section-eyebrow">长期版本历史</span>
+                        <h4 id="update-announcement-admin-title">更新公告管理</h4>
+                    </div>
+                    <div class="update-announcement-admin-actions">
+                        <select id="update-announcement-filter" aria-label="筛选更新公告状态">
+                            <option value="all">全部状态</option>
+                            <option value="draft">草稿</option>
+                            <option value="published">已发布</option>
+                            <option value="hidden">隐藏</option>
+                        </select>
+                        <button id="update-announcement-refresh-btn" type="button">刷新</button>
+                        <button id="update-announcement-new-btn" class="primary-btn" type="button">新增公告</button>
+                    </div>
+                </div>
+                <div id="update-announcement-admin-status" class="match-options-status" aria-live="polite">更新公告尚未读取。</div>
+                <div id="update-announcement-admin-list" class="update-announcement-admin-list"></div>
+
+                <section id="update-announcement-editor-form" class="update-announcement-editor-form" hidden aria-labelledby="update-announcement-editor-title">
+                    <div class="update-announcement-editor-heading">
+                        <h5 id="update-announcement-editor-title">新建更新公告</h5>
+                        <button id="update-announcement-cancel-btn" type="button">取消编辑</button>
+                    </div>
+                    <input id="update-announcement-id-input" type="hidden">
+                    <div class="update-announcement-admin-row">
+                        <label>版本号<input id="update-announcement-version-input" type="text" maxlength="32" placeholder="例如 v1.8.5"></label>
+                        <label>标题<input id="update-announcement-title-input" type="text" maxlength="40" placeholder="40 个字符以内"></label>
+                    </div>
+
+                    <section class="update-announcement-section-editor">
+                        <h6>一、网页端</h6>
+                        <div class="update-announcement-rich-toolbar" role="toolbar" aria-label="网页端内容格式">
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('webHtml', 'bold')"><strong>B</strong></button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('webHtml', 'insertUnorderedList')">项目符号</button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('webHtml', 'insertOrderedList')">编号</button>
+                            <button type="button" onclick="linkUpdateAnnouncementEditor('webHtml')">链接</button>
+                        </div>
+                        <div id="update-announcement-web-editor" class="update-announcement-rich-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+                    </section>
+
+                    <section class="update-announcement-section-editor">
+                        <h6>二、游戏插件</h6>
+                        <div class="update-announcement-rich-toolbar" role="toolbar" aria-label="游戏插件内容格式">
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('gamePluginHtml', 'bold')"><strong>B</strong></button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('gamePluginHtml', 'insertUnorderedList')">项目符号</button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('gamePluginHtml', 'insertOrderedList')">编号</button>
+                            <button type="button" onclick="linkUpdateAnnouncementEditor('gamePluginHtml')">链接</button>
+                        </div>
+                        <div id="update-announcement-game-plugin-editor" class="update-announcement-rich-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+                    </section>
+
+                    <section class="update-announcement-section-editor">
+                        <h6>三、桥接插件</h6>
+                        <div class="update-announcement-rich-toolbar" role="toolbar" aria-label="桥接插件内容格式">
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('bridgePluginHtml', 'bold')"><strong>B</strong></button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('bridgePluginHtml', 'insertUnorderedList')">项目符号</button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('bridgePluginHtml', 'insertOrderedList')">编号</button>
+                            <button type="button" onclick="linkUpdateAnnouncementEditor('bridgePluginHtml')">链接</button>
+                        </div>
+                        <div id="update-announcement-bridge-plugin-editor" class="update-announcement-rich-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+                    </section>
+
+                    <label class="update-announcement-reminder-option">
+                        <input id="update-announcement-remind-again" type="checkbox">
+                        <span><strong>重新提醒玩家</strong><small>仅在已发布或曾发布的公告中使用。</small></span>
+                    </label>
+                    <div class="update-announcement-editor-actions">
+                        <button id="update-announcement-save-btn" class="primary-btn" type="button">保存</button>
+                    </div>
+                </section>
+            </section>
             </div>
 
             <div id="admin-tab-setup" class="admin-view-panel" data-admin-view-panel="setup" role="tabpanel">
@@ -615,6 +693,17 @@
         </div>
     </div>
 
+    <div id="update-announcement-backdrop" class="update-announcement-backdrop" hidden></div>
+    <aside id="update-announcement-drawer" class="update-announcement-drawer" role="dialog" aria-modal="true" aria-labelledby="update-announcement-drawer-title" hidden>
+        <div class="update-announcement-drawer-header">
+            <div><span class="section-eyebrow">版本历史</span><h2 id="update-announcement-drawer-title">更新公告</h2></div>
+            <button id="update-announcement-close" type="button" aria-label="关闭更新公告">关闭</button>
+        </div>
+        <div id="update-announcement-status" class="muted-line" aria-live="polite">正在读取更新公告……</div>
+        <div id="update-announcement-list" class="update-announcement-list"></div>
+    </aside>
+
+    <script src="/js/update-announcement-read-state.js"></script>
     <script src="/js/lobby-app.js?v=ui-cleanup-20260603"></script>
     </div>
 <!-- PHASE2_UNIFIED_CAOREN_MOD_PANEL_V4_START -->
