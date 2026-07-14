@@ -14,19 +14,31 @@
     let openUnreadSnapshot = [];
     let memoryReadState = {};
     let triggerBeforeOpen = null;
+    let storageUnavailable = false;
+    let latestRequestId = 0;
+    let socketRevision = 0;
 
     function loadReadState() {
+        if (storageUnavailable) return Object.assign({}, memoryReadState);
         try {
-            memoryReadState = readApi.parse(localStorage.getItem(STORAGE_KEY));
-        } catch (_error) {}
+            memoryReadState = readApi.mergeReadState(
+                memoryReadState,
+                readApi.parse(localStorage.getItem(STORAGE_KEY)),
+            );
+        } catch (_error) {
+            storageUnavailable = true;
+        }
         return Object.assign({}, memoryReadState);
     }
 
     function saveReadState(value) {
-        memoryReadState = Object.assign({}, value);
+        memoryReadState = readApi.mergeReadState(memoryReadState, value);
+        if (storageUnavailable) return;
         try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(memoryReadState));
-        } catch (_error) {}
+        } catch (_error) {
+            storageUnavailable = true;
+        }
     }
 
     function formatChinaTimestamp(value) {
@@ -74,9 +86,12 @@
     }
 
     function renderAnnouncements() {
+        const activeBeforeRender = document.activeElement;
+        const focusWasInsideDrawer = !drawer.hidden && drawer.contains(activeBeforeRender);
         list.replaceChildren();
         if (!announcements.length) {
             status.textContent = '暂时没有已发布的更新公告。';
+            if (focusWasInsideDrawer && !document.contains(activeBeforeRender)) closeButton.focus();
             return;
         }
         status.textContent = '共 ' + announcements.length + ' 个已发布版本。';
@@ -124,6 +139,7 @@
             article.append(toggle, body);
             list.append(article);
         });
+        if (focusWasInsideDrawer && !document.contains(activeBeforeRender)) closeButton.focus();
     }
 
     function applyAnnouncements(next) {
@@ -133,6 +149,8 @@
     }
 
     async function refreshPublicAnnouncements() {
+        const requestId = ++latestRequestId;
+        const socketRevisionAtStart = socketRevision;
         try {
             const response = await fetch('/api/update-announcements', {
                 headers: { Accept: 'application/json' },
@@ -141,20 +159,30 @@
             if (!response.ok || !data.success) {
                 throw new Error(data.error || '更新公告暂时无法读取');
             }
+            if (!readApi.isFetchCurrent(
+                socketRevisionAtStart,
+                socketRevision,
+                requestId,
+                latestRequestId,
+            )) return;
             applyAnnouncements(data.announcements);
         } catch (_error) {
+            if (!readApi.isFetchCurrent(
+                socketRevisionAtStart,
+                socketRevision,
+                requestId,
+                latestRequestId,
+            )) return;
             status.textContent = '更新公告暂时无法读取，请稍后重试。';
             updateUnreadDot();
         }
     }
 
-    async function openDrawer() {
+    function openDrawer() {
         triggerBeforeOpen = document.activeElement;
         drawer.hidden = false;
         backdrop.hidden = false;
         document.body.classList.add('update-announcement-open');
-        closeButton.focus();
-        await refreshPublicAnnouncements();
         const unread = new Set(readApi.findUnread(announcements, loadReadState()));
         openUnreadSnapshot = announcements
             .filter(function (item) { return unread.has(item.id); })
@@ -163,6 +191,8 @@
             });
         renderAnnouncements();
         updateUnreadDot();
+        closeButton.focus();
+        void refreshPublicAnnouncements();
     }
 
     function closeDrawer() {
@@ -188,6 +218,11 @@
         if (!focusable.length) return;
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
+        if (!drawer.contains(document.activeElement)) {
+            event.preventDefault();
+            (event.shiftKey ? last : first).focus();
+            return;
+        }
         if (event.shiftKey && document.activeElement === first) {
             event.preventDefault();
             last.focus();
@@ -209,6 +244,7 @@
     const socket = window.__caorenCupSocket;
     if (socket && typeof socket.on === 'function') {
         socket.on('UPDATE_ANNOUNCEMENTS', function (payload) {
+            socketRevision += 1;
             applyAnnouncements(payload && payload.announcements);
         });
     }

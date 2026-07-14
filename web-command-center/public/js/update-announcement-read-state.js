@@ -3,15 +3,23 @@
     if (typeof module === 'object' && module.exports) module.exports = api;
     if (root) root.CaorenUpdateAnnouncementReadState = api;
 })(typeof window !== 'undefined' ? window : globalThis, function () {
+    function mergeReadState() {
+        const next = {};
+        Array.from(arguments).forEach(function (value) {
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+            Object.entries(value).forEach(function (entry) {
+                const revision = entry[1];
+                if (!Number.isInteger(revision) || revision < 0) return;
+                next[entry[0]] = Math.max(Number(next[entry[0]] || 0), revision);
+            });
+        });
+        return next;
+    }
+
     function parse(raw) {
         try {
             const value = JSON.parse(String(raw || '{}'));
-            if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-            return Object.fromEntries(Object.entries(value).filter(function (entry) {
-                return typeof entry[0] === 'string'
-                    && Number.isInteger(entry[1])
-                    && entry[1] >= 0;
-            }));
+            return mergeReadState(value);
         } catch (_error) {
             return {};
         }
@@ -33,5 +41,15 @@
         return next;
     }
 
-    return { parse: parse, findUnread: findUnread, markRead: markRead };
+    function isFetchCurrent(startSocketRevision, currentSocketRevision, requestId, latestRequestId) {
+        return startSocketRevision === currentSocketRevision && requestId === latestRequestId;
+    }
+
+    return {
+        parse: parse,
+        findUnread: findUnread,
+        markRead: markRead,
+        mergeReadState: mergeReadState,
+        isFetchCurrent: isFetchCurrent,
+    };
 });

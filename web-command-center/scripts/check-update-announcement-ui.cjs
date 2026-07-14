@@ -74,12 +74,33 @@ for (const token of [
     'UPDATE_ANNOUNCEMENTS',
     'Asia/Shanghai',
     'caoren-update-announcement-read-v1',
+    'storageUnavailable',
+    'latestRequestId',
+    'socketRevision',
+    'isFetchCurrent',
     'aria-expanded',
     'Escape',
     'update-announcement-open',
 ]) {
     assert.ok(publicJs.includes(token), `missing public update announcement behavior: ${token}`);
 }
+
+const openDrawerMatch = publicJs.match(/function openDrawer\(\) \{([\s\S]*?)\n    \}/);
+assert.ok(openDrawerMatch, '缺少同步打开公告抽屉函数');
+assert.doesNotMatch(openDrawerMatch[0], /async|await/, '打开抽屉不得等待异步请求后再创建快照');
+const openDrawerBody = openDrawerMatch[1];
+assert.ok(
+    openDrawerBody.indexOf('openUnreadSnapshot =') < openDrawerBody.indexOf('refreshPublicAnnouncements()'),
+    '打开抽屉必须先同步冻结未读快照，再异步刷新公告',
+);
+assert.ok(
+    publicJs.includes('activeBeforeRender') && publicJs.includes('!document.contains(activeBeforeRender)'),
+    '公告重绘后必须恢复被移除的抽屉焦点',
+);
+assert.ok(
+    publicJs.includes('if (!drawer.contains(document.activeElement))'),
+    '焦点已逃出打开抽屉时，Tab 必须将焦点拉回抽屉',
+);
 
 const css = fs.readFileSync(cssPath, 'utf8');
 assert.match(css, /@media\s*\(max-width:\s*768px\)/, '缺少 768px 响应式规则');
@@ -136,5 +157,19 @@ assert.deepEqual(readState.findUnread(announcements, { a: 1 }), ['b']);
 assert.deepEqual(readState.markRead({ a: 1 }, announcements), { a: 1, b: 2 });
 assert.deepEqual(readState.parse('{"a":2}'), { a: 2 });
 assert.deepEqual(readState.parse('{broken'), {});
+assert.deepEqual(
+    readState.mergeReadState({ a: 4, b: 1 }, { a: 2, b: 3, c: 5 }),
+    { a: 4, b: 3, c: 5 },
+);
+assert.deepEqual(
+    readState.mergeReadState(
+        { a: 4, badString: '4', negative: -1 },
+        { a: Number.NaN, badArray: [], zero: 0 },
+    ),
+    { a: 4, zero: 0 },
+);
+assert.equal(readState.isFetchCurrent(2, 2, 5, 5), true);
+assert.equal(readState.isFetchCurrent(2, 3, 5, 5), false);
+assert.equal(readState.isFetchCurrent(2, 2, 5, 6), false);
 
 console.log('PASS: 更新公告 UI 合约与纯已读逻辑通过');
