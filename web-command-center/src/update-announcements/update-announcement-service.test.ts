@@ -140,14 +140,49 @@ test('public projection sanitizes stored HTML again as defense in depth', async 
     const runtime = await makeService('projection-defense');
     t.after(() => fs.rmSync(runtime.dir, { recursive: true, force: true }));
     const id = '00000000-0000-4000-8000-000000001804';
-    await runtime.store.mutate((draft) => {
-        draft.announcements[id].sections.webHtml = '<p>安全正文</p><img src=x onerror=alert(1)>';
-        draft.announcements[id].sections.bridgePluginHtml = '<a href="javascript:alert(2)">危险链接</a>';
-    });
+    const compromisedMemory = runtime.store.snapshot();
+    compromisedMemory.announcements[id].sections.webHtml = '<p>安全正文</p><img src=x onerror=alert(1)>';
+    compromisedMemory.announcements[id].sections.bridgePluginHtml = '<a href="javascript:alert(2)">危险链接</a>';
+    (runtime.store as any).data = compromisedMemory;
 
     const item = runtime.service.listPublic().find((announcement) => announcement.id === id);
     assert.equal(item?.sections.webHtml, '<p>安全正文</p>');
     assert.equal(item?.sections.bridgePluginHtml, '<a>危险链接</a>');
+});
+
+test('safe links survive public projection, resave and restart without entity drift', async (t) => {
+    const runtime = await makeService('safe-link-restart');
+    t.after(() => fs.rmSync(runtime.dir, { recursive: true, force: true }));
+    const inputHtml = '<a href="https://example.com/rules?a=1&b=2&c=3">完整规则</a>';
+    const expectedHtml = '<a href="https://example.com/rules?a=1&amp;b=2&amp;c=3" target="_blank" rel="noopener noreferrer">完整规则</a>';
+    const draft = await runtime.service.saveAnnouncement({
+        version: 'v1.9.9',
+        title: '安全链接',
+        sections: { webHtml: inputHtml },
+    });
+    await runtime.service.setStatus({ id: draft.announcement.id, status: 'published' });
+    const firstPublic = runtime.service.listPublic()
+        .find((announcement) => announcement.id === draft.announcement.id);
+    assert.equal(firstPublic?.sections.webHtml, expectedHtml);
+
+    await runtime.service.saveAnnouncement({
+        id: draft.announcement.id,
+        version: 'v1.9.9',
+        title: '安全链接',
+        sections: firstPublic!.sections,
+    });
+
+    const restarted = new UpdateAnnouncementService(
+        new UpdateAnnouncementStore(path.join(runtime.dir, 'update-announcements.json')),
+        { logger: { warn: () => undefined } },
+    );
+    await restarted.initialize();
+    assert.equal(restarted.isAvailable(), true);
+    assert.equal(
+        restarted.listPublic().find((announcement) => announcement.id === draft.announcement.id)
+            ?.sections.webHtml,
+        expectedHtml,
+    );
 });
 
 test('public projection sorts equal publication times by arbitrary-size semantic versions', async (t) => {

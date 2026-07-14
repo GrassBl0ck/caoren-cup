@@ -64,6 +64,17 @@
         return createOpenSnapshotSession(sessionId, true, announcements, read);
     }
 
+    function acceptSocketAuthority(openSnapshotSession) {
+        return {
+            hasAuthoritativeList: true,
+            openSnapshotSession: openSnapshotSession,
+        };
+    }
+
+    function isAuthoritativeAnnouncementList(value) {
+        return Array.isArray(value);
+    }
+
     function isFetchCurrent(startSocketRevision, currentSocketRevision, requestId, latestRequestId) {
         return startSocketRevision === currentSocketRevision && requestId === latestRequestId;
     }
@@ -76,5 +87,7 @@
         isFetchCurrent: isFetchCurrent,
         createOpenSnapshotSession: createOpenSnapshotSession,
         captureFirstAuthoritativeSnapshot: captureFirstAuthoritativeSnapshot,
+        acceptSocketAuthority: acceptSocketAuthority,
+        isAuthoritativeAnnouncementList: isAuthoritativeAnnouncementList,
     };
 });

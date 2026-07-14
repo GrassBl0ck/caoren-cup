@@ -373,4 +373,76 @@ assert.ok(
     '公开控制器必须接入首次权威快照状态逻辑',
 );
 
+assert.equal(
+    typeof readState.acceptSocketAuthority,
+    'function',
+    '缺少 Socket 全量列表权威状态函数',
+);
+assert.equal(
+    typeof readState.isAuthoritativeAnnouncementList,
+    'function',
+    '缺少 Socket 全量列表有效性函数',
+);
+assert.equal(readState.isAuthoritativeAnnouncementList([]), true, '空全量列表仍是有效权威列表');
+assert.equal(readState.isAuthoritativeAnnouncementList([{ id: 'a' }]), true);
+assert.equal(readState.isAuthoritativeAnnouncementList(null), false);
+assert.equal(readState.isAuthoritativeAnnouncementList({ announcements: [] }), false);
+const socketListV1 = [{ id: 'socket-seed', reminderRevision: 1 }];
+const socketBeforeOpenAuthority = readState.acceptSocketAuthority(null);
+assert.deepEqual(socketBeforeOpenAuthority, {
+    hasAuthoritativeList: true,
+    openSnapshotSession: null,
+}, 'Socket 在关闭状态先到时必须成为首份权威列表');
+const socketBeforeOpenSession = readState.createOpenSnapshotSession(
+    10,
+    socketBeforeOpenAuthority.hasAuthoritativeList,
+    socketListV1,
+    {},
+);
+assert.deepEqual(socketBeforeOpenSession.snapshot, socketListV1, 'Socket -> open 必须立即建立快照');
+const socketBeforeOpenRead = readState.markRead({}, socketBeforeOpenSession.snapshot);
+assert.deepEqual(socketBeforeOpenRead, { 'socket-seed': 1 }, 'Socket -> open -> close 必须记录 revision');
+assert.equal(
+    readState.isFetchCurrent(0, 1, 1, 1),
+    false,
+    'Socket 后返回的延迟 GET 必须因 socket revision 失效',
+);
+
+const openBeforeSocketSession = readState.createOpenSnapshotSession(20, false, [], {});
+const openBeforeSocketAuthority = readState.acceptSocketAuthority(openBeforeSocketSession);
+assert.equal(openBeforeSocketAuthority.hasAuthoritativeList, true);
+assert.deepEqual(
+    openBeforeSocketAuthority.openSnapshotSession.snapshot,
+    [],
+    'open -> Socket 不得把 Socket 列表加入本次空快照',
+);
+assert.deepEqual(
+    readState.markRead({}, openBeforeSocketAuthority.openSnapshotSession.snapshot),
+    {},
+    'open -> Socket 本次关闭不得误记 Socket revision',
+);
+const nextOpenAfterSocket = readState.createOpenSnapshotSession(
+    21,
+    openBeforeSocketAuthority.hasAuthoritativeList,
+    socketListV1,
+    {},
+);
+assert.deepEqual(
+    nextOpenAfterSocket.snapshot,
+    socketListV1,
+    'open -> Socket 关闭后的下一次打开必须可读 Socket revision',
+);
+const establishedSession = readState.createOpenSnapshotSession(30, true, socketListV1, {});
+const establishedAfterSocket = readState.acceptSocketAuthority(establishedSession);
+assert.deepEqual(
+    establishedAfterSocket.openSnapshotSession.snapshot,
+    socketListV1,
+    '已有权威列表时，打开后 Socket 新 revision 不得混入旧快照',
+);
+assert.ok(
+    publicJs.includes('acceptSocketAuthority')
+        && publicJs.includes('isAuthoritativeAnnouncementList'),
+    '公开 Socket 处理器必须先验证列表，再接入 Socket 权威状态函数',
+);
+
 console.log('PASS: 更新公告 UI 合约与纯已读逻辑通过');

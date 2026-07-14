@@ -12,9 +12,44 @@ const escapeText = (value: unknown) => String(value ?? '')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+const URL_NAMED_ENTITIES: Record<string, string> = {
+    amp: '&',
+    apos: "'",
+    colon: ':',
+    gt: '>',
+    lt: '<',
+    newline: '\n',
+    quot: '"',
+    tab: '\t',
+};
+
+const decodeUrlEntitiesOnce = (value: string) => value.replace(
+    /&#(?:x([0-9a-f]+)|([0-9]+));?|&(amp|apos|colon|gt|lt|newline|quot|tab);/gi,
+    (_entity, hexadecimal: string | undefined, decimal: string | undefined, named: string | undefined) => {
+        if (named) return URL_NAMED_ENTITIES[named.toLowerCase()];
+        const codePoint = Number.parseInt(hexadecimal || decimal || '', hexadecimal ? 16 : 10);
+        if (!Number.isFinite(codePoint)
+            || codePoint <= 0
+            || codePoint > 0x10FFFF
+            || (codePoint >= 0xD800 && codePoint <= 0xDFFF)) return '\uFFFD';
+        return String.fromCodePoint(codePoint);
+    },
+);
+
+const normalizeUrlEntities = (value: string) => {
+    let normalized = value;
+    for (;;) {
+        const decoded = decodeUrlEntitiesOnce(normalized);
+        if (decoded === normalized) break;
+        normalized = decoded;
+    }
+    return normalized;
+};
+
 const sanitizeUrl = (value: string) => {
-    const trimmed = value.trim();
+    const trimmed = normalizeUrlEntities(value).trim();
     if (!trimmed) return '';
+    if (/[\u0000-\u001F\u007F]/.test(trimmed)) return '';
     if (/^(https?:|mailto:)/i.test(trimmed)) return escapeText(trimmed);
     if (/^[#/]/.test(trimmed)) return escapeText(trimmed);
     return '';

@@ -266,7 +266,11 @@
     const socket = window.__caorenCupSocket;
     if (socket && typeof socket.on === 'function') {
         socket.on('UPDATE_ANNOUNCEMENTS', function (payload) {
+            if (!readApi.isAuthoritativeAnnouncementList(payload && payload.announcements)) return;
             socketRevision += 1;
+            const authority = readApi.acceptSocketAuthority(openSnapshotSession);
+            hasAuthoritativeList = authority.hasAuthoritativeList;
+            openSnapshotSession = authority.openSnapshotSession;
             applyAnnouncements(payload && payload.announcements);
         });
     }

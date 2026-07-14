@@ -132,11 +132,13 @@ export class UpdateAnnouncementStore {
     }
 
     private async persist(data: UpdateAnnouncementStoreData, backupCurrent = true): Promise<void> {
+        const serialized = JSON.stringify(data, null, 2);
+        parseData(serialized);
         const directory = path.dirname(this.filePath);
         this.fileSystem.mkdirSync(directory, { recursive: true });
         const tempPath = `${this.filePath}.tmp-${process.pid}-${Date.now()}`;
         try {
-            this.fileSystem.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
+            this.fileSystem.writeFileSync(tempPath, serialized, 'utf8');
             if (backupCurrent && this.fileSystem.existsSync(this.filePath)) {
                 parseData(this.fileSystem.readFileSync(this.filePath, 'utf8'));
                 this.fileSystem.copyFileSync(this.filePath, this.previousPath);

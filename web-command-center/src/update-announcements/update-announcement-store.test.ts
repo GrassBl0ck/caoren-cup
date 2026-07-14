@@ -152,3 +152,21 @@ test('a failed write keeps memory unchanged and a later write can recover', asyn
     });
     assert.equal(store.snapshot().announcements[id].title, '恢复成功');
 });
+
+test('persist rejects an unsafe candidate before writing and keeps memory unchanged', async (t) => {
+    const dir = makeDir('candidate-validation');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'update-announcements.json');
+    const store = new UpdateAnnouncementStore(file);
+    await store.load();
+    const beforeMemory = store.snapshot();
+    const beforeFile = fs.readFileSync(file, 'utf8');
+    const id = '00000000-0000-4000-8000-000000001804';
+
+    await assert.rejects(store.mutate((draft) => {
+        draft.announcements[id].sections.webHtml = '<img src=x onerror=alert(1)>';
+    }));
+
+    assert.deepEqual(store.snapshot(), beforeMemory);
+    assert.equal(fs.readFileSync(file, 'utf8'), beforeFile);
+});
