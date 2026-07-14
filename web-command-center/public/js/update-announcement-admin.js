@@ -3,19 +3,24 @@
 
     const mutationStateApi = window.CaorenUpdateAnnouncementAdminMutationState;
 
-    async function adminRequest(path, payload) {
-        const adminPassword = document.getElementById('extra-input')?.value
-            || prompt('请输入管理员密码：')
-            || '';
-        if (!adminPassword) throw new Error('未输入管理员密码');
-        const response = await fetch(path, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify(Object.assign({ adminPassword: adminPassword }, payload || {})),
+    function adminSocketRequest(event, payload) {
+        const socket = window.__caorenCupSocket;
+        if (!socket || !socket.connected) {
+            return Promise.reject(new Error('管理员会话已失效，请重新登录'));
+        }
+        return new Promise(function (resolve, reject) {
+            const timeout = window.setTimeout(function () {
+                reject(new Error('管理员会话已失效，请重新登录'));
+            }, 10000);
+            socket.emit(event, payload || {}, function (result) {
+                window.clearTimeout(timeout);
+                if (!result || result.success !== true) {
+                    reject(new Error(result?.error || '管理员会话已失效，请重新登录'));
+                    return;
+                }
+                resolve(result);
+            });
         });
-        const data = await response.json();
-        if (!response.ok || !data.success) throw new Error(data.error || '更新公告操作失败');
-        return data;
     }
 
     const adminStatus = document.getElementById('update-announcement-admin-status');
@@ -160,7 +165,7 @@
         const requestId = ++latestAdminAnnouncementRequestId;
         adminStatus.textContent = '正在读取更新公告……';
         try {
-            const data = await adminRequest('/api/admin/update-announcements/list');
+            const data = await adminSocketRequest('UPDATE_ANNOUNCEMENT_ADMIN_LIST');
             if (!isAdminAnnouncementRequestCurrent(requestId, latestAdminAnnouncementRequestId)) return;
             records = Array.isArray(data.announcements) ? data.announcements : [];
             renderAdminList();
@@ -185,7 +190,7 @@
                 if (!confirmedVersionChange) return;
             }
             adminStatus.textContent = '正在保存更新公告……';
-            await adminRequest('/api/admin/update-announcements/save', {
+            await adminSocketRequest('UPDATE_ANNOUNCEMENT_ADMIN_SAVE', {
                 announcement: {
                     id: idInput.value || undefined,
                     version: versionInput.value,
@@ -223,7 +228,7 @@
                 ? confirm('是否同时重新提醒所有玩家？选择“取消”只表示不重复提醒，公告仍会重新发布。')
                 : false;
             adminStatus.textContent = '正在' + action + '更新公告……';
-            await adminRequest('/api/admin/update-announcements/status', {
+            await adminSocketRequest('UPDATE_ANNOUNCEMENT_ADMIN_SET_STATUS', {
                 id: item.id,
                 status: targetStatus,
                 remindAgain: remindAgain,

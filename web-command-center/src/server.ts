@@ -42,6 +42,7 @@ import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer, removeIdentityFromSession } from './identity/session-integration';
 import { UpdateAnnouncementService } from './update-announcements/update-announcement-service';
 import { UpdateAnnouncementStore } from './update-announcements/update-announcement-store';
+import { registerUpdateAnnouncementAdminSocketHandlers } from './update-announcements/update-announcement-admin-socket';
 import type { PublicUpdateAnnouncement } from './update-announcements/update-announcement-types';
 
 const app = express();
@@ -186,6 +187,13 @@ registerLobbyAnnouncementRoutes(app, {
 registerUpdateAnnouncementRoutes(app, {
     adminPassword: ADMIN_PASSWORD,
     service: updateAnnouncementService,
+    broadcastPublic: broadcastUpdateAnnouncements,
+});
+
+registerUpdateAnnouncementAdminSocketHandlers({
+    io,
+    service: updateAnnouncementService,
+    getSession,
     broadcastPublic: broadcastUpdateAnnouncements,
 });
 

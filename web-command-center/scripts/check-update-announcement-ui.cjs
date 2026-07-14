@@ -89,13 +89,17 @@ assert.doesNotMatch(
     '更新公告 UI 不得包含删除操作',
 );
 
-for (const endpoint of [
-    '/api/admin/update-announcements/list',
-    '/api/admin/update-announcements/save',
-    '/api/admin/update-announcements/status',
+assert.doesNotMatch(adminJs, /prompt\('请输入管理员密码：'\)/, '管理员控制器不得再弹出管理员密码输入框');
+assert.doesNotMatch(adminJs, /adminPassword\s*:/, '管理员控制器不得发送管理员密码');
+assert.doesNotMatch(adminJs, /\bfetch\(/, '管理员控制器必须通过大厅 Socket 发起管理请求');
+for (const event of [
+    'UPDATE_ANNOUNCEMENT_ADMIN_LIST',
+    'UPDATE_ANNOUNCEMENT_ADMIN_SAVE',
+    'UPDATE_ANNOUNCEMENT_ADMIN_SET_STATUS',
 ]) {
-    assert.ok(adminJs.includes(endpoint), `管理员控制器缺少接口：${endpoint}`);
+    assert.ok(adminJs.includes(event), `管理员控制器缺少 Socket 事件：${event}`);
 }
+assert.ok(adminJs.includes('管理员会话已失效，请重新登录'), '管理员控制器缺少会话失效提示');
 for (const status of ['draft', 'published', 'hidden']) {
     assert.ok(adminJs.includes(status), `管理员控制器缺少状态：${status}`);
 }
@@ -107,9 +111,6 @@ for (const token of [
 ]) {
     assert.ok(adminJs.includes(token), `管理员控制器缺少行为：${token}`);
 }
-assert.match(adminJs, /method:\s*['"]POST['"]/, '管理员接口必须使用 POST');
-assert.match(adminJs, /body:\s*JSON\.stringify\(/, '管理员接口密码与参数必须放入 JSON 请求体');
-assert.doesNotMatch(adminJs, /(?:query|searchParams|URLSearchParams)[\s\S]{0,120}adminPassword/i, '管理员密码不得放入 URL 参数');
 assert.doesNotMatch(adminJs, /fetch\([^\n]*(?:delete|\/delete)/i, '管理员控制器不得请求永久删除接口');
 assert.equal(
     (adminJs.match(/\bcloseEditor\(\)/g) || []).length,
