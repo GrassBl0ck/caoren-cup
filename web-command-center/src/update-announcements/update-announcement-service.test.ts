@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { UpdateAnnouncementService } from './update-announcement-service';
 import { UpdateAnnouncementStore } from './update-announcement-store';
+import { UpdateAnnouncementValidationError } from './update-announcement-types';
 
 const makeService = async (name: string) => {
     const dir = path.resolve(__dirname, '..', '..', 'runtime', `update-service-${name}-${process.pid}-${Date.now()}`);
@@ -62,6 +63,34 @@ test('first publish sets time once and normal edits do not remind again', async 
         sections: { webHtml: '<p>新内容</p>' }, remindAgain: true,
     });
     assert.equal(reminded.announcement.reminderRevision, 2);
+});
+
+test('published announcements cannot be edited into empty sanitized content', async (t) => {
+    const runtime = await makeService('published-empty-edit');
+    t.after(() => fs.rmSync(runtime.dir, { recursive: true, force: true }));
+    const draft = await runtime.service.saveAnnouncement({
+        version: 'v1.9.0', title: '有效公告', sections: { webHtml: '<p>保留内容</p>' },
+    });
+    await runtime.service.setStatus({ id: draft.announcement.id, status: 'published' });
+    const before = runtime.service.listAdmin().find((item) => item.id === draft.announcement.id);
+
+    await assert.rejects(runtime.service.saveAnnouncement({
+        id: draft.announcement.id,
+        version: 'v1.9.0',
+        title: '不应保存',
+        sections: {
+            webHtml: '',
+            gamePluginHtml: '<script>alert(1)</script>',
+            bridgePluginHtml: '<iframe src="https://example.com"></iframe>',
+        },
+    }), (error: unknown) => error instanceof UpdateAnnouncementValidationError
+        && error.code === 'empty_publish'
+        && /至少填写一个/.test(error.message));
+
+    const after = runtime.service.listAdmin().find((item) => item.id === draft.announcement.id);
+    assert.deepEqual(after, before);
+    assert.equal(after?.status, 'published');
+    assert.equal(after?.sections.webHtml, '<p>保留内容</p>');
 });
 
 test('published version correction requires confirmation and reminds exactly once', async (t) => {

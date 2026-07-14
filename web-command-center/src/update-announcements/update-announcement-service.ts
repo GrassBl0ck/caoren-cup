@@ -145,6 +145,10 @@ export class UpdateAnnouncementService {
             if (duplicate) throw validationError('version_duplicate', `版本号 ${version} 已存在`);
 
             const sections = sanitizeSections(input.sections, previous?.sections);
+            if (previous?.status === 'published'
+                && !Object.values(sections).some(hasMeaningfulContent)) {
+                throw validationError('empty_publish', '发布公告时至少填写一个有内容的区域');
+            }
             const now = (this.options.now || Date.now)();
             if (!previous) {
                 const announcement: UpdateAnnouncement = {
