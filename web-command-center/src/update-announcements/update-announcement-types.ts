@@ -32,6 +32,44 @@ export interface PublicUpdateAnnouncement {
     publishedAt: number;
 }
 
+export interface SaveUpdateAnnouncementInput {
+    id?: string;
+    version: string;
+    title: string;
+    sections: Partial<UpdateAnnouncementSections>;
+    remindAgain?: boolean;
+    confirmVersionChange?: boolean;
+}
+
+export interface SetUpdateAnnouncementStatusInput {
+    id: string;
+    status: 'published' | 'hidden';
+    remindAgain?: boolean;
+}
+
+export interface UpdateAnnouncementMutationResult {
+    announcement: UpdateAnnouncement;
+    publicChanged: boolean;
+}
+
+export type UpdateAnnouncementValidationCode =
+    | 'not_found'
+    | 'version_invalid'
+    | 'version_duplicate'
+    | 'title_required'
+    | 'title_too_long'
+    | 'content_too_long'
+    | 'empty_publish'
+    | 'version_change_confirmation_required'
+    | 'status_transition_invalid';
+
+export class UpdateAnnouncementValidationError extends Error {
+    constructor(public readonly code: UpdateAnnouncementValidationCode, message: string) {
+        super(message);
+        this.name = 'UpdateAnnouncementValidationError';
+    }
+}
+
 export class UnsupportedUpdateAnnouncementSchemaError extends Error {
     constructor() {
         super('update announcement schema is unsupported');
