@@ -209,6 +209,11 @@ assert.ok(
 );
 
 const css = fs.readFileSync(cssPath, 'utf8');
+assert.match(
+    css,
+    /body\.update-announcement-open\s+\.cc-audio-panel\s*\{[^{}]*visibility:\s*hidden\s*;?[^{}]*\}/,
+    '更新公告抽屉打开时必须隐藏更高层级的音频悬浮面板',
+);
 assert.match(css, /@media\s*\(max-width:\s*768px\)/, '缺少 768px 响应式规则');
 assert.match(css, /@media\s*\(max-width:\s*420px\)/, '缺少窄屏响应式规则');
 assert.match(css, /@media\s*\(max-width:\s*360px\)/, '缺少 360px 管理工具栏响应式规则');

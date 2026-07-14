@@ -1,4 +1,5 @@
 body.update-announcement-open { overflow: hidden; }
+body.update-announcement-open .cc-audio-panel { visibility: hidden; }
 
 .update-announcement-trigger { position: relative; gap: 7px; }
 .update-announcement-unread-dot {
