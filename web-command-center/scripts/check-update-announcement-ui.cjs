@@ -6,8 +6,10 @@ const publicDir = path.join(__dirname, '..', 'public');
 const indexPath = path.join(publicDir, 'index.html');
 const cssPath = path.join(publicDir, 'css', 'update-announcements.css');
 const readStatePath = path.join(publicDir, 'js', 'update-announcement-read-state.js');
+const publicJsPath = path.join(publicDir, 'js', 'update-announcement-public.js');
 
 const index = fs.readFileSync(indexPath, 'utf8');
+const publicJs = fs.readFileSync(publicJsPath, 'utf8');
 const requiredIds = [
     'update-announcement-trigger',
     'update-announcement-unread-dot',
@@ -52,15 +54,32 @@ assert.ok(updateCssIndex > appCssIndex, '更新公告样式必须在 app.css 之
 
 const readStateScriptIndex = index.indexOf('src="/js/update-announcement-read-state.js"');
 const lobbyControllerIndex = index.indexOf('src="/js/lobby-app.js');
+const publicControllerIndex = index.indexOf('src="/js/update-announcement-public.js"');
 assert.ok(
     readStateScriptIndex >= 0 && readStateScriptIndex < lobbyControllerIndex,
     '已读状态模块必须在后续控制器之前加载',
+);
+assert.ok(
+    lobbyControllerIndex < publicControllerIndex,
+    '公开更新公告控制器必须在大厅创建共享 Socket 后加载',
 );
 assert.doesNotMatch(
     index,
     /update-announcement[^\n>]*(?:delete|删除)/i,
     '更新公告 UI 不得包含删除操作',
 );
+
+for (const token of [
+    '/api/update-announcements',
+    'UPDATE_ANNOUNCEMENTS',
+    'Asia/Shanghai',
+    'caoren-update-announcement-read-v1',
+    'aria-expanded',
+    'Escape',
+    'update-announcement-open',
+]) {
+    assert.ok(publicJs.includes(token), `missing public update announcement behavior: ${token}`);
+}
 
 const css = fs.readFileSync(cssPath, 'utf8');
 assert.match(css, /@media\s*\(max-width:\s*768px\)/, '缺少 768px 响应式规则');
