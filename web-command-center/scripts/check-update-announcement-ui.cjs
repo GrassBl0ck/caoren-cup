@@ -15,6 +15,12 @@ const publicJs = fs.readFileSync(publicJsPath, 'utf8');
 assert.ok(fs.existsSync(adminJsPath), '缺少更新公告管理员控制器');
 const adminJs = fs.readFileSync(adminJsPath, 'utf8');
 const lobbyJs = fs.readFileSync(lobbyJsPath, 'utf8');
+
+function loadPureFunction(source, name) {
+    const match = source.match(new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\s*\\}`));
+    assert.ok(match, `缺少可测试的纯函数：${name}`);
+    return Function(`"use strict"; return (${match[0]});`)();
+}
 const requiredIds = [
     'update-announcement-trigger',
     'update-announcement-unread-dot',
@@ -124,6 +130,49 @@ assert.ok(
     lobbyJs.includes("new CustomEvent('caoren:admin-view-changed'")
         && lobbyJs.includes('detail: { view: activeView }'),
     '切换管理员视图后必须派发 caoren:admin-view-changed',
+);
+const shouldNotifyAdminView = loadPureFunction(lobbyJs, 'shouldNotifyAdminView');
+assert.equal(shouldNotifyAdminView('announcement', 'announcement'), false, '同一管理员视图不得重复通知');
+assert.equal(shouldNotifyAdminView('overview', 'announcement'), true, '管理员视图实际改变时必须通知');
+assert.equal(
+    shouldNotifyAdminView('announcement', 'announcement', { forceNotify: true }),
+    true,
+    '首次管理员会话必须能强制通知保存的视图',
+);
+const switchAdminViewMatch = lobbyJs.match(/function switchAdminView\([\s\S]*?\r?\n        }\r?\n\r?\n        function switchAdminTab/);
+assert.ok(switchAdminViewMatch, '缺少管理员视图切换函数');
+assert.ok(
+    switchAdminViewMatch[0].includes('const previousView = window._activeAdminView')
+        && switchAdminViewMatch[0].includes('shouldNotifyAdminView(previousView, activeView, options)'),
+    '管理员视图事件必须按调用前视图与 forceNotify 判断',
+);
+const wasAdminSessionIndex = lobbyJs.indexOf('const wasAdminSession =');
+const adminSessionToggleIndex = lobbyJs.indexOf("adminControls?.classList.toggle('is-admin-session', isAdmin)");
+assert.ok(
+    wasAdminSessionIndex >= 0 && wasAdminSessionIndex < adminSessionToggleIndex,
+    'GAME_STATE 必须在切换管理员 class 前记录会话状态',
+);
+assert.match(
+    lobbyJs,
+    /if \(!wasAdminSession\) \{\s*switchAdminView\(window\._activeAdminView \|\| 'overview', \{ forceNotify: true \}\);\s*\}/,
+    'GAME_STATE 仅在首次进入管理员会话时强制通知当前视图',
+);
+assert.doesNotMatch(
+    lobbyJs,
+    /switchAdminView\(window\._activeAdminView \|\| 'overview'\);/,
+    '后续 GAME_STATE 不得重复通知同一管理员视图',
+);
+
+const isAdminAnnouncementRequestCurrent = loadPureFunction(adminJs, 'isAdminAnnouncementRequestCurrent');
+assert.equal(isAdminAnnouncementRequestCurrent(2, 2), true, '最新管理员公告请求必须可写回');
+assert.equal(isAdminAnnouncementRequestCurrent(1, 2), false, '旧管理员公告请求必须被丢弃');
+const refreshAdminMatch = adminJs.match(/async function refreshAdminAnnouncements\(\) \{[\s\S]*?\n    }\n\n    async function saveAnnouncement/);
+assert.ok(refreshAdminMatch, '缺少管理员公告刷新流程');
+assert.match(refreshAdminMatch[0], /const requestId = \+\+latestAdminAnnouncementRequestId;/, '刷新必须递增请求代次');
+assert.equal(
+    (refreshAdminMatch[0].match(/if \(!isAdminAnnouncementRequestCurrent\(requestId, latestAdminAnnouncementRequestId\)\) return;/g) || []).length,
+    2,
+    '旧 list 成功响应和旧错误都必须在写回前退出',
 );
 
 for (const token of [

@@ -31,6 +31,7 @@
     let records = [];
     let originalVersion = '';
     let previouslyPublished = false;
+    let latestAdminAnnouncementRequestId = 0;
 
     const statusLabels = { draft: '草稿', published: '已发布', hidden: '隐藏' };
     const editorBySection = {
@@ -129,14 +130,21 @@
         remindCheckbox.checked = false;
     }
 
+    function isAdminAnnouncementRequestCurrent(requestId, latestRequestId) {
+        return requestId === latestRequestId;
+    }
+
     async function refreshAdminAnnouncements() {
+        const requestId = ++latestAdminAnnouncementRequestId;
         adminStatus.textContent = '正在读取更新公告……';
         try {
             const data = await adminRequest('/api/admin/update-announcements/list');
+            if (!isAdminAnnouncementRequestCurrent(requestId, latestAdminAnnouncementRequestId)) return;
             records = Array.isArray(data.announcements) ? data.announcements : [];
             renderAdminList();
             adminStatus.textContent = '已读取 ' + records.length + ' 条更新公告。';
         } catch (error) {
+            if (!isAdminAnnouncementRequestCurrent(requestId, latestAdminAnnouncementRequestId)) return;
             adminStatus.textContent = error.message || '更新公告读取失败。';
         }
     }

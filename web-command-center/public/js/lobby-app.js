@@ -77,7 +77,12 @@ const ws = io();
                 '</div>';
         }
 
-        function switchAdminView(view) {
+        function shouldNotifyAdminView(previousView, activeView, options) {
+            return previousView !== activeView || options?.forceNotify === true;
+        }
+
+        function switchAdminView(view, options) {
+            const previousView = window._activeAdminView;
             const activeView = ADMIN_VIEWS.includes(view) ? view : 'overview';
             window._activeAdminView = activeView;
             localStorage.setItem('caoren-active-admin-tab', activeView);
@@ -98,9 +103,11 @@ const ws = io();
             const select = document.getElementById('admin-view-select');
             if (select) select.value = activeView;
 
-            window.dispatchEvent(new CustomEvent('caoren:admin-view-changed', {
-                detail: { view: activeView }
-            }));
+            if (shouldNotifyAdminView(previousView, activeView, options)) {
+                window.dispatchEvent(new CustomEvent('caoren:admin-view-changed', {
+                    detail: { view: activeView }
+                }));
+            }
         }
 
         function switchAdminTab(tab) {
@@ -926,6 +933,7 @@ if (window._caorenModifiersEnabled !== true) {
 
             const lobbyArea = document.getElementById('lobby-area');
             const adminControls = document.getElementById('admin-controls');
+            const wasAdminSession = adminControls?.classList.contains('is-admin-session') === true;
             lobbyArea?.classList.toggle('is-admin-session', isAdmin);
             adminControls?.classList.toggle('is-admin-session', isAdmin);
             if (adminControls && currentPlayer) adminControls.style.display = 'block';
@@ -1000,7 +1008,9 @@ if (window._caorenModifiersEnabled !== true) {
                 if (overviewPhase) overviewPhase.textContent = state.phase;
                 if (overviewPlayerCount) overviewPlayerCount.textContent = String(players.length);
                 if (overviewPendingCount) overviewPendingCount.textContent = String(pending);
-                switchAdminView(window._activeAdminView || 'overview');
+                if (!wasAdminSession) {
+                    switchAdminView(window._activeAdminView || 'overview', { forceNotify: true });
+                }
                 syncMatchOptionsPanel(state, true);
                 renderAdminUndercoverTaskPanel(state);
             } else {
