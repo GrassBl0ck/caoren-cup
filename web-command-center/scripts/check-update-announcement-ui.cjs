@@ -117,7 +117,7 @@ assert.equal(
     2,
     '编辑器只能由 closeEditor 定义和保存成功分支关闭，失败时必须保留表单',
 );
-const changeStatusMatch = adminJs.match(/async function changeStatus\([\s\S]*?\n    }\n\n    function formatUpdateAnnouncementEditor/);
+const changeStatusMatch = adminJs.match(/async function changeStatus\([\s\S]*?\r?\n    }\r?\n\r?\n    function formatUpdateAnnouncementEditor/);
 assert.ok(changeStatusMatch, '缺少更新公告状态切换流程');
 assert.doesNotMatch(
     changeStatusMatch[0],
@@ -204,7 +204,7 @@ assert.ok(
         && adminJs.includes('button.disabled = true'),
     '管理员控制器必须使用共享锁、代次保护并禁用操作按钮',
 );
-const refreshAdminMatch = adminJs.match(/async function refreshAdminAnnouncements\(\) \{[\s\S]*?\n    }\n\n    async function saveAnnouncement/);
+const refreshAdminMatch = adminJs.match(/async function refreshAdminAnnouncements\(\) \{[\s\S]*?\r?\n    }\r?\n\r?\n    async function saveAnnouncement/);
 assert.ok(refreshAdminMatch, '缺少管理员公告刷新流程');
 assert.match(refreshAdminMatch[0], /const requestId = \+\+latestAdminAnnouncementRequestId;/, '刷新必须递增请求代次');
 assert.equal(
