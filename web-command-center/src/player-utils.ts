@@ -1,5 +1,6 @@
 // player-utils.ts
 import { GameSession, Player, Team, RosterTeam } from './types';
+import { getFlowUndoStatus } from './flow-undo-manager';
 
 // ========== Player utilities ==========
 export const findPlayerById = (session: GameSession, id: string): Player | undefined =>
@@ -111,6 +112,15 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
     s.duelAdminOnline = Object.values(session.players).some(p => p.role === 'Admin' && p.isOnline);
     delete s.rollTimeout;
     return s;
+};
+
+export const sanitizeGameStateForViewer = (session: GameSession, viewerId?: string | null): any => {
+    const state = sanitizeForPublic(session, viewerId);
+    const viewer = viewerId ? session.players[viewerId] : undefined;
+    if (viewer && (viewer.role === 'Admin' || session.duelTempAdminId === viewer.playerId)) {
+        state.flowUndoStatus = getFlowUndoStatus(session, viewer);
+    }
+    return state;
 };
 
 // ========== CSV export helpers ==========

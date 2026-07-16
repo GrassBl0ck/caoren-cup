@@ -14,9 +14,11 @@
     "test:rules-content": "node scripts/check-rules-content.cjs",
     "test:rules-pdf": "node scripts/check-rules-pdf.cjs",
     "test:rules-guide": "node scripts/check-rules-guide.cjs",
-    "test:lobby-identity": "tsx --test src/identity/*.test.ts src/v1333-game-login.test.ts",
     "test:update-announcements": "tsx --test src/announcement-html.test.ts src/update-announcements/*.test.ts src/routes/update-announcement-routes.test.ts",
-    "test:update-announcement-ui": "node scripts/check-update-announcement-ui.cjs"
+    "test:update-announcement-ui": "node scripts/check-update-announcement-ui.cjs",
+    "test:flow-undo-ui": "node scripts/check-flow-undo-ui.cjs",
+    "test:flow-undo": "tsx --test src/flow-undo-manager.test.ts src/session-persistence.test.ts src/flow-runtime.test.ts src/flow-undo-integration.test.ts src/flow-undo-visibility.test.ts",
+    "test:lobby-identity": "tsx --test src/identity/*.test.ts src/v1333-game-login.test.ts"
   },
   "dependencies": {
     "express": "^4.18.3",

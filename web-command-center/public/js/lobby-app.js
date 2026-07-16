@@ -212,6 +212,33 @@ const ws = io();
             return map[phase] || phase || '未知';
         }
 
+        function renderFlowUndoSafetyBar(state, currentPlayer) {
+            const bar = document.getElementById('flow-undo-safety-bar');
+            if (!bar) return;
+            const status = state?.flowUndoStatus;
+            const canManage = currentPlayer?.role === 'Admin' || currentPlayer?.playerId === state?.duelTempAdminId;
+            bar.hidden = !status || !canManage;
+            if (bar.hidden) return;
+
+            const phase = document.getElementById('flow-undo-current-phase');
+            const latest = document.getElementById('flow-undo-latest-action');
+            const count = document.getElementById('flow-undo-count');
+            const reason = document.getElementById('flow-undo-reason');
+            const button = document.getElementById('flow-undo-btn');
+            if (phase) phase.textContent = phaseDisplayName(state.phase);
+            if (count) count.textContent = String(status.count || 0);
+            if (latest) {
+                latest.textContent = status.latest
+                    ? `${status.latest.summary}（${status.latest.actorName}，${new Date(status.latest.createdAt).toLocaleTimeString('zh-CN')}）`
+                    : '暂无可撤销操作';
+            }
+            if (reason) reason.textContent = status.canUndo ? '可撤销最近一步。' : (status.disabledReason || '当前不能撤销。');
+            if (button) {
+                button.disabled = !status.canUndo;
+                button.title = status.canUndo ? `撤销：${status.latest?.summary || '最近一步'}` : (status.disabledReason || '当前不能撤销');
+            }
+        }
+
         function oppositeSide(side) {
             if (side === 'CT') return 'T';
             if (side === 'T') return 'CT';
@@ -928,6 +955,7 @@ if (window._caorenModifiersEnabled !== true) {
             const isDuel = state?.matchOptions?.matchMode === 'duel';
             const undercoverEnabled = isUndercoverModeEnabledFromState(state);
             const live = state.liveGameData || window._liveGameData || {};
+            renderFlowUndoSafetyBar(state, currentPlayer);
             window._undercoverModeEnabled = undercoverEnabled;
             window._caorenModifiersEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
 
@@ -2614,6 +2642,10 @@ if (window._caorenModifiersEnabled !== true) {
                 const select = document.getElementById('duel-live-map') || document.getElementById('match-option-duel-map');
                 if (!confirmDuelWorkshopReady(selectedDuelMapFromSelect(select))) return;
             }
+            if (window._currentGamePhase === 'PreGameSetup') {
+                const ok = confirm('进入正式比赛后将无法撤销赛前流程，所有撤销记录会立即清空。\n\n确认继续推进吗？');
+                if (!ok) return;
+            }
             if (window._currentGamePhase === 'Scoreboard') {
                 const hasScores = Object.values(window._allPlayers || {}).some(p => p.finalScore !== undefined);
                 if (!hasScores) {
@@ -2622,6 +2654,18 @@ if (window._caorenModifiersEnabled !== true) {
                 }
             }
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADVANCE_PHASE' });
+        }
+        function undoFlowAction() {
+            const status = window._currentGameState?.flowUndoStatus;
+            if (!status?.canUndo || !status.latest) {
+                return showLobbyNotice(status?.disabledReason || '当前没有可撤销的操作。', 'error');
+            }
+            const ok = confirm(
+                `将撤销「${status.latest.summary}」，回到 ${phaseDisplayName(status.latest.restorePhase)}。\n\n` +
+                '此后产生的玩家掷骰、选人或投票也会被清除。确认继续吗？'
+            );
+            if (!ok) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UNDO_FLOW_ACTION' });
         }
         function terminateGame() {
             const text = prompt('危险操作：这会强制终止本局、踢出所有玩家、清空房间。所有人必须重新进入。请输入 TERMINATE 确认：');
@@ -2668,6 +2712,7 @@ if (window._caorenModifiersEnabled !== true) {
             login,
             resume,
             advancePhase,
+            undoFlowAction,
             terminateGame,
             duelRequestTempAdmin,
             duelVoteTempAdmin,

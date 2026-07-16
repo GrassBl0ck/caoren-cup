@@ -20,6 +20,7 @@ import { calculateScores } from './scoring';
 import { getDefaultTaskTemplate, assignTaskGridToPlayer } from './task-system';
 import {
     clearDraftPickTimer,
+    clearAllFlowTimers,
     clearMapVoteTimer,
     clearSideVoteTimer,
     setDraftPickTimer,
@@ -46,6 +47,7 @@ import {
     resolveDuelMapConfig,
 } from './duel-config';
 import { enqueuePluginCommand } from './plugin-command-queue';
+import { clearFlowUndoHistory } from './flow-undo-manager';
 
 // ========== Broadcast and notification hooks ==========
 let broadcast: (() => void) | null = null;
@@ -382,6 +384,42 @@ const finishSideVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     notifyMessage?.(`选边投票结束，${session.sidePickTeam || 'A'} 队选择 ${selectedSide}`);
     broadcast?.();
     advancePhase(GamePhase.SidePick, GamePhase.PreGameSetup);
+};
+
+const resumeRestoredPregameFlow = () => {
+    const session = getSession();
+    clearAllFlowTimers();
+    if (session.rollTimeout) clearTimeout(session.rollTimeout);
+    session.rollTimeout = undefined;
+    session.timerEndAt = null;
+    session.timerPhase = null;
+
+    if (session.phase === GamePhase.PlayerDraft && session.draftCaptainsActive && !isDraftComplete()) {
+        startDraftPickTimerFunc(false);
+        return;
+    }
+
+    if (session.phase === GamePhase.MapBan && session.mapVote) {
+        const durationSeconds = getMapBanVoteDurationSeconds();
+        session.mapVote.timeoutAt = Date.now() + durationSeconds * 1000;
+        session.timerEndAt = session.mapVote.timeoutAt;
+        session.timerPhase = GamePhase.MapBan;
+        setMapVoteTimer(setTimeout(() => {
+            setMapVoteTimer(null);
+            finishMapVote('timeout');
+        }, durationSeconds * 1000));
+        return;
+    }
+
+    if (session.phase === GamePhase.SidePick && session.sideVote) {
+        session.sideVote.timeoutAt = Date.now() + SIDE_PICK_VOTE_SECONDS * 1000;
+        session.timerEndAt = session.sideVote.timeoutAt;
+        session.timerPhase = GamePhase.SidePick;
+        setSideVoteTimer(setTimeout(() => {
+            setSideVoteTimer(null);
+            finishSideVote('timeout');
+        }, SIDE_PICK_VOTE_SECONDS * 1000));
+    }
 };
 
 const setRosterLiveSides = (teamASide: Team) => {
@@ -883,15 +921,15 @@ const resolveNextPhaseByMatchOptions = (from: GamePhase, requestedTo: GamePhase)
     return requestedTo;
 };
 
-const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
+const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string): boolean => {
     let nextTo = resolveNextPhaseByMatchOptions(from, to);
     const session = getSession();
-    if (session.phase !== from) return;
+    if (session.phase !== from) return false;
     if (from === GamePhase.Lobby && isDuelMode()) {
-        if (!setupDuelFromLobby()) return;
+        if (!setupDuelFromLobby()) return false;
         nextTo = GamePhase.PreGameSetup;
     }
-    if (!canTransition(from, nextTo)) return;
+    if (!canTransition(from, nextTo)) return false;
 
     if (from === GamePhase.Roll) {
         if (session.rollValues.A === null) session.rollValues.A = Math.floor(Math.random() * 100) + 1;
@@ -902,7 +940,7 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
             session.phase = GamePhase.PlayerDraft;
             performPhaseTransition(GamePhase.PlayerDraft);
         }, 3000);
-        return;
+        return true;
     }
 
     if (from === GamePhase.PlayerDraft) {
@@ -952,6 +990,7 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
 
     session.phase = nextTo;
     performPhaseTransition(nextTo);
+    return true;
 };
 
 export const markStandardMatchLiveFromMatchZy = (): boolean => {
@@ -1058,6 +1097,7 @@ const performPhaseTransition = (to: GamePhase) => {
             }
             break;
         case GamePhase.LiveGame:
+            clearFlowUndoHistory();
             session.matchId = uuidv4();
             session.rolesReleased = true;
             const ue = session.matchOptions?.undercoverModeEnabled !== false;
@@ -1203,6 +1243,7 @@ export {
     getAvailableMaps,
     // Side pick
     finishSideVote,
+    resumeRestoredPregameFlow,
     startSideVoteFunc as startSideVote,
     setRosterLiveSides,
     // Roles

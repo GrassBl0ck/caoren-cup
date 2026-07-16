@@ -1,0 +1,282 @@
+import { randomUUID } from 'node:crypto';
+import {
+    FlowUndoActionType,
+    FlowUndoStatus,
+    GamePhase,
+    GameSession,
+    Player,
+} from './types';
+
+const MAX_FLOW_UNDO_ENTRIES = 50;
+
+const SESSION_FLOW_KEYS = [
+    'matchId',
+    'phase',
+    'matchOptions',
+    'teams',
+    'captains',
+    'rollValues',
+    'draftOrder',
+    'draftOriginalOrder',
+    'draftIndex',
+    'draftCaptainsActive',
+    'draftPickTimeoutAt',
+    'mapPool',
+    'bannedMaps',
+    'selectedMap',
+    'currentBanTeam',
+    'banSequence',
+    'mapVote',
+    'sidePickTeam',
+    'sideVote',
+    'selectedSide',
+    'undercoverCount',
+    'detectiveCount',
+    'rolesReleased',
+    'taskTemplate',
+    'questionsUsed',
+    'currentQuestion',
+    'questionAnswer',
+    'secondQuestionAnswered',
+    'accusations',
+    'timerEndAt',
+    'timerPhase',
+    'liveGameData',
+] as const;
+
+const PLAYER_FLOW_KEYS = [
+    'role',
+    'rosterTeam',
+    'team',
+    'isReady',
+    'gameRole',
+    'undercoverTaskAckStage',
+    'stats',
+    'sideStats',
+    'taskGrid',
+    'taskActionLog',
+    'abandonCount',
+    'replaceCount',
+    'hintUsedCount',
+    'detectiveQuestionCount',
+    'finalScore',
+    'scoreBreakdown',
+] as const;
+
+interface FlowUndoSnapshot {
+    session: Record<string, unknown>;
+    players: Record<string, Record<string, unknown>>;
+}
+
+export interface FlowUndoEntry {
+    id: string;
+    sessionId: string;
+    actionType: FlowUndoActionType;
+    actorId: string;
+    actorName: string;
+    summary: string;
+    createdAt: number;
+    restorePhase: GamePhase;
+    snapshot: FlowUndoSnapshot;
+}
+
+export interface PersistedFlowUndoState {
+    sessionId: string | null;
+    entries: FlowUndoEntry[];
+}
+
+export interface PushFlowUndoCheckpointInput {
+    actionType: FlowUndoActionType;
+    actorId: string;
+    actorName: string;
+    summary: string;
+    createdAt?: number;
+}
+
+export type FlowUndoResult =
+    | { ok: true; entry: FlowUndoEntry }
+    | { ok: false; reason: string };
+
+let undoState: PersistedFlowUndoState = { sessionId: null, entries: [] };
+
+const clonePlain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+
+const captureSnapshot = (session: GameSession): FlowUndoSnapshot => {
+    const sessionFields: Record<string, unknown> = {};
+    for (const key of SESSION_FLOW_KEYS) {
+        const value = (session as any)[key];
+        if (value !== undefined) sessionFields[key] = clonePlain(value);
+    }
+    const players: Record<string, Record<string, unknown>> = {};
+    for (const [playerId, player] of Object.entries(session.players)) {
+        const fields: Record<string, unknown> = {};
+        for (const key of PLAYER_FLOW_KEYS) {
+            const value = (player as any)[key];
+            if (value !== undefined) fields[key] = clonePlain(value);
+        }
+        players[playerId] = fields;
+    }
+    return { session: sessionFields, players };
+};
+
+const restorePlayerFlow = (player: Player, snapshot: Record<string, unknown> | undefined) => {
+    const currentRole = player.role;
+    const preserveAdminRole = currentRole === 'Admin';
+    for (const key of PLAYER_FLOW_KEYS) delete (player as any)[key];
+    if (snapshot) {
+        for (const key of PLAYER_FLOW_KEYS) {
+            if (Object.prototype.hasOwnProperty.call(snapshot, key)) {
+                (player as any)[key] = clonePlain(snapshot[key]);
+            }
+        }
+    } else {
+        player.role = currentRole;
+        player.isReady = false;
+    }
+    if (preserveAdminRole) player.role = 'Admin';
+    else if (!player.role) player.role = 'Player';
+};
+
+const restoreSnapshot = (session: GameSession, snapshot: FlowUndoSnapshot) => {
+    for (const key of SESSION_FLOW_KEYS) delete (session as any)[key];
+    for (const key of SESSION_FLOW_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(snapshot.session, key)) {
+            (session as any)[key] = clonePlain(snapshot.session[key]);
+        }
+    }
+
+    for (const [playerId, player] of Object.entries(session.players)) {
+        restorePlayerFlow(player, snapshot.players[playerId]);
+    }
+
+    for (const team of ['A', 'B'] as const) {
+        session.teams[team].players = session.teams[team].players.filter(playerId => !!session.players[playerId]);
+    }
+    if (session.captains.A && !session.players[session.captains.A]) session.captains.A = null;
+    if (session.captains.B && !session.players[session.captains.B]) session.captains.B = null;
+    session.accusations = Object.fromEntries(
+        Object.entries(session.accusations || {}).filter(([playerId]) => !!session.players[playerId]),
+    );
+};
+
+const latestEntry = (): FlowUndoEntry | undefined => undoState.entries[undoState.entries.length - 1];
+
+const isPregamePhase = (phase: GamePhase) => [
+    GamePhase.Lobby,
+    GamePhase.CaptainSelection,
+    GamePhase.Roll,
+    GamePhase.PlayerDraft,
+    GamePhase.MapBan,
+    GamePhase.SidePick,
+    GamePhase.PreGameSetup,
+].includes(phase);
+
+const toLatestStatus = (entry: FlowUndoEntry): NonNullable<FlowUndoStatus['latest']> => ({
+    id: entry.id,
+    actionType: entry.actionType,
+    summary: entry.summary,
+    actorId: entry.actorId,
+    actorName: entry.actorName,
+    createdAt: entry.createdAt,
+    restorePhase: entry.restorePhase,
+});
+
+export const pushFlowUndoCheckpoint = (
+    session: GameSession,
+    input: PushFlowUndoCheckpointInput,
+): FlowUndoEntry => {
+    if (undoState.sessionId !== session.sessionId) {
+        undoState = { sessionId: session.sessionId, entries: [] };
+    }
+    const entry: FlowUndoEntry = {
+        id: randomUUID(),
+        sessionId: session.sessionId,
+        actionType: input.actionType,
+        actorId: input.actorId,
+        actorName: input.actorName,
+        summary: input.summary,
+        createdAt: input.createdAt ?? Date.now(),
+        restorePhase: session.phase,
+        snapshot: captureSnapshot(session),
+    };
+    undoState.entries.push(entry);
+    if (undoState.entries.length > MAX_FLOW_UNDO_ENTRIES) {
+        undoState.entries.splice(0, undoState.entries.length - MAX_FLOW_UNDO_ENTRIES);
+    }
+    return entry;
+};
+
+export const discardFlowUndoCheckpoint = (entryId: string): boolean => {
+    const index = undoState.entries.findIndex(entry => entry.id === entryId);
+    if (index < 0) return false;
+    undoState.entries.splice(index, 1);
+    return true;
+};
+
+export const clearFlowUndoHistory = () => {
+    undoState = { sessionId: null, entries: [] };
+};
+
+export const getFlowUndoStatus = (session: GameSession, actor?: Player): FlowUndoStatus => {
+    const entry = latestEntry();
+    const base: FlowUndoStatus = {
+        count: undoState.sessionId === session.sessionId ? undoState.entries.length : 0,
+        canUndo: false,
+        latest: undoState.sessionId === session.sessionId && entry ? toLatestStatus(entry) : undefined,
+    };
+    if (!isPregamePhase(session.phase)) {
+        return { ...base, disabledReason: '正式比赛开始后不能撤销赛前流程。' };
+    }
+    const isOfficialAdmin = actor?.role === 'Admin';
+    const isDuelTempAdmin = !!actor && session.duelTempAdminId === actor.playerId;
+    if (!isOfficialAdmin && !isDuelTempAdmin) {
+        return { ...base, disabledReason: '只有管理员才能撤销流程操作。' };
+    }
+    if (!entry || undoState.sessionId !== session.sessionId) {
+        return { ...base, disabledReason: '当前没有可撤销的操作。' };
+    }
+    if (isDuelTempAdmin && !isOfficialAdmin && entry.actorId !== actor.playerId) {
+        return { ...base, disabledReason: '单挑临时管理员只能撤销自己的操作。' };
+    }
+    return { ...base, canUndo: true, disabledReason: undefined };
+};
+
+export const undoLatestFlowAction = (session: GameSession, actor: Player): FlowUndoResult => {
+    const status = getFlowUndoStatus(session, actor);
+    if (!status.canUndo) return { ok: false, reason: status.disabledReason || '当前操作不能撤销。' };
+    const entry = latestEntry();
+    if (!entry || entry.sessionId !== session.sessionId) {
+        return { ok: false, reason: '撤销记录与当前对局不一致。' };
+    }
+    restoreSnapshot(session, entry.snapshot);
+    undoState.entries.pop();
+    return { ok: true, entry };
+};
+
+export const exportFlowUndoState = (): PersistedFlowUndoState => clonePlain(undoState);
+
+export const importFlowUndoState = (raw: unknown, currentSessionId: string): boolean => {
+    clearFlowUndoHistory();
+    if (!raw || typeof raw !== 'object') return false;
+    const candidate = raw as Partial<PersistedFlowUndoState>;
+    if (candidate.sessionId !== currentSessionId || !Array.isArray(candidate.entries)) return false;
+    const entries = candidate.entries.filter((entry): entry is FlowUndoEntry => {
+        if (!entry || typeof entry !== 'object') return false;
+        const value = entry as FlowUndoEntry;
+        const snapshot = value.snapshot as FlowUndoSnapshot | undefined;
+        return value.sessionId === currentSessionId &&
+            typeof value.id === 'string' &&
+            typeof value.actorId === 'string' &&
+            typeof value.actorName === 'string' &&
+            typeof value.summary === 'string' &&
+            typeof value.createdAt === 'number' &&
+            Object.values(GamePhase).includes(value.restorePhase) &&
+            ['ADVANCE_PHASE', 'ADMIN_BAN_MAP', 'ASSIGN_ROSTER_TEAM'].includes(value.actionType) &&
+            !!snapshot && typeof snapshot === 'object' &&
+            !!snapshot.session && typeof snapshot.session === 'object' &&
+            !!snapshot.players && typeof snapshot.players === 'object' &&
+            snapshot.session.phase === value.restorePhase;
+    }).slice(-MAX_FLOW_UNDO_ENTRIES);
+    undoState = { sessionId: currentSessionId, entries: clonePlain(entries) };
+    return true;
+};

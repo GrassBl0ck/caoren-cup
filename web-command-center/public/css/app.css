@@ -141,6 +141,67 @@
             line-height: 1.85;
         }
 
+        .flow-undo-safety-bar {
+            position: sticky;
+            top: 8px;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            margin-bottom: 14px;
+            padding: 12px 16px;
+            border: 1px solid #f0c36a;
+            border-radius: 8px;
+            background: #fff9e8;
+            box-shadow: 0 5px 18px rgba(120, 83, 18, 0.12);
+        }
+
+        .flow-undo-safety-bar[hidden] {
+            display: none;
+        }
+
+        .flow-undo-summary {
+            display: grid;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .flow-undo-summary > div {
+            overflow-wrap: anywhere;
+        }
+
+        .flow-undo-meta {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .flow-undo-actions {
+            flex: 0 0 auto;
+        }
+
+        .flow-undo-actions button {
+            min-width: 132px;
+        }
+
+        body[data-theme="dark"] .flow-undo-safety-bar {
+            background: #2b2415;
+            border-color: #8a6826;
+            color: var(--text);
+        }
+
+        @media (max-width: 720px) {
+            .flow-undo-safety-bar {
+                position: static;
+                align-items: stretch;
+                flex-direction: column;
+            }
+
+            .flow-undo-actions button {
+                width: 100%;
+            }
+        }
+
         .lobby-announcement {
             margin-top: 16px;
             padding: 16px 18px;
