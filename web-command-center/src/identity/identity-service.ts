@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { IdentityStore } from './identity-store';
+import { hashFixedMemberPassword, verifyFixedMemberPassword } from './password-auth';
 import {
     DeviceTokenRecord,
     IdentityRecord,
@@ -33,10 +34,36 @@ interface DeviceAuthenticationInput {
     steamClaim?: SteamAccountClaim;
 }
 
+interface FixedAccountInput {
+    steamId: string;
+    nickname: string;
+    password: string;
+    sessionId?: string;
+    nicknameInUse?: (nickname: string, identityId: string) => boolean;
+}
+
+interface FixedAccountAuthenticationInput {
+    sessionId: string;
+    steamId: string;
+    password: string;
+    nicknameInUse?: (nickname: string, identityId: string) => boolean;
+}
+
 const normalizeSteamId = (value: unknown): string => String(value || '').replace(/\D/g, '');
 const validSteamId = (value: unknown): string | undefined => {
     const normalized = normalizeSteamId(value);
     return /^7656119\d{10}$/.test(normalized) ? normalized : undefined;
+};
+
+const strictSteamId = (value: unknown): string | undefined => {
+    const steamId = String(value || '').trim();
+    return /^7656119\d{10}$/.test(steamId) ? steamId : undefined;
+};
+
+const validNickname = (value: unknown): string => {
+    const nickname = String(value || '').trim();
+    if (!nickname || nickname.length > 32 || /[<>&"'`\\\x00-\x1f\x7f]/.test(nickname)) throw new Error('nickname_invalid');
+    return nickname;
 };
 
 const tokenHash = (secret: string): string => crypto.createHash('sha256').update(secret, 'utf8').digest('hex');
@@ -50,10 +77,191 @@ export class LobbyIdentityService {
         this.randomBytes = options.randomBytes || crypto.randomBytes;
     }
 
+    async createOrUpdateFixedAccount(input: FixedAccountInput): Promise<{ identity: IdentityRecord; created: boolean }> {
+        const steamId = strictSteamId(input.steamId);
+        if (!steamId) throw new Error('steam_id_invalid');
+        const nickname = validNickname(input.nickname);
+        const password = await hashFixedMemberPassword(input.password, { now: this.now, randomBytes: this.randomBytes });
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const matching = Object.values(data.identities).filter((identity) => identity.steamId === steamId);
+            if (matching.length > 1) throw new Error('steam_id_conflict');
+            let identity = matching[0];
+            const created = !identity;
+            if (!identity) {
+                const identityId = this.makeId(16);
+                identity = {
+                    identityId,
+                    displayName: nickname,
+                    steamId,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                data.identities[identityId] = identity;
+            }
+            if (input.nicknameInUse?.(nickname, identity.identityId)) throw new Error('nickname_in_use');
+            if (input.sessionId) this.assertNicknameAvailable(data, input.sessionId, nickname, identity.identityId);
+            const enabled = identity.fixedAccount?.enabled ?? true;
+            identity.displayName = nickname;
+            identity.fixedAccount = { enabled, password };
+            identity.updatedAt = now;
+            if (input.sessionId) {
+                for (const membership of Object.values(data.memberships)) {
+                    if (membership.sessionId === input.sessionId && membership.identityId === identity.identityId && !membership.leftAt) {
+                        membership.nickname = nickname;
+                        membership.updatedAt = now;
+                    }
+                }
+            }
+            return { identity, created };
+        });
+    }
+
+    async authenticateFixedAccount(input: FixedAccountAuthenticationInput) {
+        const steamId = strictSteamId(input.steamId);
+        if (!steamId) return { ok: false as const, reason: 'account_not_found' as const };
+        const snapshot = this.store.snapshot();
+        const identity = Object.values(snapshot.identities).find((candidate) => candidate.steamId === steamId);
+        if (!identity?.fixedAccount) return { ok: false as const, reason: 'account_not_found' as const };
+        if (!identity.fixedAccount.enabled) return { ok: false as const, reason: 'account_disabled' as const };
+        if (!await verifyFixedMemberPassword(input.password, identity.fixedAccount.password)) {
+            return { ok: false as const, reason: 'password_incorrect' as const };
+        }
+        if (input.nicknameInUse?.(identity.displayName, identity.identityId)) {
+            return { ok: false as const, reason: 'nickname_in_use' as const };
+        }
+        const verifiedHash = identity.fixedAccount.password.hash;
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const currentIdentity = data.identities[identity.identityId];
+            if (!currentIdentity?.fixedAccount || currentIdentity.steamId !== steamId) {
+                return { ok: false as const, reason: 'account_not_found' as const };
+            }
+            if (!currentIdentity.fixedAccount.enabled) return { ok: false as const, reason: 'account_disabled' as const };
+            if (currentIdentity.fixedAccount.password.hash !== verifiedHash) {
+                return { ok: false as const, reason: 'password_incorrect' as const };
+            }
+            const memberships = Object.values(data.memberships).filter((membership) =>
+                membership.sessionId === input.sessionId && membership.identityId === currentIdentity.identityId,
+            );
+            if (memberships.some((membership) => !!membership.blockedAt)) {
+                return { ok: false as const, reason: 'blocked_for_session' as const };
+            }
+            let membership = memberships.find((candidate) => !candidate.leftAt);
+            if (membership) return { ok: true as const, identity: currentIdentity, membership };
+            const nicknameInUse = Object.values(data.memberships).some((candidate) =>
+                candidate.sessionId === input.sessionId &&
+                candidate.identityId !== currentIdentity.identityId &&
+                !candidate.leftAt &&
+                candidate.nickname === currentIdentity.displayName,
+            );
+            if (nicknameInUse) return { ok: false as const, reason: 'nickname_in_use' as const };
+            const membershipId = this.makeId(16);
+            membership = {
+                membershipId,
+                sessionId: input.sessionId,
+                identityId: currentIdentity.identityId,
+                nickname: currentIdentity.displayName,
+                identityLevel: 'longTerm',
+                confirmationState: 'pending',
+                claimedSteamId: steamId,
+                joinedAt: now,
+                updatedAt: now,
+            };
+            data.memberships[membershipId] = membership;
+            return { ok: true as const, identity: currentIdentity, membership };
+        });
+    }
+
+    async renameFixedAccount(identityId: string, nicknameRaw: unknown, sessionId?: string): Promise<IdentityRecord | undefined> {
+        const nickname = validNickname(nicknameRaw);
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const identity = data.identities[identityId];
+            if (!identity?.fixedAccount) return undefined;
+            if (sessionId) this.assertNicknameAvailable(data, sessionId, nickname, identityId);
+            identity.displayName = nickname;
+            identity.updatedAt = now;
+            if (sessionId) {
+                for (const membership of Object.values(data.memberships)) {
+                    if (membership.sessionId === sessionId && membership.identityId === identityId && !membership.leftAt) {
+                        membership.nickname = nickname;
+                        membership.updatedAt = now;
+                    }
+                }
+            }
+            return identity;
+        });
+    }
+
+    async resetFixedAccountPassword(identityId: string, rawPassword: unknown): Promise<IdentityRecord | undefined> {
+        const password = await hashFixedMemberPassword(rawPassword, { now: this.now, randomBytes: this.randomBytes });
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const identity = data.identities[identityId];
+            if (!identity?.fixedAccount) return undefined;
+            identity.fixedAccount.password = password;
+            identity.updatedAt = now;
+            return identity;
+        });
+    }
+
+    async setFixedAccountEnabled(identityId: string, enabled: boolean, sessionId?: string) {
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const identity = data.identities[identityId];
+            if (!identity?.fixedAccount) return undefined;
+            identity.fixedAccount.enabled = enabled;
+            identity.updatedAt = now;
+            let membership: LobbyMembershipRecord | undefined;
+            if (!enabled && sessionId) {
+                membership = Object.values(data.memberships).find((candidate) =>
+                    candidate.sessionId === sessionId && candidate.identityId === identityId && !candidate.leftAt,
+                );
+                if (membership) {
+                    membership.blockedAt = membership.blockedAt || now;
+                    membership.updatedAt = now;
+                }
+            }
+            return { identity, membership };
+        });
+    }
+
+    listFixedAccounts(sessionId?: string) {
+        const data = this.store.snapshot();
+        return Object.values(data.identities)
+            .filter((identity) => !!identity.steamId && !!identity.fixedAccount)
+            .map((identity) => {
+                const membership = sessionId
+                    ? Object.values(data.memberships).find((candidate) =>
+                        candidate.sessionId === sessionId && candidate.identityId === identity.identityId && !candidate.leftAt,
+                    )
+                    : undefined;
+                return {
+                    identityId: identity.identityId,
+                    steamId: identity.steamId!,
+                    nickname: identity.displayName,
+                    enabled: identity.fixedAccount!.enabled,
+                    passwordUpdatedAt: identity.fixedAccount!.password.updatedAt,
+                    membership,
+                };
+            })
+            .sort((left, right) => left.nickname.localeCompare(right.nickname, 'zh-CN'));
+    }
+
+    listLobbySteamIds(sessionId: string): string[] {
+        const ids = new Set(
+            Object.values(this.store.snapshot().memberships)
+                .filter((membership) => membership.sessionId === sessionId && !membership.leftAt && !membership.blockedAt)
+                .map((membership) => strictSteamId(membership.claimedSteamId))
+                .filter((steamId): steamId is string => !!steamId),
+        );
+        return [...ids].sort();
+    }
+
     async createTemporaryMembership(input: TemporaryMembershipInput): Promise<LobbyMembershipRecord> {
         const now = this.now();
-        const nickname = String(input.nickname || '').trim();
-        if (!nickname || nickname.length > 32 || /[<>&"'`\\\x00-\x1f\x7f]/.test(nickname)) throw new Error('nickname_invalid');
+        const nickname = validNickname(input.nickname);
         const claimedSteamId = input.steamClaim ? validSteamId(input.steamClaim.steamId) : undefined;
         if (input.steamClaim?.steamId && !claimedSteamId) throw new Error('steam_id_invalid');
 
@@ -579,6 +787,21 @@ export class LobbyIdentityService {
         membership.updatedAt = now;
         membership.challenge = undefined;
         return { ok: true as const, identity, membership };
+    }
+
+    private assertNicknameAvailable(
+        data: ReturnType<IdentityStore['snapshot']>,
+        sessionId: string,
+        nickname: string,
+        identityId: string,
+    ): void {
+        const collision = Object.values(data.memberships).some((membership) =>
+            membership.sessionId === sessionId &&
+            membership.identityId !== identityId &&
+            !membership.leftAt &&
+            membership.nickname === nickname,
+        );
+        if (collision) throw new Error('nickname_in_use');
     }
 
     private makeId(size: number): string {

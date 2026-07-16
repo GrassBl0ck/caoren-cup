@@ -162,7 +162,9 @@ CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
 - 当前比分
 - 玩家战绩
 
-新玩家可以使用本场邀请码和昵称先进入大厅。首次连接 CS2 后，桥接插件会按可信 SteamID 向该玩家显示一次性确认码；只有确认码、客户端声明和服务器 SteamID 三者一致时，后端才建立长期绑定。
+管理员可以预设固定成员的 SteamID64、昵称和独立密码。固定成员使用 SteamID64 和密码直接进入当前大厅，桥接插件检测到相同的服务器可信 SteamID 后自动完成本场确认，不会重新绑定或合并身份。
+
+临时玩家可以使用本场邀请码、昵称和 SteamID64 先进入大厅。首次连接 CS2 后，桥接插件会按可信 SteamID 向该玩家显示一次性确认码；只有确认码、客户端声明和服务器 SteamID 三者一致时，后端才建立长期绑定。
 
 桌面页面只接收候选账号的公开昵称、最近使用时间、掩码 SteamID 和临时引用；最终选择的完整 SteamID 由 Electron 主进程换取 30 秒单次声明票据，不会暴露给远程 renderer。
 
@@ -175,7 +177,9 @@ CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
 `!cclogin` 和 `!cccode` 也继续保留，用于首次升级、换电脑、Steam 账号不一致和故障恢复。
 玩家游戏码成功验证后立即失效，不能重复用于建立设备登录凭据。
 
-长期身份与单场比赛 Session 分离，默认保存在忽略的 `web-command-center/runtime/identity-store.json`。设备令牌仅保存安全哈希；生产自动登录必须使用 HTTPS/WSS。
+长期身份与单场比赛 Session 分离，默认保存在忽略的 `web-command-center/runtime/identity-store.json`。固定成员密码使用 Node.js scrypt 和随机盐保存，管理员不能查看原密码。设备令牌仅保存安全哈希；生产自动登录必须使用 HTTPS/WSS，固定密码登录不会签发设备令牌。
+
+连接 CS2 但尚未进入当前网页大厅的真实玩家会收到聊天提醒。桥接插件只在网页状态成功同步且缓存有效时提示，Bot、HLTV 和无效玩家不会收到提醒。
 
 ---
 

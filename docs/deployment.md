@@ -37,9 +37,13 @@ TRUST_PROXY（HTTPS 反向代理与 Node 位于同机时设为 loopback）
 
 长期身份默认保存在 `web-command-center/runtime/identity-store.json`。该文件不会进入发布包或 Git，生产更新前必须单独备份并在覆盖后保留。
 
+固定成员账户启用后，身份库会从 schema v1 向后兼容迁移到 schema v2。迁移保留现有长期身份、单场成员和设备令牌。更新前必须同时备份主文件和 `identity-store.previous.json`；未知版本或主副本均损坏时，服务会明确停止启动，不会静默创建空身份库。
+
 ## 3. HTTPS Requirement
 
 邀请码和旧游戏码可在本地 HTTP 开发环境使用。生产环境的设备令牌签发、自动登录、轮换和退出必须通过 HTTPS/WSS；未启用 HTTPS 时后端和桌面客户端都会拒绝传输长期设备令牌。
+
+固定成员密码登录以及管理员创建或重置固定成员密码可以在 HTTP 环境使用，但密码传输不会被加密。部署 HTTPS 前，应为本系统使用独立且不复用到其他服务的密码。这个例外不会开放设备令牌、轮换令牌或自动登录。
 
 反向代理终止 TLS 时，需要转发 `X-Forwarded-Proto: https`，并在可信的本机代理场景配置：
 

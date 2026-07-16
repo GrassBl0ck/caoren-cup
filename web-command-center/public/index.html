@@ -42,36 +42,83 @@
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
 <body class="caoren-modifiers-disabled">
-    <button id="theme-toggle" class="theme-toggle" type="button" onclick="toggleTheme()">深色模式</button>
     <div class="page-shell">
-    <h1>草人杯对局指挥台</h1>
-    <p class="page-subtitle">用于管理草人杯比赛流程、玩家绑定、身份分配、实时比分与最终结算。</p>
+    <header class="site-header">
+        <div class="site-brand">
+            <h1>草人杯对局指挥台</h1>
+            <p class="page-subtitle">比赛大厅、身份核对与对局流程控制</p>
+        </div>
+        <button id="theme-toggle" class="theme-toggle" type="button" onclick="toggleTheme()">深色模式</button>
+    </header>
     <div id="login-area">
-        <div id="v1333-game-code-login-panel" class="panel" style="margin-bottom:16px;">
-            <h2 style="margin:0 0 12px;">进入草人杯大厅</h2>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 14px;">
-                <span id="v1333-server-dot" aria-hidden="true" style="display:inline-block;width:12px;height:12px;border-radius:999px;background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18);"></span>
-                <strong id="v1333-server-status">正在读取服务器状态...</strong>
-                <button id="v1333-connect-server-btn" type="button" disabled>连接至草人杯服务器</button>
-                <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.6.3.zip" download style="display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:6px;background:#0f172a;color:#fff;text-decoration:none;font-weight:700;">下载桌面客户端</a>
-                <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.6.3" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;padding:10px 14px;border-radius:6px;background:#475569;color:#fff;text-decoration:none;font-weight:700;">GitHub 备用下载</a>
-            </div>
-            <div id="desktop-auth-status" class="identity-login-status" aria-live="polite">正在检查设备登录状态...</div>
-            <div id="steam-account-section" class="steam-account-section">
+        <div id="v1333-game-code-login-panel" class="panel login-panel">
+            <div class="login-panel-header">
                 <div>
-                    <strong>本机 Steam 账号</strong>
-                    <div id="steam-account-status" class="muted-line">等待桌面客户端读取</div>
+                    <span class="section-eyebrow">大厅入口</span>
+                    <h2>进入草人杯大厅</h2>
                 </div>
-                <select id="steam-account-select" style="display:none;min-width:260px;"></select>
-                <button id="steam-account-refresh-btn" type="button" title="重新读取本机 Steam 账号">重新检测</button>
+                <div class="server-status-line" aria-live="polite">
+                    <span id="v1333-server-dot" class="server-status-dot" aria-hidden="true"></span>
+                    <strong id="v1333-server-status">正在读取服务器状态...</strong>
+                </div>
             </div>
-            <div class="lobby-invite-form">
-                <label>本场邀请码<input id="lobby-invite-code-input" type="text" maxlength="8" autocomplete="one-time-code" placeholder="8 位邀请码"></label>
-                <label>昵称<input id="lobby-nickname-input" type="text" maxlength="32" autocomplete="nickname" placeholder="本场显示昵称"></label>
-                <button id="lobby-invite-enter-btn" type="button">进入大厅</button>
+            <div class="login-utility-row">
+                <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草人杯服务器</button>
+                <details class="download-menu">
+                    <summary>客户端下载</summary>
+                    <div class="download-menu-content">
+                        <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.6.3.zip" download>下载桌面客户端</a>
+                        <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.6.3" target="_blank" rel="noopener">GitHub 备用下载</a>
+                    </div>
+                </details>
+            </div>
+
+            <div class="login-workspace">
+                <div class="login-mode-switch" role="tablist" aria-label="选择参赛身份">
+                    <button id="login-mode-fixed" class="login-mode-btn active" type="button" role="tab" aria-selected="true" aria-controls="login-panel-fixed" onclick="setLoginMode('fixed')">固定成员</button>
+                    <button id="login-mode-temporary" class="login-mode-btn" type="button" role="tab" aria-selected="false" aria-controls="login-panel-temporary" onclick="setLoginMode('temporary')">临时参赛者</button>
+                </div>
+
+                <section id="login-panel-fixed" class="login-mode-panel active" data-login-panel="fixed" role="tabpanel" aria-labelledby="login-mode-fixed">
+                    <div class="login-mode-heading">
+                        <h3 id="fixed-member-title">固定成员登录</h3>
+                        <p>使用管理员预设的 SteamID64 与独立密码进入当前大厅。</p>
+                    </div>
+                    <div class="fixed-member-form">
+                        <label>SteamID64<input id="fixed-member-steamid-input" type="text" inputmode="numeric" maxlength="17" autocomplete="username" placeholder="7656119 开头的 17 位数字"></label>
+                        <label>密码<input id="fixed-member-password-input" type="password" maxlength="128" autocomplete="current-password" placeholder="固定成员密码"></label>
+                        <button id="fixed-member-login-btn" class="primary-btn" type="button">登录</button>
+                    </div>
+                    <div id="fixed-member-login-error" class="fixed-member-login-error" aria-live="polite"></div>
+                </section>
+
+                <section id="login-panel-temporary" class="login-mode-panel" data-login-panel="temporary" role="tabpanel" aria-labelledby="login-mode-temporary" hidden>
+                    <div class="login-mode-heading">
+                        <h3>临时参赛者</h3>
+                        <p>使用本场邀请码进入，并在 CS2 中完成身份确认。</p>
+                    </div>
+                    <div class="lobby-invite-form">
+                        <label>本场邀请码<input id="lobby-invite-code-input" type="text" maxlength="8" autocomplete="one-time-code" placeholder="8 位邀请码"></label>
+                        <label>昵称<input id="lobby-nickname-input" type="text" maxlength="32" autocomplete="nickname" placeholder="本场显示昵称"></label>
+                        <label>SteamID64<input id="lobby-steamid-input" type="text" inputmode="numeric" maxlength="17" autocomplete="username" placeholder="7656119 开头的 17 位数字"></label>
+                        <button id="lobby-invite-enter-btn" class="primary-btn" type="button">进入大厅</button>
+                    </div>
+                </section>
+            </div>
+
+            <div class="login-context-row">
+                <div id="desktop-auth-status" class="identity-login-status" aria-live="polite">正在检查设备登录状态...</div>
+                <div id="steam-account-section" class="steam-account-section">
+                    <div>
+                        <strong>本机 Steam 账号</strong>
+                        <div id="steam-account-status" class="muted-line">等待桌面客户端读取</div>
+                    </div>
+                    <select id="steam-account-select" style="display:none;min-width:260px;"></select>
+                    <button id="steam-account-refresh-btn" type="button" title="重新读取本机 Steam 账号">重新检测</button>
+                </div>
             </div>
             <details class="legacy-login-details">
-                <summary>使用游戏内登录码或管理员登录</summary>
+                <summary>其他登录方式</summary>
                 <div class="legacy-login-row">
                     <input id="v1333-game-login-code-input" type="text" placeholder="6 位游戏码或管理员密码" autocomplete="one-time-code" />
                     <button id="v1335-enter-lobby-btn" type="button">验证并进入</button>
@@ -90,10 +137,10 @@
         <input id="extra-input" type="hidden" />
     </div>
     <div id="lobby-area" style="display:none;">
-        <div class="toolbar-row panel identity-toolbar" style="margin-bottom:14px;">
-            <div>
+        <div class="toolbar-row panel identity-toolbar">
+            <div id="player-summary" class="player-session-summary">
                 <div class="status-chip">当前身份</div>
-                <p style="margin:10px 0 6px;font-size:16px;">欢迎，<span id="my-name"></span></p>
+                <p class="identity-welcome">欢迎，<span id="my-name"></span></p>
                 <div class="identity-badges"><span id="my-identity-level" class="tag tag-gray">身份读取中</span><span id="my-confirmation-state" class="tag tag-gray">确认状态读取中</span></div>
                 <div id="my-confirmation-reason" class="identity-reason" style="display:none;"></div>
                 <div id="steam-confirm-panel" class="steam-confirm-panel" style="display:none;">
@@ -102,30 +149,82 @@
                 </div>
                 <p class="legacy-bind-line">故障恢复码：<strong id="my-bindcode"></strong></p>
             </div>
+            <div id="admin-summary" class="admin-session-summary" hidden>
+                <div class="status-chip">管理员会话</div>
+                <p class="identity-welcome">Admin <span class="admin-role-label">管理员</span></p>
+                <p class="muted-line">管理当前大厅、玩家准入与比赛流程</p>
+            </div>
             <div class="identity-toolbar-actions">
+                <div id="lobby-phase-summary" class="lobby-phase-summary">当前阶段读取中</div>
                 <button id="v1333-lobby-connect-server-btn" type="button" disabled>连接 CS2</button>
                 <button id="device-logout-btn" type="button" style="display:none;">退出设备登录</button>
                 <div id="timer-display"></div><div id="lobby-notification-display" style="display:none;"></div>
             </div>
         </div>
-        <p id="my-identity" style="font-weight:bold; color: #0056b3; font-size: 18px;"></p>
-        <div class="player-list" id="player-list"></div>
-        <div id="admin-controls" style="display:none; margin-top: 15px; padding: 15px; background: #f8f9fa; border: 1px solid #ced4da; border-radius: 8px;">
-            <h3 style="margin-top:0;">管理员控制区</h3>
-            <section class="identity-admin-panel">
-                <div class="identity-admin-header"><div><strong>大厅身份与邀请码</strong><div id="admin-lobby-invite" class="muted-line">邀请码读取中</div></div><div><button type="button" onclick="refreshIdentityAdmin()">刷新</button><button type="button" onclick="rotateIdentityInvite()">更换邀请码</button></div></div>
-                <div id="identity-admin-list" class="muted-line">身份状态读取中</div>
-            </section>
-
-            <div class="admin-tabs" role="tablist" aria-label="管理员功能标签">
-                <button type="button" class="admin-tab-btn" data-admin-tab="announcement" role="tab" aria-controls="admin-tab-announcement" onclick="switchAdminTab('announcement')">公告</button>
-                <button type="button" class="admin-tab-btn" data-admin-tab="setup" role="tab" aria-controls="admin-tab-setup" onclick="switchAdminTab('setup')">本局设置</button>
-                <button type="button" class="admin-tab-btn" data-admin-tab="flow" role="tab" aria-controls="admin-tab-flow" onclick="switchAdminTab('flow')">流程控制</button>
-                <button type="button" class="admin-tab-btn" data-admin-tab="tasks" role="tab" aria-controls="admin-tab-tasks" onclick="switchAdminTab('tasks')">卧底任务</button>
-                <button type="button" class="admin-tab-btn" data-admin-tab="mods" role="tab" aria-controls="admin-tab-mods" onclick="switchAdminTab('mods')">娱乐修改</button>
+        <p id="my-identity" class="my-identity-line"></p>
+        <div id="admin-controls" class="lobby-workspace" style="display:none;">
+            <div class="admin-mobile-nav">
+                <label for="admin-view-select">管理模块</label>
+                <select id="admin-view-select" onchange="switchAdminView(this.value)">
+                    <option value="overview">总览</option>
+                    <option value="access">玩家与准入</option>
+                    <option value="setup">比赛设置</option>
+                    <option value="flow">流程控制</option>
+                    <option value="announcement">公告</option>
+                    <option value="tasks">卧底任务</option>
+                    <option value="mods">娱乐修改</option>
+                </select>
             </div>
+            <div class="admin-shell">
+                <aside class="admin-sidebar" aria-label="管理员控制区">
+                    <div class="admin-sidebar-heading"><strong>管理员控制区</strong><span>当前对局工作台</span></div>
+                    <nav class="admin-nav" aria-label="管理员功能">
+                        <button type="button" class="admin-nav-btn" data-admin-view="overview" aria-controls="admin-overview" onclick="switchAdminView('overview')">总览</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="access" aria-controls="admin-access" onclick="switchAdminView('access')">玩家与准入</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="setup" aria-controls="admin-tab-setup" onclick="switchAdminView('setup')">比赛设置</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="flow" aria-controls="admin-tab-flow" onclick="switchAdminView('flow')">流程控制</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="announcement" aria-controls="admin-tab-announcement" onclick="switchAdminView('announcement')">公告</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="tasks" aria-controls="admin-tab-tasks" onclick="switchAdminView('tasks')">卧底任务</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="mods" aria-controls="admin-tab-mods" onclick="switchAdminView('mods')">娱乐修改</button>
+                    </nav>
+                </aside>
+                <main id="admin-workspace" class="admin-workspace">
+                    <section id="admin-overview" class="admin-view-panel" data-admin-view-panel="overview" aria-labelledby="admin-overview-title">
+                        <div class="admin-view-heading"><div><span class="section-eyebrow">对局概况</span><h2 id="admin-overview-title">总览</h2></div><button type="button" onclick="refreshIdentityAdmin()">刷新状态</button></div>
+                        <div class="overview-metrics">
+                            <div class="overview-metric"><span>当前阶段</span><strong id="overview-phase">读取中</strong></div>
+                            <div class="overview-metric"><span>大厅玩家</span><strong id="overview-player-count">0</strong></div>
+                            <div class="overview-metric"><span>待确认</span><strong id="overview-pending-count">0</strong></div>
+                            <div class="overview-metric"><span>服务器</span><strong id="overview-server-status">正在检测</strong></div>
+                        </div>
+                        <div class="overview-actions">
+                            <button type="button" class="primary-btn" onclick="switchAdminView('access')">管理玩家与准入</button>
+                            <button type="button" onclick="switchAdminView('flow')">进入流程控制</button>
+                        </div>
+                    </section>
+                    <section id="stage-content" class="stage-content admin-view-panel public-stage-panel" data-admin-view-panel="overview" aria-label="当前阶段内容">
+                        <div id="phase-info"></div>
+                        <div id="extra-info"></div>
+                    </section>
 
-            <div id="admin-tab-announcement" class="admin-tab-panel" data-admin-tab-panel="announcement" role="tabpanel">
+                    <div class="player-list admin-view-panel public-roster-panel" id="player-list" data-admin-view-panel="access"></div>
+                    <section id="admin-access" class="identity-admin-panel admin-view-panel" data-admin-view-panel="access" aria-labelledby="admin-access-title">
+                <div class="identity-admin-header"><div><span class="section-eyebrow">玩家准入</span><h2 id="admin-access-title">身份与固定成员</h2><div id="admin-lobby-invite" class="muted-line">邀请码读取中</div></div><div><button type="button" onclick="refreshIdentityAdmin()">刷新</button><button type="button" onclick="rotateIdentityInvite()">更换邀请码</button></div></div>
+                <div id="identity-admin-list" class="muted-line">身份状态读取中</div>
+                <div class="fixed-account-admin-section">
+                    <h4>固定成员账户</h4>
+                    <div class="fixed-account-create-form">
+                        <label>SteamID64<input id="fixed-account-steamid-input" type="text" inputmode="numeric" maxlength="17" placeholder="7656119 开头的 17 位数字"></label>
+                        <label>昵称<input id="fixed-account-nickname-input" type="text" maxlength="32" placeholder="固定成员昵称"></label>
+                        <label>初始密码<input id="fixed-account-password-input" type="password" maxlength="128" autocomplete="new-password" placeholder="8 到 128 个字符"></label>
+                        <button id="fixed-account-create-btn" type="button">新增或设置密码</button>
+                    </div>
+                    <div id="fixed-account-admin-status" class="muted-line" aria-live="polite"></div>
+                    <div id="fixed-account-admin-list" class="fixed-account-admin-list muted-line">固定成员账户读取中</div>
+                </div>
+                    </section>
+
+            <div id="admin-tab-announcement" class="admin-view-panel" data-admin-view-panel="announcement" role="tabpanel">
             <div id="lobby-announcement-admin-panel" class="match-options-panel lobby-announcement-admin-panel">
                 <h4>大厅公告设置</h4>
                 <div id="lobby-announcement-admin-status" class="match-options-status">公告状态读取中……</div>
@@ -159,7 +258,7 @@
             </div>
             </div>
 
-            <div id="admin-tab-setup" class="admin-tab-panel" data-admin-tab-panel="setup" role="tabpanel">
+            <div id="admin-tab-setup" class="admin-view-panel" data-admin-view-panel="setup" role="tabpanel">
             <div id="match-options-panel" class="match-options-panel">
                 <h4>本局模式设置</h4>
                 <div id="match-options-status" class="match-options-status">当前阶段：读取中……</div>
@@ -257,7 +356,7 @@
                 </div>
             </div>
 
-            <div id="admin-tab-flow" class="admin-tab-panel" data-admin-tab-panel="flow" role="tabpanel">
+            <div id="admin-tab-flow" class="admin-view-panel" data-admin-view-panel="flow" role="tabpanel">
             <div id="team-lock-panel" class="match-options-panel">
                 <h4>网页强制分队</h4>
                 <div id="team-lock-status" class="match-options-status">按网页 A/B 队和选边结果，把玩家同步到游戏内 CT/T，并锁定防止自行换边。</div>
@@ -271,9 +370,16 @@
                     <button id="advance-phase-btn" onclick="advancePhase()" style="font-weight:bold; background-color:#ffeb3b; border-color:#fbc02d; font-size: 16px; padding: 10px 20px;">推进阶段 (当前: Lobby)</button>
                     <button onclick="playAdminAudioCue()" style="font-weight:bold; background-color:#0ea5e9; color:#fff; border-color:#0284c7; font-size: 16px; padding: 10px 20px;">发送提示音</button>
                 </div>
+                <div class="admin-danger-zone">
+                    <div>
+                        <strong>危险操作</strong>
+                        <p>终止本局会踢出所有玩家并清空房间，所有人需要重新进入。</p>
+                    </div>
+                    <button class="danger-btn" onclick="terminateGame()">终止本局游戏</button>
+                </div>
             </div>
 
-            <div id="admin-tab-tasks" class="admin-tab-panel" data-admin-tab-panel="tasks" role="tabpanel">
+            <div id="admin-tab-tasks" class="admin-view-panel" data-admin-view-panel="tasks" role="tabpanel">
                 <div id="admin-undercover-task-panel" class="match-options-panel admin-undercover-task-panel">
                     <h4>卧底任务查看</h4>
                     <div id="admin-undercover-task-status" class="match-options-status">任务状态读取中……</div>
@@ -284,7 +390,7 @@
                 </div>
             </div>
 
-            <div id="admin-tab-mods" class="admin-tab-panel" data-admin-tab-panel="mods" role="tabpanel">
+            <div id="admin-tab-mods" class="admin-view-panel" data-admin-view-panel="mods" role="tabpanel">
                 <div id="admin-mods-empty-state" class="match-options-panel admin-mods-empty-state">
                     <h4>CaorenCup 修改</h4>
                     <div class="match-options-status">本局未启用 CaorenCup 修改。需要使用娱乐修改时，先到“本局设置”里开启并保存。</div>
@@ -362,13 +468,8 @@
                 </div>
             </div>
 
-                <div class="admin-danger-zone">
-                    <div>
-                        <strong>危险操作</strong>
-                        <p>终止本局会踢出所有玩家并清空房间，所有人需要重新进入。</p>
-                    </div>
-                    <button onclick="terminateGame()" style="font-weight:bold; background-color:#d32f2f; color:#fff; border-color:#b71c1c; font-size: 16px; padding: 10px 20px;">终止本局游戏</button>
-                </div>
+            </div>
+                </main>
             </div>
         </div>
     </div>

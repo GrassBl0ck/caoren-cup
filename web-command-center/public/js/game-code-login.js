@@ -18,6 +18,27 @@
   var selectedSteamAccount = null;
   var deviceLoginAvailable = false;
   var lastServerStatus = null;
+  var pendingAdminTicketRequests = new Map();
+
+  function setLoginMode(mode) {
+    var activeMode = mode === 'temporary' ? 'temporary' : 'fixed';
+    ['fixed', 'temporary'].forEach(function (name) {
+      var button = byId('login-mode-' + name);
+      var panel = byId('login-panel-' + name);
+      var active = name === activeMode;
+      if (button) {
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        button.setAttribute('tabindex', active ? '0' : '-1');
+      }
+      if (panel) {
+        panel.classList.toggle('active', active);
+        panel.hidden = !active;
+      }
+    });
+  }
+
+  window.setLoginMode = setLoginMode;
 
   function setDesktopStatus(message, tone) {
     var element = byId('desktop-auth-status');
@@ -112,23 +133,66 @@
     setDesktopStatus(messages[result.reason] || '未能自动登录，可继续使用邀请码进入。', result.reason === 'https_required' ? 'error' : '');
   }
 
+  function setFixedLoginError(message, success) {
+    var element = byId('fixed-member-login-error');
+    if (!element) return;
+    element.textContent = message || '';
+    element.classList.toggle('is-success', success === true);
+  }
+
+  async function loginFixedMember() {
+    var steamId = String(byId('fixed-member-steamid-input')?.value || '').trim();
+    var passwordInput = byId('fixed-member-password-input');
+    var password = String(passwordInput?.value || '');
+    if (!/^7656119\d{10}$/.test(steamId)) return setFixedLoginError('请输入 7656119 开头的 17 位 SteamID64。');
+    if (Array.from(password).length < 8 || Array.from(password).length > 128) return setFixedLoginError('密码长度必须为 8 到 128 个字符。');
+    var button = byId('fixed-member-login-btn');
+    if (button) button.disabled = true;
+    setFixedLoginError('正在验证固定成员账户...');
+    try {
+      var response = await fetch('/api/fixed-member-auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ steamId: steamId, password: password })
+      });
+      var data = await response.json();
+      if (!response.ok || !data.success) {
+        var messages = {
+          account_not_found: '固定成员账户不存在。',
+          password_incorrect: '固定成员密码错误。',
+          account_disabled: '该固定成员账户已禁用。',
+          blocked_for_session: '该成员本场已被禁止进入。',
+          nickname_in_use: '该固定昵称已在本场使用，请联系管理员修改。',
+          rate_limited: '登录失败次数过多，请稍后再试。',
+          steam_id_invalid: 'SteamID64 格式无效。'
+        };
+        return setFixedLoginError(messages[data.error] || '固定成员登录失败。');
+      }
+      var loginSocket = getLoginSocket();
+      if (!loginSocket) return setFixedLoginError('大厅连接尚未初始化，请刷新页面重试。');
+      setFixedLoginError('验证成功，正在进入当前大厅...', true);
+      loginSocket.emit('FIXED_MEMBER_SOCKET_LOGIN', { ticket: data.socketTicket });
+    } catch (_error) {
+      setFixedLoginError('固定成员登录请求失败，请检查网络后重试。');
+    } finally {
+      if (passwordInput) passwordInput.value = '';
+      if (button) button.disabled = false;
+    }
+  }
+
   async function enterByInvite() {
     var inviteCode = String(byId('lobby-invite-code-input')?.value || '').trim().toUpperCase();
     var nickname = String(byId('lobby-nickname-input')?.value || '').trim();
-    if (!inviteCode || !nickname) return alert('请输入本场邀请码和昵称。');
-    if (byId('steam-account-select')?.style.display !== 'none' && !selectedSteamAccount) return alert('请先选择本场使用的 Steam 账号。');
+    var claimedSteamId = String(byId('lobby-steamid-input')?.value || '').trim();
+    if (!inviteCode || !nickname || !claimedSteamId) return alert('请输入本场邀请码、昵称和 SteamID64。');
+    if (!/^7656119\d{10}$/.test(claimedSteamId)) return alert('SteamID64 必须是 7656119 开头的 17 位数字。');
     var loginSocket = getLoginSocket();
     if (!loginSocket) return alert('大厅连接尚未初始化，请刷新页面重试。');
-    var steamClaimTicket;
-    if (selectedSteamAccount && desktopApi()) {
-      var claimResult = await desktopApi().authenticateDevice(selectedSteamAccount.accountRef, 'steamClaim');
-      if (claimResult.ok) steamClaimTicket = claimResult.steamClaimTicket;
-      else setDesktopStatus('Steam 声明暂时无法提交，仍将以临时身份进入：' + (claimResult.reason || '未知错误'), 'error');
-    }
     loginSocket.emit('LOBBY_INVITE_LOGIN', {
       inviteCode: inviteCode,
       nickname: nickname,
-      steamClaimTicket: steamClaimTicket
+      claimedSteamId: claimedSteamId
     });
   }
 
@@ -167,6 +231,7 @@
       dot.style.boxShadow = online ? '0 0 0 3px rgba(22,163,74,.18)' : '0 0 0 3px rgba(220,38,38,.16)';
     }
     if (label) label.textContent = text;
+    if (byId('overview-server-status')) byId('overview-server-status').textContent = online ? '在线' : '未就绪';
   }
 
   function refreshServerStatus() {
@@ -186,12 +251,18 @@
 
   function updateIdentityUi(player) {
     if (!player) return;
+    var isAdmin = player.role === 'Admin';
+    if (byId('player-summary')) byId('player-summary').hidden = isAdmin;
+    if (byId('admin-summary')) byId('admin-summary').hidden = !isAdmin;
     var identity = byId('my-identity-level');
     var confirmation = byId('my-confirmation-state');
     var reason = byId('my-confirmation-reason');
     var panel = byId('steam-confirm-panel');
     var identityText = player.identityLevel === 'longTerm' ? '长期玩家' : '临时参赛者';
     var confirmationLabels = { pending: '本场待确认', confirmed: '本场已确认', unavailable: '未提供 Steam 声明', mismatch: 'Steam 不一致' };
+    if (player.identityLevel === 'longTerm' && player.confirmationState === 'pending') {
+      confirmationLabels.pending = '尚未检测到该固定账户的 SteamID';
+    }
     if (identity) identity.textContent = identityText;
     if (confirmation) {
       confirmation.textContent = confirmationLabels[player.confirmationState] || '确认状态未知';
@@ -201,25 +272,155 @@
       reason.textContent = player.confirmationReason ? '未确认原因：' + player.confirmationReason : '';
       reason.style.display = player.confirmationReason ? 'block' : 'none';
     }
-    if (panel) panel.style.display = player.identityLevel === 'temporary' && player.confirmationState === 'pending' ? 'flex' : 'none';
-    if (byId('device-logout-btn')) byId('device-logout-btn').style.display = isDesktopClient() && player.identityLevel === 'longTerm' ? 'inline-flex' : 'none';
+    if (panel) panel.style.display = !isAdmin && player.identityLevel === 'temporary' && player.confirmationState === 'pending' ? 'flex' : 'none';
+    if (byId('device-logout-btn')) byId('device-logout-btn').style.display = !isAdmin && isDesktopClient() && player.identityLevel === 'longTerm' ? 'inline-flex' : 'none';
   }
 
   function renderIdentityAdmin(data) {
     if (data.lobbyAccess && byId('admin-lobby-invite')) {
       byId('admin-lobby-invite').textContent = '本场邀请码：' + data.lobbyAccess.inviteCode + '，有效至 ' + new Date(data.lobbyAccess.inviteExpiresAt).toLocaleString('zh-CN');
     }
-    if (!data.memberships || !byId('identity-admin-list')) return;
-    var rows = data.memberships.map(function (member) {
-      var devices = (member.devices || []).filter(function (device) { return device.status !== 'revoked'; });
-      var operations = member.identityLevel === 'temporary'
-        ? '<button type="button" onclick="clearIdentityClaim(\'' + escapeHtml(member.membershipId) + '\')">清除声明</button>'
-        : devices.map(function (device, index) {
-          return '<button type="button" onclick="revokeIdentityDevice(\'' + escapeHtml(member.identityId) + '\',\'' + escapeHtml(device.tokenId) + '\')">撤销设备 ' + (index + 1) + '</button>';
-        }).join(' ') + (devices.length ? ' <button type="button" onclick="revokeIdentityTokens(\'' + escapeHtml(member.identityId) + '\')">撤销全部</button>' : '无有效设备');
-      return '<tr><td>' + escapeHtml(member.nickname) + '</td><td>' + escapeHtml(member.identityLevel) + '</td><td>' + escapeHtml(member.confirmationState) + '</td><td>' + escapeHtml(member.confirmationReason || '-') + '</td><td>' + escapeHtml(member.claimedSteamIdMasked || '-') + '</td><td>' + operations + '</td></tr>';
+    if (data.memberships && byId('identity-admin-list')) {
+      var rows = data.memberships.map(function (member) {
+        var devices = (member.devices || []).filter(function (device) { return device.status !== 'revoked'; });
+        var operations = member.identityLevel === 'temporary'
+          ? '<button type="button" onclick="clearIdentityClaim(\'' + escapeHtml(member.membershipId) + '\')">清除声明</button>'
+          : devices.map(function (device, index) {
+            return '<button type="button" onclick="revokeIdentityDevice(\'' + escapeHtml(member.identityId) + '\',\'' + escapeHtml(device.tokenId) + '\')">撤销设备 ' + (index + 1) + '</button>';
+          }).join(' ') + (devices.length ? ' <button type="button" onclick="revokeIdentityTokens(\'' + escapeHtml(member.identityId) + '\')">撤销全部</button>' : '无有效设备');
+        return '<tr><td>' + escapeHtml(member.nickname) + '</td><td>' + escapeHtml(member.identityLevel) + '</td><td>' + escapeHtml(member.confirmationState) + '</td><td>' + escapeHtml(member.confirmationReason || '-') + '</td><td>' + escapeHtml(member.claimedSteamIdMasked || '-') + '</td><td>' + operations + '</td></tr>';
+      }).join('');
+      byId('identity-admin-list').innerHTML = '<div class="identity-admin-table-wrap"><table class="identity-admin-table"><thead><tr><th>昵称</th><th>身份</th><th>本场确认</th><th>原因</th><th>SteamID</th><th>恢复操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+    renderFixedAccounts(data.fixedAccounts || []);
+  }
+
+  function fixedAccountStatus(message, isError) {
+    var status = byId('fixed-account-admin-status');
+    if (!status) return;
+    status.textContent = message || '';
+    status.classList.toggle('is-error', isError === true);
+  }
+
+  function renderFixedAccounts(accounts) {
+    var container = byId('fixed-account-admin-list');
+    if (!container) return;
+    if (!accounts.length) {
+      container.textContent = '尚未设置固定成员账户。';
+      return;
+    }
+    var rows = accounts.map(function (account) {
+      var id = escapeHtml(account.identityId);
+      var state = account.blocked ? '本场禁止进入' : (account.isOnline ? '网页在线' : '网页离线');
+      var confirmationLabels = {
+        pending: '尚未检测到该固定账户的 SteamID',
+        confirmed: 'SteamID 已自动核对',
+        unavailable: 'SteamID 状态不可用',
+        mismatch: 'SteamID 不一致'
+      };
+      var confirmation = confirmationLabels[account.confirmationState] || '未进入本场';
+      return '<tr>' +
+        '<td>' + escapeHtml(account.steamId) + '</td>' +
+        '<td><div class="fixed-account-inline"><input id="fixed-name-' + id + '" type="text" maxlength="32" value="' + escapeHtml(account.nickname) + '"><button type="button" onclick="renameFixedAccount(\'' + id + '\')">保存昵称</button></div></td>' +
+        '<td><label class="fixed-account-toggle"><input type="checkbox" ' + (account.enabled ? 'checked ' : '') + 'onchange="setFixedAccountEnabled(\'' + id + '\', this.checked)"><span>' + (account.enabled ? '启用' : '禁用') + '</span></label></td>' +
+        '<td>' + escapeHtml(state) + '<br><span class="muted-line">' + escapeHtml(confirmation) + '</span></td>' +
+        '<td>' + escapeHtml(new Date(account.passwordUpdatedAt).toLocaleString('zh-CN')) + '</td>' +
+        '<td><div class="fixed-account-inline"><input id="fixed-password-' + id + '" type="password" maxlength="128" autocomplete="new-password" placeholder="新密码"><button type="button" onclick="resetFixedAccountPassword(\'' + id + '\')">重置</button></div></td>' +
+        '</tr>';
     }).join('');
-    byId('identity-admin-list').innerHTML = '<table class="identity-admin-table"><thead><tr><th>昵称</th><th>身份</th><th>本场确认</th><th>原因</th><th>SteamID</th><th>恢复操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    container.innerHTML = '<div class="identity-admin-table-wrap"><table class="identity-admin-table fixed-account-table"><thead><tr><th>SteamID64</th><th>昵称</th><th>账户</th><th>本场状态</th><th>密码更新时间</th><th>重置密码</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function requestFixedAccountAdminTicket(operation, target) {
+    return new Promise(function (resolve, reject) {
+      var loginSocket = getLoginSocket();
+      if (!loginSocket) return reject(new Error('大厅连接尚未初始化'));
+      var requestId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+      var timer = setTimeout(function () {
+        pendingAdminTicketRequests.delete(requestId);
+        reject(new Error('管理员操作票据请求超时'));
+      }, 5000);
+      pendingAdminTicketRequests.set(requestId, {
+        resolve: function (data) { clearTimeout(timer); resolve(data); },
+        reject: function (error) { clearTimeout(timer); reject(error); }
+      });
+      loginSocket.emit('IDENTITY_ADMIN_ACTION', Object.assign({
+        action: 'ISSUE_FIXED_ACCOUNT_TICKET', operation: operation, requestId: requestId
+      }, target || {}));
+    });
+  }
+
+  async function fixedAccountAdminFetch(operation, target, url, method, body) {
+    var ticketData = await requestFixedAccountAdminTicket(operation, target);
+    var response = await fetch(url, {
+      method: method,
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + ticketData.adminTicket },
+      cache: 'no-store',
+      body: JSON.stringify(body)
+    });
+    var data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || 'fixed_account_update_failed');
+    return data;
+  }
+
+  async function createFixedAccount() {
+    var steamId = String(byId('fixed-account-steamid-input')?.value || '').trim();
+    var nickname = String(byId('fixed-account-nickname-input')?.value || '').trim();
+    var passwordInput = byId('fixed-account-password-input');
+    var password = String(passwordInput?.value || '');
+    if (!/^7656119\d{10}$/.test(steamId)) return fixedAccountStatus('SteamID64 必须是 7656119 开头的 17 位数字。', true);
+    if (!nickname) return fixedAccountStatus('请输入固定成员昵称。', true);
+    if (Array.from(password).length < 8 || Array.from(password).length > 128) return fixedAccountStatus('密码长度必须为 8 到 128 个字符。', true);
+    try {
+      await fixedAccountAdminFetch('create', { steamId: steamId }, '/api/admin/fixed-members', 'POST', { steamId: steamId, nickname: nickname, password: password });
+      fixedAccountStatus('固定成员账户已保存。');
+      byId('fixed-account-steamid-input').value = '';
+      byId('fixed-account-nickname-input').value = '';
+      refreshIdentityAdmin();
+    } catch (error) {
+      fixedAccountStatus('保存失败：' + error.message, true);
+    } finally {
+      if (passwordInput) passwordInput.value = '';
+    }
+  }
+
+  async function renameFixedAccount(identityId) {
+    var nickname = String(byId('fixed-name-' + identityId)?.value || '').trim();
+    if (!nickname) return fixedAccountStatus('昵称不能为空。', true);
+    try {
+      await fixedAccountAdminFetch('rename', { identityId: identityId }, '/api/admin/fixed-members/' + encodeURIComponent(identityId) + '/nickname', 'PATCH', { nickname: nickname });
+      fixedAccountStatus('昵称已更新。');
+      refreshIdentityAdmin();
+    } catch (error) { fixedAccountStatus('修改失败：' + error.message, true); }
+  }
+
+  async function resetFixedAccountPassword(identityId) {
+    var input = byId('fixed-password-' + identityId);
+    var password = String(input?.value || '');
+    if (Array.from(password).length < 8 || Array.from(password).length > 128) return fixedAccountStatus('新密码长度必须为 8 到 128 个字符。', true);
+    if (!confirm('确认重置该固定成员的密码？旧密码会立即失效。')) return;
+    try {
+      await fixedAccountAdminFetch('reset_password', { identityId: identityId }, '/api/admin/fixed-members/' + encodeURIComponent(identityId) + '/password', 'POST', { password: password });
+      fixedAccountStatus('密码已重置。');
+      refreshIdentityAdmin();
+    } catch (error) { fixedAccountStatus('重置失败：' + error.message, true); }
+    finally { if (input) input.value = ''; }
+  }
+
+  async function setFixedAccountEnabled(identityId, enabled) {
+    var action = enabled ? '启用' : '禁用';
+    if (!confirm('确认' + action + '该固定成员账户？' + (enabled ? '' : '当前在线玩家会立即被移出大厅。'))) {
+      refreshIdentityAdmin();
+      return;
+    }
+    try {
+      await fixedAccountAdminFetch('set_enabled', { identityId: identityId }, '/api/admin/fixed-members/' + encodeURIComponent(identityId) + '/enabled', 'PATCH', { enabled: enabled });
+      fixedAccountStatus('账户已' + action + '。');
+      refreshIdentityAdmin();
+    } catch (error) {
+      fixedAccountStatus(action + '失败：' + error.message, true);
+      refreshIdentityAdmin();
+    }
   }
 
   function refreshIdentityAdmin() { getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'GET_STATUS' }); }
@@ -227,29 +428,44 @@
   function clearIdentityClaim(membershipId) { getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'CLEAR_CLAIM', membershipId: membershipId }); }
   function revokeIdentityDevice(identityId, tokenId) { if (confirm('确认撤销这一台设备的登录令牌？')) getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_DEVICE', identityId: identityId, tokenId: tokenId }); }
   function revokeIdentityTokens(identityId) { if (confirm('确认撤销该长期身份的全部设备令牌？')) getLoginSocket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_ALL_TOKENS', identityId: identityId }); }
-  Object.assign(window, { refreshIdentityAdmin, rotateIdentityInvite, clearIdentityClaim, revokeIdentityDevice, revokeIdentityTokens });
+  Object.assign(window, {
+    refreshIdentityAdmin,
+    rotateIdentityInvite,
+    clearIdentityClaim,
+    revokeIdentityDevice,
+    revokeIdentityTokens,
+    createFixedAccount,
+    renameFixedAccount,
+    resetFixedAccountPassword,
+    setFixedAccountEnabled
+  });
 
   async function boot() {
+    setLoginMode('fixed');
     if (isDesktopClient()) {
       ['caoren-desktop-client-download', 'caoren-desktop-client-github-download'].forEach(function (id) { if (byId(id)) byId(id).style.display = 'none'; });
     }
     try {
       var capabilities = await fetch('/api/public/auth-capabilities', { cache: 'no-store' }).then(function (response) { return response.json(); });
       deviceLoginAvailable = capabilities.deviceAuthAvailable === true;
-      if (!deviceLoginAvailable && capabilities.requiresHttps) setDesktopStatus('当前生产地址为 HTTP：邀请码可用，设备自动登录需配置 HTTPS。', 'error');
+      if (!deviceLoginAvailable && capabilities.requiresHttps) setDesktopStatus('当前为 HTTP：设备自动登录不可用，固定成员密码和邀请码仍可正常使用。');
     } catch (_error) {
       setDesktopStatus('无法读取登录安全状态，可继续使用邀请码。', 'error');
     }
 
     byId('steam-account-refresh-btn')?.addEventListener('click', function () { refreshSteamAccounts(true); });
     byId('steam-account-select')?.addEventListener('change', function (event) { selectSteamAccount(event.target.value); });
+    byId('fixed-member-login-btn')?.addEventListener('click', loginFixedMember);
     byId('lobby-invite-enter-btn')?.addEventListener('click', enterByInvite);
+    byId('fixed-account-create-btn')?.addEventListener('click', createFixedAccount);
     byId('v1335-enter-lobby-btn')?.addEventListener('click', enterByLegacyCode);
     byId('steam-confirm-code-btn')?.addEventListener('click', submitSteamConfirmation);
     byId('device-logout-btn')?.addEventListener('click', logoutDevice);
     byId('v1333-connect-server-btn')?.addEventListener('click', connectServer);
     byId('v1333-lobby-connect-server-btn')?.addEventListener('click', connectServer);
     byId('lobby-nickname-input')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') enterByInvite(); });
+    byId('fixed-member-password-input')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') loginFixedMember(); });
+    byId('lobby-steamid-input')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') enterByInvite(); });
     byId('v1333-game-login-code-input')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') enterByLegacyCode(); });
     byId('steam-confirm-code-input')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') submitSteamConfirmation(); });
 
@@ -262,6 +478,14 @@
         setDesktopStatus(result.ok ? '设备凭据已安全保存，以后打开客户端会自动进入大厅。' : '身份已确认，但设备凭据保存失败：' + (result.reason || '未知错误'), result.ok ? 'success' : 'error');
       });
       loginSocket.on('IDENTITY_ADMIN_ACTION', function (data) {
+        if (data.action === 'ISSUE_FIXED_ACCOUNT_TICKET' && data.requestId) {
+          var pending = pendingAdminTicketRequests.get(data.requestId);
+          if (!pending) return;
+          pendingAdminTicketRequests.delete(data.requestId);
+          if (data.success) pending.resolve(data);
+          else pending.reject(new Error(data.error || 'admin_ticket_invalid'));
+          return;
+        }
         if (data.success && data.action === 'GET_STATUS') renderIdentityAdmin(data);
         else if (data.success) refreshIdentityAdmin();
       });

@@ -46,6 +46,8 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, CsTeam> _teamAssignments = new(StringComparer.Ordinal);
     private readonly HashSet<string> _teamAssignmentBypass = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WebPlayerState> _webPlayersBySteamId = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _lobbySteamIds = new(StringComparer.Ordinal);
+    private readonly object _webStateLock = new();
     private readonly List<WebPlayerState> _lastNoticeMissingTargets = new();
     private readonly ConcurrentDictionary<string, long> _shownIdentityChallenges = new(StringComparer.Ordinal);
     private bool _teamLockEnabled;
@@ -67,7 +69,12 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, string> _duelCurrentSecondary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingAwpRequest> _duelAwpRequests = new(StringComparer.Ordinal);
     private bool _isUnloading;
+    private bool _hasSuccessfulLobbyStateSync;
+    private DateTimeOffset _lastSuccessfulLobbyStateSync;
+    private int _webStateRefreshInProgress;
+    private int _webStateGeneration;
     private const string DefaultNoticeSound = "training/bell_normal.vsnd_c";
+    private static readonly TimeSpan LobbyStateMaxAge = TimeSpan.FromSeconds(15);
     private static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "css_ammo",
@@ -181,6 +188,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         RegisterDuelWeaponCommands();
         RegisterListener<Listeners.OnPlayerTakeDamagePre>(OnPlayerTakeDamagePre);
         RegisterListener<Listeners.OnTick>(OnTick);
+        RegisterListener<Listeners.OnMapStart>(OnMapStart);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _outboundWorker = Task.Run(() => ProcessOutboundQueueAsync(_outboundCts.Token));
 
@@ -200,9 +208,18 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             if (!_isUnloading) EnforceTeamAssignments();
         }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
+        _timers.Add(AddTimer(5.0f, () =>
+        {
+            if (!_isUnloading) _ = RefreshWebStateAsync();
+        }, TimerFlags.REPEAT));
+        _timers.Add(AddTimer(1.0f, () =>
+        {
+            if (!_isUnloading) ShowLobbyEntryReminders();
+        }, TimerFlags.REPEAT));
 
         Logger.LogInformation("{Name} loaded. CommandCenter={BaseUrl}", ModuleName, _config.CommandCenterBaseUrl);
         _ = SendHeartbeatAsync();
+        _ = RefreshWebStateAsync();
     }
 
     public override void Unload(bool hotReload)
@@ -211,6 +228,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         StopTimers();
         RemoveCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _outboundCts.Cancel();
+        ClearLobbyReminderState();
         _http.Dispose();
     }
 
@@ -931,6 +949,8 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task<bool> RefreshWebStateAsync()
     {
+        if (Interlocked.Exchange(ref _webStateRefreshInProgress, 1) == 1) return false;
+        var stateGeneration = Volatile.Read(ref _webStateGeneration);
         try
         {
             var response = await _http.GetAsync("api/plugin/state");
@@ -942,14 +962,31 @@ public sealed class CaorenCupPlugin : BasePlugin
             }
 
             var state = JsonSerializer.Deserialize<PluginStateResponse>(text, _jsonOptions);
-            _webPlayersBySteamId.Clear();
+            if (state?.Success != true) return false;
+            var lobbySteamIds = state.LobbySteamIds;
+            if (lobbySteamIds == null) return false;
+            var nextWebPlayers = new Dictionary<string, WebPlayerState>(StringComparer.Ordinal);
             if (state?.Players != null)
             {
                 foreach (var webPlayer in state.Players)
                 {
                     var steamId = NormalizeSteamId(webPlayer.SteamId);
-                    if (!string.IsNullOrWhiteSpace(steamId)) _webPlayersBySteamId[steamId] = webPlayer;
+                    if (!string.IsNullOrWhiteSpace(steamId)) nextWebPlayers[steamId] = webPlayer;
                 }
+            }
+            var nextLobbySteamIds = lobbySteamIds
+                .Select(NormalizeSteamId)
+                .Where(steamId => !string.IsNullOrWhiteSpace(steamId))
+                .ToHashSet(StringComparer.Ordinal);
+            if (_isUnloading || stateGeneration != Volatile.Read(ref _webStateGeneration)) return false;
+            lock (_webStateLock)
+            {
+                _webPlayersBySteamId.Clear();
+                foreach (var pair in nextWebPlayers) _webPlayersBySteamId[pair.Key] = pair.Value;
+                _lobbySteamIds.Clear();
+                foreach (var steamId in nextLobbySteamIds) _lobbySteamIds.Add(steamId);
+                _lastSuccessfulLobbyStateSync = DateTimeOffset.UtcNow;
+                _hasSuccessfulLobbyStateSync = true;
             }
             return true;
         }
@@ -957,6 +994,56 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             Logger.LogWarning(ex, "Plugin state refresh exception");
             return false;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _webStateRefreshInProgress, 0);
+        }
+    }
+
+    private void OnMapStart(string _mapName)
+    {
+        ClearLobbyReminderState();
+        if (!_isUnloading) _ = RefreshWebStateAsync();
+    }
+
+    private void ClearLobbyReminderState()
+    {
+        Interlocked.Increment(ref _webStateGeneration);
+        lock (_webStateLock)
+        {
+            _lobbySteamIds.Clear();
+            _webPlayersBySteamId.Clear();
+            _hasSuccessfulLobbyStateSync = false;
+            _lastSuccessfulLobbyStateSync = default;
+        }
+    }
+
+    private void ShowLobbyEntryReminders()
+    {
+        bool hasSuccessfulSync;
+        DateTimeOffset lastSuccessfulSync;
+        IReadOnlySet<string> lobbySteamIds;
+        lock (_webStateLock)
+        {
+            hasSuccessfulSync = _hasSuccessfulLobbyStateSync;
+            lastSuccessfulSync = _lastSuccessfulLobbyStateSync;
+            lobbySteamIds = new HashSet<string>(_lobbySteamIds, StringComparer.Ordinal);
+        }
+        var now = DateTimeOffset.UtcNow;
+        foreach (var player in Utilities.GetPlayers())
+        {
+            var isRealPlayer = IsRealPlayer(player);
+            var steamId = isRealPlayer ? player.SteamID.ToString() : string.Empty;
+            if (!LobbyReminderPolicy.ShouldRemind(
+                isRealPlayer,
+                steamId,
+                hasSuccessfulSync,
+                lastSuccessfulSync,
+                now,
+                LobbyStateMaxAge,
+                lobbySteamIds)) continue;
+            ReplyToPlayer(player, "[草人杯] 请先打开草人杯客户端，使用 SteamID64 + 密码或邀请码进入大厅。");
         }
     }
 
@@ -1008,7 +1095,9 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         if (targetLabel == null) return new List<CCSPlayerController>();
 
-        var matched = _webPlayersBySteamId.Values.Where(p => target switch
+        List<WebPlayerState> webPlayers;
+        lock (_webStateLock) webPlayers = _webPlayersBySteamId.Values.ToList();
+        var matched = webPlayers.Where(p => target switch
         {
             "all" => true,
             "undercover" or "und" => string.Equals(p.GameRole, "Undercover", StringComparison.OrdinalIgnoreCase),
@@ -2219,6 +2308,12 @@ public sealed class PluginStateResponse
 {
     [JsonPropertyName("success")]
     public bool Success { get; set; }
+
+    [JsonPropertyName("generatedAt")]
+    public long GeneratedAt { get; set; }
+
+    [JsonPropertyName("lobbySteamIds")]
+    public List<string>? LobbySteamIds { get; set; }
 
     [JsonPropertyName("players")]
     public List<WebPlayerState>? Players { get; set; }
