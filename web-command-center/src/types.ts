@@ -144,6 +144,23 @@ export interface SideVoteState {
     timeoutAt: number;
 }
 
+export type FlowUndoActionType = 'ADVANCE_PHASE' | 'ADMIN_BAN_MAP' | 'ASSIGN_ROSTER_TEAM';
+
+export interface FlowUndoStatus {
+    count: number;
+    canUndo: boolean;
+    disabledReason?: string;
+    latest?: {
+        id: string;
+        actionType: FlowUndoActionType;
+        summary: string;
+        actorId: string;
+        actorName: string;
+        createdAt: number;
+        restorePhase: GamePhase;
+    };
+}
+
 export interface DuelRoundConfig {
     pistol: number;
     rifle: number;

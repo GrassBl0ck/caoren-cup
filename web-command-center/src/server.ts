@@ -9,8 +9,8 @@ import {
     WsEvents,
 } from './types';
 import { getSession } from './session-manager';
-import { restoreSessionSnapshot, scheduleSessionSnapshotSave } from './session-persistence';
-import { findPlayerById, sanitizeForPublic } from './player-utils';
+import { restoreSessionSnapshot, saveSessionSnapshotNow, scheduleSessionSnapshotSave } from './session-persistence';
+import { findPlayerById, sanitizeGameStateForViewer } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
 import {
@@ -29,6 +29,7 @@ import {
     finishDraftPick,
     finishMapVote,
     finishSideVote,
+    resumeRestoredPregameFlow,
 } from './game-flow-manager';
 import {
     enqueuePluginCommand,
@@ -71,7 +72,7 @@ app.use(express.static('public', {
     }
 }));
 const upload = multer({ storage: multer.memoryStorage() });
-restoreSessionSnapshot();
+const restoredSessionSnapshot = restoreSessionSnapshot();
 
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
@@ -92,7 +93,7 @@ const broadcastState = () => {
     const session = getSession();
     for (const socket of io.sockets.sockets.values()) {
         const viewerId = socket.data?.playerId || null;
-        socket.emit(WsEvents.GAME_STATE, sanitizeForPublic(session, viewerId));
+        socket.emit(WsEvents.GAME_STATE, sanitizeGameStateForViewer(session, viewerId));
     }
     scheduleSessionSnapshotSave();
 };
@@ -128,6 +129,7 @@ const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {
 
 injectFlowBroadcast(broadcastState);
 injectNotify(notifyMessage);
+if (restoredSessionSnapshot) resumeRestoredPregameFlow();
 
 const ensureMatchOptions = () => {
     const session = getSession();
@@ -205,6 +207,7 @@ registerPluginRoutes(app, {
 registerSocketHandlers(io, {
     broadcastState,
     notifyMessage,
+    persistSessionNow: saveSessionSnapshotNow,
 });
 
 io.on('connection', (socket) => {

@@ -179,6 +179,17 @@
         </div>
         <p id="my-identity" class="my-identity-line"></p>
         <div id="admin-controls" class="lobby-workspace" style="display:none;">
+            <section id="flow-undo-safety-bar" class="flow-undo-safety-bar" aria-live="polite" hidden>
+                <div class="flow-undo-summary">
+                    <span class="section-eyebrow">流程安全</span>
+                    <div><strong>当前阶段：</strong><span id="flow-undo-current-phase">读取中</span></div>
+                    <div><strong>最近操作：</strong><span id="flow-undo-latest-action">暂无可撤销操作</span></div>
+                    <div class="flow-undo-meta">可撤销 <span id="flow-undo-count">0</span> 步 · <span id="flow-undo-reason">当前没有可撤销的操作。</span></div>
+                </div>
+                <div class="flow-undo-actions">
+                    <button id="flow-undo-btn" type="button" class="secondary-btn" onclick="undoFlowAction()" disabled>撤销上一步</button>
+                </div>
+            </section>
             <div class="admin-mobile-nav">
                 <label for="admin-view-select">管理模块</label>
                 <select id="admin-view-select" onchange="switchAdminView(this.value)">
