@@ -14,6 +14,88 @@
   const MANIFEST_URL = "/assets/audio/manifest.json";
   const STORAGE_PREFIX = "caorenCupAudio.";
   const NO_BGM_PHASES = new Set(["LiveGame"]);
+  const UI_DANGER_CLASSES = [
+    "danger",
+    "danger-btn",
+    "caoren-unified-danger",
+    "caoren-unified-disable",
+    "caoren-unified-reset-all"
+  ];
+  const UI_DANGER_TEXT = /取消|退出|终止|删除|重置|解除|禁用|拒绝/;
+
+  function classifyUiButtonSound(button) {
+    if (!button || button.disabled || button.getAttribute?.("aria-disabled") === "true") return null;
+
+    const override = String(button.getAttribute?.("data-ui-sound") || "").toLowerCase();
+    if (override === "none") return null;
+    if (override === "normal" || override === "danger") return override;
+
+    const onclick = String(button.getAttribute?.("onclick") || "");
+    const label = String(button.textContent || "").trim();
+    if (button.id === "cc-audio-test" || /playAdminAudioCue/.test(onclick) || label === "测试提示音") return null;
+
+    if (UI_DANGER_CLASSES.some((name) => button.classList?.contains(name)) || UI_DANGER_TEXT.test(label)) {
+      return "danger";
+    }
+    return "normal";
+  }
+
+  function resolveUiButtonSound(event) {
+    if (!event?.isTrusted || typeof event.target?.closest !== "function") return null;
+    return classifyUiButtonSound(event.target.closest("button"));
+  }
+
+  function getUiSoundPreset(type) {
+    if (type === "danger") {
+      return {
+        duration: 0.07,
+        noiseDuration: 0.05,
+        filterFrequency: 700,
+        filterQ: 0.7,
+        startFrequency: 280,
+        endFrequency: 160,
+        wave: "sine",
+        gain: 0.11,
+        noiseMix: 0.58,
+        toneMix: 0.42,
+        attack: 0.0025
+      };
+    }
+    return {
+      duration: 0.04,
+      noiseDuration: 0.027,
+      filterFrequency: 1100,
+      filterQ: 0.75,
+      startFrequency: 520,
+      endFrequency: 330,
+      wave: "sine",
+      gain: 0.09,
+      noiseMix: 0.7,
+      toneMix: 0.3,
+      attack: 0.0015
+    };
+  }
+
+  function createDeterministicNoiseValues(length) {
+    const size = Math.max(0, Math.floor(Number(length) || 0));
+    const values = new Float32Array(size);
+    let seed = 0x6d2b79f5;
+    for (let i = 0; i < size; i += 1) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      values[i] = (seed / 0xffffffff) * 2 - 1;
+    }
+    return values;
+  }
+
+  if (typeof module === "object" && module.exports) {
+    module.exports = {
+      classifyUiButtonSound,
+      resolveUiButtonSound,
+      getUiSoundPreset,
+      createDeterministicNoiseValues
+    };
+    return;
+  }
 
   const PHASE_LABELS = {
     Lobby: "大厅",
@@ -37,11 +119,15 @@
     currentBgmKey: null,
     bgmAudio: null,
     enabled: readBool("enabled", false),
+    uiSfxEnabled: readBool("uiSfxEnabled", true),
     unlocked: false,
     unlockAttempted: false,
     masterVolume: readNumber("masterVolume", 0.75),
     bgmVolume: readNumber("bgmVolume", 0.42),
     sfxVolume: readNumber("sfxVolume", 0.85),
+    uiAudioContext: null,
+    uiNoiseBuffer: null,
+    lastUiSoundAt: 0,
     ui: {}
   };
 
@@ -87,6 +173,112 @@
     if (!audio) return;
     const local = type === "bgm" ? state.bgmVolume : state.sfxVolume;
     audio.volume = clamp01(state.masterVolume * local * (trackVolume ?? 1));
+  }
+
+  function updateUiSfxButton() {
+    if (!state.ui.uiSfx) return;
+    state.ui.uiSfx.textContent = `界面音效：${state.uiSfxEnabled ? "开启" : "关闭"}`;
+    state.ui.uiSfx.setAttribute?.("aria-pressed", state.uiSfxEnabled ? "true" : "false");
+  }
+
+  function setUiSfxEnabled(enabled) {
+    state.uiSfxEnabled = Boolean(enabled);
+    writeBool("uiSfxEnabled", state.uiSfxEnabled);
+    updateUiSfxButton();
+    return state.uiSfxEnabled;
+  }
+
+  function getUiAudioContext() {
+    if (state.uiAudioContext) return state.uiAudioContext;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (typeof AudioContextClass !== "function") return null;
+    try {
+      state.uiAudioContext = new AudioContextClass();
+    } catch (_) {
+      state.uiAudioContext = null;
+    }
+    return state.uiAudioContext;
+  }
+
+  function getUiNoiseBuffer(context) {
+    if (state.uiNoiseBuffer) return state.uiNoiseBuffer;
+    const sampleRate = Number(context.sampleRate) || 48000;
+    const length = Math.ceil(sampleRate * 0.1);
+    const buffer = context.createBuffer(1, length, sampleRate);
+    buffer.getChannelData(0).set(createDeterministicNoiseValues(length));
+    state.uiNoiseBuffer = buffer;
+    return buffer;
+  }
+
+  function scheduleUiSfx(context, type) {
+    const preset = getUiSoundPreset(type);
+    const startAt = context.currentTime;
+    const stopAt = startAt + preset.duration;
+    const level = Math.max(0.0001, clamp01(state.masterVolume * state.sfxVolume) * preset.gain);
+    const output = context.createGain();
+    const noiseLevel = context.createGain();
+    const toneLevel = context.createGain();
+    const filter = context.createBiquadFilter();
+    const noise = context.createBufferSource();
+    const tone = context.createOscillator();
+
+    output.gain.setValueAtTime(0.0001, startAt);
+    output.gain.linearRampToValueAtTime(level, startAt + preset.attack);
+    output.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+    output.connect(context.destination);
+
+    noise.buffer = getUiNoiseBuffer(context);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(preset.filterFrequency, startAt);
+    filter.Q.setValueAtTime(preset.filterQ, startAt);
+    noiseLevel.gain.setValueAtTime(preset.noiseMix, startAt);
+    noise.connect(filter);
+    filter.connect(noiseLevel);
+    noiseLevel.connect(output);
+
+    tone.type = preset.wave;
+    tone.frequency.setValueAtTime(preset.startFrequency, startAt);
+    tone.frequency.exponentialRampToValueAtTime(preset.endFrequency, stopAt);
+    toneLevel.gain.setValueAtTime(preset.toneMix, startAt);
+    tone.connect(toneLevel);
+    toneLevel.connect(output);
+
+    noise.start(startAt);
+    noise.stop(Math.min(stopAt, startAt + preset.noiseDuration));
+    tone.start(startAt);
+    tone.stop(stopAt);
+  }
+
+  function playUiSfx(type, options) {
+    if (!state.uiSfxEnabled && options?.force !== true) return false;
+    if (clamp01(state.masterVolume) * clamp01(state.sfxVolume) <= 0) return false;
+
+    const now = Date.now();
+    if (!options?.bypassThrottle && now - state.lastUiSoundAt < 35) return false;
+
+    const context = getUiAudioContext();
+    if (!context) return false;
+    state.lastUiSoundAt = now;
+
+    const play = function () {
+      try {
+        scheduleUiSfx(context, type === "danger" ? "danger" : "normal");
+      } catch (_) {
+        // 界面音效失败不能影响按钮原本的操作。
+      }
+    };
+
+    if (context.state === "suspended") {
+      context.resume().then(play).catch(function () {});
+    } else {
+      play();
+    }
+    return true;
+  }
+
+  function handleUiButtonClick(event) {
+    const type = resolveUiButtonSound(event);
+    if (type) playUiSfx(type);
   }
 
   function unlockAudioFromUserGesture() {
@@ -409,6 +601,7 @@
       <div class="cc-audio-body">
         <button id="cc-audio-enable" class="cc-audio-btn">${state.enabled ? "重新启用音乐" : "启用音乐"}</button>
         <button id="cc-audio-stop" class="cc-audio-btn secondary">停止 BGM</button>
+        <button id="cc-ui-sfx-toggle" class="cc-audio-btn secondary" type="button" aria-pressed="${state.uiSfxEnabled ? "true" : "false"}">界面音效：${state.uiSfxEnabled ? "开启" : "关闭"}</button>
 
         <div class="cc-audio-row">
           <label for="cc-audio-track">当前阶段 BGM</label>
@@ -438,6 +631,7 @@
     state.ui.phase = panel.querySelector("#cc-audio-phase");
     state.ui.enable = panel.querySelector("#cc-audio-enable");
     state.ui.stop = panel.querySelector("#cc-audio-stop");
+    state.ui.uiSfx = panel.querySelector("#cc-ui-sfx-toggle");
     state.ui.track = panel.querySelector("#cc-audio-track");
     state.ui.master = panel.querySelector("#cc-audio-master");
     state.ui.bgm = panel.querySelector("#cc-audio-bgm");
@@ -457,6 +651,13 @@
     state.ui.stop.addEventListener("click", function () {
       stopBgm();
       updateStatus("已停止 BGM。");
+    });
+
+    state.ui.uiSfx.addEventListener("click", function () {
+      const shouldEnable = !state.uiSfxEnabled;
+      setUiSfxEnabled(shouldEnable);
+      updateStatus(`界面音效已${shouldEnable ? "开启" : "关闭"}。`);
+      if (shouldEnable) playUiSfx("normal", { bypassThrottle: true });
     });
 
     state.ui.track.addEventListener("change", function () {
@@ -531,6 +732,7 @@
 
   async function init() {
     buildUi();
+    document.addEventListener("click", handleUiButtonClick, true);
     document.addEventListener("pointerdown", unlockAudioFromUserGesture, { once: true });
     document.addEventListener("keydown", unlockAudioFromUserGesture, { once: true });
 
@@ -545,6 +747,8 @@
 
     window.CaorenAudio = {
       playSfx,
+      playUiSfx,
+      setUiSfxEnabled,
       playBgmForPhase,
       stopBgm,
       getManifest: () => state.manifest,
