@@ -6,7 +6,9 @@ const PHASE_TRANSITIONS: Partial<Record<GamePhase, GamePhase[]>> = {
     [GamePhase.Roll]: [GamePhase.PlayerDraft, GamePhase.PreGameSetup],
     [GamePhase.PlayerDraft]: [GamePhase.MapBan, GamePhase.PreGameSetup],
     [GamePhase.MapBan]: [GamePhase.SidePick, GamePhase.PreGameSetup],
-    [GamePhase.SidePick]: [GamePhase.PreGameSetup],
+    [GamePhase.SidePick]: [GamePhase.AbilityBan, GamePhase.AbilityDraft, GamePhase.PreGameSetup],
+    [GamePhase.AbilityBan]: [GamePhase.AbilityDraft],
+    [GamePhase.AbilityDraft]: [GamePhase.PreGameSetup],
     [GamePhase.PreGameSetup]: [GamePhase.LiveGame],
 
     // 第一阶段新增：

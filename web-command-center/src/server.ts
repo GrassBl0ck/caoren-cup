@@ -27,12 +27,17 @@ import {
     finishDraftPick,
     finishMapVote,
     finishSideVote,
+    pollAbilityFlowTimeouts,
 } from './game-flow-manager';
 import {
     enqueuePluginCommand,
     getPluginCommandQueueSummary,
 } from './plugin-command-queue';
-import { ADMIN_PASSWORD } from './game-constants';
+import {
+    ABILITY_BAN_DEFAULT_SECONDS,
+    ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
+    ADMIN_PASSWORD,
+} from './game-constants';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds, normalizeDuelMap, normalizeDuelRoundTimeMinutes, normalizeDuelRounds, normalizeDuelUtilityMode, normalizeDuelWorkshopId } from './duel-config';
 import { registerIdentityAuthRoutes } from './identity/auth-routes';
 import { initializeIdentityRuntime } from './identity/identity-runtime';
@@ -130,6 +135,21 @@ const ensureMatchOptions = () => {
     }
     session.matchOptions.matchMode = session.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
     session.matchOptions.matchController = session.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
+    session.matchOptions.abilityModeEnabled = session.matchOptions.matchMode === 'duel'
+        ? false
+        : session.matchOptions.abilityModeEnabled === true;
+    const abilityBanCount = Number(session.matchOptions.abilityBanCountPerTeam);
+    session.matchOptions.abilityBanCountPerTeam = Number.isFinite(abilityBanCount)
+        ? Math.max(0, Math.floor(abilityBanCount))
+        : 1;
+    const abilityBanSeconds = Number(session.matchOptions.abilityBanSeconds);
+    session.matchOptions.abilityBanSeconds = Number.isFinite(abilityBanSeconds)
+        ? Math.max(1, Math.floor(abilityBanSeconds))
+        : ABILITY_BAN_DEFAULT_SECONDS;
+    const abilityDraftBatchSeconds = Number(session.matchOptions.abilityDraftBatchSeconds);
+    session.matchOptions.abilityDraftBatchSeconds = Number.isFinite(abilityDraftBatchSeconds)
+        ? Math.max(1, Math.floor(abilityDraftBatchSeconds))
+        : ABILITY_DRAFT_BATCH_DEFAULT_SECONDS;
     session.matchOptions.undercoverModeEnabled = session.matchOptions.matchMode === 'duel'
         ? false
         : session.matchOptions.undercoverModeEnabled !== false;
@@ -207,6 +227,7 @@ setInterval(() => {
     if (session.phase === GamePhase.SidePick && session.sideVote && now > session.sideVote.timeoutAt) {
         finishSideVote('timeout');
     }
+    pollAbilityFlowTimeouts(now);
 }, 1000);
 
 const PORT = process.env.PORT || 3000;

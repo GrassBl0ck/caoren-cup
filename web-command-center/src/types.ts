@@ -5,6 +5,8 @@ export enum GamePhase {
     PlayerDraft = 'PlayerDraft',
     MapBan = 'MapBan',
     SidePick = 'SidePick',
+    AbilityBan = 'AbilityBan',
+    AbilityDraft = 'AbilityDraft',
     PreGameSetup = 'PreGameSetup',
     LiveGame = 'LiveGame',
     MidGameQA = 'MidGameQA',
@@ -308,6 +310,9 @@ export interface GameSession {
     sidePickTeam: RosterTeam | null;
     sideVote?: SideVoteState;
     selectedSide: 'CT' | 'T' | null;
+    abilityBanState?: AbilityBanState;
+    abilityDraftState?: AbilityDraftState;
+    abilityAssignments?: AbilityAssignment[];
     undercoverCount: number;
     detectiveCount: number;
     rolesReleased?: boolean;
