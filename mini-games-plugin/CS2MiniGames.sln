@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{F83DEC51-6C1F-4BFF-A2FA-FD7FA5CA9DE1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CS2MiniGames", "src\CS2MiniGames\CS2MiniGames.csproj", "{293ABB68-0ADD-4AF6-ADB8-BB1BCAA9CD6D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{9B0EB23A-C5A0-4B9B-A0B8-E4BC7DEA2221}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CS2MiniGames.Tests", "tests\CS2MiniGames.Tests\CS2MiniGames.Tests.csproj", "{DF5C81B6-AE7F-484F-90C1-1F170E463235}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{293ABB68-0ADD-4AF6-ADB8-BB1BCAA9CD6D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{293ABB68-0ADD-4AF6-ADB8-BB1BCAA9CD6D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{293ABB68-0ADD-4AF6-ADB8-BB1BCAA9CD6D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{293ABB68-0ADD-4AF6-ADB8-BB1BCAA9CD6D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DF5C81B6-AE7F-484F-90C1-1F170E463235}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DF5C81B6-AE7F-484F-90C1-1F170E463235}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DF5C81B6-AE7F-484F-90C1-1F170E463235}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DF5C81B6-AE7F-484F-90C1-1F170E463235}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{293ABB68-0ADD-4AF6-ADB8-BB1BCAA9CD6D} = {F83DEC51-6C1F-4BFF-A2FA-FD7FA5CA9DE1}
+		{DF5C81B6-AE7F-484F-90C1-1F170E463235} = {9B0EB23A-C5A0-4B9B-A0B8-E4BC7DEA2221}
+	EndGlobalSection
+EndGlobal

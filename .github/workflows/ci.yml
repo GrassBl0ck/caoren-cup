@@ -51,3 +51,32 @@ jobs:
         working-directory: web-command-center/CaorenCupPlugin
         run: dotnet build -c Release --no-restore
 
+  minigames-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore mini games plugin
+        working-directory: mini-games-plugin
+        run: dotnet restore
+
+      - name: Test mini games plugin
+        working-directory: mini-games-plugin
+        run: dotnet test --no-restore --logger "console;verbosity=minimal"
+
+      - name: Build mini games plugin
+        working-directory: mini-games-plugin
+        run: dotnet build -c Release --no-restore --no-incremental -warnaserror
+
+      - name: Verify mini games package tree
+        shell: pwsh
+        working-directory: mini-games-plugin
+        run: >-
+          ./scripts/Verify-Package.ps1
+          -OutputPath ./src/CS2MiniGames/bin/Release/net8.0
+
