@@ -2,11 +2,12 @@
 
 Caoren Cup 是一个面向 CS2 自定义娱乐赛的赛事系统。
 
-项目包含三部分：
+项目包含四部分：
 
 1. **CS2 娱乐玩法插件**
 2. **网页赛事指挥台 / 网页端**
 3. **CS2 与网页后端通信的桥接插件**
+4. **CS2 小游戏插件**
 
 适用于 CS2 自定义娱乐赛、队长选人、地图 Ban/Pick、阵营选择、卧底玩法、赛后指认、战绩同步和积分结算等场景。
 
@@ -33,6 +34,9 @@ caoren-cup/
 │  └─ CaorenCupPlugin/
 │     └─ CS2 网页端服务器插件 / 网页桥接插件
 │
+├─ mini-games-plugin/
+│  └─ CS2 小游戏插件
+│
 ├─ docs/
 │  └─ 项目文档
 │
@@ -47,7 +51,7 @@ caoren-cup/
 
 ---
 
-## 三个核心模块
+## 四个核心模块
 
 ### 1. CS2 娱乐玩法插件本体
 
@@ -768,12 +772,13 @@ Release 包和源码仓库是两回事：
 
 ## Release 包命名规则
 
-项目 Release 拆成三个包：
+项目 Release 拆成四个包：
 
 ```text
 CaorenCup-修改插件本体-vX.X.X.zip
 CaorenCupWeb-网页端-vX.X.X.zip
 CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
+CS2MiniGames-小游戏插件-vX.X.X.zip
 ```
 
 不要再使用以下旧名称：
@@ -790,7 +795,7 @@ CaorenCup-all-in-one-vX.X.X.zip
 
 ---
 
-## 三个 Release 包说明
+## 四个 Release 包说明
 
 ### 1. CS2 娱乐插件本体
 
@@ -910,6 +915,36 @@ Microsoft.Extensions.*.dll
 ```text
 <CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
 ```
+
+---
+
+### 4. CS2 小游戏插件
+
+包名：
+
+```text
+CS2MiniGames-小游戏插件-vX.X.X.zip
+```
+
+来源目录：
+
+```text
+mini-games-plugin/
+```
+
+本地打包：
+
+```powershell
+.\scripts\package-caoren-minigames.ps1 -Version vX.X.X
+```
+
+部署目标：
+
+```text
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CS2MiniGames/
+```
+
+小游戏插件内部版本独立管理；ZIP 文件名使用草人杯统一 Release 版本。运行数据库和服务器配置不属于公开包。
 
 ---
 
@@ -1033,12 +1068,15 @@ Tag: vX.X.X
 Title: Caoren Cup vX.X.X
 ```
 
-上传三个 zip：
+统一上传四个包；服务器只部署实际改动组件。
+
+上传四个 zip：
 
 ```text
 CaorenCup-修改插件本体-vX.X.X.zip
 CaorenCupWeb-网页端-vX.X.X.zip
 CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
+CS2MiniGames-小游戏插件-vX.X.X.zip
 ```
 
 然后点击发布。
@@ -1087,9 +1125,9 @@ curl -I http://127.0.0.1:3000/assets/audio/manifest.json
 
 ## 许可证
 
-本项目使用 MIT License。
+草人杯仓库主体使用 MIT License。
 
-你可以自由使用、修改和分发本项目，但需要保留原始版权声明和许可证内容。
+`mini-games-plugin/` 作为独立组件使用 GNU General Public License v3.0（GPL-3.0），其复制、修改和分发以该目录内的 `LICENSE` 为准。发布或再分发小游戏插件二进制时必须保留对应许可证与源码获取方式。
 
 ---
 
@@ -1193,7 +1231,7 @@ module-configs/*.json
 - `CaorenCupWeb-网页端-vX.X.X.zip`
 - `CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip`
 
-如果本次没有改动 `game-plugin/`，服务器本地部署可以不覆盖娱乐插件本体；但 GitHub Release 仍按统一版本号上传三个包。
+如果本次没有改动 `game-plugin/`，服务器本地部署可以不覆盖娱乐插件本体；GitHub Release 仍按统一版本号上传四个包；服务器只部署实际改动组件。
 
 ## Credits / Third-party Code / 第三方代码说明
 
