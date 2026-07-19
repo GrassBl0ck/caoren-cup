@@ -101,6 +101,19 @@ export const shouldFinishAbilityBanEarly = (
     .filter((playerId) => onlinePlayerIds.has(playerId))
     .every((playerId) => state.confirmedPlayerIds.includes(playerId));
 
+export const getOnlineAbilityBanPlayerIds = (
+    state: AbilityBanState,
+    players: Readonly<Record<string, unknown>>,
+): Set<string> => new Set(
+    [...state.orderedPlayers.A, ...state.orderedPlayers.B]
+        .filter((playerId) => {
+            const player = players[playerId];
+            return player !== null
+                && typeof player === 'object'
+                && (player as { isOnline?: unknown }).isOnline !== false;
+        }),
+);
+
 export const shouldFinishAbilityDraftBatchEarly = (state: AbilityDraftState): boolean => {
     const activeBatch = state.batches[state.currentBatchIndex];
     return !!activeBatch

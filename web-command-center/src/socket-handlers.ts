@@ -61,6 +61,7 @@ import {
 import {
     AbilitySocketAction,
     authorizeAbilitySocketAction,
+    getOnlineAbilityBanPlayerIds,
     shouldFinishAbilityBanEarly,
     shouldFinishAbilityDraftBatchEarly,
 } from './ability-socket-policy';
@@ -373,6 +374,14 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 return false;
             }
             return true;
+        };
+        const finishAbilityBanIfOnlinePlayersReady = (): boolean => {
+            const session = getSession();
+            const state = session.abilityBanState;
+            if (session.phase !== GamePhase.AbilityBan || !state) return false;
+            const onlinePlayerIds = getOnlineAbilityBanPlayerIds(state, session.players);
+            if (!shouldFinishAbilityBanEarly(state, onlinePlayerIds)) return false;
+            return finishAbilityBan('confirmed');
         };
 
         socket.on(WsEvents.LOBBY_INVITE_LOGIN, async (data: { inviteCode?: string; nickname?: string; steamClaimTicket?: string }) => {
@@ -1157,13 +1166,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 return;
             }
             broadcastState();
-            const onlinePlayerIds = new Set(
-                [...state.orderedPlayers.A, ...state.orderedPlayers.B]
-                    .filter((playerId) => session.players[playerId]?.isOnline !== false),
-            );
-            if (shouldFinishAbilityBanEarly(state, onlinePlayerIds)) {
-                finishAbilityBan('confirmed');
-            }
+            finishAbilityBanIfOnlinePlayersReady();
         });
 
         socket.on(WsEvents.ABILITY_PICK_UPDATE, (data: unknown) => {
@@ -1451,6 +1454,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const playerId = socket.data?.playerId;
             const player = playerId ? findPlayerById(session, playerId) : undefined;
             if (player) player.isOnline = false;
+            finishAbilityBanIfOnlinePlayersReady();
             console.log(`客户端断开: ${socket.id}`);
             broadcastState();
         });

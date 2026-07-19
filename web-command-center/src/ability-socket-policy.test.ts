@@ -10,10 +10,44 @@ import {
 } from './ability-draft-service';
 import {
     authorizeAbilitySocketAction,
+    getOnlineAbilityBanPlayerIds,
     shouldFinishAbilityBanEarly,
     shouldFinishAbilityDraftBatchEarly,
 } from './ability-socket-policy';
+import { clearAllFlowTimers } from './game-timers';
+import { createInitialSession, setSession } from './session-manager';
+import { registerSocketHandlers } from './socket-handlers';
 import { GamePhase, PlayerRole, RosterTeam } from './types';
+
+class FakeSocket {
+    readonly data: Record<string, unknown> = {};
+    readonly handshake = { address: '127.0.0.1', secure: false, headers: {} };
+    private readonly handlers = new Map<string, (payload?: unknown) => unknown>();
+
+    constructor(readonly id: string) {}
+
+    on(event: string, handler: (payload?: unknown) => unknown) { this.handlers.set(event, handler); }
+    emit(_event: string, _payload: unknown) {}
+    join(_room: string) {}
+    trigger(event: string, payload?: unknown) {
+        const handler = this.handlers.get(event);
+        if (!handler) throw new Error(`missing handler: ${event}`);
+        return handler(payload);
+    }
+}
+
+class FakeIo {
+    readonly sockets = { sockets: new Map<string, FakeSocket>() };
+    private connectionHandler?: (socket: FakeSocket) => void;
+
+    on(event: string, handler: (socket: FakeSocket) => void) {
+        if (event === 'connection') this.connectionHandler = handler;
+    }
+    connect(socket: FakeSocket) {
+        this.sockets.sockets.set(socket.id, socket);
+        this.connectionHandler?.(socket);
+    }
+}
 
 const banState = () => createAbilityBanState({
     orderedA: ['a1', 'a2'],
@@ -165,4 +199,50 @@ test('Ban 仅等待在线参赛者，选角必须等待当前批次每个席位�
     assert.equal(shouldFinishAbilityDraftBatchEarly(draft), false);
     draft.confirmedPlayerIds.push('a2');
     assert.equal(shouldFinishAbilityDraftBatchEarly(draft), true);
+});
+
+test('Ban 在线名单排除缺失记录和明确离线玩家，兼容未设置 isOnline 的旧玩家', () => {
+    const bans = banState();
+    bans.orderedPlayers.B.push('missing-player');
+    const onlinePlayerIds = getOnlineAbilityBanPlayerIds(bans, {
+        a1: { isOnline: true },
+        a2: {},
+        b1: { isOnline: false },
+    });
+
+    assert.deepEqual([...onlinePlayerIds], ['a1', 'a2']);
+});
+
+test('未确认玩家断线后重新评估 Ban 并立即触发提前结算', (t) => {
+    t.after(clearAllFlowTimers);
+    const session = createInitialSession();
+    session.phase = GamePhase.AbilityBan;
+    session.matchOptions.abilityModeEnabled = true;
+    session.players = {
+        a1: { playerId: 'a1', name: 'A1', role: 'Player', rosterTeam: 'A', isOnline: true } as never,
+        b1: { playerId: 'b1', name: 'B1', role: 'Player', rosterTeam: 'B', isOnline: true } as never,
+    };
+    session.playerOrder = ['a1', 'b1'];
+    session.teams.A.players = ['a1'];
+    session.teams.B.players = ['b1'];
+    session.captains = { A: 'a1', B: 'b1' };
+    session.abilityBanState = createAbilityBanState({
+        orderedA: ['a1'],
+        orderedB: ['b1'],
+        banCountPerTeam: 1,
+        timeoutAt: Date.now() + 45_000,
+    });
+    session.abilityBanState.confirmedPlayerIds = ['a1'];
+    setSession(session);
+
+    const io = new FakeIo();
+    registerSocketHandlers(io as never, { broadcastState() {}, notifyMessage() {} });
+    const socket = new FakeSocket('b1-socket');
+    io.connect(socket);
+    socket.data.playerId = 'b1';
+
+    assert.equal(shouldFinishAbilityBanEarly(session.abilityBanState, new Set(['a1', 'b1'])), false);
+    socket.trigger('disconnect');
+    assert.equal(session.players.b1.isOnline, false);
+    assert.equal(session.phase, GamePhase.AbilityDraft);
 });
