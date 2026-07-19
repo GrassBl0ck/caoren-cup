@@ -215,3 +215,39 @@ test('ability Draft hides the active batch from enemies but publishes completed 
     assert.equal(session.abilityDraftState.assignments[0].abilityId, 'tank');
     assert.equal(session.abilityDraftState.failure?.message, 'test failure');
 });
+
+test('public final ability assignments do not share arrays or entries with session state', () => {
+    const session = createAbilitySession();
+    const assignment = { playerId: 'a1', team: 'A' as const, abilityId: 'tank' as const };
+    session.phase = GamePhase.PreGameSetup;
+    session.abilityDraftState = {
+        batches: [{ team: 'A', playerIds: ['a1'] }],
+        currentBatchIndex: 1,
+        bannedAbilityIds: [],
+        choices: { a1: 'tank' },
+        confirmedPlayerIds: ['a1'],
+        assignments: [assignment],
+        timeoutAt: 23456,
+    };
+    session.abilityAssignments = [assignment];
+
+    const publicSession = sanitizeForPublic(session, 'admin');
+    publicSession.abilityAssignments.push({ playerId: 'b1', team: 'B', abilityId: 'witch' });
+    publicSession.abilityAssignments[0].playerId = 'changed-player';
+    publicSession.abilityAssignments[0].team = 'B';
+    publicSession.abilityAssignments[0].abilityId = 'witch';
+
+    assert.deepEqual(session.abilityAssignments, [
+        { playerId: 'a1', team: 'A', abilityId: 'tank' },
+    ]);
+    assert.deepEqual(session.abilityDraftState.assignments, [
+        { playerId: 'a1', team: 'A', abilityId: 'tank' },
+    ]);
+
+    const sessionWithoutAssignments = createAbilitySession();
+    const publicSessionWithoutAssignments = sanitizeForPublic(sessionWithoutAssignments, 'admin');
+    assert.equal(
+        Object.prototype.hasOwnProperty.call(publicSessionWithoutAssignments, 'abilityAssignments'),
+        false,
+    );
+});

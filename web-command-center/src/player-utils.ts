@@ -199,6 +199,13 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
     }
     s.abilityBanState = sanitizeAbilityBanState(session, viewer);
     s.abilityDraftState = sanitizeAbilityDraftState(session.abilityDraftState, viewer);
+    if (session.abilityAssignments) {
+        s.abilityAssignments = session.abilityAssignments.map((assignment) => ({
+            playerId: assignment.playerId,
+            team: assignment.team,
+            abilityId: assignment.abilityId,
+        }));
+    }
     s.duelAdminOnline = Object.values(session.players).some(p => p.role === 'Admin' && p.isOnline);
     delete s.rollTimeout;
     return s;
