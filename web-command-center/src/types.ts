@@ -32,6 +32,41 @@ export type AbilityId =
     | 'sky_courier'
     | 'snow_golem'
     | 'witch';
+export interface AbilityBanState {
+    orderedPlayers: Record<RosterTeam, string[]>;
+    banCountPerTeam: number;
+    selections: Record<string, AbilityId[]>;
+    confirmedPlayerIds: string[];
+    timeoutAt: number;
+}
+export interface AbilityDraftBatch {
+    team: RosterTeam;
+    playerIds: string[];
+}
+export interface AbilityAssignment {
+    playerId: string;
+    team: RosterTeam;
+    abilityId: AbilityId;
+}
+export interface AbilityDraftState {
+    batches: AbilityDraftBatch[];
+    currentBatchIndex: number;
+    bannedAbilityIds: AbilityId[];
+    choices: Record<string, AbilityId>;
+    confirmedPlayerIds: string[];
+    assignments: AbilityAssignment[];
+    timeoutAt: number;
+}
+export interface AbilityBanResolution {
+    teamBans: Record<RosterTeam, AbilityId[]>;
+    bannedAbilityIds: AbilityId[];
+    votes: Record<RosterTeam, Partial<Record<AbilityId, number>>>;
+}
+export interface RuleResult {
+    ok: boolean;
+    code?: string;
+    message?: string;
+}
 export type ChargeModel = 'A' | 'B' | 'C';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
 export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
