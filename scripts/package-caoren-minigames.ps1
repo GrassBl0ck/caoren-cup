@@ -47,6 +47,83 @@ function Assert-ChildPath {
     }
 }
 
+function Assert-NotReparsePoint {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $attributes = Get-EntryAttributes -Path $Path
+    if ($null -eq $attributes) {
+        return $false
+    }
+
+    if (($attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Refusing reparse point: $Path"
+    }
+
+    return $true
+}
+
+function Get-EntryAttributes {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    try {
+        return [System.IO.File]::GetAttributes($Path)
+    }
+    catch [System.IO.FileNotFoundException] {
+        return $null
+    }
+    catch [System.IO.DirectoryNotFoundException] {
+        return $null
+    }
+}
+
+function Assert-NoReparsePointsInDirectoryTree {
+    param([Parameter(Mandatory = $true)][string]$RootPath)
+
+    $rootAttributes = Get-EntryAttributes -Path $RootPath
+    if ($null -eq $rootAttributes) {
+        return $false
+    }
+    if (($rootAttributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Refusing reparse point: $RootPath"
+    }
+    if (($rootAttributes -band [System.IO.FileAttributes]::Directory) -eq 0) {
+        throw "Expected staging path to be a directory: $RootPath"
+    }
+
+    $pendingDirectories = [System.Collections.Generic.Stack[string]]::new()
+    $pendingDirectories.Push($RootPath)
+    while ($pendingDirectories.Count -gt 0) {
+        $directoryPath = $pendingDirectories.Pop()
+        try {
+            $entries = [System.IO.DirectoryInfo]::new($directoryPath).GetFileSystemInfos()
+        }
+        catch {
+            throw "Unable to safely inspect staging path: $directoryPath. $($_.Exception.Message)"
+        }
+
+        foreach ($entry in $entries) {
+            $entryAttributes = Get-EntryAttributes -Path $entry.FullName
+            if ($null -eq $entryAttributes) {
+                throw "Staging entry disappeared during safety preflight: $($entry.FullName)"
+            }
+            if (($entryAttributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Refusing reparse point: $($entry.FullName)"
+            }
+            if (($entryAttributes -band [System.IO.FileAttributes]::Directory) -ne 0) {
+                $pendingDirectories.Push($entry.FullName)
+            }
+        }
+    }
+
+    return $true
+}
+
+function Test-IsNonRuntimeConfigurationArtifact {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    return $Name -match '(?i)(?:^|[._-])(?:example|sample|template|schema)(?:$|\.)'
+}
+
 foreach ($requiredPath in @(
     $solutionPath,
     $projectPath,
@@ -58,14 +135,23 @@ foreach ($requiredPath in @(
     }
 }
 
-if (Test-Path -LiteralPath $zipPath) {
+Assert-ChildPath -Parent $repoRoot -Child $releaseBuild
+Assert-ChildPath -Parent $repoRoot -Child $releaseOutput
+Assert-ChildPath -Parent $releaseBuild -Child $stagePath
+Assert-ChildPath -Parent $releaseOutput -Child $zipPath
+$null = Assert-NotReparsePoint -Path $releaseBuild
+$null = Assert-NotReparsePoint -Path $releaseOutput
+$stageExists = Assert-NoReparsePointsInDirectoryTree -RootPath $stagePath
+New-Item -ItemType Directory -Force -Path $releaseBuild | Out-Null
+New-Item -ItemType Directory -Force -Path $releaseOutput | Out-Null
+$null = Assert-NotReparsePoint -Path $releaseBuild
+$null = Assert-NotReparsePoint -Path $releaseOutput
+
+if (Assert-NotReparsePoint -Path $zipPath) {
     throw "Output already exists: $zipPath"
 }
 
-New-Item -ItemType Directory -Force -Path $releaseBuild | Out-Null
-New-Item -ItemType Directory -Force -Path $releaseOutput | Out-Null
-Assert-ChildPath -Parent $releaseBuild -Child $stagePath
-if (Test-Path -LiteralPath $stagePath) {
+if ($stageExists) {
     Remove-Item -LiteralPath $stagePath -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $stagePath | Out-Null
@@ -94,56 +180,82 @@ if ($LASTEXITCODE -ne 0) {
 
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$archive = [System.IO.Compression.ZipFile]::Open(
-    $zipPath,
-    [System.IO.Compression.ZipArchiveMode]::Create)
+$tempZipPath = Join-Path $releaseOutput (
+    "$(Split-Path -Leaf $zipPath).tmp-$([System.Guid]::NewGuid().ToString('N'))")
+Assert-ChildPath -Parent $releaseOutput -Child $tempZipPath
+
 try {
-    Get-ChildItem -LiteralPath $stagePath -File -Recurse |
-        Sort-Object FullName |
-        ForEach-Object {
-            $relative = $_.FullName.Substring($stagePath.Length).TrimStart('\', '/')
-            $entryName = $relative.Replace('\', '/')
-            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
-                $archive,
-                $_.FullName,
-                $entryName,
-                [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    $archive = [System.IO.Compression.ZipFile]::Open(
+        $tempZipPath,
+        [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        Get-ChildItem -LiteralPath $stagePath -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+                $relative = $_.FullName.Substring($stagePath.Length).TrimStart('\', '/')
+                $entryName = $relative.Replace('\', '/')
+                [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                    $archive,
+                    $_.FullName,
+                    $entryName,
+                    [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
+            }
+    }
+    finally {
+        $archive.Dispose()
+    }
+
+    $requiredEntries = @(
+        'CS2MiniGames.dll',
+        'CS2MiniGames.deps.json',
+        'Microsoft.Data.Sqlite.dll',
+        'runtimes/linux-x64/native/libe_sqlite3.so',
+        'LICENSE'
+    )
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($tempZipPath)
+    try {
+        $entryNames = @($zip.Entries | ForEach-Object { $_.FullName })
+        $missing = @($requiredEntries | Where-Object { $_ -notin $entryNames })
+        $forbidden = @($entryNames | Where-Object {
+            $name = [System.IO.Path]::GetFileName($_)
+            $isNonRuntimeConfigurationArtifact = Test-IsNonRuntimeConfigurationArtifact -Name $name
+            $isUserConfiguration =
+                -not $isNonRuntimeConfigurationArtifact -and
+                (
+                    $name -ieq 'CS2MiniGames.json' -or
+                    $name -ieq '.env' -or
+                    $name -match '(?i)^\.env\.' -or
+                    $name -match '(?i)^appsettings(?:\.[^.]+)*\.json$' -or
+                    $name -match '(?i)(?:^|[._-])config(?:uration)?(?:[._-].*)?\.(?:json|ya?ml|toml|cjs)$'
+                )
+
+            $_ -match '(^|/)(bin|obj|\.vs|TestResults|release-build|release-output)(/|$)' -or
+            $_ -match '(^|/)backup(?:$|[-_/])' -or
+            $name -match '(?i)\.db(?:$|-(?:wal|shm|journal)$)' -or
+            $name -match '(?i)\.(?:log|bak)(?:$|-)' -or
+            $isUserConfiguration
+        })
+
+        if ($missing.Count -gt 0) {
+            throw "ZIP missing required entries:`n$($missing -join "`n")"
         }
+        if ($forbidden.Count -gt 0) {
+            throw "ZIP contains forbidden entries:`n$($forbidden -join "`n")"
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
+
+    $hash = (Get-FileHash -LiteralPath $tempZipPath -Algorithm SHA256).Hash
+    Move-Item -LiteralPath $tempZipPath -Destination $zipPath
 }
 finally {
-    $archive.Dispose()
-}
-
-$requiredEntries = @(
-    'CS2MiniGames.dll',
-    'CS2MiniGames.deps.json',
-    'Microsoft.Data.Sqlite.dll',
-    'runtimes/linux-x64/native/libe_sqlite3.so',
-    'LICENSE'
-)
-$zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
-try {
-    $entryNames = @($zip.Entries | ForEach-Object { $_.FullName })
-    $missing = @($requiredEntries | Where-Object { $_ -notin $entryNames })
-    $forbidden = @($entryNames | Where-Object {
-        $_ -match '(^|/)(bin|obj|\.vs|TestResults|release-build|release-output)(/|$)' -or
-        $_ -match '(^|/)backup(?:$|[-_/])' -or
-        $_ -match '(?i)\.db(?:$|-(?:wal|shm|journal)$)' -or
-        $_ -match '(?i)\.(?:log|bak)(?:$|-)' -or
-        $_ -match '(^|/)(CS2MiniGames\.json|\.env(?:\..*)?)$'
-    })
-
-    if ($missing.Count -gt 0) {
-        throw "ZIP missing required entries:`n$($missing -join "`n")"
-    }
-    if ($forbidden.Count -gt 0) {
-        throw "ZIP contains forbidden entries:`n$($forbidden -join "`n")"
+    if (Assert-NotReparsePoint -Path $tempZipPath) {
+        Assert-ChildPath -Parent $releaseOutput -Child $tempZipPath
+        Remove-Item -LiteralPath $tempZipPath -Force
     }
 }
-finally {
-    $zip.Dispose()
-}
 
-$hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash
 Write-Output "PASS: $zipPath"
 Write-Output "SHA-256: $hash"
