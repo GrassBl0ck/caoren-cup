@@ -1,7 +1,7 @@
 ﻿// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { CellStatus, GamePhase, LiveGameData, Player, PlayerRole, RosterTeam, TaskCell, WsEvents } from './types';
+import { AbilityId, CellStatus, GamePhase, LiveGameData, Player, PlayerRole, RosterTeam, RuleResult, TaskCell, WsEvents } from './types';
 import { getSession, resetSessionWithPlayers, terminateAndClear } from './session-manager';
 import {
     findPlayerById,
@@ -33,6 +33,8 @@ import {
     syncPendingDraftOrderWithRoster,
     setRosterLiveSides,
     extendDuelWaitingIfLateJoin,
+    finishAbilityBan,
+    finishAbilityDraftBatch,
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
 import { ADMIN_PASSWORD } from './game-constants';
@@ -50,6 +52,18 @@ import {
     steamClaimTickets,
 } from './identity/identity-runtime';
 import { applyMembershipToPlayer, attachMembershipToSession } from './identity/session-integration';
+import {
+    confirmAbilityBan,
+    confirmAbilityChoice,
+    updateAbilityBanSelection,
+    updateAbilityChoice,
+} from './ability-draft-service';
+import {
+    AbilitySocketAction,
+    authorizeAbilitySocketAction,
+    shouldFinishAbilityBanEarly,
+    shouldFinishAbilityDraftBatchEarly,
+} from './ability-socket-policy';
 
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
@@ -334,6 +348,31 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             if (authenticatedPlayerId && authenticatedPlayerId === claimed) return true;
             socket.emit(WsEvents.NOTIFICATION, { message: '当前连接无权代替该玩家执行操作，请重新登录。' });
             return false;
+        };
+        const emitAbilityRuleFailure = (result: RuleResult) => {
+            socket.emit(WsEvents.NOTIFICATION, {
+                message: result.message || '异能 BP 操作失败，请刷新页面后重试。',
+            });
+        };
+        const authorizeAbilityAction = (event: AbilitySocketAction, payload: unknown): boolean => {
+            const session = getSession();
+            const authenticatedPlayerId = String(socket.data.playerId || '');
+            const actor = authenticatedPlayerId
+                ? findPlayerById(session, authenticatedPlayerId)
+                : undefined;
+            const result = authorizeAbilitySocketAction({
+                event,
+                actor,
+                phase: session.phase,
+                banState: session.abilityBanState,
+                draftState: session.abilityDraftState,
+                payload,
+            });
+            if (!result.allowed) {
+                emitAbilityRuleFailure({ ok: false, code: result.code, message: result.message });
+                return false;
+            }
+            return true;
         };
 
         socket.on(WsEvents.LOBBY_INVITE_LOGIN, async (data: { inviteCode?: string; nickname?: string; steamClaimTicket?: string }) => {
@@ -1093,6 +1132,65 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             if (data.side !== 'CT' && data.side !== 'T') return;
             session.sideVote.votes[data.playerId] = data.side;
             broadcastState();
+        });
+
+        socket.on(WsEvents.ABILITY_BAN_UPDATE, (data: unknown) => {
+            if (!authorizeAbilityAction('ABILITY_BAN_UPDATE', data)) return;
+            const payload = data as { playerId: string; selectedAbilityIds: AbilityId[] };
+            const state = getSession().abilityBanState!;
+            const result = updateAbilityBanSelection(state, payload.playerId, payload.selectedAbilityIds);
+            if (!result.ok) {
+                emitAbilityRuleFailure(result);
+                return;
+            }
+            broadcastState();
+        });
+
+        socket.on(WsEvents.ABILITY_BAN_CONFIRM, (data: unknown) => {
+            if (!authorizeAbilityAction('ABILITY_BAN_CONFIRM', data)) return;
+            const payload = data as { playerId: string };
+            const session = getSession();
+            const state = session.abilityBanState!;
+            const result = confirmAbilityBan(state, payload.playerId);
+            if (!result.ok) {
+                emitAbilityRuleFailure(result);
+                return;
+            }
+            broadcastState();
+            const onlinePlayerIds = new Set(
+                [...state.orderedPlayers.A, ...state.orderedPlayers.B]
+                    .filter((playerId) => session.players[playerId]?.isOnline !== false),
+            );
+            if (shouldFinishAbilityBanEarly(state, onlinePlayerIds)) {
+                finishAbilityBan('confirmed');
+            }
+        });
+
+        socket.on(WsEvents.ABILITY_PICK_UPDATE, (data: unknown) => {
+            if (!authorizeAbilityAction('ABILITY_PICK_UPDATE', data)) return;
+            const payload = data as { playerId: string; abilityId: AbilityId };
+            const state = getSession().abilityDraftState!;
+            const result = updateAbilityChoice(state, payload.playerId, payload.abilityId);
+            if (!result.ok) {
+                emitAbilityRuleFailure(result);
+                return;
+            }
+            broadcastState();
+        });
+
+        socket.on(WsEvents.ABILITY_PICK_CONFIRM, (data: unknown) => {
+            if (!authorizeAbilityAction('ABILITY_PICK_CONFIRM', data)) return;
+            const payload = data as { playerId: string };
+            const state = getSession().abilityDraftState!;
+            const result = confirmAbilityChoice(state, payload.playerId);
+            if (!result.ok) {
+                emitAbilityRuleFailure(result);
+                return;
+            }
+            broadcastState();
+            if (shouldFinishAbilityDraftBatchEarly(state)) {
+                finishAbilityDraftBatch('manual');
+            }
         });
 
         socket.on(WsEvents.DUEL_ACTION, (data: { playerId: string; action: string; payload?: any }) => {
