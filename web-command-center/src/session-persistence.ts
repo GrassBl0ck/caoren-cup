@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import { GameSession } from './types';
+import { randomUUID } from 'crypto';
+import { GamePhase, GameSession } from './types';
 import { createInitialSession, getSession, setSession } from './session-manager';
 
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 const SNAPSHOT_DIR = path.resolve(__dirname, '..', 'runtime');
 const SNAPSHOT_PATH = path.join(SNAPSHOT_DIR, 'live-session-snapshot.json');
 
@@ -24,9 +25,9 @@ const sanitizePlayersForSnapshot = (players: GameSession['players']) => {
     return result;
 };
 
-const sanitizeSessionForSnapshot = (session: GameSession) => ({
+export const serializeSessionSnapshot = (session: GameSession, savedAt = Date.now()) => ({
     version: SNAPSHOT_VERSION,
-    savedAt: Date.now(),
+    savedAt,
     session: {
         sessionId: session.sessionId,
         phase: session.phase,
@@ -39,6 +40,9 @@ const sanitizeSessionForSnapshot = (session: GameSession) => ({
         selectedMap: session.selectedMap,
         selectedSide: session.selectedSide,
         matchOptions: session.matchOptions,
+        abilityBanState: session.abilityBanState,
+        abilityDraftState: session.abilityDraftState,
+        abilityAssignments: session.abilityAssignments,
         duelTempAdminId: session.duelTempAdminId,
         duelAdminVote: session.duelAdminVote,
         duelAdminRequest: session.duelAdminRequest,
@@ -53,7 +57,7 @@ const sanitizeSessionForSnapshot = (session: GameSession) => ({
     },
 });
 
-const normalizeRestoredSession = (raw: any): GameSession => {
+const normalizeRestoredSession = (raw: any, version: 1 | 2): GameSession => {
     const base = createInitialSession();
     const restored = {
         ...base,
@@ -74,6 +78,15 @@ const normalizeRestoredSession = (raw: any): GameSession => {
         : base.lobbyAccess;
     restored.matchOptions.matchMode = restored.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
     restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
+    if (version === 1) {
+        restored.matchOptions.abilityModeEnabled = false;
+        restored.matchOptions.abilityBanCountPerTeam = base.matchOptions.abilityBanCountPerTeam;
+        restored.matchOptions.abilityBanSeconds = base.matchOptions.abilityBanSeconds;
+        restored.matchOptions.abilityDraftBatchSeconds = base.matchOptions.abilityDraftBatchSeconds;
+        restored.abilityBanState = undefined;
+        restored.abilityDraftState = undefined;
+        restored.abilityAssignments = undefined;
+    }
     restored.accusations = restored.accusations || {};
     restored.adminLock = restored.adminLock || { holderId: null, acquiredAt: null };
     restored.duelTempAdminId = restored.duelTempAdminId || null;
@@ -82,6 +95,19 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     restored.duelTerminateRequest = restored.duelTerminateRequest;
     restored.timerEndAt = null;
     restored.timerPhase = null;
+    if (version === 2
+        && restored.phase === GamePhase.AbilityBan
+        && typeof restored.abilityBanState?.timeoutAt === 'number'
+        && Number.isFinite(restored.abilityBanState.timeoutAt)) {
+        restored.timerEndAt = restored.abilityBanState.timeoutAt;
+        restored.timerPhase = GamePhase.AbilityBan;
+    } else if (version === 2
+        && restored.phase === GamePhase.AbilityDraft
+        && typeof restored.abilityDraftState?.timeoutAt === 'number'
+        && Number.isFinite(restored.abilityDraftState.timeoutAt)) {
+        restored.timerEndAt = restored.abilityDraftState.timeoutAt;
+        restored.timerPhase = GamePhase.AbilityDraft;
+    }
     restored.rollTimeout = undefined;
     for (const player of Object.values(restored.players)) {
         if (player.gameRole !== 'Undercover') player.undercoverTaskAckStage = undefined;
@@ -90,12 +116,63 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     return restored;
 };
 
+export const deserializeSessionSnapshot = (snapshot: unknown): GameSession | null => {
+    if (!snapshot || typeof snapshot !== 'object') return null;
+    const parsed = snapshot as { version?: unknown; session?: unknown };
+    if ((parsed.version !== 1 && parsed.version !== 2)
+        || !parsed.session
+        || typeof parsed.session !== 'object'
+        || Array.isArray(parsed.session)) {
+        return null;
+    }
+    return normalizeRestoredSession(parsed.session, parsed.version);
+};
+
+export interface SnapshotFileSystem {
+    mkdirSync: (directoryPath: string, options: { recursive: true }) => unknown;
+    writeFileSync: (filePath: string, data: string, encoding: 'utf8') => unknown;
+    renameSync: (oldPath: string, newPath: string) => unknown;
+    unlinkSync: (filePath: string) => unknown;
+}
+
+export const writeSnapshotAtomically = (
+    snapshotPath: string,
+    payload: unknown,
+    fileSystem: SnapshotFileSystem = fs,
+) => {
+    const snapshotDir = path.dirname(snapshotPath);
+    const tempPath = path.join(
+        snapshotDir,
+        `.${path.basename(snapshotPath)}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`,
+    );
+    let tempMayExist = false;
+    try {
+        fileSystem.mkdirSync(snapshotDir, { recursive: true });
+        const serialized = JSON.stringify(payload, null, 2);
+        if (serialized === undefined) throw new TypeError('Snapshot payload cannot be serialized.');
+        tempMayExist = true;
+        fileSystem.writeFileSync(tempPath, serialized, 'utf8');
+        fileSystem.renameSync(tempPath, snapshotPath);
+        tempMayExist = false;
+    } catch (err) {
+        if (tempMayExist) {
+            try {
+                fileSystem.unlinkSync(tempPath);
+            } catch {
+                // Best-effort cleanup only; preserve the original write error.
+            }
+        }
+        throw err;
+    }
+};
+
 export const restoreSessionSnapshot = (): boolean => {
     if (!fs.existsSync(SNAPSHOT_PATH)) return false;
     try {
         const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf8'));
-        if (parsed?.version !== SNAPSHOT_VERSION || !parsed?.session) return false;
-        setSession(normalizeRestoredSession(parsed.session));
+        const restored = deserializeSessionSnapshot(parsed);
+        if (!restored) return false;
+        setSession(restored);
         return true;
     } catch (err) {
         console.warn('[SessionPersistence] failed to restore snapshot:', err);
@@ -105,9 +182,8 @@ export const restoreSessionSnapshot = (): boolean => {
 
 export const saveSessionSnapshotNow = () => {
     try {
-        fs.mkdirSync(SNAPSHOT_DIR, { recursive: true });
-        const payload = sanitizeSessionForSnapshot(getSession());
-        fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(payload, null, 2), 'utf8');
+        const payload = serializeSessionSnapshot(getSession());
+        writeSnapshotAtomically(SNAPSHOT_PATH, payload);
     } catch (err) {
         console.warn('[SessionPersistence] failed to save snapshot:', err);
     }
