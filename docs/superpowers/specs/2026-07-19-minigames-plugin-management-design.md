@@ -195,7 +195,7 @@ ZIP 必须拒绝：
 小游戏插件的独立服务器目标为：
 
 ```text
-/root/game_servers/27/cs2/game/csgo/addons/counterstrikesharp/plugins/CS2MiniGames/
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CS2MiniGames/
 ```
 
 后续经用户单独批准的部署流程为：
@@ -203,7 +203,7 @@ ZIP 必须拒绝：
 ```text
 本地测试
 → 本地生成 ZIP
-→ 上传 /tmp
+→ 上传服务器临时目录
 → 完整备份原 CS2MiniGames 目录
 → 校验上传包 SHA-256
 → unzip -t
