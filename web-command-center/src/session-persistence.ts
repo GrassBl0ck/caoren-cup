@@ -79,6 +79,9 @@ const normalizeRestoredSession = (raw: any, version: 1 | 2): GameSession => {
     restored.matchOptions.matchMode = restored.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
     restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
     if (version === 1) {
+        if (restored.phase === GamePhase.AbilityBan || restored.phase === GamePhase.AbilityDraft) {
+            restored.phase = GamePhase.PreGameSetup;
+        }
         restored.matchOptions.abilityModeEnabled = false;
         restored.matchOptions.abilityBanCountPerTeam = base.matchOptions.abilityBanCountPerTeam;
         restored.matchOptions.abilityBanSeconds = base.matchOptions.abilityBanSeconds;
@@ -103,6 +106,7 @@ const normalizeRestoredSession = (raw: any, version: 1 | 2): GameSession => {
         restored.timerPhase = GamePhase.AbilityBan;
     } else if (version === 2
         && restored.phase === GamePhase.AbilityDraft
+        && !restored.abilityDraftState?.failure
         && typeof restored.abilityDraftState?.timeoutAt === 'number'
         && Number.isFinite(restored.abilityDraftState.timeoutAt)) {
         restored.timerEndAt = restored.abilityDraftState.timeoutAt;
@@ -135,11 +139,29 @@ export interface SnapshotFileSystem {
     unlinkSync: (filePath: string) => unknown;
 }
 
+const assertValidBpTimeouts = (payload: unknown) => {
+    if (!payload || typeof payload !== 'object') return;
+    const snapshot = payload as { version?: unknown; session?: unknown };
+    if (snapshot.version !== SNAPSHOT_VERSION || !snapshot.session || typeof snapshot.session !== 'object') return;
+    const session = snapshot.session as Record<string, unknown>;
+    for (const stateKey of ['abilityBanState', 'abilityDraftState'] as const) {
+        const state = session[stateKey];
+        if (state === undefined) continue;
+        const timeoutAt = state && typeof state === 'object'
+            ? (state as { timeoutAt?: unknown }).timeoutAt
+            : undefined;
+        if (typeof timeoutAt !== 'number' || !Number.isFinite(timeoutAt)) {
+            throw new TypeError(`${stateKey}.timeoutAt must be a finite number.`);
+        }
+    }
+};
+
 export const writeSnapshotAtomically = (
     snapshotPath: string,
     payload: unknown,
     fileSystem: SnapshotFileSystem = fs,
 ) => {
+    assertValidBpTimeouts(payload);
     const snapshotDir = path.dirname(snapshotPath);
     const tempPath = path.join(
         snapshotDir,

@@ -134,6 +134,63 @@ test('Snapshot v1 可迁移，并默认关闭异能且不恢复 BP 状态', () =
     assert.equal(restored.timerPhase, null);
 });
 
+const createLegacyBpSnapshot = (phase: GamePhase.AbilityBan | GamePhase.AbilityDraft) => ({
+    version: 1,
+    savedAt: 100,
+    session: {
+        sessionId: `legacy-${phase}`,
+        matchId: 'legacy-match',
+        phase,
+        matchOptions: {
+            matchMode: 'competitive',
+            abilityModeEnabled: true,
+            undercoverModeEnabled: true,
+            caorenModifiersEnabled: false,
+        },
+        players: {
+            a1: { playerId: 'a1', name: 'A1', role: 'Player', rosterTeam: 'A', isReady: true },
+            b1: { playerId: 'b1', name: 'B1', role: 'Player', rosterTeam: 'B', isReady: true },
+        },
+        playerOrder: ['a1', 'b1'],
+        teams: {
+            A: { name: 'A', players: ['a1'] },
+            B: { name: 'B', players: ['b1'] },
+        },
+        captains: { A: 'a1', B: 'b1' },
+        selectedMap: 'Mirage',
+        selectedSide: 'CT',
+        abilityBanState: { timeoutAt: 1 },
+        abilityDraftState: { timeoutAt: 2 },
+        abilityAssignments: [{ playerId: 'a1', team: 'A', abilityId: 'medic' }],
+    },
+});
+
+const assertLegacyBpMigratedToPreGame = (restored: GameSession | null) => {
+    assert.ok(restored);
+    assert.equal(restored.phase, GamePhase.PreGameSetup);
+    assert.equal(restored.matchOptions.abilityModeEnabled, false);
+    assert.equal(restored.abilityBanState, undefined);
+    assert.equal(restored.abilityDraftState, undefined);
+    assert.equal(restored.abilityAssignments, undefined);
+    assert.deepEqual(restored.playerOrder, ['a1', 'b1']);
+    assert.deepEqual(restored.teams.A.players, ['a1']);
+    assert.deepEqual(restored.teams.B.players, ['b1']);
+    assert.equal(restored.selectedMap, 'Mirage');
+    assert.equal(restored.selectedSide, 'CT');
+};
+
+test('v1 AbilityBan 快照关闭异能并迁移到 PreGameSetup，同时保留比赛状态', () => {
+    const { deserialize } = requirePersistenceApi();
+
+    assertLegacyBpMigratedToPreGame(deserialize(createLegacyBpSnapshot(GamePhase.AbilityBan)));
+});
+
+test('v1 AbilityDraft 快照关闭异能并迁移到 PreGameSetup，同时保留比赛状态', () => {
+    const { deserialize } = requirePersistenceApi();
+
+    assertLegacyBpMigratedToPreGame(deserialize(createLegacyBpSnapshot(GamePhase.AbilityDraft)));
+});
+
 test('未知 Snapshot 版本会被拒绝', () => {
     const { deserialize } = requirePersistenceApi();
 
@@ -170,12 +227,25 @@ test('恢复未过期 BP 后沿用原绝对截止，不会续满倒计时', () =
     const timeoutAt = 900_000;
     const session = createAbilityDraftSession(timeoutAt);
     clearTimeout(session.rollTimeout);
+    session.abilityDraftState!.failure = undefined;
     const restored = deserialize(serialize(session, 100_000));
 
     assert.ok(restored);
     assert.equal(restored.abilityDraftState!.timeoutAt, timeoutAt);
     assert.equal(restored.timerEndAt, timeoutAt);
     assert.equal(restored.timerPhase, GamePhase.AbilityDraft);
+});
+
+test('恢复含 failure 的 Draft 状态时保持 Timer 停止', () => {
+    const { serialize, deserialize } = requirePersistenceApi();
+    const session = createAbilityDraftSession(900_000);
+    clearTimeout(session.rollTimeout);
+    const restored = deserialize(serialize(session, 100_000));
+
+    assert.ok(restored);
+    assert.deepEqual(restored.abilityDraftState!.failure, session.abilityDraftState!.failure);
+    assert.equal(restored.timerEndAt, null);
+    assert.equal(restored.timerPhase, null);
 });
 
 test('恢复 Ban 阶段后 Timer 对应 Ban 的原绝对截止', () => {
@@ -258,4 +328,40 @@ test('原子替换失败时清理临时文件并保留旧正式文件', (t) => {
     );
     assert.equal(fs.readFileSync(snapshotPath, 'utf8'), 'old');
     assert.deepEqual(fs.readdirSync(tempDir), ['live-session-snapshot.json']);
+});
+
+test('异常 BP timeoutAt 在写盘前被拒绝，旧正式快照保持不变且无临时残留', (t) => {
+    const { serialize, writeAtomically } = requirePersistenceApi();
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'caoren-snapshot-invalid-timeout-'));
+    t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+    const invalidCases: Array<{
+        label: string;
+        value: unknown;
+        state: 'abilityBanState' | 'abilityDraftState';
+    }> = [
+        { label: 'nan-ban', value: Number.NaN, state: 'abilityBanState' },
+        { label: 'infinity-ban', value: Number.POSITIVE_INFINITY, state: 'abilityBanState' },
+        { label: 'negative-infinity-draft', value: Number.NEGATIVE_INFINITY, state: 'abilityDraftState' },
+        { label: 'string-draft', value: '900000', state: 'abilityDraftState' },
+    ];
+
+    for (const invalidCase of invalidCases) {
+        const snapshotPath = path.join(tempDir, `${invalidCase.label}.json`);
+        fs.writeFileSync(snapshotPath, 'old-snapshot', 'utf8');
+        const session = createAbilityDraftSession(900_000);
+        clearTimeout(session.rollTimeout);
+        const payload = serialize(session, 100_000);
+        payload.session[invalidCase.state]!.timeoutAt = invalidCase.value as number;
+
+        assert.throws(
+            () => writeAtomically(snapshotPath, payload),
+            /timeoutAt.*finite number/i,
+        );
+        assert.equal(fs.readFileSync(snapshotPath, 'utf8'), 'old-snapshot');
+    }
+
+    assert.deepEqual(
+        fs.readdirSync(tempDir).sort(),
+        invalidCases.map((invalidCase) => `${invalidCase.label}.json`).sort(),
+    );
 });
