@@ -18,6 +18,21 @@ export type Team = 'CT' | 'T' | 'Unassigned';
 export type RosterTeam = 'A' | 'B';
 export type MatchMode = 'competitive' | 'duel';
 export type MatchController = 'matchzy' | 'caoren';
+export type AbilityId =
+    | 'medic'
+    | 'berserker'
+    | 'assassin'
+    | 'tank'
+    | 'istaru'
+    | 'capitalist'
+    | 'balance'
+    | 'glass_cannon'
+    | 'utility_specialist'
+    | 'commander'
+    | 'sky_courier'
+    | 'snow_golem'
+    | 'witch';
+export type ChargeModel = 'A' | 'B' | 'C';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
 export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
 export type IdentityLevel = 'temporary' | 'longTerm';
@@ -210,6 +225,10 @@ export interface LiveGameData {
 export interface MatchOptions {
     matchMode?: MatchMode;
     matchController?: MatchController;
+    abilityModeEnabled?: boolean;
+    abilityBanCountPerTeam?: number;
+    abilityBanSeconds?: number;
+    abilityDraftBatchSeconds?: number;
     undercoverModeEnabled: boolean;
     caorenModifiersEnabled: boolean;
     duelMap?: string;

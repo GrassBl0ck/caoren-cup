@@ -22,6 +22,10 @@ export const createInitialSession = (): GameSession => {
         matchOptions: {
             matchMode: 'competitive',
             matchController: 'matchzy',
+            abilityModeEnabled: false,
+            abilityBanCountPerTeam: 1,
+            abilityBanSeconds: 45,
+            abilityDraftBatchSeconds: 30,
             undercoverModeEnabled: true,
             caorenModifiersEnabled: false,
             duelMap: DUEL_DEFAULT_MAP,
