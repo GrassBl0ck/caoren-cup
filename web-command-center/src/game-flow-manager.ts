@@ -527,9 +527,16 @@ const finishAbilityDraftBatch = (_reason: 'timeout' | 'manual' | 'admin' = 'time
     clearAbilityDraftTimer();
     const result = finishCurrentAbilityBatch(state, Math.random);
     if (!result.ok) {
-        scheduleAbilityDraftTimer();
+        const code = result.code || 'ABILITY_DRAFT_FAILED';
+        const message = result.message || '职业自动分配失败。';
+        state.failure = { code, message, failedAt: Date.now() };
+        session.timerEndAt = null;
+        session.timerPhase = null;
+        notifyMessage?.(`职业自动分配失败：${message}（${code}）。已停止自动重试，请管理员处理。`);
+        broadcast?.();
         return false;
     }
+    state.failure = undefined;
 
     if (state.currentBatchIndex >= state.batches.length) {
         session.abilityAssignments = [...state.assignments];
@@ -560,6 +567,7 @@ const pollAbilityFlowTimeouts = (now = Date.now()): boolean => {
     }
     if (session.phase === GamePhase.AbilityDraft
         && session.abilityDraftState
+        && !session.abilityDraftState.failure
         && now >= session.abilityDraftState.timeoutAt) {
         return finishAbilityDraftBatch('timeout');
     }
@@ -1052,7 +1060,7 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
 // ========== Phase progression ==========
 const resolveNextPhaseByMatchOptions = (from: GamePhase, requestedTo: GamePhase): GamePhase => {
     const session = getSession();
-    if (from === GamePhase.SidePick && requestedTo === GamePhase.PreGameSetup) {
+    if (from === GamePhase.SidePick) {
         if (session.matchOptions?.matchMode === 'duel' || session.matchOptions?.abilityModeEnabled !== true) {
             return GamePhase.PreGameSetup;
         }

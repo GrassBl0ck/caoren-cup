@@ -58,6 +58,11 @@ export interface AbilityDraftState {
     confirmedPlayerIds: string[];
     assignments: AbilityAssignment[];
     timeoutAt: number;
+    failure?: {
+        code: string;
+        message: string;
+        failedAt: number;
+    };
 }
 export interface AbilityBanResolution {
     teamBans: Record<RosterTeam, AbilityId[]>;
