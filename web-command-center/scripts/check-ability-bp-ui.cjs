@@ -111,6 +111,15 @@ assert.match(indexHtml, /\/js\/ability-bp-ui\.js\?v=ability-bp-task7-20260720/);
 const ensureAbilityModeConfigControlsSource = lobbyJs.match(
   /function ensureAbilityModeConfigControls\(panel\)[\s\S]*?\n        }/,
 )?.[0] || '';
+const abilityPluginSyncWarningText = '职业配置仅在网页完成，插件同步将在下一阶段实现；当前不能以异能模式正式开赛。';
+const shouldShowAbilityPluginSyncWarningSource = lobbyJs.match(
+  /function shouldShowAbilityPluginSyncWarning\(state\)[\s\S]*?\n        }/,
+)?.[0] || '';
+const preGameSetupStart = lobbyJs.indexOf("if (state.phase === 'PreGameSetup') {");
+const preGameSetupEnd = lobbyJs.indexOf("if (state.phase === 'LiveGame') {", preGameSetupStart);
+const preGameSetupSource = preGameSetupStart >= 0 && preGameSetupEnd > preGameSetupStart
+  ? lobbyJs.slice(preGameSetupStart, preGameSetupEnd)
+  : '';
 const abilitySettingsBootContractFailures = [];
 if (!/panel\.children/.test(ensureAbilityModeConfigControlsSource)) {
   abilitySettingsBootContractFailures.push('异能设置面板只能从 panel.children 查找直接子级插入目标');
@@ -118,14 +127,49 @@ if (!/panel\.children/.test(ensureAbilityModeConfigControlsSource)) {
 if (/panel\.querySelector\(['"]\.match-options-actions['"]\)/.test(ensureAbilityModeConfigControlsSource)) {
   abilitySettingsBootContractFailures.push('异能设置面板不得把后代 querySelector 结果传给 panel.insertBefore');
 }
-if (!/\/js\/lobby-app\.js\?v=ability-bp-task9-20260720/.test(indexHtml)) {
-  abilitySettingsBootContractFailures.push('lobby-app.js 必须使用 Task 9 cachebuster');
+if (!shouldShowAbilityPluginSyncWarningSource) {
+  abilitySettingsBootContractFailures.push('lobby app 必须提供赛前异能插件同步警告的条件判断');
+}
+if (!preGameSetupSource.includes('shouldShowAbilityPluginSyncWarning(state)')) {
+  abilitySettingsBootContractFailures.push('PreGameSetup 必须按完整异能分配条件渲染插件同步警告');
+}
+if (!preGameSetupSource.includes(abilityPluginSyncWarningText)) {
+  abilitySettingsBootContractFailures.push('PreGameSetup 必须渲染固定的异能插件同步警告文案');
+}
+if (!/\/js\/lobby-app\.js\?v=ability-bp-task9-final-20260720/.test(indexHtml)) {
+  abilitySettingsBootContractFailures.push('lobby-app.js 必须使用 Task 9 final cachebuster');
 }
 assert.deepEqual(
   abilitySettingsBootContractFailures,
   [],
   `ability settings boot contracts failed:\n${abilitySettingsBootContractFailures.join('\n')}`,
 );
+
+const warningPredicateSandbox = {};
+vm.runInNewContext(
+  `${shouldShowAbilityPluginSyncWarningSource}\nthis.shouldShowAbilityPluginSyncWarning = shouldShowAbilityPluginSyncWarning;`,
+  warningPredicateSandbox,
+);
+const shouldShowAbilityPluginSyncWarning = warningPredicateSandbox.shouldShowAbilityPluginSyncWarning;
+const completedAbilityState = {
+  phase: 'PreGameSetup',
+  matchOptions: { matchMode: 'competitive', abilityModeEnabled: true },
+  players: {
+    admin: { playerId: 'admin', role: 'Admin' },
+    spectator: { playerId: 'spectator', role: 'Spectator' },
+    a1: { playerId: 'a1', role: 'Player', rosterTeam: 'A' },
+    b1: { playerId: 'b1', role: 'Player', rosterTeam: 'B' },
+  },
+  abilityAssignments: [
+    { playerId: 'a1', team: 'A', abilityId: 'medic' },
+    { playerId: 'b1', team: 'B', abilityId: 'witch' },
+  ],
+};
+assert.equal(shouldShowAbilityPluginSyncWarning(completedAbilityState), true, 'completed ability BP must show the PreGameSetup warning');
+assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, abilityAssignments: completedAbilityState.abilityAssignments.slice(0, 1) }), false, 'incomplete ability assignments must not show the warning');
+assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, matchOptions: { ...completedAbilityState.matchOptions, abilityModeEnabled: false } }), false, 'disabled ability mode must not show the warning');
+assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, matchOptions: { ...completedAbilityState.matchOptions, matchMode: 'duel' } }), false, 'duel mode must not show the warning');
+assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, phase: 'AbilityDraft' }), false, 'the warning belongs only to PreGameSetup');
 assert.ok(indexHtml.indexOf('/js/ability-bp-ui.js') < indexHtml.indexOf('/js/lobby-app.js'), 'ability BP helper must load before lobby app');
 for (const [fn, eventName] of [
   ['toggleAbilityBanChoice', 'ABILITY_BAN_UPDATE'],

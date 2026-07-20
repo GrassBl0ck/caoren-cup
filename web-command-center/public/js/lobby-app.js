@@ -463,6 +463,17 @@ const ws = io();
             return Math.max(0, Math.floor((normalAbilityCount - teamSizeA) / 2));
         }
 
+        function shouldShowAbilityPluginSyncWarning(state) {
+            const options = state?.matchOptions || {};
+            if (state?.phase !== 'PreGameSetup' || options.matchMode === 'duel' || options.abilityModeEnabled !== true) return false;
+            const matchPlayerIds = Object.values(state?.players || {})
+                .filter(player => player.role !== 'Admin' && player.role !== 'Spectator' && (player.rosterTeam === 'A' || player.rosterTeam === 'B'))
+                .map(player => player.playerId);
+            if (matchPlayerIds.length === 0) return false;
+            const assignedPlayerIds = new Set((Array.isArray(state?.abilityAssignments) ? state.abilityAssignments : []).map(assignment => assignment?.playerId));
+            return matchPlayerIds.every(playerId => assignedPlayerIds.has(playerId));
+        }
+
         function ensureAbilityModeConfigControls(panel) {
             let abilityPanel = document.getElementById('ability-mode-config-panel');
             if (abilityPanel) return abilityPanel;
@@ -1378,6 +1389,10 @@ if (window._caorenModifiersEnabled !== true) {
             if (state.phase === 'PreGameSetup') {
                 const role = currentPlayer?.gameRole;
                 let html = renderDuelControlPanel(state, currentPlayer);
+
+                if (shouldShowAbilityPluginSyncWarning(state)) {
+                    html += '<div class="match-options-warning" style="margin-bottom:14px;">职业配置仅在网页完成，插件同步将在下一阶段实现；当前不能以异能模式正式开赛。</div>';
+                }
 
                 if (!undercoverEnabled) {
                     if (isAdmin) {
