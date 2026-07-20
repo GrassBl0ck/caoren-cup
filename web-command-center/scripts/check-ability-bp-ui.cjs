@@ -111,7 +111,6 @@ assert.match(indexHtml, /\/js\/ability-bp-ui\.js\?v=ability-bp-task7-20260720/);
 const ensureAbilityModeConfigControlsSource = lobbyJs.match(
   /function ensureAbilityModeConfigControls\(panel\)[\s\S]*?\n        }/,
 )?.[0] || '';
-const abilityPluginSyncWarningText = '职业配置仅在网页完成，插件同步将在下一阶段实现；当前不能以异能模式正式开赛。';
 const shouldShowAbilityPluginSyncWarningSource = lobbyJs.match(
   /function shouldShowAbilityPluginSyncWarning\(state\)[\s\S]*?\n        }/,
 )?.[0] || '';
@@ -123,6 +122,7 @@ const preGameSetupEnd = lobbyJs.indexOf("if (state.phase === 'LiveGame') {", pre
 const preGameSetupSource = preGameSetupStart >= 0 && preGameSetupEnd > preGameSetupStart
   ? lobbyJs.slice(preGameSetupStart, preGameSetupEnd)
   : '';
+const playerTableStart = lobbyJs.indexOf("const useMatchZyStartStatus = isCompetitiveMatchzyState(state);");
 const warningPredicateSandbox = {};
 vm.runInNewContext(
   `${shouldShowAbilityPluginSyncWarningSource}\nthis.shouldShowAbilityPluginSyncWarning = shouldShowAbilityPluginSyncWarning;`,
@@ -180,11 +180,31 @@ if (!preGameSetupSource.includes('resolveAbilityPreGameRenderDecision(state)')) 
 if (!preGameSetupSource.includes('abilityPreGameDecision.showMatchStartGuidance')) {
   abilitySettingsBootContractFailures.push('PreGameSetup 的正式开赛指引必须由赛前异能渲染决策控制');
 }
-if (!preGameSetupSource.includes(abilityPluginSyncWarningText)) {
-  abilitySettingsBootContractFailures.push('PreGameSetup 必须渲染固定的异能插件同步警告文案');
+if (!preGameSetupSource.includes('abilityPreGameDecision.formalMatchStartMessage')) {
+  abilitySettingsBootContractFailures.push('PreGameSetup 必须渲染服务端公开的异能插件同步警告文案');
 }
-if (!/\/js\/lobby-app\.js\?v=ability-bp-task9-start-guard-20260720/.test(indexHtml)) {
-  abilitySettingsBootContractFailures.push('lobby-app.js 必须使用 Task 9 start guard cachebuster');
+if (!lobbyJs.includes('abilityPhaseOnePolicy')) {
+  abilitySettingsBootContractFailures.push('大厅必须以服务端公开的异能阶段 1 策略作为门禁事实来源');
+}
+if (!/formalMatchStartBlocked/.test(resolveAbilityPreGameRenderDecisionSource)) {
+  abilitySettingsBootContractFailures.push('赛前渲染决策必须优先采用服务端的正式开赛门禁');
+}
+if (!/renderAbilityPluginSyncTag\(p\)/.test(lobbyJs.slice(playerTableStart, preGameSetupStart))) {
+  abilitySettingsBootContractFailures.push('受门禁保护时玩家表必须显示插件未同步状态，而不是等待 .start');
+}
+if (!/formalMatchStartBlocked/.test(lobbyJs.slice(playerTableStart, preGameSetupStart))) {
+  abilitySettingsBootContractFailures.push('受门禁保护时玩家表必须使用正式开赛门禁决定状态');
+}
+const advancePhaseStart = lobbyJs.indexOf('function advancePhase()');
+const advancePhaseEnd = lobbyJs.indexOf('function terminateGame()', advancePhaseStart);
+const advancePhaseSource = advancePhaseStart >= 0 && advancePhaseEnd > advancePhaseStart
+  ? lobbyJs.slice(advancePhaseStart, advancePhaseEnd)
+  : '';
+if (!/formalMatchStartBlocked/.test(advancePhaseSource)) {
+  abilitySettingsBootContractFailures.push('前端必须阻止阶段 1 门禁状态下发起 ADVANCE_PHASE');
+}
+if (!/\/js\/lobby-app\.js\?v=ability-bp-phase1-final-gate-20260721/.test(indexHtml)) {
+  abilitySettingsBootContractFailures.push('lobby-app.js 必须使用阶段 1 最终门禁 cachebuster');
 }
 assert.deepEqual(
   abilitySettingsBootContractFailures,

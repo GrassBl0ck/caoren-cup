@@ -269,6 +269,11 @@ const ws = io();
             return '<span class="tag tag-orange">等待 .start</span>';
         }
 
+        function renderAbilityPluginSyncTag(player) {
+            if (player?.role === 'Admin' || player?.role === 'Spectator') return '<span class="tag tag-gray">-</span>';
+            return '<span class="tag tag-orange">插件未同步</span>';
+        }
+
         function renderUndercoverAckControl(player) {
             if (!player || player.role === 'Admin' || player.role === 'Spectator' || player.gameRole !== 'Undercover') return '';
             const stage = getUndercoverAckStage(player);
@@ -479,10 +484,16 @@ const ws = io();
         }
 
         function resolveAbilityPreGameRenderDecision(state) {
-            const showPluginSyncWarning = shouldShowAbilityPluginSyncWarning(state);
+            const formalMatchStartBlocked = state?.abilityPhaseOnePolicy?.formalMatchStartBlocked;
+            const showPluginSyncWarning = typeof formalMatchStartBlocked === 'boolean'
+                ? formalMatchStartBlocked
+                : shouldShowAbilityPluginSyncWarning(state);
             return {
                 showPluginSyncWarning,
                 showMatchStartGuidance: !showPluginSyncWarning,
+                formalMatchStartBlocked: showPluginSyncWarning,
+                formalMatchStartMessage: state?.abilityPhaseOnePolicy?.formalMatchStartMessage
+                    || '职业配置仅在网页完成，游戏插件尚未同步，阶段 1 不能正式开赛。请先终止本局，或返回大厅关闭异能模式后重新开始。',
             };
         }
 
@@ -1066,6 +1077,7 @@ if (window._caorenModifiersEnabled !== true) {
                 .sort((a, b) => (teamSortWeight(a) - teamSortWeight(b)) || String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
             let playerTable = renderPublicDuelWorkshopNotice(state, currentPlayer);
             playerTable += '<h3 style="margin-top:0;">当前房间玩家</h3>';
+            const formalMatchStartBlocked = state?.abilityPhaseOnePolicy?.formalMatchStartBlocked === true;
             const useMatchZyStartStatus = isCompetitiveMatchzyState(state);
             const readyHeader = useMatchZyStartStatus ? '开赛状态' : '准备';
             playerTable += '<div class="cc-table-wrap"><table class="cc-table"><thead><tr>' +
@@ -1079,10 +1091,13 @@ if (window._caorenModifiersEnabled !== true) {
                 const expectedSide = renderExpectedSideTag(p, state);
                 const bind = p.steamIdBound ? '<span class="tag tag-green">已绑定</span>' : '<span class="tag tag-red">未绑定</span>';
                 const roleText = p.role === 'Admin' ? '<span class="tag tag-purple">管理员</span>' : (p.gameRole ? `<span class="tag tag-gray">${p.gameRole}</span>` : '<span class="tag tag-gray">未分配</span>');
-                const ready = useMatchZyStartStatus ? renderMatchStartTag(p, state) : renderReadyTag(p);
+                const ready = formalMatchStartBlocked
+                    ? renderAbilityPluginSyncTag(p)
+                    : (useMatchZyStartStatus ? renderMatchStartTag(p, state) : renderReadyTag(p));
                 const canDuelAssign = isDuel && (isAdmin || currentPlayer?.playerId === state.duelTempAdminId) && (!state.duelTempAdminId || currentPlayer?.playerId === state.duelTempAdminId) && p.role !== 'Admin' && p.role !== 'Spectator' && ['PreGameSetup', 'LiveGame'].includes(state.phase) && (state.phase !== 'LiveGame' || live?.duelWaitingForPlayers);
                 const duelAssignOps = canDuelAssign ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;"><button onclick="adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;padding:4px 9px;">分到A</button><button onclick="adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;padding:4px 9px;">分到B</button>${p.rosterTeam ? `<button onclick="adminUnassignTeam('${p.playerId}')" style="background:#64748b;color:#fff;padding:4px 9px;">撤销分队</button>` : ''}</div>` : '';
-                const kickOp = isAdmin && p.role !== 'Admin' ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
+                const isProtectedAbilityRosterPlayer = p.role !== 'Admin' && p.role !== 'Spectator' && (p.rosterTeam === 'A' || p.rosterTeam === 'B');
+                const kickOp = isAdmin && p.role !== 'Admin' && !(state?.abilityPhaseOnePolicy?.rosterMutationBlocked === true && isProtectedAbilityRosterPlayer) ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
                 const adminOps = (isAdmin || duelAssignOps) ? `<td>${duelAssignOps}${kickOp || '-'}</td>` : '';
                 const sideCells = isDuel ? '' : `<td>${side}</td><td>${expectedSide}</td>`;
                 playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${p.name}</b></td><td>${roster}</td>${sideCells}<td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
@@ -1092,7 +1107,15 @@ if (window._caorenModifiersEnabled !== true) {
 
             if (isAdmin) {
                 const btn = document.getElementById('advance-phase-btn');
-                if (btn) btn.textContent = '推进阶段 (当前: ' + state.phase + ')';
+                if (btn) {
+                    btn.textContent = formalMatchStartBlocked
+                        ? '异能插件未同步，不能推进开赛'
+                        : '推进阶段 (当前: ' + state.phase + ')';
+                    btn.disabled = formalMatchStartBlocked;
+                    btn.title = formalMatchStartBlocked
+                        ? (state.abilityPhaseOnePolicy?.formalMatchStartMessage || '异能插件尚未同步，当前不能正式开赛。')
+                        : '';
+                }
                 const templateBtn = document.getElementById('template-config-btn');
                 if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
                 const taskTemplateBtn = document.getElementById('task-template-config-btn');
@@ -1404,7 +1427,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const abilityPreGameDecision = resolveAbilityPreGameRenderDecision(state);
 
                 if (abilityPreGameDecision.showPluginSyncWarning) {
-                    html += '<div class="match-options-warning" style="margin-bottom:14px;">职业配置仅在网页完成，插件同步将在下一阶段实现；当前不能以异能模式正式开赛。</div>';
+                    html += '<div class="match-options-warning" style="margin-bottom:14px;">' + htmlEscape(abilityPreGameDecision.formalMatchStartMessage) + '</div>';
                 }
 
                 if (!undercoverEnabled) {
@@ -2733,6 +2756,11 @@ if (window._caorenModifiersEnabled !== true) {
         }
         function resume() { login(); }
         function advancePhase() {
+            const phaseOnePolicy = window._currentGameState?.abilityPhaseOnePolicy;
+            if (phaseOnePolicy?.formalMatchStartBlocked === true) {
+                alert(phaseOnePolicy.formalMatchStartMessage || '异能插件尚未同步，当前不能正式开赛。');
+                return;
+            }
             const isDuelMode = window._currentGameState?.matchOptions?.matchMode === 'duel';
             if ((window._currentGamePhase === 'Lobby' || window._currentGamePhase === 'PreGameSetup') && isDuelMode) {
                 const select = document.getElementById('duel-live-map') || document.getElementById('match-option-duel-map');

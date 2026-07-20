@@ -145,7 +145,7 @@ test('Snapshot sidePickTeam 仅接受 A/B，v1 安全迁移不恢复旧选边权
     const { serialize, deserialize } = requirePersistenceApi();
     const session = createInitialSession();
     const invalidV2 = serialize(session, 100);
-    invalidV2.session.sidePickTeam = 'C';
+    (invalidV2.session as { sidePickTeam: unknown }).sidePickTeam = 'C';
 
     assert.equal(deserialize(invalidV2)?.sidePickTeam, null);
     assert.equal(deserialize({

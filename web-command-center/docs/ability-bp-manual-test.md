@@ -1,5 +1,13 @@
 # 异能 BP 阶段 1 验证记录
 
+## 2026-07-21 阶段 1 最终门禁补充
+
+- 用户已明确采用策略 A：处于 `AbilityBan`、`AbilityDraft`，或异能已开启且 BP 完成的 `PreGameSetup` 时，管理员不能踢出参赛者，也不能通过禁用或移除固定身份使参赛者离开阵容；应先终止本局，或返回大厅后再调整阵容。
+- 阶段 1 的异能职业配置尚未同步至游戏插件。上述完整 BP 的 `PreGameSetup` 不允许管理员推进开赛，也不允许 MatchZy `round_start` 自动进入正式比赛；网页不再显示 `.start` 等待提示。
+- 网页端以服务端公开的 `abilityPhaseOnePolicy` 为门禁事实来源；本次脚本缓存版本为 `ability-bp-phase1-final-gate-20260721`。
+- 本次最终门禁补充仅完成自动化回归，未重新进行浏览器人工复测。下文已有浏览器记录只对应此前的 BP 主流程和赛前提示，不应当作本次管理员踢人、固定成员禁用/移除、网页推进或 MatchZy 自动开赛门禁的浏览器验证。
+- 最终门禁补充的自动化结果：`npm run test:ability-mode` 83 项通过，`npm run test:lobby-identity` 64 项通过，`npm run test:match-command-policy`、`npm run typecheck`、两个前端脚本语法检查和 `git diff --check` 均通过。
+
 ## 当前状态
 
 - 自动化验证：已在赛前警告修复后重新完成。
