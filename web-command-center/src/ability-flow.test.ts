@@ -1,15 +1,98 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import { getAbilityCatalog } from './ability-catalog';
 import { confirmAbilityBan, confirmAbilityChoice, updateAbilityChoice } from './ability-draft-service';
 import * as flow from './game-flow-manager';
 import { clearAllFlowTimers, getAbilityDraftTimer } from './game-timers';
 import { createInitialSession, getSession, setSession } from './session-manager';
+import { registerSocketHandlers } from './socket-handlers';
 import { canTransition } from './state-machine';
-import { AbilityId, GamePhase, GameSession, RosterTeam } from './types';
+import { AbilityId, GamePhase, GameSession, RosterTeam, WsEvents } from './types';
 
 const abilityBanPhase = 'AbilityBan' as GamePhase;
 const abilityDraftPhase = 'AbilityDraft' as GamePhase;
+
+class FakeSocket {
+    readonly data: Record<string, unknown> = {};
+    readonly handshake = { address: '127.0.0.1', secure: false, headers: {} };
+    readonly emitted: Array<{ event: string; payload: unknown }> = [];
+    private readonly handlers = new Map<string, (payload?: unknown) => unknown>();
+
+    constructor(readonly id: string) {}
+
+    on(event: string, handler: (payload?: unknown) => unknown) { this.handlers.set(event, handler); }
+    emit(event: string, payload: unknown) { this.emitted.push({ event, payload }); }
+    join(_room: string) {}
+    trigger(event: string, payload?: unknown) {
+        const handler = this.handlers.get(event);
+        if (!handler) throw new Error(`missing handler: ${event}`);
+        return handler(payload);
+    }
+}
+
+class FakeIo {
+    readonly sockets = { sockets: new Map<string, FakeSocket>() };
+    private connectionHandler?: (socket: FakeSocket) => void;
+
+    on(event: string, handler: (socket: FakeSocket) => void) {
+        if (event === 'connection') this.connectionHandler = handler;
+    }
+    emit(_event: string, _payload: unknown) {}
+    connect(socket: FakeSocket) {
+        this.sockets.sockets.set(socket.id, socket);
+        this.connectionHandler?.(socket);
+    }
+}
+
+const createAbilityConfigSocketContext = (options: {
+    phase?: GamePhase;
+    actorRole?: 'Admin' | 'Player';
+    participantCount?: number;
+} = {}) => {
+    const session = createInitialSession();
+    session.phase = options.phase ?? GamePhase.Lobby;
+    session.players.admin = {
+        playerId: 'admin',
+        name: '管理员',
+        role: 'Admin',
+        isReady: false,
+        isOnline: true,
+    };
+    session.playerOrder.push('admin');
+    const participantCount = options.participantCount ?? 5;
+    for (let index = 1; index <= participantCount; index += 1) {
+        const playerId = `p${index}`;
+        session.players[playerId] = {
+            playerId,
+            name: `玩家${index}`,
+            role: 'Player',
+            isReady: false,
+            isOnline: true,
+        };
+        session.playerOrder.push(playerId);
+    }
+    setSession(session);
+
+    let broadcastCount = 0;
+    const io = new FakeIo();
+    registerSocketHandlers(io as never, {
+        broadcastState() { broadcastCount += 1; },
+        notifyMessage() {},
+    });
+    const actorId = options.actorRole === 'Player' ? 'p1' : 'admin';
+    const socket = new FakeSocket(`${actorId}-socket`);
+    io.connect(socket);
+    socket.data.playerId = actorId;
+    return { session, socket, actorId, getBroadcastCount: () => broadcastCount };
+};
+
+const validAbilityConfigPayload = {
+    abilityModeEnabled: true,
+    abilityBanCountPerTeam: 4,
+    abilityBanSeconds: 45,
+    abilityDraftBatchSeconds: 30,
+};
 
 const createSidePickSession = (options: {
     abilityModeEnabled: boolean;
@@ -75,6 +158,178 @@ test('单挑模式固定跳过异能 BP', () => {
     createSidePickSession({ abilityModeEnabled: true, matchMode: 'duel' });
 
     assert.equal(advancePastSidePick().phase, GamePhase.PreGameSetup);
+});
+
+test('只有管理员可通过专用动作在 Lobby 更新四项异能配置，额外键不能覆盖比赛设置', async () => {
+    const { session, socket, actorId, getBroadcastCount } = createAbilityConfigSocketContext();
+    session.matchOptions.undercoverModeEnabled = true;
+    session.matchOptions.matchMode = 'competitive';
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: actorId,
+        action: 'SET_ABILITY_MODE_CONFIG',
+        payload: {
+            ...validAbilityConfigPayload,
+            undercoverModeEnabled: false,
+            matchMode: 'duel',
+        },
+    });
+
+    assert.equal(session.matchOptions.abilityModeEnabled, true);
+    assert.equal(session.matchOptions.abilityBanCountPerTeam, 4);
+    assert.equal(session.matchOptions.abilityBanSeconds, 45);
+    assert.equal(session.matchOptions.abilityDraftBatchSeconds, 30);
+    assert.equal(session.matchOptions.undercoverModeEnabled, true);
+    assert.equal(session.matchOptions.matchMode, 'competitive');
+    assert.equal(getBroadcastCount(), 1);
+});
+
+test('通用本局设置入口不能绕过专用动作覆盖异能配置', () => {
+    const session = createInitialSession();
+    session.matchOptions.abilityModeEnabled = true;
+    session.matchOptions.abilityBanCountPerTeam = 3;
+    session.matchOptions.abilityBanSeconds = 60;
+    session.matchOptions.abilityDraftBatchSeconds = 90;
+    setSession(session);
+
+    (flow as any).applyMatchOptions({
+        matchMode: 'competitive',
+        undercoverModeEnabled: false,
+        abilityModeEnabled: false,
+        abilityBanCountPerTeam: 0,
+        abilityBanSeconds: 1,
+        abilityDraftBatchSeconds: 1,
+    });
+
+    assert.equal(session.matchOptions.abilityModeEnabled, true);
+    assert.equal(session.matchOptions.abilityBanCountPerTeam, 3);
+    assert.equal(session.matchOptions.abilityBanSeconds, 60);
+    assert.equal(session.matchOptions.abilityDraftBatchSeconds, 90);
+    assert.equal(session.matchOptions.undercoverModeEnabled, false);
+});
+
+test('普通玩家不能修改异能配置', async () => {
+    const { session, socket, actorId } = createAbilityConfigSocketContext({ actorRole: 'Player' });
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: actorId,
+        action: 'SET_ABILITY_MODE_CONFIG',
+        payload: validAbilityConfigPayload,
+    });
+
+    assert.equal(session.matchOptions.abilityModeEnabled, false);
+    assert.match(String((socket.emitted.at(-1)?.payload as any)?.message || ''), /只有管理员/);
+});
+
+test('离开 Lobby 后异能配置锁定，包括已进入 AbilityBan 的对局', async () => {
+    for (const phase of [GamePhase.CaptainSelection, abilityBanPhase]) {
+        const { session, socket, actorId } = createAbilityConfigSocketContext({ phase });
+
+        await socket.trigger(WsEvents.ADMIN_ACTION, {
+            playerId: actorId,
+            action: 'SET_ABILITY_MODE_CONFIG',
+            payload: validAbilityConfigPayload,
+        });
+
+        assert.equal(session.matchOptions.abilityModeEnabled, false);
+        assert.match(String((socket.emitted.at(-1)?.payload as any)?.message || ''), /只能在大厅阶段/);
+    }
+});
+
+test('Ban 数必须是安全整数且不超过按当前参赛人数计算的保守上限', async () => {
+    for (const invalidBanCount of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, 5]) {
+        const { session, socket, actorId } = createAbilityConfigSocketContext({ participantCount: 5 });
+
+        await socket.trigger(WsEvents.ADMIN_ACTION, {
+            playerId: actorId,
+            action: 'SET_ABILITY_MODE_CONFIG',
+            payload: { ...validAbilityConfigPayload, abilityBanCountPerTeam: invalidBanCount },
+        });
+
+        assert.equal(session.matchOptions.abilityModeEnabled, false, `invalid Ban count: ${invalidBanCount}`);
+        assert.match(String((socket.emitted.at(-1)?.payload as any)?.message || ''), /当前最多可 Ban 4 个|安全整数/);
+    }
+});
+
+test('Ban 秒数和选角批次秒数必须是正的安全整数，不虚构最大秒数', async () => {
+    for (const [field, invalidValue] of [
+        ['abilityBanSeconds', 0],
+        ['abilityBanSeconds', 1.5],
+        ['abilityBanSeconds', Number.MAX_SAFE_INTEGER + 1],
+        ['abilityDraftBatchSeconds', 0],
+        ['abilityDraftBatchSeconds', 1.5],
+        ['abilityDraftBatchSeconds', Number.MAX_SAFE_INTEGER + 1],
+    ] as const) {
+        const { session, socket, actorId } = createAbilityConfigSocketContext();
+
+        await socket.trigger(WsEvents.ADMIN_ACTION, {
+            playerId: actorId,
+            action: 'SET_ABILITY_MODE_CONFIG',
+            payload: { ...validAbilityConfigPayload, [field]: invalidValue },
+        });
+
+        assert.equal(session.matchOptions.abilityModeEnabled, false, `${field}: ${invalidValue}`);
+        assert.match(String((socket.emitted.at(-1)?.payload as any)?.message || ''), /正整数/);
+    }
+
+    const { session, socket, actorId } = createAbilityConfigSocketContext();
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: actorId,
+        action: 'SET_ABILITY_MODE_CONFIG',
+        payload: {
+            ...validAbilityConfigPayload,
+            abilityBanSeconds: Number.MAX_SAFE_INTEGER,
+            abilityDraftBatchSeconds: Number.MAX_SAFE_INTEGER,
+        },
+    });
+    assert.equal(session.matchOptions.abilityBanSeconds, Number.MAX_SAFE_INTEGER);
+    assert.equal(session.matchOptions.abilityDraftBatchSeconds, Number.MAX_SAFE_INTEGER);
+});
+
+test('SidePick 进入 BP 前按实际 A/B 有序名单重算上限，超限时保持阶段并提示管理员', () => {
+    const notifications: string[] = [];
+    const session = createSidePickSession({ abilityModeEnabled: true, abilityBanCountPerTeam: 4 });
+    session.players.a4 = {
+        playerId: 'a4',
+        name: 'a4',
+        role: 'Player',
+        rosterTeam: 'B',
+        isReady: false,
+        isOnline: true,
+    };
+    session.playerOrder.push('a4');
+    for (const playerId of ['a1', 'a2', 'a3', 'b1', 'b2']) session.players[playerId].rosterTeam = 'A';
+    session.teams.A.players = ['a1', 'a2', 'a3', 'b1', 'b2'];
+    session.teams.B.players = ['a4'];
+    session.captains = { A: 'a1', B: 'a4' };
+    flow.injectNotify((message) => notifications.push(message));
+
+    const result = advancePastSidePick();
+
+    assert.equal(result.phase, GamePhase.SidePick);
+    assert.equal(result.abilityBanState, undefined);
+    assert.equal(result.abilityDraftState, undefined);
+    assert.match(notifications.at(-1) ?? '', /当前最多可 Ban 3 个/);
+});
+
+test('Lobby 管理区显示异能配置与最新安全上限，保存按钮使用专用 ADMIN_ACTION', () => {
+    const lobbySource = readFileSync('public/js/lobby-app.js', 'utf8');
+
+    for (const token of [
+        'ability-mode-config-panel',
+        'match-option-ability-enabled',
+        'match-option-ability-ban-count',
+        'match-option-ability-ban-seconds',
+        'match-option-ability-draft-seconds',
+        'ability-ban-safe-limit',
+    ]) {
+        assert.ok(lobbySource.includes(token), `Lobby 缺少异能配置 UI 标记：${token}`);
+    }
+    assert.match(
+        lobbySource,
+        /function saveAbilityModeConfig\b[\s\S]{0,1800}ws\.emit\('ADMIN_ACTION',[\s\S]{0,300}action:\s*'SET_ABILITY_MODE_CONFIG'/,
+    );
+    assert.match(lobbySource, /function calculateLobbyAbilityBanSafeLimit\b/);
 });
 
 test('异能模式 Ban=0 时从 SidePick 直接进入 AbilityDraft', () => {

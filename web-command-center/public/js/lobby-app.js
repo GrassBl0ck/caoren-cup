@@ -448,6 +448,86 @@ const ws = io();
             }, delayMs);
         }
 
+        function calculateLobbyAbilityBanSafeLimit(state) {
+            const players = Object.values(state?.players || window._currentGameState?.players || {}).filter(player => player.role !== 'Admin' && player.role !== 'Spectator');
+            const catalog = Array.isArray(state?.abilityCatalog)
+                ? state.abilityCatalog
+                : (Array.isArray(window._currentGameState?.abilityCatalog) ? window._currentGameState.abilityCatalog : []);
+            const abilityCount = catalog.length;
+            if (abilityCount === 0) return 0;
+            const normalAbilityCount = catalog.filter(ability => ability.globalUnique !== true).length;
+            const teamSizeA = Math.ceil(players.length / 2);
+            const teamSizeB = Math.floor(players.length / 2);
+            if (teamSizeA === 0) return abilityCount;
+            if (teamSizeB === 0) return Math.max(0, abilityCount - teamSizeA);
+            return Math.max(0, Math.floor((normalAbilityCount - teamSizeA) / 2));
+        }
+
+        function ensureAbilityModeConfigControls(panel) {
+            let abilityPanel = document.getElementById('ability-mode-config-panel');
+            if (abilityPanel) return abilityPanel;
+            abilityPanel = document.createElement('div');
+            abilityPanel.id = 'ability-mode-config-panel';
+            abilityPanel.style.cssText = 'margin-top:14px;padding-top:14px;border-top:1px solid #dbe3ec;';
+            abilityPanel.innerHTML = `
+                <h4 style="margin:0 0 8px;">异能 BP 设置</h4>
+                <div id="ability-ban-safe-limit" class="match-options-status">正在计算当前安全上限……</div>
+                <label class="match-options-row">
+                    <input type="checkbox" id="match-option-ability-enabled">
+                    <div><div class="match-options-title">启用异能模式</div><div class="match-options-desc">关闭时按普通比赛流程跳过异能 Ban 与选角；单挑模式固定跳过。</div></div>
+                </label>
+                <div class="match-options-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;">
+                    <label>每队 Ban 数<input id="match-option-ability-ban-count" type="number" min="0" step="1"></label>
+                    <label>Ban 倒计时（秒）<input id="match-option-ability-ban-seconds" type="number" min="1" step="1"></label>
+                    <label>每批选角倒计时（秒）<input id="match-option-ability-draft-seconds" type="number" min="1" step="1"></label>
+                </div>
+                <div class="match-options-actions"><button type="button" class="primary-btn" onclick="saveAbilityModeConfig()">保存异能设置</button></div>
+                <div id="ability-mode-config-lock-note" class="match-options-warning"></div>`;
+            const actions = panel.querySelector('.match-options-actions');
+            panel.insertBefore(abilityPanel, actions || null);
+            return abilityPanel;
+        }
+
+        function syncAbilityModeConfigPanel(state, editable, duelEnabled) {
+            const parent = document.getElementById('match-options-panel');
+            if (!parent) return;
+            ensureAbilityModeConfigControls(parent);
+            const options = state?.matchOptions || {};
+            const safeLimit = calculateLobbyAbilityBanSafeLimit(state);
+            const participantCount = Object.values(state?.players || window._currentGameState?.players || {}).filter(player => player.role !== 'Admin' && player.role !== 'Spectator').length;
+            const enabledInput = document.getElementById('match-option-ability-enabled');
+            const banCountInput = document.getElementById('match-option-ability-ban-count');
+            const banSecondsInput = document.getElementById('match-option-ability-ban-seconds');
+            const draftSecondsInput = document.getElementById('match-option-ability-draft-seconds');
+            const safeLimitText = document.getElementById('ability-ban-safe-limit');
+            const lockNote = document.getElementById('ability-mode-config-lock-note');
+            const canEdit = editable && !duelEnabled;
+
+            if (enabledInput) {
+                enabledInput.checked = !duelEnabled && options.abilityModeEnabled === true;
+                enabledInput.disabled = !canEdit;
+            }
+            if (banCountInput) {
+                banCountInput.value = Number.isSafeInteger(options.abilityBanCountPerTeam) ? options.abilityBanCountPerTeam : 1;
+                banCountInput.max = String(safeLimit);
+                banCountInput.disabled = !canEdit;
+            }
+            if (banSecondsInput) {
+                banSecondsInput.value = Number.isSafeInteger(options.abilityBanSeconds) ? options.abilityBanSeconds : 45;
+                banSecondsInput.disabled = !canEdit;
+            }
+            if (draftSecondsInput) {
+                draftSecondsInput.value = Number.isSafeInteger(options.abilityDraftBatchSeconds) ? options.abilityDraftBatchSeconds : 30;
+                draftSecondsInput.disabled = !canEdit;
+            }
+            if (safeLimitText) safeLimitText.textContent = `当前 ${participantCount} 名参赛玩家，按最不利平衡分队计算：每队当前最多可 Ban ${safeLimit} 个。人数变化后会自动更新。`;
+            if (lockNote) {
+                lockNote.textContent = duelEnabled
+                    ? '当前是单挑模式：本局固定跳过异能 BP。'
+                    : (editable ? '仅管理员可在大厅修改；进入后续阶段即锁定。' : '本局异能规则已锁定。如需修改，请回到大厅后重新设置。');
+            }
+        }
+
 
 
 
@@ -580,6 +660,7 @@ const ws = io();
                 };
             }
             if (saveBtn) saveBtn.disabled = !editable;
+            syncAbilityModeConfigPanel(state, editable, duelEnabled);
             syncCaorenModPanel(state, isAdmin, caorenEnabled);
         }
 
@@ -2641,6 +2722,31 @@ if (window._caorenModifiersEnabled !== true) {
             if (text !== 'TERMINATE') return;
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
         }
+        function saveAbilityModeConfig() {
+            const state = window._currentGameState;
+            if (window._currentPlayer?.role !== 'Admin') return showLobbyNotice('只有管理员可以修改异能设置。', 'error');
+            if ((window._currentGamePhase || state?.phase) !== 'Lobby') return showLobbyNotice('只能在大厅阶段修改异能设置。', 'error');
+            if (state?.matchOptions?.matchMode === 'duel') return showLobbyNotice('单挑模式固定跳过异能 BP。', 'error');
+            const abilityBanCountPerTeam = Number(document.getElementById('match-option-ability-ban-count')?.value);
+            const abilityBanSeconds = Number(document.getElementById('match-option-ability-ban-seconds')?.value);
+            const abilityDraftBatchSeconds = Number(document.getElementById('match-option-ability-draft-seconds')?.value);
+            const safeLimit = calculateLobbyAbilityBanSafeLimit(state);
+            if (!Number.isSafeInteger(abilityBanCountPerTeam) || abilityBanCountPerTeam < 0 || abilityBanCountPerTeam > safeLimit) {
+                return showLobbyNotice(`Ban 数必须是 0 到 ${safeLimit} 的整数；当前最多可 Ban ${safeLimit} 个。`, 'error');
+            }
+            if (!Number.isSafeInteger(abilityBanSeconds) || abilityBanSeconds <= 0) return showLobbyNotice('Ban 倒计时必须是正整数。', 'error');
+            if (!Number.isSafeInteger(abilityDraftBatchSeconds) || abilityDraftBatchSeconds <= 0) return showLobbyNotice('选角批次倒计时必须是正整数。', 'error');
+            ws.emit('ADMIN_ACTION', {
+                playerId: myPlayerId,
+                action: 'SET_ABILITY_MODE_CONFIG',
+                payload: {
+                    abilityModeEnabled: document.getElementById('match-option-ability-enabled')?.checked === true,
+                    abilityBanCountPerTeam,
+                    abilityBanSeconds,
+                    abilityDraftBatchSeconds
+                }
+            });
+        }
         function duelRequestTempAdmin() { ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'REQUEST_TEMP_ADMIN' }); }
         function duelVoteTempAdmin(agree) { ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'VOTE_TEMP_ADMIN', payload: { agree } }); }
         function duelApproveTempAdmin(ok) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: ok ? 'DUEL_APPROVE_TEMP_ADMIN' : 'DUEL_REJECT_TEMP_ADMIN' }); }
@@ -2682,6 +2788,7 @@ if (window._caorenModifiersEnabled !== true) {
             resume,
             advancePhase,
             terminateGame,
+            saveAbilityModeConfig,
             duelRequestTempAdmin,
             duelVoteTempAdmin,
             duelApproveTempAdmin,

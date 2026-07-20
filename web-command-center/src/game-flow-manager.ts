@@ -53,6 +53,7 @@ import {
 } from './duel-config';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import {
+    calculateSafeBanLimit,
     createAbilityBanState,
     createAbilityDraftState,
     finishCurrentAbilityBatch,
@@ -420,6 +421,19 @@ const getOrderedAbilityPlayers = (team: RosterTeam): string[] => {
     session.teams[team].players.forEach(addOnce);
     return ordered;
 };
+
+const getLobbyAbilityBanSafeLimit = (): number => {
+    const totalPlayers = getGamePlayers(getSession()).length;
+    return calculateSafeBanLimit({
+        teamSizeA: Math.ceil(totalPlayers / 2),
+        teamSizeB: Math.floor(totalPlayers / 2),
+    });
+};
+
+const getActualAbilityBanSafeLimit = (): number => calculateSafeBanLimit({
+    teamSizeA: getOrderedAbilityPlayers('A').length,
+    teamSizeB: getOrderedAbilityPlayers('B').length,
+});
 
 const clearAbilityFlowState = () => {
     const session = getSession();
@@ -1082,6 +1096,17 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
         if (!setupDuelFromLobby()) return;
         nextTo = GamePhase.PreGameSetup;
     }
+    if (from === GamePhase.SidePick
+        && session.matchOptions?.matchMode !== 'duel'
+        && session.matchOptions?.abilityModeEnabled === true) {
+        const banCount = session.matchOptions.abilityBanCountPerTeam;
+        const safeLimit = getActualAbilityBanSafeLimit();
+        if (!Number.isSafeInteger(banCount) || Number(banCount) < 0 || Number(banCount) > safeLimit) {
+            notifyMessage?.(`异能 BP 无法开始：当前最多可 Ban ${safeLimit} 个。请管理员返回大厅修改异能设置。`);
+            broadcast?.();
+            return;
+        }
+    }
     if (from === GamePhase.AbilityDraft && nextTo === GamePhase.PreGameSetup) {
         const draft = session.abilityDraftState;
         if (!draft || draft.currentBatchIndex < draft.batches.length) return;
@@ -1379,17 +1404,19 @@ const forceSkipUndercoverOnlyPhaseIfNeeded = () => {
 const applyMatchOptions = (rawOptions: unknown) => {
     const session = getSession();
     const requestedMatchMode = (rawOptions as any)?.matchMode === 'duel' ? 'duel' : 'competitive';
-    const rawBanCount = Number((rawOptions as any)?.abilityBanCountPerTeam);
+    const currentAbilityOptions = {
+        abilityModeEnabled: session.matchOptions.abilityModeEnabled === true,
+        abilityBanCountPerTeam: session.matchOptions.abilityBanCountPerTeam ?? 1,
+        abilityBanSeconds: session.matchOptions.abilityBanSeconds ?? ABILITY_BAN_DEFAULT_SECONDS,
+        abilityDraftBatchSeconds: session.matchOptions.abilityDraftBatchSeconds ?? ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
+    };
     session.matchOptions = {
         matchMode: requestedMatchMode,
         matchController: requestedMatchMode === 'duel' ? 'caoren' : 'matchzy',
-        abilityModeEnabled: requestedMatchMode !== 'duel' && (rawOptions as any)?.abilityModeEnabled === true,
-        abilityBanCountPerTeam: Number.isFinite(rawBanCount) ? Math.max(0, Math.floor(rawBanCount)) : 1,
-        abilityBanSeconds: positiveInteger((rawOptions as any)?.abilityBanSeconds, ABILITY_BAN_DEFAULT_SECONDS),
-        abilityDraftBatchSeconds: positiveInteger(
-            (rawOptions as any)?.abilityDraftBatchSeconds,
-            ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
-        ),
+        abilityModeEnabled: requestedMatchMode !== 'duel' && currentAbilityOptions.abilityModeEnabled,
+        abilityBanCountPerTeam: currentAbilityOptions.abilityBanCountPerTeam,
+        abilityBanSeconds: currentAbilityOptions.abilityBanSeconds,
+        abilityDraftBatchSeconds: currentAbilityOptions.abilityDraftBatchSeconds,
         undercoverModeEnabled: (rawOptions as any)?.undercoverModeEnabled !== false,
         caorenModifiersEnabled: (rawOptions as any)?.caorenModifiersEnabled === true,
         duelMap: resolveDuelMapConfig((rawOptions as any)?.duelMap || DUEL_DEFAULT_MAP, (rawOptions as any)?.duelMapWorkshopId).name,
@@ -1431,6 +1458,7 @@ export {
     startSideVoteFunc as startSideVote,
     setRosterLiveSides,
     // Ability BP
+    getLobbyAbilityBanSafeLimit,
     finishAbilityBan,
     finishAbilityBanIfReady,
     finishAbilityDraftBatch,

@@ -33,6 +33,7 @@ import {
     syncPendingDraftOrderWithRoster,
     setRosterLiveSides,
     extendDuelWaitingIfLateJoin,
+    getLobbyAbilityBanSafeLimit,
     finishAbilityBan,
     finishAbilityDraftBatch,
 } from './game-flow-manager';
@@ -755,6 +756,47 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const cue = typeof data.payload?.cue === 'string' ? data.payload.cue : 'adminPrompt';
                 io.emit('AUDIO_CUE', { cue, source: 'admin', adminName: admin.name });
                 socket.emit(WsEvents.NOTIFICATION, { message: '已向所有网页玩家发送提示音。' });
+            } else if (data.action === 'SET_ABILITY_MODE_CONFIG') {
+                if (session.phase !== GamePhase.Lobby) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '只能在大厅阶段修改异能模式设置。进入异能 Ban 后配置已锁定。' });
+                    return;
+                }
+                const payload = data.payload;
+                if (!payload || typeof payload.abilityModeEnabled !== 'boolean') {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '异能模式开关格式无效。' });
+                    return;
+                }
+                const safeLimit = getLobbyAbilityBanSafeLimit();
+                const banCount = payload.abilityBanCountPerTeam;
+                if (!Number.isSafeInteger(banCount) || banCount < 0 || banCount > safeLimit) {
+                    socket.emit(WsEvents.NOTIFICATION, {
+                        message: `Ban 数必须是 0 到 ${safeLimit} 的安全整数；当前最多可 Ban ${safeLimit} 个。`,
+                    });
+                    return;
+                }
+                const banSeconds = payload.abilityBanSeconds;
+                const draftBatchSeconds = payload.abilityDraftBatchSeconds;
+                if (!Number.isSafeInteger(banSeconds) || banSeconds <= 0) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: 'Ban 倒计时必须是正整数。' });
+                    return;
+                }
+                if (!Number.isSafeInteger(draftBatchSeconds) || draftBatchSeconds <= 0) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '选角批次倒计时必须是正整数。' });
+                    return;
+                }
+
+                session.matchOptions.abilityModeEnabled = session.matchOptions.matchMode === 'duel'
+                    ? false
+                    : payload.abilityModeEnabled;
+                session.matchOptions.abilityBanCountPerTeam = banCount;
+                session.matchOptions.abilityBanSeconds = banSeconds;
+                session.matchOptions.abilityDraftBatchSeconds = draftBatchSeconds;
+                broadcastState();
+                socket.emit(WsEvents.NOTIFICATION, {
+                    message: session.matchOptions.matchMode === 'duel'
+                        ? '单挑模式固定跳过异能 BP；其余异能设置已保存。'
+                        : '异能模式设置已保存。',
+                });
             } else if (data.action === 'TERMINATE_GAME') {
                 terminateCurrentGameAndKickAll('管理员强制终止本局游戏');
             } else if (data.action === 'FORCE_READY') {
