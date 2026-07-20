@@ -375,6 +375,7 @@ const startSideVoteFunc = (team: RosterTeam = getSession().sidePickTeam || 'A') 
 const finishSideVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     const session = getSession();
     if (session.phase !== GamePhase.SidePick || !session.sideVote) return;
+    if (!allowAbilityBanConfigGate(validateAbilityBanConfigForSidePickStart())) return;
     clearSideVoteTimer();
 
     const votes = session.sideVote.votes || {};
@@ -434,6 +435,38 @@ const getActualAbilityBanSafeLimit = (): number => calculateSafeBanLimit({
     teamSizeA: getOrderedAbilityPlayers('A').length,
     teamSizeB: getOrderedAbilityPlayers('B').length,
 });
+
+interface AbilityBanConfigValidation {
+    allowed: boolean;
+    safeLimit: number;
+}
+
+const validateAbilityBanConfigForSafeLimit = (safeLimit: number): AbilityBanConfigValidation => {
+    const session = getSession();
+    if (session.matchOptions?.matchMode === 'duel' || session.matchOptions?.abilityModeEnabled !== true) {
+        return { allowed: true, safeLimit };
+    }
+    const banCount = session.matchOptions.abilityBanCountPerTeam;
+    return {
+        allowed: Number.isSafeInteger(banCount) && Number(banCount) >= 0 && Number(banCount) <= safeLimit,
+        safeLimit,
+    };
+};
+
+const validateAbilityBanConfigForLobbyStart = (): AbilityBanConfigValidation => (
+    validateAbilityBanConfigForSafeLimit(getLobbyAbilityBanSafeLimit())
+);
+
+const validateAbilityBanConfigForSidePickStart = (): AbilityBanConfigValidation => (
+    validateAbilityBanConfigForSafeLimit(getActualAbilityBanSafeLimit())
+);
+
+const allowAbilityBanConfigGate = (validation: AbilityBanConfigValidation): boolean => {
+    if (validation.allowed) return true;
+    notifyMessage?.(`异能 BP 无法开始：当前最多可 Ban ${validation.safeLimit} 个。请管理员返回大厅修改异能设置。`);
+    broadcast?.();
+    return false;
+};
 
 const clearAbilityFlowState = () => {
     const session = getSession();
@@ -1096,16 +1129,13 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
         if (!setupDuelFromLobby()) return;
         nextTo = GamePhase.PreGameSetup;
     }
+    if (from === GamePhase.Lobby
+        && nextTo === GamePhase.CaptainSelection
+        && !allowAbilityBanConfigGate(validateAbilityBanConfigForLobbyStart())) return;
     if (from === GamePhase.SidePick
         && session.matchOptions?.matchMode !== 'duel'
         && session.matchOptions?.abilityModeEnabled === true) {
-        const banCount = session.matchOptions.abilityBanCountPerTeam;
-        const safeLimit = getActualAbilityBanSafeLimit();
-        if (!Number.isSafeInteger(banCount) || Number(banCount) < 0 || Number(banCount) > safeLimit) {
-            notifyMessage?.(`异能 BP 无法开始：当前最多可 Ban ${safeLimit} 个。请管理员返回大厅修改异能设置。`);
-            broadcast?.();
-            return;
-        }
+        if (!allowAbilityBanConfigGate(validateAbilityBanConfigForSidePickStart())) return;
     }
     if (from === GamePhase.AbilityDraft && nextTo === GamePhase.PreGameSetup) {
         const draft = session.abilityDraftState;

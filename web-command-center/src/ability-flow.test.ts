@@ -251,6 +251,54 @@ test('Ban 数必须是安全整数且不超过按当前参赛人数计算的保�
     }
 });
 
+test('保存后玩家加入导致上限下降时，实际 ADVANCE_PHASE 入口阻止离开 Lobby 且仍可修改配置', async () => {
+    const notifications: string[] = [];
+    const { session, socket, actorId } = createAbilityConfigSocketContext({ participantCount: 2 });
+    flow.injectNotify((message) => notifications.push(message));
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: actorId,
+        action: 'SET_ABILITY_MODE_CONFIG',
+        payload: { ...validAbilityConfigPayload, abilityBanCountPerTeam: 5 },
+    });
+    assert.equal(session.matchOptions.abilityBanCountPerTeam, 5);
+
+    for (let index = 3; index <= 5; index += 1) {
+        const playerId = `p${index}`;
+        session.players[playerId] = {
+            playerId,
+            name: `玩家${index}`,
+            role: 'Player',
+            isReady: false,
+            isOnline: true,
+        };
+        session.playerOrder.push(playerId);
+    }
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: actorId,
+        action: 'ADVANCE_PHASE',
+    });
+
+    assert.equal(session.phase, GamePhase.Lobby);
+    assert.equal(session.matchOptions.abilityBanCountPerTeam, 5);
+    assert.match(notifications.at(-1) ?? '', /当前最多可 Ban 4 个/);
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: actorId,
+        action: 'SET_ABILITY_MODE_CONFIG',
+        payload: { ...validAbilityConfigPayload, abilityBanCountPerTeam: 4 },
+    });
+    assert.equal(session.phase, GamePhase.Lobby);
+    assert.equal(session.matchOptions.abilityBanCountPerTeam, 4);
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: actorId,
+        action: 'ADVANCE_PHASE',
+    });
+    assert.equal(session.phase, GamePhase.CaptainSelection);
+});
+
 test('Ban 秒数和选角批次秒数必须是正的安全整数，不虚构最大秒数', async () => {
     for (const [field, invalidValue] of [
         ['abilityBanSeconds', 0],
@@ -310,6 +358,46 @@ test('SidePick 进入 BP 前按实际 A/B 有序名单重算上限，超限时�
     assert.equal(result.abilityBanState, undefined);
     assert.equal(result.abilityDraftState, undefined);
     assert.match(notifications.at(-1) ?? '', /当前最多可 Ban 3 个/);
+});
+
+test('finishSideVote 门禁失败不消费选边状态，修正配置后可用原投票重试进入 AbilityBan', () => {
+    const notifications: string[] = [];
+    const session = createSidePickSession({ abilityModeEnabled: true, abilityBanCountPerTeam: 4 });
+    session.players.a4 = {
+        playerId: 'a4',
+        name: 'a4',
+        role: 'Player',
+        rosterTeam: 'B',
+        isReady: false,
+        isOnline: true,
+    };
+    session.playerOrder.push('a4');
+    for (const playerId of ['a1', 'a2', 'a3', 'b1', 'b2']) session.players[playerId].rosterTeam = 'A';
+    session.teams.A.players = ['a1', 'a2', 'a3', 'b1', 'b2'];
+    session.teams.B.players = ['a4'];
+    session.captains = { A: 'a1', B: 'a4' };
+    flow.injectNotify((message) => notifications.push(message));
+    flow.startSideVote('A');
+    session.sideVote!.votes.a1 = 'T';
+    const originalSideVote = session.sideVote;
+    const originalTimerEndAt = session.timerEndAt;
+
+    flow.finishSideVote('manual');
+
+    assert.equal(session.phase, GamePhase.SidePick);
+    assert.equal(session.sideVote, originalSideVote);
+    assert.equal(session.selectedSide, null);
+    assert.equal(session.timerEndAt, originalTimerEndAt);
+    assert.equal(session.timerPhase, GamePhase.SidePick);
+    assert.match(notifications.at(-1) ?? '', /当前最多可 Ban 3 个/);
+
+    session.matchOptions.abilityBanCountPerTeam = 3;
+    flow.finishSideVote('manual');
+
+    assert.equal(session.phase, abilityBanPhase);
+    assert.equal(session.sideVote, undefined);
+    assert.equal(session.selectedSide, 'T');
+    assert.equal(session.abilityBanState?.banCountPerTeam, 3);
 });
 
 test('Lobby 管理区显示异能配置与最新安全上限，保存按钮使用专用 ADMIN_ACTION', () => {
