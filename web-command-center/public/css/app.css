@@ -3750,3 +3750,194 @@ body[data-theme="dark"] .admin-nav-btn.active {
         flex-wrap: wrap;
     }
 }
+
+/* Ability mode: CS2 tournament BP meets classified ability dossiers. */
+.ability-bp-board {
+    --ability-accent: #f97316;
+    --ability-accent-soft: rgba(249, 115, 22, 0.12);
+    position: relative;
+    overflow: hidden;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background:
+        linear-gradient(115deg, rgba(15, 23, 42, 0.035) 25%, transparent 25%) 0 0 / 18px 18px,
+        var(--panel);
+    box-shadow: var(--shadow);
+}
+
+.ability-bp-draft-board { --ability-accent: #2563eb; --ability-accent-soft: rgba(37, 99, 235, 0.12); }
+
+.ability-bp-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.ability-bp-header h2 { margin: 5px 0 4px; font-size: clamp(24px, 3vw, 34px); letter-spacing: -0.03em; }
+.ability-bp-header p { max-width: 680px; margin: 0; color: var(--muted); line-height: 1.65; }
+
+.ability-bp-kicker {
+    color: var(--ability-accent);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+}
+
+.ability-bp-timer {
+    min-width: 138px;
+    padding: 12px 16px;
+    border: 1px solid color-mix(in srgb, var(--ability-accent) 36%, var(--border));
+    border-radius: 12px;
+    background: var(--ability-accent-soft);
+    text-align: right;
+}
+
+.ability-bp-timer span,
+.ability-bp-summary span { display: block; color: var(--muted); font-size: 12px; font-weight: 800; }
+.ability-bp-timer strong { display: block; margin-top: 4px; color: var(--ability-accent); font-size: 21px; }
+
+.ability-bp-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 10px;
+    margin: 14px 0;
+}
+
+.ability-bp-summary > div {
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--ability-accent);
+    border-radius: 10px;
+    background: var(--panel-soft);
+}
+
+.ability-bp-summary strong { display: block; overflow-wrap: anywhere; margin-top: 5px; }
+
+.ability-bp-team-grid,
+.ability-bp-batches {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 14px 0 18px;
+}
+
+.ability-bp-team,
+.ability-bp-batch {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel-soft);
+}
+
+.ability-bp-team h3,
+.ability-bp-batch h3 { margin: 2px 0 10px; }
+.ability-bp-batch > span { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: 0.12em; }
+.ability-bp-batch.is-current { border-color: var(--ability-accent); box-shadow: inset 3px 0 0 var(--ability-accent); }
+.ability-bp-batch.is-complete { opacity: 0.74; }
+
+.ability-bp-player-choice,
+.ability-bp-hidden {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+    padding: 8px 0;
+    border-top: 1px dashed var(--border);
+}
+
+.ability-bp-player-choice b,
+.ability-bp-hidden b { min-width: 0; overflow-wrap: anywhere; }
+.ability-bp-player-choice span,
+.ability-bp-hidden span { color: var(--muted); font-size: 12px; text-align: right; }
+.ability-bp-player-choice.is-locked span { color: var(--success); font-weight: 800; }
+.ability-bp-hidden { color: var(--muted); }
+
+.ability-bp-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+    gap: 12px;
+}
+
+.ability-bp-card {
+    position: relative;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-top: 3px solid #64748b;
+    border-radius: 12px;
+    background: linear-gradient(180deg, var(--panel), var(--panel-soft));
+}
+
+.ability-bp-card.is-selectable { cursor: pointer; }
+.ability-bp-card.is-selectable:hover { border-color: var(--ability-accent); box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12); }
+.ability-bp-card.is-selected { border-color: var(--ability-accent); border-top-color: var(--ability-accent); box-shadow: 0 0 0 2px var(--ability-accent-soft); }
+.ability-bp-card.is-banned { opacity: 0.5; filter: grayscale(0.8); }
+.ability-bp-card h3 { margin: 10px 0 12px; font-size: 21px; }
+
+.ability-bp-card-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ability-bp-model,
+.ability-bp-unique { padding: 3px 7px; border-radius: 999px; background: #1e293b; color: #f8fafc; font-size: 11px; font-weight: 900; }
+.ability-bp-unique { background: #7c2d12; }
+
+.ability-bp-skill { margin-top: 8px; }
+.ability-bp-skill b { color: var(--ability-accent); font-size: 12px; letter-spacing: 0.08em; }
+.ability-bp-skill p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.ability-bp-skill.active { padding-top: 8px; border-top: 1px dashed var(--border); }
+
+.ability-bp-card-status { display: inline-block; margin-top: 12px; color: var(--ability-accent); font-size: 12px; font-weight: 900; }
+
+.ability-bp-actions {
+    position: sticky;
+    bottom: 10px;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-top: 18px;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--ability-accent) 34%, var(--border));
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    backdrop-filter: blur(10px);
+}
+
+.ability-bp-actions span { min-width: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.ability-bp-actions button { flex: 0 0 auto; max-width: 100%; background: var(--ability-accent); color: #fff; font-weight: 900; }
+.ability-bp-empty,
+.ability-bp-failure { color: var(--muted); font-size: 13px; }
+.ability-bp-failure { display: flex; gap: 10px; margin: 12px 0; padding: 10px 12px; border: 1px solid #fca5a5; border-radius: 10px; background: #fef2f2; color: #991b1b; }
+
+body[data-theme="dark"] .ability-bp-board {
+    background:
+        linear-gradient(115deg, rgba(148, 163, 184, 0.035) 25%, transparent 25%) 0 0 / 18px 18px,
+        var(--panel);
+}
+
+body[data-theme="dark"] .ability-bp-card,
+body[data-theme="dark"] .ability-bp-team,
+body[data-theme="dark"] .ability-bp-batch,
+body[data-theme="dark"] .ability-bp-summary > div { background: #111827; }
+body[data-theme="dark"] .ability-bp-actions { background: rgba(23, 32, 51, 0.94); }
+body[data-theme="dark"] .ability-bp-failure { background: #3f1d24; color: #fecaca; border-color: #7f1d1d; }
+
+@media (max-width: 600px) {
+    .ability-bp-board { padding: 14px; border-radius: 14px; }
+    .ability-bp-header { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .ability-bp-timer { width: 100%; min-width: 0; text-align: left; }
+    .ability-bp-summary,
+    .ability-bp-team-grid,
+    .ability-bp-batches,
+    .ability-bp-card-grid { grid-template-columns: minmax(0, 1fr); }
+    .ability-bp-player-choice,
+    .ability-bp-hidden { align-items: flex-start; }
+    .ability-bp-actions { position: static; display: grid; grid-template-columns: minmax(0, 1fr); }
+    .ability-bp-actions button { width: 100%; white-space: normal; overflow-wrap: anywhere; }
+}

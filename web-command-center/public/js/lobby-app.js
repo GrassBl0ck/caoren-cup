@@ -192,6 +192,8 @@ const ws = io();
                 PlayerDraft: '队长选人',
                 MapBan: '地图 Ban/Pick',
                 SidePick: '选边',
+                AbilityBan: '异能禁用',
+                AbilityDraft: '异能选角',
                 PreGameSetup: '赛前配置',
                 LiveGame: '比赛中',
                 MidGameQA: '侦探问答',
@@ -900,9 +902,12 @@ if (window._caorenModifiersEnabled !== true) {
             if (state.taskTemplate) window._currentTaskTemplate = state.taskTemplate;
             window._allPlayers = state.players;
 
-            if (state.timerEndAt !== currentTimerEndAt) {
+            const phaseTimerEndAt = state.phase === 'AbilityBan'
+                ? state.abilityBanState?.timeoutAt
+                : (state.phase === 'AbilityDraft' ? state.abilityDraftState?.timeoutAt : state.timerEndAt);
+            if (phaseTimerEndAt !== currentTimerEndAt) {
                 if (countdownInterval) clearInterval(countdownInterval);
-                currentTimerEndAt = state.timerEndAt;
+                currentTimerEndAt = phaseTimerEndAt;
                 if (currentTimerEndAt) {
                     updateTimerDisplay();
                     countdownInterval = setInterval(updateTimerDisplay, 1000);
@@ -1265,6 +1270,28 @@ if (window._caorenModifiersEnabled !== true) {
 
                 html += '</div>';
                 extraDiv.innerHTML = html;
+            }
+
+            if (state.phase === 'AbilityBan') {
+                const abilityUi = window.CaorenAbilityBpUi;
+                extraDiv.innerHTML = abilityUi?.renderAbilityBan({
+                    catalog: state.abilityCatalog,
+                    banState: state.abilityBanState,
+                    players: state.players,
+                    currentPlayerId: myPlayerId,
+                    now: syncedNow(),
+                }) || '<div class="soft-block">异能禁用界面加载失败，请刷新页面。</div>';
+            }
+
+            if (state.phase === 'AbilityDraft') {
+                const abilityUi = window.CaorenAbilityBpUi;
+                extraDiv.innerHTML = abilityUi?.renderAbilityDraft({
+                    catalog: state.abilityCatalog,
+                    draftState: state.abilityDraftState,
+                    players: state.players,
+                    currentPlayerId: myPlayerId,
+                    now: syncedNow(),
+                }) || '<div class="soft-block">异能选角界面加载失败，请刷新页面。</div>';
             }
 
             if (state.phase === 'PreGameSetup') {
@@ -2680,6 +2707,20 @@ if (window._caorenModifiersEnabled !== true) {
         function voteMap(map) { ws.emit('VOTE', { playerId: myPlayerId, map }); }
         function adminBanMap(map) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADMIN_BAN_MAP', payload: { map } }); }
         function selectSide(side) { ws.emit('SIDE_PICK', { playerId: myPlayerId, side }); }
+        function toggleAbilityBanChoice(abilityId) {
+            const state = window._currentGameState;
+            const banState = state?.abilityBanState;
+            const valid = (state?.abilityCatalog || []).some(ability => ability.id === abilityId);
+            if (!banState || !valid || banState.confirmedPlayerIds?.includes(myPlayerId)) return;
+            const selectedAbilityIds = [...(banState.selections?.[myPlayerId] || [])];
+            const index = selectedAbilityIds.indexOf(abilityId);
+            if (index >= 0) selectedAbilityIds.splice(index, 1);
+            else if (selectedAbilityIds.length < Number(banState.banCountPerTeam || 0)) selectedAbilityIds.push(abilityId);
+            ws.emit('ABILITY_BAN_UPDATE', { playerId: myPlayerId, selectedAbilityIds });
+        }
+        function confirmAbilityBanChoice() { ws.emit('ABILITY_BAN_CONFIRM', { playerId: myPlayerId }); }
+        function chooseAbilityDraft(abilityId) { ws.emit('ABILITY_PICK_UPDATE', { playerId: myPlayerId, abilityId }); }
+        function confirmAbilityDraftChoice() { ws.emit('ABILITY_PICK_CONFIRM', { playerId: myPlayerId }); }
         function readyPlayer() { ws.emit('PLAYER_READY', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
         function ackUndercoverTask() { ws.emit('UNDERCOVER_TASK_ACK', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
         function updateRoleCounts() { const u = parseInt(document.getElementById('undercover-count').value) || 0; const d = parseInt(document.getElementById('detective-count').value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_ROLES_COUNT', payload: { undercoverCount: u, detectiveCount: d } }); }
@@ -2733,6 +2774,10 @@ if (window._caorenModifiersEnabled !== true) {
             voteMap,
             adminBanMap,
             selectSide,
+            toggleAbilityBanChoice,
+            confirmAbilityBanChoice,
+            chooseAbilityDraft,
+            confirmAbilityDraftChoice,
             readyPlayer,
             ackUndercoverTask,
             updateRoleCounts,

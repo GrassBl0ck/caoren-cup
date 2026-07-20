@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { getAbilityCatalog } from '../ability-catalog';
 import { sanitizeForPublic } from '../player-utils';
 import { createInitialSession } from '../session-manager';
 import { GamePhase } from '../types';
@@ -18,6 +19,25 @@ const createAbilitySession = () => {
     session.teams.B.players = ['b1', 'b2'];
     return session;
 };
+
+test('public session exposes an isolated ability catalog to every viewer', () => {
+    const session = createAbilitySession();
+    const expectedCatalog = getAbilityCatalog();
+
+    for (const viewerId of ['a1', 'admin', 'spectator', null]) {
+        const publicSession = sanitizeForPublic(session, viewerId);
+        assert.deepEqual(publicSession.abilityCatalog, expectedCatalog);
+        assert.notStrictEqual(publicSession.abilityCatalog, expectedCatalog);
+        assert.notStrictEqual(publicSession.abilityCatalog[0], expectedCatalog[0]);
+    }
+
+    const firstPublicSession = sanitizeForPublic(session, 'a1');
+    firstPublicSession.abilityCatalog[0].name = 'changed';
+    firstPublicSession.abilityCatalog.push({ id: 'fake' });
+
+    const secondPublicSession = sanitizeForPublic(session, 'a1');
+    assert.deepEqual(secondPublicSession.abilityCatalog, expectedCatalog);
+});
 
 test('lobby invite is visible only to an authenticated admin', () => {
     const session = createInitialSession();

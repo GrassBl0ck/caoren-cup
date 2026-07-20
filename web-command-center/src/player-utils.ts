@@ -8,6 +8,7 @@ import {
     Team,
     RosterTeam,
 } from './types';
+import { getAbilityCatalog } from './ability-catalog';
 
 // ========== Player utilities ==========
 export const findPlayerById = (session: GameSession, id: string): Player | undefined =>
@@ -171,6 +172,15 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
     const revealAllPostgame = session.phase === 'Scoreboard';
     const s: any = { ...session };
     s.serverNow = Date.now();
+    s.abilityCatalog = getAbilityCatalog().map((ability) => ({
+        id: ability.id,
+        name: ability.name,
+        passiveDescription: ability.passiveDescription,
+        activeDescription: ability.activeDescription,
+        chargeModel: ability.chargeModel,
+        catalogVersion: ability.catalogVersion,
+        ...(ability.globalUnique ? { globalUnique: true } : {}),
+    }));
     s.lobbyAccess = viewer?.role === 'Admin'
         ? { ...session.lobbyAccess }
         : { inviteExpiresAt: session.lobbyAccess?.inviteExpiresAt };
