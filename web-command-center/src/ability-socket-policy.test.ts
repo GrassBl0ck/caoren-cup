@@ -298,3 +298,60 @@ test('异能 BP 与完成后的 PreGameSetup 阶段拒绝管理员踢人并保�
     await abilityBan.socket.trigger('ADMIN_ACTION', { playerId: 'admin', action: 'KICK_PLAYER', payload: { playerId: 'spectator' } });
     assert.equal(abilityBan.session.players.spectator, undefined, '非参赛观众保持原有可踢出路径');
 });
+
+test('SidePick 踢人请求在异步封禁前原子移除阵容，不会跨阶段留下幽灵席位', async (t) => {
+    t.after(clearAllFlowTimers);
+    const session = createInitialSession();
+    session.phase = GamePhase.SidePick;
+    session.matchOptions.abilityModeEnabled = true;
+    session.matchOptions.matchMode = 'competitive';
+    session.players = {
+        admin: { playerId: 'admin', name: 'Admin', role: 'Admin', isReady: true },
+        a1: { playerId: 'a1', name: 'A1', role: 'Player', rosterTeam: 'A', membershipId: 'membership-a1', isReady: true },
+        b1: { playerId: 'b1', name: 'B1', role: 'Player', rosterTeam: 'B', isReady: true },
+    };
+    session.playerOrder = ['admin', 'a1', 'b1'];
+    session.teams.A.players = ['a1'];
+    session.teams.B.players = ['b1'];
+    setSession(session);
+
+    let releaseBlock!: () => void;
+    let markBlockStarted!: () => void;
+    const blockStarted = new Promise<void>((resolve) => { markBlockStarted = resolve; });
+    const blockGate = new Promise<void>((resolve) => { releaseBlock = resolve; });
+    const io = new FakeIo();
+    registerSocketHandlers(io as never, {
+        broadcastState() {},
+        notifyMessage() {},
+        blockMembership: async () => {
+            markBlockStarted();
+            await blockGate;
+        },
+    });
+    const socket = new FakeSocket('admin-race');
+    io.connect(socket);
+    socket.data.playerId = 'admin';
+
+    const kickPromise = socket.trigger('ADMIN_ACTION', {
+        playerId: 'admin', action: 'KICK_PLAYER', payload: { playerId: 'a1' },
+    });
+    const injectedBlockStarted = await Promise.race([
+        blockStarted.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 100)),
+    ]);
+    assert.equal(injectedBlockStarted, true, '测试注入的异步封禁入口必须被调用');
+
+    assert.equal(session.players.a1, undefined, '第一次 await 前必须移除玩家');
+    assert.deepEqual(session.teams.A.players, [], '第一次 await 前必须移除队伍席位');
+    session.phase = GamePhase.AbilityBan;
+    session.abilityBanState = createAbilityBanState({
+        orderedA: [...session.teams.A.players],
+        orderedB: [...session.teams.B.players],
+        banCountPerTeam: 1,
+        timeoutAt: Date.now() + 45_000,
+    });
+    releaseBlock();
+    await kickPromise;
+
+    assert.equal(session.abilityBanState.orderedPlayers.A.includes('a1'), false);
+});

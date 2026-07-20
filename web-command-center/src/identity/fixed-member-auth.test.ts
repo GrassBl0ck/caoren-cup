@@ -267,3 +267,55 @@ test('异能选角阶段拒绝禁用当前参赛固定成员', async (t) => {
     assert.match(result.body.message || '', /终止本局.*返回大厅/);
     assert.equal(runtime.service.findIdentityBySteamId('76561198000000087')?.fixedAccount?.enabled, true);
 });
+
+test('SidePick 禁用固定成员在异步写盘前原子移除阵容，不会跨阶段留下幽灵席位', async (t) => {
+    const runtime = await startTestServer('ability-roster-disable-race');
+    t.after(runtime.close);
+    const account = await runtime.service.createOrUpdateFixedAccount({
+        steamId: '76561198000000088', nickname: 'Race Member', password: 'initial-pass',
+    });
+    runtime.session.phase = GamePhase.SidePick;
+    runtime.session.matchOptions.abilityModeEnabled = true;
+    runtime.session.players.member = {
+        playerId: 'member', name: 'Race Member', role: 'Player',
+        identityId: account.identity.identityId, rosterTeam: 'A', isReady: true,
+    };
+    runtime.session.playerOrder = ['member'];
+    runtime.session.teams.A.players = ['member'];
+    const ticket = runtime.adminTickets.issue({
+        sessionId: runtime.session.sessionId,
+        adminPlayerId: 'admin-player',
+        operation: 'set_enabled',
+        identityId: account.identity.identityId,
+    }, 30_000);
+
+    const originalSetEnabled = runtime.service.setFixedAccountEnabled.bind(runtime.service);
+    let releaseWrite!: () => void;
+    let markWriteStarted!: () => void;
+    const writeStarted = new Promise<void>((resolve) => { markWriteStarted = resolve; });
+    const writeGate = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    runtime.service.setFixedAccountEnabled = async (...args) => {
+        markWriteStarted();
+        await writeGate;
+        return originalSetEnabled(...args);
+    };
+
+    const request = patchJson(
+        `${runtime.baseUrl}/api/admin/fixed-members/${account.identity.identityId}/enabled`,
+        { enabled: false },
+        ticket.ticket,
+    );
+    await writeStarted;
+
+    const playerRemovedBeforeAwait = runtime.session.players.member === undefined;
+    const rosterRemovedBeforeAwait = runtime.session.teams.A.players.length === 0;
+    runtime.session.phase = GamePhase.AbilityBan;
+    releaseWrite();
+    const result = await request;
+
+    assert.equal(playerRemovedBeforeAwait, true, '第一次 await 前必须移除玩家');
+    assert.equal(rosterRemovedBeforeAwait, true, '第一次 await 前必须移除队伍席位');
+    assert.equal(result.status, 200);
+    assert.equal(runtime.session.players.member, undefined);
+    assert.equal(runtime.service.findIdentityBySteamId('76561198000000088')?.fixedAccount?.enabled, false);
+});

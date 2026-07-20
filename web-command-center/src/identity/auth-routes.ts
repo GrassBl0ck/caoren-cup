@@ -17,6 +17,7 @@ import {
 } from './identity-runtime';
 import { LobbyIdentityService } from './identity-service';
 import { FixedMemberLoginGuard } from './password-auth';
+import { removeIdentityFromSession } from './session-integration';
 import {
     ABILITY_ROSTER_LOCK_MESSAGE,
     isProtectedAbilityRosterPlayer,
@@ -229,6 +230,12 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
                 error: 'ability_roster_locked',
                 message: ABILITY_ROSTER_LOCK_MESSAGE,
             });
+        }
+        const accountExists = service.listFixedAccounts(activeSession.sessionId)
+            .some((account) => account.identityId === identityId);
+        if (!accountExists) return res.status(404).json({ success: false, error: 'account_not_found' });
+        if (req.body.enabled === false && activePlayer) {
+            removeIdentityFromSession(activeSession, identityId);
         }
         const result = await service.setFixedAccountEnabled(identityId, req.body.enabled, activeSession.sessionId);
         if (!result) return res.status(404).json({ success: false, error: 'account_not_found' });

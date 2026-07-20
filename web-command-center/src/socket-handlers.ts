@@ -250,8 +250,11 @@ const duelManagedActions = new Set([
 export function registerSocketHandlers(io: SocketIOServer, deps: {
     broadcastState: () => void;
     notifyMessage: (msg: string) => void;
+    blockMembership?: (membershipId: string) => Promise<unknown>;
 }) {
     const { broadcastState, notifyMessage } = deps;
+    const blockMembership = deps.blockMembership
+        ?? ((membershipId: string) => lobbyIdentityService.blockMembership(membershipId));
     const inviteGuard = new LobbyInviteGuard();
 
     const sendPrivateData = (socketId: string, playerId: string) => {
@@ -999,7 +1002,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     socket.emit(WsEvents.NOTIFICATION, { message: ABILITY_ROSTER_LOCK_MESSAGE });
                     return;
                 }
-                if (target.membershipId) await lobbyIdentityService.blockMembership(target.membershipId);
+                const membershipId = target.membershipId;
                 removePlayerFromRosterTeams(targetId);
                 if (session.captains.A === targetId) session.captains.A = null;
                 if (session.captains.B === targetId) session.captains.B = null;
@@ -1009,6 +1012,15 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 io.to(targetId).emit(WsEvents.LOGIN_RESPONSE, { success: false, resetClient: true, message: '你已被管理员移出房间。' });
                 notifyMessage(`管理员已踢出玩家：${target.name}`);
                 broadcastState();
+                if (membershipId) {
+                    try {
+                        await blockMembership(membershipId);
+                    } catch {
+                        socket.emit(WsEvents.NOTIFICATION, {
+                            message: '玩家已从本局阵容移除，但身份封禁写入失败；请在玩家与准入页面重试禁用该身份。',
+                        });
+                    }
+                }
             } else if (data.action === 'RESET_FORMAL_MATCH_COUNTERS') {
                 if (session.phase !== GamePhase.LiveGame) return;
                 const rawPluginRound = resetFormalMatchCounters();
