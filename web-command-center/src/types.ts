@@ -69,6 +69,12 @@ export interface AbilityBanResolution {
     bannedAbilityIds: AbilityId[];
     votes: Record<RosterTeam, Partial<Record<AbilityId, number>>>;
 }
+export interface AbilityPhaseOnePublicPolicy {
+    formalMatchStartBlocked: boolean;
+    rosterMutationBlocked: boolean;
+    formalMatchStartMessage: string;
+    rosterMutationMessage: string;
+}
 export interface RuleResult {
     ok: boolean;
     code?: string;
@@ -318,6 +324,7 @@ export interface GameSession {
     abilityBanState?: AbilityBanState;
     abilityDraftState?: AbilityDraftState;
     abilityAssignments?: AbilityAssignment[];
+    abilityPhaseOnePolicy?: AbilityPhaseOnePublicPolicy;
     undercoverCount: number;
     detectiveCount: number;
     rolesReleased?: boolean;

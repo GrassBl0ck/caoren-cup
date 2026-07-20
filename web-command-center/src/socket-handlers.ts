@@ -66,6 +66,12 @@ import {
     shouldFinishAbilityBanEarly,
     shouldFinishAbilityDraftBatchEarly,
 } from './ability-socket-policy';
+import {
+    ABILITY_PHASE_ONE_START_BLOCK_MESSAGE,
+    ABILITY_ROSTER_LOCK_MESSAGE,
+    isAbilityPhaseOneFormalStartBlocked,
+    isProtectedAbilityRosterPlayer,
+} from './ability-phase-one-policy';
 
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
@@ -710,6 +716,10 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 }
 
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame) {
+                    if (isAbilityPhaseOneFormalStartBlocked(session)) {
+                        socket.emit(WsEvents.NOTIFICATION, { message: ABILITY_PHASE_ONE_START_BLOCK_MESSAGE });
+                        return;
+                    }
                     if (isDuelMode()) {
                         clearUndercoverModeState();
                         session.rolesReleased = true;
@@ -985,6 +995,10 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const targetId = String(data.payload?.playerId || '');
                 const target = findPlayerById(session, targetId);
                 if (!target || target.role === 'Admin') return;
+                if (isProtectedAbilityRosterPlayer(session, target)) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: ABILITY_ROSTER_LOCK_MESSAGE });
+                    return;
+                }
                 if (target.membershipId) await lobbyIdentityService.blockMembership(target.membershipId);
                 removePlayerFromRosterTeams(targetId);
                 if (session.captains.A === targetId) session.captains.A = null;

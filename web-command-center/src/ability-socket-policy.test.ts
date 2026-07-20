@@ -22,12 +22,13 @@ import { GamePhase, PlayerRole, RosterTeam } from './types';
 class FakeSocket {
     readonly data: Record<string, unknown> = {};
     readonly handshake = { address: '127.0.0.1', secure: false, headers: {} };
+    readonly emitted: Array<{ event: string; payload: unknown }> = [];
     private readonly handlers = new Map<string, (payload?: unknown) => unknown>();
 
     constructor(readonly id: string) {}
 
     on(event: string, handler: (payload?: unknown) => unknown) { this.handlers.set(event, handler); }
-    emit(_event: string, _payload: unknown) {}
+    emit(event: string, payload: unknown) { this.emitted.push({ event, payload }); }
     join(_room: string) {}
     trigger(event: string, payload?: unknown) {
         const handler = this.handlers.get(event);
@@ -43,6 +44,7 @@ class FakeIo {
     on(event: string, handler: (socket: FakeSocket) => void) {
         if (event === 'connection') this.connectionHandler = handler;
     }
+    to(_room: string) { return { emit(_event: string, _payload: unknown) {} }; }
     connect(socket: FakeSocket) {
         this.sockets.sockets.set(socket.id, socket);
         this.connectionHandler?.(socket);
@@ -245,4 +247,54 @@ test('未确认玩家断线后重新评估 Ban 并立即触发提前结算', (t)
     socket.trigger('disconnect');
     assert.equal(session.players.b1.isOnline, false);
     assert.equal(session.phase, GamePhase.AbilityDraft);
+});
+
+test('异能 BP 与完成后的 PreGameSetup 阶段拒绝管理员踢人并保留普通大厅旧行为', async (t) => {
+    t.after(clearAllFlowTimers);
+    const createKickContext = (phase: GamePhase, completeAssignments = false) => {
+        const session = createInitialSession();
+        session.phase = phase;
+        session.matchOptions.abilityModeEnabled = true;
+        session.matchOptions.matchMode = 'competitive';
+        session.players = {
+            admin: { playerId: 'admin', name: 'Admin', role: 'Admin', isReady: true },
+            a1: { playerId: 'a1', name: 'A1', role: 'Player', rosterTeam: 'A', isReady: true },
+        };
+        session.playerOrder = ['admin', 'a1'];
+        session.teams.A.players = ['a1'];
+        session.abilityAssignments = completeAssignments
+            ? [{ playerId: 'a1', team: 'A', abilityId: 'medic' }]
+            : [];
+        setSession(session);
+        const io = new FakeIo();
+        registerSocketHandlers(io as never, { broadcastState() {}, notifyMessage() {} });
+        const socket = new FakeSocket(`admin-${phase}`);
+        io.connect(socket);
+        socket.data.playerId = 'admin';
+        return { session, socket };
+    };
+
+    for (const [phase, completeAssignments] of [
+        [GamePhase.AbilityBan, false],
+        [GamePhase.AbilityDraft, false],
+        [GamePhase.PreGameSetup, true],
+    ] as const) {
+        const { session, socket } = createKickContext(phase, completeAssignments);
+        await socket.trigger('ADMIN_ACTION', { playerId: 'admin', action: 'KICK_PLAYER', payload: { playerId: 'a1' } });
+        assert.ok(session.players.a1, `${phase} must retain the protected roster player`);
+        const message = String((socket.emitted.find((item) => item.event === 'NOTIFICATION')?.payload as any)?.message || '');
+        assert.match(message, /终止本局.*返回大厅/);
+    }
+
+    const lobby = createKickContext(GamePhase.Lobby);
+    await lobby.socket.trigger('ADMIN_ACTION', { playerId: 'admin', action: 'KICK_PLAYER', payload: { playerId: 'a1' } });
+    assert.equal(lobby.session.players.a1, undefined);
+
+    const abilityBan = createKickContext(GamePhase.AbilityBan);
+    abilityBan.session.players.spectator = {
+        playerId: 'spectator', name: 'Spectator', role: 'Spectator', isReady: true,
+    };
+    abilityBan.session.playerOrder.push('spectator');
+    await abilityBan.socket.trigger('ADMIN_ACTION', { playerId: 'admin', action: 'KICK_PLAYER', payload: { playerId: 'spectator' } });
+    assert.equal(abilityBan.session.players.spectator, undefined, '非参赛观众保持原有可踢出路径');
 });

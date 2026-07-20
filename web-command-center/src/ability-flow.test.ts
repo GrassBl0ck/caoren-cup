@@ -138,6 +138,28 @@ const advancePastSidePick = () => {
     return getSession();
 };
 
+const createCompletedAbilityPreGameSession = () => {
+    const session = createInitialSession();
+    session.phase = GamePhase.PreGameSetup;
+    session.matchOptions.matchMode = 'competitive';
+    session.matchOptions.abilityModeEnabled = true;
+    session.matchOptions.undercoverModeEnabled = false;
+    session.players = {
+        admin: { playerId: 'admin', name: '管理员', role: 'Admin', isReady: true, isOnline: true },
+        a1: { playerId: 'a1', name: 'A1', role: 'Player', rosterTeam: 'A', isReady: true, isOnline: true },
+        b1: { playerId: 'b1', name: 'B1', role: 'Player', rosterTeam: 'B', isReady: true, isOnline: true },
+    };
+    session.playerOrder = ['admin', 'a1', 'b1'];
+    session.teams.A.players = ['a1'];
+    session.teams.B.players = ['b1'];
+    session.abilityAssignments = [
+        { playerId: 'a1', team: 'A', abilityId: 'medic' },
+        { playerId: 'b1', team: 'B', abilityId: 'witch' },
+    ];
+    setSession(session);
+    return session;
+};
+
 afterEach(() => {
     clearAllFlowTimers();
     flow.injectNotify(() => {});
@@ -525,6 +547,38 @@ test('最后一批职业确认后完成 BP 并进入 PreGameSetup', () => {
 
     assert.equal(getSession().phase, GamePhase.PreGameSetup);
     assert.deepEqual(getSession().abilityAssignments?.map((item) => item.playerId), ['b1', 'a1']);
+});
+
+test('阶段 1 异能配置完成后 MatchZy round_start 不能把 PreGameSetup 提升为 LiveGame', () => {
+    const notifications: string[] = [];
+    flow.injectNotify((message) => notifications.push(message));
+    createCompletedAbilityPreGameSession();
+
+    assert.equal(flow.markStandardMatchLiveFromMatchZy(), false);
+    assert.equal(getSession().phase, GamePhase.PreGameSetup);
+    assert.match(notifications.at(-1) ?? '', /插件尚未同步.*不能正式开赛/);
+    assert.doesNotMatch(notifications.at(-1) ?? '', /\.start/);
+
+    const incomplete = createCompletedAbilityPreGameSession();
+    incomplete.abilityAssignments = incomplete.abilityAssignments?.slice(0, 1);
+    assert.equal(flow.markStandardMatchLiveFromMatchZy(), true);
+    assert.equal(getSession().phase, GamePhase.LiveGame);
+});
+
+test('管理员 ADVANCE_PHASE 不能绕过阶段 1 异能正式开赛门禁', async () => {
+    createCompletedAbilityPreGameSession();
+    const io = new FakeIo();
+    registerSocketHandlers(io as never, { broadcastState() {}, notifyMessage() {} });
+    const socket = new FakeSocket('admin-socket');
+    io.connect(socket);
+    socket.data.playerId = 'admin';
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: 'admin', action: 'ADVANCE_PHASE' });
+
+    assert.equal(getSession().phase, GamePhase.PreGameSetup);
+    const notification = socket.emitted.find((item) => item.event === WsEvents.NOTIFICATION);
+    assert.match(String((notification?.payload as any)?.message || ''), /插件尚未同步.*不能正式开赛/);
+    assert.doesNotMatch(String((notification?.payload as any)?.message || ''), /\.start/);
 });
 
 test('timeoutAt 过期轮询可结算 Ban，未过期时不推进', () => {

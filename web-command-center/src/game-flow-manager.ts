@@ -59,6 +59,10 @@ import {
     finishCurrentAbilityBatch,
     resolveAbilityBans,
 } from './ability-draft-service';
+import {
+    ABILITY_PHASE_ONE_START_BLOCK_MESSAGE,
+    isAbilityPhaseOneFormalStartBlocked,
+} from './ability-phase-one-policy';
 
 // ========== Broadcast and notification hooks ==========
 let broadcast: (() => void) | null = null;
@@ -1141,6 +1145,13 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
         const draft = session.abilityDraftState;
         if (!draft || draft.currentBatchIndex < draft.batches.length) return;
     }
+    if (from === GamePhase.PreGameSetup
+        && nextTo === GamePhase.LiveGame
+        && isAbilityPhaseOneFormalStartBlocked(session)) {
+        notifyMessage?.(ABILITY_PHASE_ONE_START_BLOCK_MESSAGE);
+        broadcast?.();
+        return;
+    }
     if (!canTransition(from, nextTo)) return;
 
     if (from === GamePhase.Roll) {
@@ -1217,6 +1228,11 @@ export const markStandardMatchLiveFromMatchZy = (): boolean => {
     const session = getSession();
     if (session.phase !== GamePhase.PreGameSetup) return false;
     if (session.matchOptions?.matchMode === 'duel') return false;
+    if (isAbilityPhaseOneFormalStartBlocked(session)) {
+        notifyMessage?.(ABILITY_PHASE_ONE_START_BLOCK_MESSAGE);
+        broadcast?.();
+        return false;
+    }
 
     session.phase = GamePhase.LiveGame;
     performPhaseTransition(GamePhase.LiveGame);

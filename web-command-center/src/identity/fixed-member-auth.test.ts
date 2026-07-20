@@ -6,6 +6,7 @@ import test from 'node:test';
 import express from 'express';
 import { AddressInfo } from 'node:net';
 import { createInitialSession } from '../session-manager';
+import { GamePhase } from '../types';
 import { EphemeralTicketService, FixedAccountAdminTicket, SocketLoginTicket } from './auth-core';
 import { registerIdentityAuthRoutes } from './auth-routes';
 import { LobbyIdentityService } from './identity-service';
@@ -229,4 +230,40 @@ test('administrator tickets rename reset and disable an existing fixed account',
     assert.deepEqual(await runtime.service.authenticateFixedAccount({
         sessionId: runtime.session.sessionId, steamId: '76561198000000085', password: 'replacement-pass',
     }), { ok: false, reason: 'account_disabled' });
+});
+
+test('异能选角阶段拒绝禁用当前参赛固定成员', async (t) => {
+    const runtime = await startTestServer('ability-roster-disable-gate');
+    t.after(runtime.close);
+    const account = await runtime.service.createOrUpdateFixedAccount({
+        steamId: '76561198000000087', nickname: 'Protected Member', password: 'initial-pass',
+    });
+    runtime.session.phase = GamePhase.AbilityDraft;
+    runtime.session.matchOptions.abilityModeEnabled = true;
+    runtime.session.players.member = {
+        playerId: 'member',
+        name: 'Protected Member',
+        role: 'Player',
+        identityId: account.identity.identityId,
+        rosterTeam: 'A',
+        isReady: true,
+    };
+    runtime.session.teams.A.players = ['member'];
+    const ticket = runtime.adminTickets.issue({
+        sessionId: runtime.session.sessionId,
+        adminPlayerId: 'admin-player',
+        operation: 'set_enabled',
+        identityId: account.identity.identityId,
+    }, 30_000);
+
+    const result = await patchJson(
+        `${runtime.baseUrl}/api/admin/fixed-members/${account.identity.identityId}/enabled`,
+        { enabled: false },
+        ticket.ticket,
+    );
+
+    assert.equal(result.status, 409);
+    assert.equal(result.body.error, 'ability_roster_locked');
+    assert.match(result.body.message || '', /终止本局.*返回大厅/);
+    assert.equal(runtime.service.findIdentityBySteamId('76561198000000087')?.fixedAccount?.enabled, true);
 });

@@ -17,6 +17,10 @@ import {
 } from './identity-runtime';
 import { LobbyIdentityService } from './identity-service';
 import { FixedMemberLoginGuard } from './password-auth';
+import {
+    ABILITY_ROSTER_LOCK_MESSAGE,
+    isProtectedAbilityRosterPlayer,
+} from '../ability-phase-one-policy';
 
 const defaultFixedMemberLoginGuard = new FixedMemberLoginGuard();
 
@@ -217,7 +221,16 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         if (!consumeAdminTicket(req, 'set_enabled', { identityId }) || typeof req.body?.enabled !== 'boolean') {
             return res.status(403).json({ success: false, error: 'admin_ticket_invalid' });
         }
-        const result = await service.setFixedAccountEnabled(identityId, req.body.enabled, getActiveSession().sessionId);
+        const activeSession = getActiveSession();
+        const activePlayer = Object.values(activeSession.players).find((player) => player.identityId === identityId);
+        if (req.body.enabled === false && isProtectedAbilityRosterPlayer(activeSession, activePlayer)) {
+            return res.status(409).json({
+                success: false,
+                error: 'ability_roster_locked',
+                message: ABILITY_ROSTER_LOCK_MESSAGE,
+            });
+        }
+        const result = await service.setFixedAccountEnabled(identityId, req.body.enabled, activeSession.sessionId);
         if (!result) return res.status(404).json({ success: false, error: 'account_not_found' });
         await dependencies.onFixedAccountChanged?.({
             operation: 'set_enabled',

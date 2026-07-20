@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { GamePhase, GameSession, Player } from '../types';
 import { LobbyMembershipRecord } from './identity-types';
+import { isProtectedAbilityRosterPlayer } from '../ability-phase-one-policy';
 
 export const applyMembershipToPlayer = (player: Player, membership: LobbyMembershipRecord): Player => {
     player.name = membership.nickname;
@@ -41,6 +42,7 @@ export const removeIdentityFromSession = (session: GameSession, identityId: stri
         candidate.identityId === identityId && candidate.role !== 'Admin',
     );
     if (!player) return undefined;
+    if (isProtectedAbilityRosterPlayer(session, player)) return undefined;
     const playerId = player.playerId;
     delete session.players[playerId];
     session.playerOrder = session.playerOrder.filter((candidate) => candidate !== playerId);

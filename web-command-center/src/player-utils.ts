@@ -9,6 +9,7 @@ import {
     RosterTeam,
 } from './types';
 import { getAbilityCatalog } from './ability-catalog';
+import { getAbilityPhaseOnePublicPolicy } from './ability-phase-one-policy';
 
 // ========== Player utilities ==========
 export const findPlayerById = (session: GameSession, id: string): Player | undefined =>
@@ -181,6 +182,7 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
         catalogVersion: ability.catalogVersion,
         ...(ability.globalUnique ? { globalUnique: true } : {}),
     }));
+    s.abilityPhaseOnePolicy = getAbilityPhaseOnePublicPolicy(session);
     s.lobbyAccess = viewer?.role === 'Admin'
         ? { ...session.lobbyAccess }
         : { inviteExpiresAt: session.lobbyAccess?.inviteExpiresAt };

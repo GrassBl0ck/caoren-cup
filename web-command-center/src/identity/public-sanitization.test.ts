@@ -271,3 +271,23 @@ test('public final ability assignments do not share arrays or entries with sessi
         false,
     );
 });
+
+test('public session exposes the phase-one ability start and roster gates without private data', () => {
+    const session = createAbilitySession();
+    session.phase = GamePhase.PreGameSetup;
+    session.matchOptions.abilityModeEnabled = true;
+    session.matchOptions.matchMode = 'competitive';
+    session.abilityAssignments = [
+        { playerId: 'a1', team: 'A', abilityId: 'tank' },
+        { playerId: 'a2', team: 'A', abilityId: 'medic' },
+        { playerId: 'b1', team: 'B', abilityId: 'witch' },
+        { playerId: 'b2', team: 'B', abilityId: 'assassin' },
+    ];
+
+    const publicSession = sanitizeForPublic(session, 'a1');
+
+    assert.equal(publicSession.abilityPhaseOnePolicy?.formalMatchStartBlocked, true);
+    assert.equal(publicSession.abilityPhaseOnePolicy?.rosterMutationBlocked, true);
+    assert.match(publicSession.abilityPhaseOnePolicy?.formalMatchStartMessage || '', /插件尚未同步.*不能正式开赛/);
+    assert.match(publicSession.abilityPhaseOnePolicy?.rosterMutationMessage || '', /终止本局.*返回大厅/);
+});
