@@ -483,7 +483,7 @@ const ws = io();
                 </div>
                 <div class="match-options-actions"><button type="button" class="primary-btn" onclick="saveAbilityModeConfig()">保存异能设置</button></div>
                 <div id="ability-mode-config-lock-note" class="match-options-warning"></div>`;
-            const actions = panel.querySelector('.match-options-actions');
+            const actions = Array.from(panel.children).find(child => child.classList.contains('match-options-actions'));
             panel.insertBefore(abilityPanel, actions || null);
             return abilityPanel;
         }

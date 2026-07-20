@@ -108,7 +108,24 @@ const appCss = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf
 const motionCss = fs.readFileSync(path.join(root, 'public', 'css', 'caoren-motion.css'), 'utf8');
 
 assert.match(indexHtml, /\/js\/ability-bp-ui\.js\?v=ability-bp-task7-20260720/);
-assert.match(indexHtml, /\/js\/lobby-app\.js\?v=ability-bp-task7-20260720/);
+const ensureAbilityModeConfigControlsSource = lobbyJs.match(
+  /function ensureAbilityModeConfigControls\(panel\)[\s\S]*?\n        }/,
+)?.[0] || '';
+const abilitySettingsBootContractFailures = [];
+if (!/panel\.children/.test(ensureAbilityModeConfigControlsSource)) {
+  abilitySettingsBootContractFailures.push('异能设置面板只能从 panel.children 查找直接子级插入目标');
+}
+if (/panel\.querySelector\(['"]\.match-options-actions['"]\)/.test(ensureAbilityModeConfigControlsSource)) {
+  abilitySettingsBootContractFailures.push('异能设置面板不得把后代 querySelector 结果传给 panel.insertBefore');
+}
+if (!/\/js\/lobby-app\.js\?v=ability-bp-task9-20260720/.test(indexHtml)) {
+  abilitySettingsBootContractFailures.push('lobby-app.js 必须使用 Task 9 cachebuster');
+}
+assert.deepEqual(
+  abilitySettingsBootContractFailures,
+  [],
+  `ability settings boot contracts failed:\n${abilitySettingsBootContractFailures.join('\n')}`,
+);
 assert.ok(indexHtml.indexOf('/js/ability-bp-ui.js') < indexHtml.indexOf('/js/lobby-app.js'), 'ability BP helper must load before lobby app');
 for (const [fn, eventName] of [
   ['toggleAbilityBanChoice', 'ABILITY_BAN_UPDATE'],
