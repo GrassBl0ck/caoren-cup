@@ -115,36 +115,14 @@ const abilityPluginSyncWarningText = '职业配置仅在网页完成，插件同
 const shouldShowAbilityPluginSyncWarningSource = lobbyJs.match(
   /function shouldShowAbilityPluginSyncWarning\(state\)[\s\S]*?\n        }/,
 )?.[0] || '';
+const resolveAbilityPreGameRenderDecisionSource = lobbyJs.match(
+  /function resolveAbilityPreGameRenderDecision\(state\)[\s\S]*?\n        }/,
+)?.[0] || '';
 const preGameSetupStart = lobbyJs.indexOf("if (state.phase === 'PreGameSetup') {");
 const preGameSetupEnd = lobbyJs.indexOf("if (state.phase === 'LiveGame') {", preGameSetupStart);
 const preGameSetupSource = preGameSetupStart >= 0 && preGameSetupEnd > preGameSetupStart
   ? lobbyJs.slice(preGameSetupStart, preGameSetupEnd)
   : '';
-const abilitySettingsBootContractFailures = [];
-if (!/panel\.children/.test(ensureAbilityModeConfigControlsSource)) {
-  abilitySettingsBootContractFailures.push('异能设置面板只能从 panel.children 查找直接子级插入目标');
-}
-if (/panel\.querySelector\(['"]\.match-options-actions['"]\)/.test(ensureAbilityModeConfigControlsSource)) {
-  abilitySettingsBootContractFailures.push('异能设置面板不得把后代 querySelector 结果传给 panel.insertBefore');
-}
-if (!shouldShowAbilityPluginSyncWarningSource) {
-  abilitySettingsBootContractFailures.push('lobby app 必须提供赛前异能插件同步警告的条件判断');
-}
-if (!preGameSetupSource.includes('shouldShowAbilityPluginSyncWarning(state)')) {
-  abilitySettingsBootContractFailures.push('PreGameSetup 必须按完整异能分配条件渲染插件同步警告');
-}
-if (!preGameSetupSource.includes(abilityPluginSyncWarningText)) {
-  abilitySettingsBootContractFailures.push('PreGameSetup 必须渲染固定的异能插件同步警告文案');
-}
-if (!/\/js\/lobby-app\.js\?v=ability-bp-task9-final-20260720/.test(indexHtml)) {
-  abilitySettingsBootContractFailures.push('lobby-app.js 必须使用 Task 9 final cachebuster');
-}
-assert.deepEqual(
-  abilitySettingsBootContractFailures,
-  [],
-  `ability settings boot contracts failed:\n${abilitySettingsBootContractFailures.join('\n')}`,
-);
-
 const warningPredicateSandbox = {};
 vm.runInNewContext(
   `${shouldShowAbilityPluginSyncWarningSource}\nthis.shouldShowAbilityPluginSyncWarning = shouldShowAbilityPluginSyncWarning;`,
@@ -165,11 +143,80 @@ const completedAbilityState = {
     { playerId: 'b1', team: 'B', abilityId: 'witch' },
   ],
 };
+const abilitySettingsBootContractFailures = [];
+if (!/panel\.children/.test(ensureAbilityModeConfigControlsSource)) {
+  abilitySettingsBootContractFailures.push('异能设置面板只能从 panel.children 查找直接子级插入目标');
+}
+if (/panel\.querySelector\(['"]\.match-options-actions['"]\)/.test(ensureAbilityModeConfigControlsSource)) {
+  abilitySettingsBootContractFailures.push('异能设置面板不得把后代 querySelector 结果传给 panel.insertBefore');
+}
+if (!shouldShowAbilityPluginSyncWarningSource) {
+  abilitySettingsBootContractFailures.push('lobby app 必须提供赛前异能插件同步警告的条件判断');
+}
+if (shouldShowAbilityPluginSyncWarning({
+  ...completedAbilityState,
+  abilityAssignments: [
+    completedAbilityState.abilityAssignments[0],
+    { ...completedAbilityState.abilityAssignments[1], team: 'A' },
+  ],
+})) {
+  abilitySettingsBootContractFailures.push('错队 assignment 不得视为覆盖对应比赛席位');
+}
+if (shouldShowAbilityPluginSyncWarning({
+  ...completedAbilityState,
+  abilityAssignments: [
+    completedAbilityState.abilityAssignments[0],
+    { ...completedAbilityState.abilityAssignments[1], abilityId: '' },
+  ],
+})) {
+  abilitySettingsBootContractFailures.push('空 abilityId assignment 不得视为完整职业分配');
+}
+if (!resolveAbilityPreGameRenderDecisionSource) {
+  abilitySettingsBootContractFailures.push('lobby app 必须提供可执行的赛前异能渲染决策');
+}
+if (!preGameSetupSource.includes('resolveAbilityPreGameRenderDecision(state)')) {
+  abilitySettingsBootContractFailures.push('PreGameSetup 必须使用赛前异能渲染决策');
+}
+if (!preGameSetupSource.includes('abilityPreGameDecision.showMatchStartGuidance')) {
+  abilitySettingsBootContractFailures.push('PreGameSetup 的正式开赛指引必须由赛前异能渲染决策控制');
+}
+if (!preGameSetupSource.includes(abilityPluginSyncWarningText)) {
+  abilitySettingsBootContractFailures.push('PreGameSetup 必须渲染固定的异能插件同步警告文案');
+}
+if (!/\/js\/lobby-app\.js\?v=ability-bp-task9-start-guard-20260720/.test(indexHtml)) {
+  abilitySettingsBootContractFailures.push('lobby-app.js 必须使用 Task 9 start guard cachebuster');
+}
+assert.deepEqual(
+  abilitySettingsBootContractFailures,
+  [],
+  `ability settings boot contracts failed:\n${abilitySettingsBootContractFailures.join('\n')}`,
+);
+
+const renderDecisionSandbox = {};
+vm.runInNewContext(
+  `${shouldShowAbilityPluginSyncWarningSource}\n${resolveAbilityPreGameRenderDecisionSource}\nthis.resolveAbilityPreGameRenderDecision = resolveAbilityPreGameRenderDecision;`,
+  renderDecisionSandbox,
+);
+const resolveAbilityPreGameRenderDecision = renderDecisionSandbox.resolveAbilityPreGameRenderDecision;
 assert.equal(shouldShowAbilityPluginSyncWarning(completedAbilityState), true, 'completed ability BP must show the PreGameSetup warning');
 assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, abilityAssignments: completedAbilityState.abilityAssignments.slice(0, 1) }), false, 'incomplete ability assignments must not show the warning');
+assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, abilityAssignments: [completedAbilityState.abilityAssignments[0], { ...completedAbilityState.abilityAssignments[1], team: 'A' }] }), false, 'wrong-team assignments must not show the warning');
+assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, abilityAssignments: [completedAbilityState.abilityAssignments[0], { ...completedAbilityState.abilityAssignments[1], abilityId: '' }] }), false, 'empty ability IDs must not show the warning');
 assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, matchOptions: { ...completedAbilityState.matchOptions, abilityModeEnabled: false } }), false, 'disabled ability mode must not show the warning');
 assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, matchOptions: { ...completedAbilityState.matchOptions, matchMode: 'duel' } }), false, 'duel mode must not show the warning');
 assert.equal(shouldShowAbilityPluginSyncWarning({ ...completedAbilityState, phase: 'AbilityDraft' }), false, 'the warning belongs only to PreGameSetup');
+const completedRenderDecision = resolveAbilityPreGameRenderDecision(completedAbilityState);
+assert.equal(completedRenderDecision.showPluginSyncWarning, true, 'completed ability BP must keep the fixed warning');
+assert.equal(completedRenderDecision.showMatchStartGuidance, false, 'completed ability BP must hide ordinary match and .start guidance');
+for (const state of [
+  { ...completedAbilityState, abilityAssignments: completedAbilityState.abilityAssignments.slice(0, 1) },
+  { ...completedAbilityState, matchOptions: { ...completedAbilityState.matchOptions, abilityModeEnabled: false } },
+  { ...completedAbilityState, matchOptions: { ...completedAbilityState.matchOptions, matchMode: 'duel' } },
+]) {
+  const decision = resolveAbilityPreGameRenderDecision(state);
+  assert.equal(decision.showPluginSyncWarning, false, 'legacy PreGameSetup paths must not show the ability warning');
+  assert.equal(decision.showMatchStartGuidance, true, 'legacy PreGameSetup paths must retain existing match start guidance');
+}
 assert.ok(indexHtml.indexOf('/js/ability-bp-ui.js') < indexHtml.indexOf('/js/lobby-app.js'), 'ability BP helper must load before lobby app');
 for (const [fn, eventName] of [
   ['toggleAbilityBanChoice', 'ABILITY_BAN_UPDATE'],

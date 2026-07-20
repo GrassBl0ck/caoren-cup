@@ -466,12 +466,24 @@ const ws = io();
         function shouldShowAbilityPluginSyncWarning(state) {
             const options = state?.matchOptions || {};
             if (state?.phase !== 'PreGameSetup' || options.matchMode === 'duel' || options.abilityModeEnabled !== true) return false;
-            const matchPlayerIds = Object.values(state?.players || {})
-                .filter(player => player.role !== 'Admin' && player.role !== 'Spectator' && (player.rosterTeam === 'A' || player.rosterTeam === 'B'))
-                .map(player => player.playerId);
-            if (matchPlayerIds.length === 0) return false;
-            const assignedPlayerIds = new Set((Array.isArray(state?.abilityAssignments) ? state.abilityAssignments : []).map(assignment => assignment?.playerId));
-            return matchPlayerIds.every(playerId => assignedPlayerIds.has(playerId));
+            const matchPlayers = Object.values(state?.players || {})
+                .filter(player => player.role !== 'Admin' && player.role !== 'Spectator' && (player.rosterTeam === 'A' || player.rosterTeam === 'B'));
+            if (matchPlayers.length === 0) return false;
+            const assignments = Array.isArray(state?.abilityAssignments) ? state.abilityAssignments : [];
+            return matchPlayers.every(player => assignments.some(assignment => (
+                assignment?.playerId === player.playerId
+                && assignment?.team === player.rosterTeam
+                && typeof assignment?.abilityId === 'string'
+                && assignment.abilityId.trim().length > 0
+            )));
+        }
+
+        function resolveAbilityPreGameRenderDecision(state) {
+            const showPluginSyncWarning = shouldShowAbilityPluginSyncWarning(state);
+            return {
+                showPluginSyncWarning,
+                showMatchStartGuidance: !showPluginSyncWarning,
+            };
         }
 
         function ensureAbilityModeConfigControls(panel) {
@@ -1389,27 +1401,30 @@ if (window._caorenModifiersEnabled !== true) {
             if (state.phase === 'PreGameSetup') {
                 const role = currentPlayer?.gameRole;
                 let html = renderDuelControlPanel(state, currentPlayer);
+                const abilityPreGameDecision = resolveAbilityPreGameRenderDecision(state);
 
-                if (shouldShowAbilityPluginSyncWarning(state)) {
+                if (abilityPreGameDecision.showPluginSyncWarning) {
                     html += '<div class="match-options-warning" style="margin-bottom:14px;">职业配置仅在网页完成，插件同步将在下一阶段实现；当前不能以异能模式正式开赛。</div>';
                 }
 
                 if (!undercoverEnabled) {
-                    if (isAdmin) {
-                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">标准竞技不再要求网页准备；请确认玩家已绑定、分队无误，然后由管理员在游戏内输入 MatchZy <code>.start</code> 开始比赛。</p></div><hr>';
-                    }
+                    if (abilityPreGameDecision.showMatchStartGuidance) {
+                        if (isAdmin) {
+                            html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">标准竞技不再要求网页准备；请确认玩家已绑定、分队无误，然后由管理员在游戏内输入 MatchZy <code>.start</code> 开始比赛。</p></div><hr>';
+                        }
 
-                    html += '<h3 style="text-align:center; color:#2e7d32;">本局为普通比赛模式</h3>';
-                    html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；玩家绑定并站到对应队伍后，等待管理员在游戏内使用 MatchZy <code>.start</code> 开赛。</p>';
+                        html += '<h3 style="text-align:center; color:#2e7d32;">本局为普通比赛模式</h3>';
+                        html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；玩家绑定并站到对应队伍后，等待管理员在游戏内使用 MatchZy <code>.start</code> 开赛。</p>';
 
-                    html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
-                    if (currentPlayer?.role !== 'Admin' && currentPlayer?.role !== 'Spectator') {
-                        html += '<h3 style="color:#1565c0;">请回到游戏内等待管理员开赛</h3>';
-                        html += '<p style="color:#64748b;">不需要输入 <code>.r</code>，也不需要点击网页准备。</p>';
-                    } else {
-                        html += '<h3 style="color:#4caf50;">确认无误后，在游戏内输入 <code>.start</code></h3>';
+                        html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
+                        if (currentPlayer?.role !== 'Admin' && currentPlayer?.role !== 'Spectator') {
+                            html += '<h3 style="color:#1565c0;">请回到游戏内等待管理员开赛</h3>';
+                            html += '<p style="color:#64748b;">不需要输入 <code>.r</code>，也不需要点击网页准备。</p>';
+                        } else {
+                            html += '<h3 style="color:#4caf50;">确认无误后，在游戏内输入 <code>.start</code></h3>';
+                        }
+                        html += '<p style="color:#888; font-size:14px; margin-top:15px;">比赛开始后，网页会自动进入正式比赛阶段。</p></div>';
                     }
-                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">比赛开始后，网页会自动进入正式比赛阶段。</p></div>';
                     extraDiv.innerHTML = html;
                 } else {
                     if (isAdmin) {
