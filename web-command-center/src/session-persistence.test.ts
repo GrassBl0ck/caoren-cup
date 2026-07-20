@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { pollAbilityFlowTimeouts } from './game-flow-manager';
+import { clearAllFlowTimers } from './game-timers';
 import { createInitialSession, getSession, setSession } from './session-manager';
 import * as persistence from './session-persistence';
 import { GamePhase, GameSession } from './types';
@@ -95,6 +96,70 @@ test('Snapshot v2 保存完整异能配置与 BP 状态，但不保存凭据和 
     assert.equal('timerEndAt' in snapshot.session, false);
     assert.equal('timerPhase' in snapshot.session, false);
     assert.equal('rollTimeout' in snapshot.session, false);
+});
+
+test('B 队选边权在 AbilityBan 持久化恢复后仍让无选边权的 A 队首选职业', (t) => {
+    t.after(clearAllFlowTimers);
+    const { serialize, deserialize } = requirePersistenceApi();
+    const now = 600_000;
+    const session = createInitialSession();
+    session.phase = GamePhase.AbilityBan;
+    session.matchOptions.abilityModeEnabled = true;
+    session.matchOptions.abilityBanCountPerTeam = 1;
+    session.sidePickTeam = 'B';
+    session.players = {
+        a1: { playerId: 'a1', name: 'A1', role: 'Player', rosterTeam: 'A', isReady: true },
+        b1: { playerId: 'b1', name: 'B1', role: 'Player', rosterTeam: 'B', isReady: true },
+    };
+    session.playerOrder = ['a1', 'b1'];
+    session.teams.A.players = ['a1'];
+    session.teams.B.players = ['b1'];
+    session.captains = { A: 'a1', B: 'b1' };
+    session.abilityBanState = {
+        orderedPlayers: { A: ['a1'], B: ['b1'] },
+        banCountPerTeam: 1,
+        selections: {},
+        confirmedPlayerIds: [],
+        timeoutAt: now - 1,
+    };
+    session.abilityAssignments = [];
+
+    const snapshot = serialize(session, now - 10_000);
+    assert.equal(snapshot.session.sidePickTeam, 'B');
+    const restored = deserialize(snapshot);
+    assert.ok(restored);
+    assert.equal(restored.sidePickTeam, 'B');
+
+    const previous = getSession();
+    try {
+        setSession(restored);
+        assert.equal(pollAbilityFlowTimeouts(now), true);
+        assert.equal(getSession().phase, GamePhase.AbilityDraft);
+        assert.equal(getSession().abilityDraftState?.batches[0]?.team, 'A');
+    } finally {
+        setSession(previous);
+    }
+});
+
+test('Snapshot sidePickTeam 仅接受 A/B，v1 安全迁移不恢复旧选边权', () => {
+    const { serialize, deserialize } = requirePersistenceApi();
+    const session = createInitialSession();
+    const invalidV2 = serialize(session, 100);
+    invalidV2.session.sidePickTeam = 'C';
+
+    assert.equal(deserialize(invalidV2)?.sidePickTeam, null);
+    assert.equal(deserialize({
+        version: 1,
+        savedAt: 100,
+        session: {
+            sessionId: 'legacy-side-pick',
+            phase: GamePhase.Lobby,
+            sidePickTeam: 'B',
+            players: {},
+            playerOrder: [],
+            matchOptions: {},
+        },
+    })?.sidePickTeam, null);
 });
 
 test('Snapshot v1 可迁移，并默认关闭异能且不恢复 BP 状态', () => {

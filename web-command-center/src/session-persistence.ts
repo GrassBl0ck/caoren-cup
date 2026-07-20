@@ -39,6 +39,7 @@ export const serializeSessionSnapshot = (session: GameSession, savedAt = Date.no
         captains: session.captains,
         selectedMap: session.selectedMap,
         selectedSide: session.selectedSide,
+        sidePickTeam: session.sidePickTeam,
         matchOptions: session.matchOptions,
         abilityBanState: session.abilityBanState,
         abilityDraftState: session.abilityDraftState,
@@ -78,6 +79,9 @@ const normalizeRestoredSession = (raw: any, version: 1 | 2): GameSession => {
         : base.lobbyAccess;
     restored.matchOptions.matchMode = restored.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
     restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
+    restored.sidePickTeam = version === 2 && (restored.sidePickTeam === 'A' || restored.sidePickTeam === 'B')
+        ? restored.sidePickTeam
+        : null;
     if (version === 1) {
         if (restored.phase === GamePhase.AbilityBan || restored.phase === GamePhase.AbilityDraft) {
             restored.phase = GamePhase.PreGameSetup;
