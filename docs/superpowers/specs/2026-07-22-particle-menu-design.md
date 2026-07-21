@@ -1,4 +1,6 @@
-# 草人杯全地图粒子菜单设计
+# 已废弃：草人杯全地图粒子菜单设计（CounterStrikeSharp-only）
+
+> **状态：已废弃，2026-07-22。** 用户已决定使用新版 SwiftlyS2 单独承载粒子菜单；请改读 `2026-07-22-swiftlys2-particle-menu-design.md`。本文件保留用于说明 CounterStrikeSharp-only 输入方案为何停止，不能作为实施依据。
 
 ## 目标
 

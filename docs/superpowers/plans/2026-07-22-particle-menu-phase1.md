@@ -1,4 +1,6 @@
-# 草人杯全地图粒子菜单第一阶段 Implementation Plan
+# 已废弃：草人杯全地图粒子菜单第一阶段 Implementation Plan
+
+> **状态：已废弃，2026-07-22。** 本计划假设 CounterStrikeSharp 能完成鼠标输入与攻击拦截；该假设已被输入 Hook 核查否定。用户已决定改用新版 SwiftlyS2 单独承载菜单，不能执行本计划。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
