@@ -2,12 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { GameSession } from './types';
 import { createInitialSession, getSession, setSession } from './session-manager';
-import {
-    clearFlowUndoHistory,
-    exportFlowUndoState,
-    importFlowUndoState,
-    PersistedFlowUndoState,
-} from './flow-undo-manager';
+import { clearFlowUndoHistory } from './flow-undo-manager';
 
 const SNAPSHOT_VERSION = 2;
 const SNAPSHOT_DIR = path.resolve(__dirname, '..', 'runtime');
@@ -34,7 +29,6 @@ export interface SessionSnapshotPayloadV2 {
     version: 2;
     savedAt: number;
     session: Record<string, unknown>;
-    flowUndo: PersistedFlowUndoState;
 }
 
 export const buildSessionSnapshotPayload = (session: GameSession): SessionSnapshotPayloadV2 => ({
@@ -85,7 +79,6 @@ export const buildSessionSnapshotPayload = (session: GameSession): SessionSnapsh
         createdAt: session.createdAt,
         autoClearMinutes: session.autoClearMinutes,
     },
-    flowUndo: exportFlowUndoState(),
 });
 
 const normalizeRestoredSession = (raw: any): GameSession => {
@@ -134,8 +127,7 @@ export const restoreSessionSnapshotData = (parsed: any): boolean => {
     if (!parsed?.session || (parsed.version !== 1 && parsed.version !== SNAPSHOT_VERSION)) return false;
     const restored = normalizeRestoredSession(parsed.session);
     setSession(restored);
-    if (parsed.version === SNAPSHOT_VERSION) importFlowUndoState(parsed.flowUndo, restored.sessionId);
-    else clearFlowUndoHistory();
+    clearFlowUndoHistory();
     return true;
 };
 

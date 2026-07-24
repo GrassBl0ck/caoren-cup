@@ -146,9 +146,17 @@ export interface SideVoteState {
 
 export type FlowUndoActionType = 'ADVANCE_PHASE' | 'ADMIN_BAN_MAP' | 'ASSIGN_ROSTER_TEAM';
 
+export interface FlowUndoRequest {
+    expectedPhase: GamePhase;
+    expectedHistoryDepth: number;
+    expectedEntryId: string;
+}
+
 export interface FlowUndoStatus {
     count: number;
+    historyDepth: number;
     canUndo: boolean;
+    targetPhase: GamePhase | null;
     disabledReason?: string;
     latest?: {
         id: string;

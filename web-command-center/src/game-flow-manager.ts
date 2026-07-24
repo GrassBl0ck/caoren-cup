@@ -47,7 +47,11 @@ import {
     resolveDuelMapConfig,
 } from './duel-config';
 import { enqueuePluginCommand } from './plugin-command-queue';
-import { clearFlowUndoHistory } from './flow-undo-manager';
+import {
+    clearFlowUndoHistory,
+    commitFlowUndoCheckpoint,
+    prepareFlowUndoCheckpoint,
+} from './flow-undo-manager';
 
 // ========== Broadcast and notification hooks ==========
 let broadcast: (() => void) | null = null;
@@ -760,6 +764,7 @@ const queueDuelFormalStart = (delaySeconds = 0) => {
 
 const rollbackDuelToLobby = (reason = '单挑等待结束后参赛玩家不足，已回到大厅。') => {
     const session = getSession();
+    clearFlowUndoHistory();
     session.phase = GamePhase.Lobby;
     session.matchId = uuidv4();
     session.liveGameData = undefined;
@@ -921,13 +926,39 @@ const resolveNextPhaseByMatchOptions = (from: GamePhase, requestedTo: GamePhase)
     return requestedTo;
 };
 
-const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string): boolean => {
+const REVERSIBLE_PREGAME_PHASES = [
+    GamePhase.Lobby,
+    GamePhase.CaptainSelection,
+    GamePhase.Roll,
+    GamePhase.PlayerDraft,
+    GamePhase.MapBan,
+    GamePhase.SidePick,
+    GamePhase.PreGameSetup,
+];
+
+const advancePhase = (
+    from: GamePhase,
+    to: GamePhase,
+    triggeredBy = '系统',
+    triggeredById = 'SYSTEM',
+    recordUndo = true,
+): boolean => {
     let nextTo = resolveNextPhaseByMatchOptions(from, to);
     const session = getSession();
     if (session.phase !== from) return false;
+    if (from === GamePhase.Lobby && isDuelMode()) nextTo = GamePhase.PreGameSetup;
+    const checkpoint = recordUndo &&
+        REVERSIBLE_PREGAME_PHASES.includes(from) &&
+        nextTo !== GamePhase.LiveGame
+        ? prepareFlowUndoCheckpoint(session, {
+            actionType: 'ADVANCE_PHASE',
+            actorId: triggeredById,
+            actorName: triggeredBy,
+            summary: `推进阶段：${from} → ${nextTo}`,
+        })
+        : undefined;
     if (from === GamePhase.Lobby && isDuelMode()) {
         if (!setupDuelFromLobby()) return false;
-        nextTo = GamePhase.PreGameSetup;
     }
     if (!canTransition(from, nextTo)) return false;
 
@@ -937,8 +968,10 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string): boo
         broadcast?.();
         if (session.rollTimeout) clearTimeout(session.rollTimeout);
         session.rollTimeout = setTimeout(() => {
+            if (session.phase !== GamePhase.Roll) return;
             session.phase = GamePhase.PlayerDraft;
             performPhaseTransition(GamePhase.PlayerDraft);
+            if (checkpoint) commitFlowUndoCheckpoint(checkpoint);
         }, 3000);
         return true;
     }
@@ -990,6 +1023,7 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string): boo
 
     session.phase = nextTo;
     performPhaseTransition(nextTo);
+    if (checkpoint) commitFlowUndoCheckpoint(checkpoint);
     return true;
 };
 

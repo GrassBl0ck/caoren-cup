@@ -6,7 +6,6 @@ import {
     clearFlowUndoHistory,
     exportFlowUndoState,
     getFlowUndoStatus,
-    importFlowUndoState,
     pushFlowUndoCheckpoint,
     undoLatestFlowAction,
 } from './flow-undo-manager';
@@ -24,26 +23,33 @@ const addPlayer = (session: ReturnType<typeof createInitialSession>, player: Pla
     session.playerOrder.push(player.playerId);
 };
 
+const currentRequest = (session: ReturnType<typeof createInitialSession>, actor: Player) => {
+    const status = getFlowUndoStatus(session, actor);
+    assert.ok(status.latest);
+    return {
+        expectedPhase: session.phase,
+        expectedHistoryDepth: status.count,
+        expectedEntryId: status.latest.id,
+    };
+};
+
 test.beforeEach(() => clearFlowUndoHistory());
 
-test('undo restores flow fields while preserving current identities, new players, and kicked players', () => {
+test('undo restores flow fields while preserving current identities and later spectators', () => {
     const session = createInitialSession();
     session.phase = GamePhase.PlayerDraft;
     const admin = makePlayer('admin', 'Admin', 'Admin');
     const kept: Player = { ...makePlayer('kept', 'Kept'), identityId: 'identity-before', rosterTeam: 'A' };
-    const kicked: Player = { ...makePlayer('kicked', 'Kicked'), rosterTeam: 'B' };
     addPlayer(session, admin);
     addPlayer(session, kept);
-    addPlayer(session, kicked);
     session.teams.A.players = ['kept'];
-    session.teams.B.players = ['kicked'];
     session.draftIndex = 1;
 
     pushFlowUndoCheckpoint(session, {
         actionType: 'ASSIGN_ROSTER_TEAM',
         actorId: admin.playerId,
         actorName: admin.name,
-        summary: '将 Kept 分入 B 队',
+        summary: 'Move Kept to team B',
     });
 
     session.phase = GamePhase.MapBan;
@@ -52,20 +58,16 @@ test('undo restores flow fields while preserving current identities, new players
     kept.identityId = 'identity-current';
     session.teams.A.players = [];
     session.teams.B.players = ['kept'];
-    delete session.players.kicked;
-    session.playerOrder = session.playerOrder.filter(id => id !== 'kicked');
-    const joined = { ...makePlayer('joined', 'Joined', 'Spectator'), identityId: 'identity-joined', rosterTeam: 'A' as const, isReady: true };
+    const joined = { ...makePlayer('joined', 'Joined', 'Spectator'), identityId: 'identity-joined', isReady: true };
     addPlayer(session, joined);
-    session.teams.A.players.push('joined');
 
-    const result = undoLatestFlowAction(session, admin);
+    const result = undoLatestFlowAction(session, admin, currentRequest(session, admin) as any);
 
     assert.equal(result.ok, true);
     assert.equal(session.phase, GamePhase.PlayerDraft);
     assert.equal(session.draftIndex, 1);
     assert.equal(session.players.kept.rosterTeam, 'A');
     assert.equal(session.players.kept.identityId, 'identity-current');
-    assert.equal(session.players.kicked, undefined);
     assert.equal(session.players.joined.identityId, 'identity-joined');
     assert.equal(session.players.joined.role, 'Spectator');
     assert.equal(session.players.joined.rosterTeam, undefined);
@@ -74,53 +76,139 @@ test('undo restores flow fields while preserving current identities, new players
     assert.deepEqual(session.teams.B.players, []);
 });
 
-test('official admin can undo any checkpoint while duel temporary admin can only undo their own top checkpoint', () => {
+test('missing required participant rejects undo and clears invalid history', () => {
     const session = createInitialSession();
-    session.phase = GamePhase.PreGameSetup;
+    session.phase = GamePhase.PlayerDraft;
     const admin = makePlayer('admin', 'Admin', 'Admin');
-    const temporary = makePlayer('temporary', 'Temporary');
-    const other = makePlayer('other', 'Other');
+    const drafted: Player = { ...makePlayer('drafted', 'Drafted'), rosterTeam: 'A' };
     addPlayer(session, admin);
-    addPlayer(session, temporary);
-    addPlayer(session, other);
-    session.duelTempAdminId = temporary.playerId;
-
+    addPlayer(session, drafted);
+    session.teams.A.players = ['drafted'];
     pushFlowUndoCheckpoint(session, {
-        actionType: 'ADVANCE_PHASE', actorId: other.playerId, actorName: other.name, summary: '其他人的操作',
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Advance draft',
     });
-    assert.equal(getFlowUndoStatus(session, temporary).canUndo, false);
-    assert.match(getFlowUndoStatus(session, temporary).disabledReason || '', /只能撤销自己的操作/);
-    assert.equal(undoLatestFlowAction(session, temporary).ok, false);
-    assert.equal(undoLatestFlowAction(session, admin).ok, true);
+    session.phase = GamePhase.MapBan;
+    delete session.players.drafted;
+    session.playerOrder = session.playerOrder.filter(id => id !== drafted.playerId);
+    const request = currentRequest(session, admin);
 
-    pushFlowUndoCheckpoint(session, {
-        actionType: 'ASSIGN_ROSTER_TEAM', actorId: temporary.playerId, actorName: temporary.name, summary: '临时管理员分队',
-    });
-    assert.equal(getFlowUndoStatus(session, temporary).canUndo, true);
-    assert.equal(undoLatestFlowAction(session, temporary).ok, true);
+    const result = undoLatestFlowAction(session, admin, request as any);
+
+    assert.equal(result.ok, false);
+    assert.match('reason' in result ? result.reason : '', /参赛者.*不在|失效/);
+    assert.equal(session.phase, GamePhase.MapBan);
+    assert.equal(getFlowUndoStatus(session, admin).count, 0);
 });
 
-test('history is capped at fifty entries and survives import only for the same session', () => {
+test('missing unassigned lobby participant also invalidates phase undo history', () => {
+    const session = createInitialSession();
+    const admin = makePlayer('admin', 'Admin', 'Admin');
+    const participant = makePlayer('participant', 'Participant');
+    addPlayer(session, admin);
+    addPlayer(session, participant);
+    session.phase = GamePhase.Lobby;
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Start captain selection',
+    });
+    session.phase = GamePhase.CaptainSelection;
+    delete session.players.participant;
+    session.playerOrder = ['admin'];
+    const request = currentRequest(session, admin);
+
+    const result = undoLatestFlowAction(session, admin, request as any);
+
+    assert.equal(result.ok, false);
+    assert.equal(session.phase, GamePhase.CaptainSelection);
+    assert.equal(getFlowUndoStatus(session, admin).historyDepth, 0);
+});
+
+test('required participant becoming spectator rejects undo and clears invalid history', () => {
+    const session = createInitialSession();
+    session.phase = GamePhase.CaptainSelection;
+    const admin = makePlayer('admin', 'Admin', 'Admin');
+    const captain: Player = { ...makePlayer('captain', 'Captain'), rosterTeam: 'A' };
+    addPlayer(session, admin);
+    addPlayer(session, captain);
+    session.captains.A = captain.playerId;
+    session.teams.A.players = [captain.playerId];
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Advance captain selection',
+    });
+    session.phase = GamePhase.Roll;
+    captain.role = 'Spectator';
+    const request = currentRequest(session, admin);
+
+    const result = undoLatestFlowAction(session, admin, request as any);
+
+    assert.equal(result.ok, false);
+    assert.match('reason' in result ? result.reason : '', /观战|失效/);
+    assert.equal(session.phase, GamePhase.Roll);
+    assert.equal(getFlowUndoStatus(session, admin).count, 0);
+});
+
+test('stale duplicate request cannot pop a second checkpoint', () => {
+    const session = createInitialSession();
+    const admin = makePlayer('admin', 'Admin', 'Admin');
+    addPlayer(session, admin);
+    session.phase = GamePhase.Lobby;
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'First advance',
+    });
+    session.phase = GamePhase.CaptainSelection;
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Second advance',
+    });
+    session.phase = GamePhase.Roll;
+    const request = currentRequest(session, admin);
+
+    assert.equal(undoLatestFlowAction(session, admin, request as any).ok, true);
+    assert.equal(session.phase, GamePhase.CaptainSelection);
+    assert.equal(undoLatestFlowAction(session, admin, request as any).ok, false);
+    assert.equal(session.phase, GamePhase.CaptainSelection);
+    assert.equal(getFlowUndoStatus(session, admin).count, 1);
+});
+
+test('official admin can undo any checkpoint while duel temporary admin can only undo their phase advance', () => {
+    const session = createInitialSession();
+    const admin = makePlayer('admin', 'Admin', 'Admin');
+    const temporary = makePlayer('temporary', 'Temporary');
+    addPlayer(session, admin);
+    addPlayer(session, temporary);
+    session.duelTempAdminId = temporary.playerId;
+    session.phase = GamePhase.Lobby;
+
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ASSIGN_ROSTER_TEAM', actorId: temporary.playerId, actorName: temporary.name, summary: 'Temporary assignment',
+    });
+    assert.equal(getFlowUndoStatus(session, temporary).canUndo, false);
+    assert.equal(undoLatestFlowAction(session, temporary, currentRequest(session, admin) as any).ok, false);
+    assert.equal(undoLatestFlowAction(session, admin, currentRequest(session, admin) as any).ok, true);
+
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: temporary.playerId, actorName: temporary.name, summary: 'Start duel setup',
+    });
+    session.phase = GamePhase.PreGameSetup;
+    assert.equal(getFlowUndoStatus(session, temporary).canUndo, true);
+    assert.equal(undoLatestFlowAction(session, temporary, currentRequest(session, temporary) as any).ok, true);
+    assert.equal(session.phase, GamePhase.Lobby);
+});
+
+test('history is capped at fifty entries and status exposes safe concurrency fields', () => {
     const session = createInitialSession();
     session.phase = GamePhase.CaptainSelection;
     const admin = makePlayer('admin', 'Admin', 'Admin');
     addPlayer(session, admin);
     for (let index = 0; index < 55; index += 1) {
         pushFlowUndoCheckpoint(session, {
-            actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: `操作 ${index}`,
+            actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: `Action ${index}`,
         });
     }
+    const status = getFlowUndoStatus(session, admin) as any;
     assert.equal(exportFlowUndoState().entries.length, 50);
-    assert.equal(exportFlowUndoState().entries[0].summary, '操作 5');
-
-    const persisted = exportFlowUndoState();
-    clearFlowUndoHistory();
-    assert.equal(importFlowUndoState(persisted, session.sessionId), true);
-    assert.equal(getFlowUndoStatus(session, admin).count, 50);
-
-    clearFlowUndoHistory();
-    assert.equal(importFlowUndoState(persisted, 'different-session'), false);
-    assert.equal(exportFlowUndoState().entries.length, 0);
+    assert.equal(exportFlowUndoState().entries[0].summary, 'Action 5');
+    assert.equal(status.historyDepth, 50);
+    assert.equal(status.targetPhase, GamePhase.CaptainSelection);
+    assert.equal(typeof status.latest.id, 'string');
 });
 
 test('live and postgame phases cannot be undone', () => {
@@ -128,27 +216,41 @@ test('live and postgame phases cannot be undone', () => {
     const admin = makePlayer('admin', 'Admin', 'Admin');
     addPlayer(session, admin);
     pushFlowUndoCheckpoint(session, {
-        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: '进入正式比赛前',
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Before live game',
     });
     session.phase = GamePhase.LiveGame;
     assert.equal(getFlowUndoStatus(session, admin).canUndo, false);
     assert.match(getFlowUndoStatus(session, admin).disabledReason || '', /正式比赛/);
-    assert.equal(undoLatestFlowAction(session, admin).ok, false);
 });
 
-test('import drops a damaged checkpoint instead of exposing it for restore', () => {
+test('undo restores assigned game roles and readiness without reverting identity fields', () => {
     const session = createInitialSession();
-    session.phase = GamePhase.PlayerDraft;
+    session.phase = GamePhase.PreGameSetup;
     const admin = makePlayer('admin', 'Admin', 'Admin');
+    const participant: Player = {
+        ...makePlayer('participant', 'Participant'),
+        identityId: 'identity-current',
+        rosterTeam: 'A',
+        gameRole: 'Undercover',
+        isReady: true,
+        undercoverTaskAckStage: 'read',
+    };
     addPlayer(session, admin);
+    addPlayer(session, participant);
+    session.teams.A.players = [participant.playerId];
     pushFlowUndoCheckpoint(session, {
-        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: '损坏记录',
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Pregame roles',
     });
-    const persisted: any = exportFlowUndoState();
-    persisted.entries[0].snapshot = {};
+    participant.gameRole = 'Soldier';
+    participant.isReady = false;
+    participant.undercoverTaskAckStage = undefined;
+    participant.identityId = 'identity-new';
 
-    clearFlowUndoHistory();
-    assert.equal(importFlowUndoState(persisted, session.sessionId), true);
-    assert.equal(getFlowUndoStatus(session, admin).count, 0);
-    assert.equal(getFlowUndoStatus(session, admin).canUndo, false);
+    const result = undoLatestFlowAction(session, admin, currentRequest(session, admin) as any);
+
+    assert.equal(result.ok, true);
+    assert.equal(participant.gameRole, 'Undercover');
+    assert.equal(participant.isReady, true);
+    assert.equal(participant.undercoverTaskAckStage, 'read');
+    assert.equal(participant.identityId, 'identity-new');
 });

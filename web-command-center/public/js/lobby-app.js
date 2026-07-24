@@ -233,10 +233,16 @@ const ws = io();
                     : '暂无可撤销操作';
             }
             if (reason) reason.textContent = status.canUndo ? '可撤销最近一步。' : (status.disabledReason || '当前不能撤销。');
-            if (button) {
-                button.disabled = !status.canUndo;
-                button.title = status.canUndo ? `撤销：${status.latest?.summary || '最近一步'}` : (status.disabledReason || '当前不能撤销');
-            }
+            const buttonLabel = status.latest?.actionType === 'ADVANCE_PHASE'
+                ? `回退到：${phaseDisplayName(status.targetPhase)}`
+                : (status.latest ? `撤销：${status.latest.summary}` : '当前没有可撤销操作');
+            const requestPending = window._flowUndoRequestPending === true;
+            const buttons = [button, ...document.querySelectorAll('[data-flow-undo-action]')].filter(Boolean);
+            buttons.forEach(item => {
+                item.textContent = buttonLabel;
+                item.disabled = !status.canUndo || requestPending;
+                item.title = status.canUndo ? buttonLabel : (status.disabledReason || '当前不能撤销');
+            });
         }
 
         function oppositeSide(side) {
@@ -925,12 +931,17 @@ if (window._caorenModifiersEnabled !== true) {
         ws.on('NOTIFICATION', (data) => {
             const message = data?.message || '';
             if (!message) return;
+            window._flowUndoRequestPending = false;
+            if (window._currentGameState && window._currentPlayer) {
+                renderFlowUndoSafetyBar(window._currentGameState, window._currentPlayer);
+            }
             showLobbyNotice(message);
         });
 
         refreshLobbyAnnouncement();
 
         ws.on('GAME_STATE', (state) => {
+            window._flowUndoRequestPending = false;
             window._currentGameState = state;
             if (typeof state.serverNow === 'number') serverClockOffset = state.serverNow - Date.now();
             window._currentGamePhase = state.phase;
@@ -2119,7 +2130,12 @@ if (window._caorenModifiersEnabled !== true) {
                 }
                 if (currentPlayer.playerId === state.duelTempAdminId) {
                     const label = state.phase === 'Lobby' ? '\u5f00\u542f\u5355\u6311\u6d41\u7a0b' : (state.phase === 'PreGameSetup' ? '\u8fdb\u5165\u6b63\u5f0f\u5355\u6311' : '\u63a8\u8fdb\u5230\u4e0b\u4e00\u9636\u6bb5');
-                    html += `<div style="margin-top:10px;"><button onclick="advancePhase()" style="font-weight:bold;background:#facc15;color:#111827;">${label}</button></div>`;
+                    const undoStatus = state.flowUndoStatus;
+                    const undoLabel = undoStatus?.latest?.actionType === 'ADVANCE_PHASE'
+                        ? `回退到：${phaseDisplayName(undoStatus.targetPhase)}`
+                        : (undoStatus?.latest ? `撤销：${undoStatus.latest.summary}` : '当前没有可撤销操作');
+                    const undoDisabled = undoStatus?.canUndo ? '' : ' disabled';
+                    html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button onclick="advancePhase()" style="font-weight:bold;background:#facc15;color:#111827;">${label}</button><button data-flow-undo-action="duel" onclick="undoFlowAction()"${undoDisabled}>${htmlEscape(undoLabel)}</button></div>`;
                 }
             }
             if (state.duelTerminateRequest && currentPlayer.role === 'Admin') {
@@ -2656,16 +2672,31 @@ if (window._caorenModifiersEnabled !== true) {
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADVANCE_PHASE' });
         }
         function undoFlowAction() {
-            const status = window._currentGameState?.flowUndoStatus;
-            if (!status?.canUndo || !status.latest) {
+            const state = window._currentGameState;
+            const status = state?.flowUndoStatus;
+            if (!status?.canUndo || !status.latest || window._flowUndoRequestPending) {
                 return showLobbyNotice(status?.disabledReason || '当前没有可撤销的操作。', 'error');
             }
-            const ok = confirm(
-                `将撤销「${status.latest.summary}」，回到 ${phaseDisplayName(status.latest.restorePhase)}。\n\n` +
-                '此后产生的玩家掷骰、选人或投票也会被清除。确认继续吗？'
-            );
+            const currentPhase = phaseDisplayName(state.phase);
+            const targetPhase = phaseDisplayName(status.targetPhase);
+            const prompt = status.latest.actionType === 'ADVANCE_PHASE'
+                ? `确定要从“${currentPhase}”回退到“${targetPhase}”吗？\n\n当前阶段之后产生的流程操作将被丢弃，玩家登录和在线状态不会改变。`
+                : `确定撤销「${status.latest.summary}」吗？当前阶段仍为“${currentPhase}”。\n\n当前阶段之后产生的流程操作将被丢弃，玩家登录和在线状态不会改变。`;
+            const ok = confirm(prompt);
             if (!ok) return;
-            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UNDO_FLOW_ACTION' });
+            window._flowUndoRequestPending = true;
+            document.querySelectorAll('#flow-undo-btn, [data-flow-undo-action]').forEach(item => {
+                item.disabled = true;
+            });
+            ws.emit('ADMIN_ACTION', {
+                playerId: myPlayerId,
+                action: 'UNDO_FLOW_ACTION',
+                payload: {
+                    expectedPhase: state.phase,
+                    expectedHistoryDepth: status.historyDepth,
+                    expectedEntryId: status.latest.id,
+                },
+            });
         }
         function terminateGame() {
             const text = prompt('危险操作：这会强制终止本局、踢出所有玩家、清空房间。所有人必须重新进入。请输入 TERMINATE 确认：');

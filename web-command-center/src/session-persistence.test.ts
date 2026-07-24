@@ -3,7 +3,6 @@ import test from 'node:test';
 import {
     clearFlowUndoHistory,
     exportFlowUndoState,
-    getFlowUndoStatus,
     pushFlowUndoCheckpoint,
 } from './flow-undo-manager';
 import { createInitialSession, getSession, setSession } from './session-manager';
@@ -26,7 +25,7 @@ test.beforeEach(() => {
     clearFlowUndoHistory();
 });
 
-test('schema v2 persists complete pregame flow and undo history without login secrets', () => {
+test('schema v2 persists complete pregame flow without undo history or login secrets', () => {
     const session = createInitialSession();
     session.phase = GamePhase.MapBan;
     session.players.admin = { ...admin, bindCode: 'BIND-SECRET', sessionCode: 'SESSION-SECRET' };
@@ -40,7 +39,7 @@ test('schema v2 persists complete pregame flow and undo history without login se
     session.timerEndAt = session.mapVote.timeoutAt;
     session.timerPhase = GamePhase.MapBan;
     pushFlowUndoCheckpoint(session, {
-        actionType: 'ADMIN_BAN_MAP', actorId: 'admin', actorName: 'Admin', summary: '强 Ban Inferno',
+        actionType: 'ADMIN_BAN_MAP', actorId: 'admin', actorName: 'Admin', summary: 'Force ban Inferno',
     });
 
     const payload = buildSessionSnapshotPayload(session);
@@ -49,16 +48,16 @@ test('schema v2 persists complete pregame flow and undo history without login se
     assert.equal(payload.version, 2);
     assert.equal(serialized.includes('BIND-SECRET'), false);
     assert.equal(serialized.includes('SESSION-SECRET'), false);
-    assert.equal(payload.flowUndo.entries.length, 1);
+    assert.equal(Object.prototype.hasOwnProperty.call(payload, 'flowUndo'), false);
 
+    const legacyPayload = { ...payload, flowUndo: exportFlowUndoState() };
     setSession(createInitialSession());
-    clearFlowUndoHistory();
-    assert.equal(restoreSessionSnapshotData(payload), true);
+    assert.equal(restoreSessionSnapshotData(legacyPayload), true);
     assert.equal(getSession().phase, GamePhase.MapBan);
     assert.deepEqual(getSession().draftOriginalOrder, ['A', 'B']);
     assert.deepEqual(getSession().bannedMaps, ['Dust II']);
     assert.equal(getSession().mapVote?.votes.admin, 'Inferno');
-    assert.equal(getFlowUndoStatus(getSession(), getSession().players.admin).count, 1);
+    assert.equal(exportFlowUndoState().entries.length, 0);
 });
 
 test('schema v1 restores current session with empty undo history', () => {
@@ -66,7 +65,7 @@ test('schema v1 restores current session with empty undo history', () => {
     current.players.admin = { ...admin };
     current.playerOrder = ['admin'];
     pushFlowUndoCheckpoint(current, {
-        actionType: 'ADVANCE_PHASE', actorId: 'admin', actorName: 'Admin', summary: '旧历史',
+        actionType: 'ADVANCE_PHASE', actorId: 'admin', actorName: 'Admin', summary: 'Legacy history',
     });
     assert.equal(exportFlowUndoState().entries.length, 1);
 

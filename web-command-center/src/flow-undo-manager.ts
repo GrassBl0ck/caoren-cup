@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
     FlowUndoActionType,
+    FlowUndoRequest,
     FlowUndoStatus,
     GamePhase,
     GameSession,
@@ -80,7 +81,7 @@ export interface FlowUndoEntry {
     snapshot: FlowUndoSnapshot;
 }
 
-export interface PersistedFlowUndoState {
+export interface FlowUndoState {
     sessionId: string | null;
     entries: FlowUndoEntry[];
 }
@@ -97,7 +98,7 @@ export type FlowUndoResult =
     | { ok: true; entry: FlowUndoEntry }
     | { ok: false; reason: string };
 
-let undoState: PersistedFlowUndoState = { sessionId: null, entries: [] };
+let undoState: FlowUndoState = { sessionId: null, entries: [] };
 
 const clonePlain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
@@ -159,6 +160,32 @@ const restoreSnapshot = (session: GameSession, snapshot: FlowUndoSnapshot) => {
     );
 };
 
+const getRequiredParticipantIds = (snapshot: FlowUndoSnapshot): string[] => {
+    const required = new Set<string>();
+    const teams = snapshot.session.teams as GameSession['teams'] | undefined;
+    for (const team of ['A', 'B'] as const) {
+        for (const playerId of teams?.[team]?.players || []) required.add(playerId);
+    }
+    const captains = snapshot.session.captains as GameSession['captains'] | undefined;
+    if (captains?.A) required.add(captains.A);
+    if (captains?.B) required.add(captains.B);
+    for (const [playerId, fields] of Object.entries(snapshot.players)) {
+        if (fields.role === 'Player' || fields.rosterTeam === 'A' || fields.rosterTeam === 'B') {
+            required.add(playerId);
+        }
+    }
+    return [...required];
+};
+
+const validateSnapshotParticipants = (session: GameSession, snapshot: FlowUndoSnapshot): string | null => {
+    for (const playerId of getRequiredParticipantIds(snapshot)) {
+        const player = session.players[playerId];
+        if (!player) return `撤销记录依赖的参赛者 ${playerId} 已不在大厅，历史已失效。`;
+        if (player.role === 'Spectator') return `撤销记录依赖的参赛者 ${player.name} 已变成观战者，历史已失效。`;
+    }
+    return null;
+};
+
 const latestEntry = (): FlowUndoEntry | undefined => undoState.entries[undoState.entries.length - 1];
 
 const isPregamePhase = (phase: GamePhase) => [
@@ -181,14 +208,11 @@ const toLatestStatus = (entry: FlowUndoEntry): NonNullable<FlowUndoStatus['lates
     restorePhase: entry.restorePhase,
 });
 
-export const pushFlowUndoCheckpoint = (
+export const prepareFlowUndoCheckpoint = (
     session: GameSession,
     input: PushFlowUndoCheckpointInput,
 ): FlowUndoEntry => {
-    if (undoState.sessionId !== session.sessionId) {
-        undoState = { sessionId: session.sessionId, entries: [] };
-    }
-    const entry: FlowUndoEntry = {
+    return {
         id: randomUUID(),
         sessionId: session.sessionId,
         actionType: input.actionType,
@@ -199,12 +223,23 @@ export const pushFlowUndoCheckpoint = (
         restorePhase: session.phase,
         snapshot: captureSnapshot(session),
     };
+};
+
+export const commitFlowUndoCheckpoint = (entry: FlowUndoEntry): FlowUndoEntry => {
+    if (undoState.sessionId !== entry.sessionId) {
+        undoState = { sessionId: entry.sessionId, entries: [] };
+    }
     undoState.entries.push(entry);
     if (undoState.entries.length > MAX_FLOW_UNDO_ENTRIES) {
         undoState.entries.splice(0, undoState.entries.length - MAX_FLOW_UNDO_ENTRIES);
     }
     return entry;
 };
+
+export const pushFlowUndoCheckpoint = (
+    session: GameSession,
+    input: PushFlowUndoCheckpointInput,
+): FlowUndoEntry => commitFlowUndoCheckpoint(prepareFlowUndoCheckpoint(session, input));
 
 export const discardFlowUndoCheckpoint = (entryId: string): boolean => {
     const index = undoState.entries.findIndex(entry => entry.id === entryId);
@@ -219,9 +254,12 @@ export const clearFlowUndoHistory = () => {
 
 export const getFlowUndoStatus = (session: GameSession, actor?: Player): FlowUndoStatus => {
     const entry = latestEntry();
+    const historyDepth = undoState.sessionId === session.sessionId ? undoState.entries.length : 0;
     const base: FlowUndoStatus = {
-        count: undoState.sessionId === session.sessionId ? undoState.entries.length : 0,
+        count: historyDepth,
+        historyDepth,
         canUndo: false,
+        targetPhase: undoState.sessionId === session.sessionId && entry ? entry.restorePhase : null,
         latest: undoState.sessionId === session.sessionId && entry ? toLatestStatus(entry) : undefined,
     };
     if (!isPregamePhase(session.phase)) {
@@ -235,48 +273,42 @@ export const getFlowUndoStatus = (session: GameSession, actor?: Player): FlowUnd
     if (!entry || undoState.sessionId !== session.sessionId) {
         return { ...base, disabledReason: '当前没有可撤销的操作。' };
     }
-    if (isDuelTempAdmin && !isOfficialAdmin && entry.actorId !== actor.playerId) {
-        return { ...base, disabledReason: '单挑临时管理员只能撤销自己的操作。' };
+    if (isDuelTempAdmin && !isOfficialAdmin && (
+        entry.actorId !== actor.playerId ||
+        entry.actionType !== 'ADVANCE_PHASE' ||
+        entry.restorePhase !== GamePhase.Lobby
+    )) {
+        return { ...base, disabledReason: '单挑临时管理员只能撤销自己从大厅推进到赛前配置的操作。' };
     }
     return { ...base, canUndo: true, disabledReason: undefined };
 };
 
-export const undoLatestFlowAction = (session: GameSession, actor: Player): FlowUndoResult => {
+export const undoLatestFlowAction = (
+    session: GameSession,
+    actor: Player,
+    request?: FlowUndoRequest,
+): FlowUndoResult => {
     const status = getFlowUndoStatus(session, actor);
     if (!status.canUndo) return { ok: false, reason: status.disabledReason || '当前操作不能撤销。' };
     const entry = latestEntry();
     if (!entry || entry.sessionId !== session.sessionId) {
         return { ok: false, reason: '撤销记录与当前对局不一致。' };
     }
+    if (!request ||
+        request.expectedPhase !== session.phase ||
+        request.expectedHistoryDepth !== undoState.entries.length ||
+        request.expectedEntryId !== entry.id
+    ) {
+        return { ok: false, reason: '当前阶段或撤销记录已变化，请刷新状态后重试。' };
+    }
+    const participantError = validateSnapshotParticipants(session, entry.snapshot);
+    if (participantError) {
+        clearFlowUndoHistory();
+        return { ok: false, reason: participantError };
+    }
     restoreSnapshot(session, entry.snapshot);
     undoState.entries.pop();
     return { ok: true, entry };
 };
 
-export const exportFlowUndoState = (): PersistedFlowUndoState => clonePlain(undoState);
-
-export const importFlowUndoState = (raw: unknown, currentSessionId: string): boolean => {
-    clearFlowUndoHistory();
-    if (!raw || typeof raw !== 'object') return false;
-    const candidate = raw as Partial<PersistedFlowUndoState>;
-    if (candidate.sessionId !== currentSessionId || !Array.isArray(candidate.entries)) return false;
-    const entries = candidate.entries.filter((entry): entry is FlowUndoEntry => {
-        if (!entry || typeof entry !== 'object') return false;
-        const value = entry as FlowUndoEntry;
-        const snapshot = value.snapshot as FlowUndoSnapshot | undefined;
-        return value.sessionId === currentSessionId &&
-            typeof value.id === 'string' &&
-            typeof value.actorId === 'string' &&
-            typeof value.actorName === 'string' &&
-            typeof value.summary === 'string' &&
-            typeof value.createdAt === 'number' &&
-            Object.values(GamePhase).includes(value.restorePhase) &&
-            ['ADVANCE_PHASE', 'ADMIN_BAN_MAP', 'ASSIGN_ROSTER_TEAM'].includes(value.actionType) &&
-            !!snapshot && typeof snapshot === 'object' &&
-            !!snapshot.session && typeof snapshot.session === 'object' &&
-            !!snapshot.players && typeof snapshot.players === 'object' &&
-            snapshot.session.phase === value.restorePhase;
-    }).slice(-MAX_FLOW_UNDO_ENTRIES);
-    undoState = { sessionId: currentSessionId, entries: clonePlain(entries) };
-    return true;
-};
+export const exportFlowUndoState = (): FlowUndoState => clonePlain(undoState);

@@ -716,7 +716,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     GamePhase.MapBan,
                     GamePhase.SidePick,
                 ].includes(current) && nextPhase !== GamePhase.LiveGame;
-                const checkpoint = reversibleAdvance
+                const checkpoint = reversibleAdvance && enablesDuelForTempAdmin
                     ? pushFlowUndoCheckpoint(session, {
                         actionType: 'ADVANCE_PHASE',
                         actorId: admin.playerId,
@@ -726,9 +726,16 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     : undefined;
                 if (enablesDuelForTempAdmin) enableDuelModeForTempAdmin();
                 const wasScoreboard = String(current) === GamePhase.Scoreboard;
-                const advanced = advancePhase(current, nextPhase, admin.name);
+                const advanced = advancePhase(current, nextPhase, admin.name, admin.playerId, !checkpoint);
                 if (!advanced) {
-                    if (checkpoint && enablesDuelForTempAdmin) undoLatestFlowAction(session, admin);
+                    if (checkpoint && enablesDuelForTempAdmin) {
+                        const status = getFlowUndoStatus(session, admin);
+                        undoLatestFlowAction(session, admin, {
+                            expectedPhase: session.phase,
+                            expectedHistoryDepth: status.historyDepth,
+                            expectedEntryId: status.latest?.id || '',
+                        });
+                    }
                     else if (checkpoint) discardFlowUndoCheckpoint(checkpoint.id);
                     socket.emit(WsEvents.NOTIFICATION, { message: '阶段推进未生效，未创建撤销记录。' });
                     return;
@@ -747,14 +754,21 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     socket.emit(WsEvents.NOTIFICATION, { message: status.disabledReason || '当前没有可撤销的操作。' });
                     return;
                 }
+                const result = undoLatestFlowAction(session, admin, {
+                    expectedPhase: data.payload?.expectedPhase as GamePhase,
+                    expectedHistoryDepth: Number(data.payload?.expectedHistoryDepth),
+                    expectedEntryId: typeof data.payload?.expectedEntryId === 'string'
+                        ? data.payload.expectedEntryId
+                        : '',
+                });
+                if ('reason' in result) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: result.reason });
+                    broadcastState();
+                    return;
+                }
                 clearAllFlowTimers();
                 if (session.rollTimeout) clearTimeout(session.rollTimeout);
                 session.rollTimeout = undefined;
-                const result = undoLatestFlowAction(session, admin);
-                if ('reason' in result) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: result.reason });
-                    return;
-                }
                 resumeRestoredPregameFlow();
                 notifyMessage(`${admin.name} 已撤销「${result.entry.summary}」，当前阶段：${session.phase}。`);
                 broadcastState();
@@ -857,7 +871,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                         session.timerPhase = null;
                         if (getAvailableMaps().length === 1) {
                             session.selectedMap = getAvailableMaps()[0];
-                            advancePhase(GamePhase.MapBan, GamePhase.SidePick);
+                            advancePhase(GamePhase.MapBan, GamePhase.SidePick, admin.name, admin.playerId, false);
                         } else {
                             const nextIdx = session.bannedMaps.length;
                             if (nextIdx < session.banSequence.length) startMapVote(session.banSequence[nextIdx]);
