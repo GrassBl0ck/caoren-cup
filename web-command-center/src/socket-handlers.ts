@@ -763,6 +763,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 });
                 if ('reason' in result) {
                     socket.emit(WsEvents.NOTIFICATION, { message: result.reason });
+                    broadcastState();
                     return;
                 }
                 clearAllFlowTimers();

@@ -28,5 +28,8 @@ test('only official or duel temporary administrators receive sanitized undo stat
     assert.equal(JSON.stringify(publicState).includes('安全摘要'), false);
     assert.equal(adminState.flowUndoStatus.latest.summary, '安全摘要');
     assert.equal(temporaryState.flowUndoStatus.latest.summary, '安全摘要');
+    assert.equal(adminState.flowUndoStatus.historyDepth, 1);
+    assert.equal(adminState.flowUndoStatus.targetPhase, GamePhase.PlayerDraft);
+    assert.equal(temporaryState.flowUndoStatus.canUndo, false);
     assert.equal(JSON.stringify(adminState.flowUndoStatus).includes('snapshot'), false);
 });

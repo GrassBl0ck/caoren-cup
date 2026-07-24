@@ -200,3 +200,35 @@ test('live and postgame phases cannot be undone', () => {
     assert.equal(getFlowUndoStatus(session, admin).canUndo, false);
     assert.match(getFlowUndoStatus(session, admin).disabledReason || '', /正式比赛/);
 });
+
+test('undo restores assigned game roles and readiness without reverting identity fields', () => {
+    const session = createInitialSession();
+    session.phase = GamePhase.PreGameSetup;
+    const admin = makePlayer('admin', 'Admin', 'Admin');
+    const participant: Player = {
+        ...makePlayer('participant', 'Participant'),
+        identityId: 'identity-current',
+        rosterTeam: 'A',
+        gameRole: 'Undercover',
+        isReady: true,
+        undercoverTaskAckStage: 'read',
+    };
+    addPlayer(session, admin);
+    addPlayer(session, participant);
+    session.teams.A.players = [participant.playerId];
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Pregame roles',
+    });
+    participant.gameRole = 'Soldier';
+    participant.isReady = false;
+    participant.undercoverTaskAckStage = undefined;
+    participant.identityId = 'identity-new';
+
+    const result = undoLatestFlowAction(session, admin, currentRequest(session, admin) as any);
+
+    assert.equal(result.ok, true);
+    assert.equal(participant.gameRole, 'Undercover');
+    assert.equal(participant.isReady, true);
+    assert.equal(participant.undercoverTaskAckStage, 'read');
+    assert.equal(participant.identityId, 'identity-new');
+});

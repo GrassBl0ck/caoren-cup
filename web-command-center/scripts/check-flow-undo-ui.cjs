@@ -13,6 +13,7 @@ for (const id of [
   'flow-undo-count',
   'flow-undo-reason',
   'flow-undo-btn',
+  'flow-undo-inline-btn',
 ]) {
   if (!html.includes(`id="${id}"`)) throw new Error(`missing flow undo UI id: ${id}`);
 }
@@ -21,8 +22,15 @@ for (const token of [
   'function renderFlowUndoSafetyBar(',
   'function undoFlowAction(',
   "action: 'UNDO_FLOW_ACTION'",
-  '此后产生的玩家掷骰、选人或投票也会被清除',
+  'expectedPhase: state.phase',
+  'expectedHistoryDepth: status.historyDepth',
+  'expectedEntryId: status.latest.id',
+  'window._flowUndoRequestPending',
+  '回退到：${phaseDisplayName(status.targetPhase)}',
+  '撤销：${status.latest.summary}',
+  '当前阶段之后产生的流程操作将被丢弃',
   '进入正式比赛后将无法撤销赛前流程',
+  'data-flow-undo-action="duel"',
 ]) {
   if (!js.includes(token)) throw new Error(`missing flow undo browser behavior: ${token}`);
 }

@@ -764,6 +764,7 @@ const queueDuelFormalStart = (delaySeconds = 0) => {
 
 const rollbackDuelToLobby = (reason = '单挑等待结束后参赛玩家不足，已回到大厅。') => {
     const session = getSession();
+    clearFlowUndoHistory();
     session.phase = GamePhase.Lobby;
     session.matchId = uuidv4();
     session.liveGameData = undefined;

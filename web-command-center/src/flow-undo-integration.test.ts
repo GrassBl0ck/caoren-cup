@@ -319,3 +319,42 @@ test('duplicate socket undo request cannot pop two checkpoints', async () => {
     assert.equal(session.phase, GamePhase.CaptainSelection);
     assert.equal(exportFlowUndoState().entries.length, 1);
 });
+
+test('invalid participant failure is private and refreshes sanitized state for everyone', async () => {
+    const session = createInitialSession();
+    const admin = player('admin', 'Admin', 'Admin');
+    const participant = { ...player('participant', 'Participant'), rosterTeam: 'A' as const };
+    session.players = { admin, participant };
+    session.playerOrder = ['admin', 'participant'];
+    session.teams.A.players = ['participant'];
+    session.phase = GamePhase.PlayerDraft;
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Advance',
+    });
+    session.phase = GamePhase.MapBan;
+    delete session.players.participant;
+    session.playerOrder = ['admin'];
+    setSession(session);
+    const io = new FakeIo();
+    let stateBroadcasts = 0;
+    let publicNotices = 0;
+    registerSocketHandlers(io as any, {
+        broadcastState() { stateBroadcasts += 1; },
+        notifyMessage() { publicNotices += 1; },
+        persistSessionNow() {},
+    });
+    const socket = new FakeSocket('invalid-participant');
+    io.connect(socket);
+    socket.data.playerId = admin.playerId;
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: admin.playerId,
+        action: 'UNDO_FLOW_ACTION',
+        payload: undoPayload(session, admin),
+    });
+
+    assert.equal(exportFlowUndoState().entries.length, 0);
+    assert.equal(stateBroadcasts, 1);
+    assert.equal(publicNotices, 0);
+    assert.match(String(socket.emitted.at(-1)?.payload?.message || ''), /参赛者|失效/);
+});
