@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
     FlowUndoActionType,
+    FlowUndoRequest,
     FlowUndoStatus,
     GamePhase,
     GameSession,
@@ -159,6 +160,30 @@ const restoreSnapshot = (session: GameSession, snapshot: FlowUndoSnapshot) => {
     );
 };
 
+const getRequiredParticipantIds = (snapshot: FlowUndoSnapshot): string[] => {
+    const required = new Set<string>();
+    const teams = snapshot.session.teams as GameSession['teams'] | undefined;
+    for (const team of ['A', 'B'] as const) {
+        for (const playerId of teams?.[team]?.players || []) required.add(playerId);
+    }
+    const captains = snapshot.session.captains as GameSession['captains'] | undefined;
+    if (captains?.A) required.add(captains.A);
+    if (captains?.B) required.add(captains.B);
+    for (const [playerId, fields] of Object.entries(snapshot.players)) {
+        if (fields.rosterTeam === 'A' || fields.rosterTeam === 'B') required.add(playerId);
+    }
+    return [...required];
+};
+
+const validateSnapshotParticipants = (session: GameSession, snapshot: FlowUndoSnapshot): string | null => {
+    for (const playerId of getRequiredParticipantIds(snapshot)) {
+        const player = session.players[playerId];
+        if (!player) return `撤销记录依赖的参赛者 ${playerId} 已不在大厅，历史已失效。`;
+        if (player.role === 'Spectator') return `撤销记录依赖的参赛者 ${player.name} 已变成观战者，历史已失效。`;
+    }
+    return null;
+};
+
 const latestEntry = (): FlowUndoEntry | undefined => undoState.entries[undoState.entries.length - 1];
 
 const isPregamePhase = (phase: GamePhase) => [
@@ -219,9 +244,12 @@ export const clearFlowUndoHistory = () => {
 
 export const getFlowUndoStatus = (session: GameSession, actor?: Player): FlowUndoStatus => {
     const entry = latestEntry();
+    const historyDepth = undoState.sessionId === session.sessionId ? undoState.entries.length : 0;
     const base: FlowUndoStatus = {
-        count: undoState.sessionId === session.sessionId ? undoState.entries.length : 0,
+        count: historyDepth,
+        historyDepth,
         canUndo: false,
+        targetPhase: undoState.sessionId === session.sessionId && entry ? entry.restorePhase : null,
         latest: undoState.sessionId === session.sessionId && entry ? toLatestStatus(entry) : undefined,
     };
     if (!isPregamePhase(session.phase)) {
@@ -235,18 +263,38 @@ export const getFlowUndoStatus = (session: GameSession, actor?: Player): FlowUnd
     if (!entry || undoState.sessionId !== session.sessionId) {
         return { ...base, disabledReason: '当前没有可撤销的操作。' };
     }
-    if (isDuelTempAdmin && !isOfficialAdmin && entry.actorId !== actor.playerId) {
-        return { ...base, disabledReason: '单挑临时管理员只能撤销自己的操作。' };
+    if (isDuelTempAdmin && !isOfficialAdmin && (
+        entry.actorId !== actor.playerId ||
+        entry.actionType !== 'ADVANCE_PHASE' ||
+        entry.restorePhase !== GamePhase.Lobby
+    )) {
+        return { ...base, disabledReason: '单挑临时管理员只能撤销自己从大厅推进到赛前配置的操作。' };
     }
     return { ...base, canUndo: true, disabledReason: undefined };
 };
 
-export const undoLatestFlowAction = (session: GameSession, actor: Player): FlowUndoResult => {
+export const undoLatestFlowAction = (
+    session: GameSession,
+    actor: Player,
+    request?: FlowUndoRequest,
+): FlowUndoResult => {
     const status = getFlowUndoStatus(session, actor);
     if (!status.canUndo) return { ok: false, reason: status.disabledReason || '当前操作不能撤销。' };
     const entry = latestEntry();
     if (!entry || entry.sessionId !== session.sessionId) {
         return { ok: false, reason: '撤销记录与当前对局不一致。' };
+    }
+    if (!request ||
+        request.expectedPhase !== session.phase ||
+        request.expectedHistoryDepth !== undoState.entries.length ||
+        request.expectedEntryId !== entry.id
+    ) {
+        return { ok: false, reason: '当前阶段或撤销记录已变化，请刷新状态后重试。' };
+    }
+    const participantError = validateSnapshotParticipants(session, entry.snapshot);
+    if (participantError) {
+        clearFlowUndoHistory();
+        return { ok: false, reason: participantError };
     }
     restoreSnapshot(session, entry.snapshot);
     undoState.entries.pop();
