@@ -206,14 +206,11 @@ const toLatestStatus = (entry: FlowUndoEntry): NonNullable<FlowUndoStatus['lates
     restorePhase: entry.restorePhase,
 });
 
-export const pushFlowUndoCheckpoint = (
+export const prepareFlowUndoCheckpoint = (
     session: GameSession,
     input: PushFlowUndoCheckpointInput,
 ): FlowUndoEntry => {
-    if (undoState.sessionId !== session.sessionId) {
-        undoState = { sessionId: session.sessionId, entries: [] };
-    }
-    const entry: FlowUndoEntry = {
+    return {
         id: randomUUID(),
         sessionId: session.sessionId,
         actionType: input.actionType,
@@ -224,12 +221,23 @@ export const pushFlowUndoCheckpoint = (
         restorePhase: session.phase,
         snapshot: captureSnapshot(session),
     };
+};
+
+export const commitFlowUndoCheckpoint = (entry: FlowUndoEntry): FlowUndoEntry => {
+    if (undoState.sessionId !== entry.sessionId) {
+        undoState = { sessionId: entry.sessionId, entries: [] };
+    }
     undoState.entries.push(entry);
     if (undoState.entries.length > MAX_FLOW_UNDO_ENTRIES) {
         undoState.entries.splice(0, undoState.entries.length - MAX_FLOW_UNDO_ENTRIES);
     }
     return entry;
 };
+
+export const pushFlowUndoCheckpoint = (
+    session: GameSession,
+    input: PushFlowUndoCheckpointInput,
+): FlowUndoEntry => commitFlowUndoCheckpoint(prepareFlowUndoCheckpoint(session, input));
 
 export const discardFlowUndoCheckpoint = (entryId: string): boolean => {
     const index = undoState.entries.findIndex(entry => entry.id === entryId);

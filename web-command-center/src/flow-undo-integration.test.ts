@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { clearFlowUndoHistory, exportFlowUndoState, pushFlowUndoCheckpoint } from './flow-undo-manager';
+import {
+    clearFlowUndoHistory,
+    exportFlowUndoState,
+    getFlowUndoStatus,
+    pushFlowUndoCheckpoint,
+} from './flow-undo-manager';
 import { clearAllFlowTimers } from './game-timers';
 import { createInitialSession, getSession, setSession } from './session-manager';
 import { registerSocketHandlers } from './socket-handlers';
@@ -43,6 +48,15 @@ const player = (playerId: string, name: string, role: Player['role'] = 'Player')
     playerId, name, role, isReady: false, isOnline: true,
 });
 
+const undoPayload = (session: ReturnType<typeof createInitialSession>, actor: Player) => {
+    const status = getFlowUndoStatus(session, actor);
+    return {
+        expectedPhase: session.phase,
+        expectedHistoryDepth: status.historyDepth,
+        expectedEntryId: status.latest?.id,
+    };
+};
+
 test.afterEach(() => {
     clearAllFlowTimers();
     if (getSession().rollTimeout) clearTimeout(getSession().rollTimeout);
@@ -75,7 +89,9 @@ test('admin can undo phase advance, forced draft assignment, and forced map ban 
     await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: admin.playerId, action: 'ADVANCE_PHASE' });
     assert.equal(session.phase, GamePhase.CaptainSelection);
     assert.equal(exportFlowUndoState().entries.length, 1);
-    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: admin.playerId, action: 'UNDO_FLOW_ACTION' });
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: admin.playerId, action: 'UNDO_FLOW_ACTION', payload: undoPayload(session, admin),
+    });
     assert.equal(session.phase, GamePhase.Lobby);
     assert.deepEqual(session.captains, { A: null, B: null });
 
@@ -95,7 +111,9 @@ test('admin can undo phase advance, forced draft assignment, and forced map ban 
         payload: { playerId: target.playerId, team: 'A' },
     });
     assert.equal(target.rosterTeam, 'A');
-    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: admin.playerId, action: 'UNDO_FLOW_ACTION' });
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: admin.playerId, action: 'UNDO_FLOW_ACTION', payload: undoPayload(session, admin),
+    });
     assert.equal(session.phase, GamePhase.PlayerDraft);
     assert.equal(target.rosterTeam, undefined);
     assert.equal(session.draftIndex, 0);
@@ -113,7 +131,9 @@ test('admin can undo phase advance, forced draft assignment, and forced map ban 
     });
     assert.equal(session.phase, GamePhase.SidePick);
     assert.deepEqual(session.bannedMaps, ['Dust II']);
-    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: admin.playerId, action: 'UNDO_FLOW_ACTION' });
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: admin.playerId, action: 'UNDO_FLOW_ACTION', payload: undoPayload(session, admin),
+    });
     assert.equal(session.phase, GamePhase.MapBan);
     assert.deepEqual(session.bannedMaps, []);
     assert.deepEqual(session.mapVote?.votes, { [captainA.playerId]: 'Dust II' });
@@ -187,7 +207,7 @@ test('no-op assignment and duel LiveGame assignment do not create undo history',
     assert.equal(exportFlowUndoState().entries.length, 0);
 });
 
-test('duel temporary admin can execute undo for their own latest checkpoint', async () => {
+test('duel temporary admin can undo only their own lobby-to-pregame advance', async () => {
     const session = createInitialSession();
     const temporary = player('temporary', 'Temporary');
     const target = player('target', 'Target');
@@ -211,10 +231,13 @@ test('duel temporary admin can execute undo for their own latest checkpoint', as
     io.connect(socket);
     socket.data.playerId = temporary.playerId;
 
-    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: temporary.playerId, action: 'UNDO_FLOW_ACTION' });
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: temporary.playerId, action: 'UNDO_FLOW_ACTION', payload: undoPayload(session, temporary),
+    });
 
-    assert.equal(target.rosterTeam, undefined);
-    assert.equal(exportFlowUndoState().entries.length, 0);
+    assert.equal(target.rosterTeam, 'A');
+    assert.equal(exportFlowUndoState().entries.length, 1);
+    clearFlowUndoHistory();
 
     session.phase = GamePhase.Lobby;
     session.matchOptions.matchMode = 'competitive';
@@ -227,7 +250,9 @@ test('duel temporary admin can execute undo for their own latest checkpoint', as
     await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: temporary.playerId, action: 'ADVANCE_PHASE' });
     assert.equal(session.phase, GamePhase.PreGameSetup);
     assert.equal(session.matchOptions.matchMode, 'duel');
-    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: temporary.playerId, action: 'UNDO_FLOW_ACTION' });
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: temporary.playerId, action: 'UNDO_FLOW_ACTION', payload: undoPayload(session, temporary),
+    });
     assert.equal(session.phase, GamePhase.Lobby);
     assert.equal(session.matchOptions.matchMode, 'competitive');
     assert.equal(session.matchOptions.undercoverModeEnabled, true);
@@ -258,8 +283,39 @@ test('official admin can undo the temporary admin latest action while delegation
     io.connect(socket);
     socket.data.playerId = admin.playerId;
 
-    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: admin.playerId, action: 'UNDO_FLOW_ACTION' });
+    await socket.trigger(WsEvents.ADMIN_ACTION, {
+        playerId: admin.playerId, action: 'UNDO_FLOW_ACTION', payload: undoPayload(session, admin),
+    });
 
     assert.equal(target.rosterTeam, undefined);
     assert.equal(exportFlowUndoState().entries.length, 0);
+});
+
+test('duplicate socket undo request cannot pop two checkpoints', async () => {
+    const session = createInitialSession();
+    const admin = player('admin', 'Admin', 'Admin');
+    session.players = { admin };
+    session.playerOrder = ['admin'];
+    session.phase = GamePhase.Lobby;
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'First',
+    });
+    session.phase = GamePhase.CaptainSelection;
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Second',
+    });
+    session.phase = GamePhase.Roll;
+    setSession(session);
+    const io = new FakeIo();
+    registerSocketHandlers(io as any, { broadcastState() {}, notifyMessage() {}, persistSessionNow() {} });
+    const socket = new FakeSocket('duplicate-undo');
+    io.connect(socket);
+    socket.data.playerId = admin.playerId;
+    const payload = undoPayload(session, admin);
+
+    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: admin.playerId, action: 'UNDO_FLOW_ACTION', payload });
+    await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: admin.playerId, action: 'UNDO_FLOW_ACTION', payload });
+
+    assert.equal(session.phase, GamePhase.CaptainSelection);
+    assert.equal(exportFlowUndoState().entries.length, 1);
 });
