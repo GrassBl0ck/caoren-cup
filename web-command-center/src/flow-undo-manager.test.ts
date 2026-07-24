@@ -100,6 +100,28 @@ test('missing required participant rejects undo and clears invalid history', () 
     assert.equal(getFlowUndoStatus(session, admin).count, 0);
 });
 
+test('missing unassigned lobby participant also invalidates phase undo history', () => {
+    const session = createInitialSession();
+    const admin = makePlayer('admin', 'Admin', 'Admin');
+    const participant = makePlayer('participant', 'Participant');
+    addPlayer(session, admin);
+    addPlayer(session, participant);
+    session.phase = GamePhase.Lobby;
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Start captain selection',
+    });
+    session.phase = GamePhase.CaptainSelection;
+    delete session.players.participant;
+    session.playerOrder = ['admin'];
+    const request = currentRequest(session, admin);
+
+    const result = undoLatestFlowAction(session, admin, request as any);
+
+    assert.equal(result.ok, false);
+    assert.equal(session.phase, GamePhase.CaptainSelection);
+    assert.equal(getFlowUndoStatus(session, admin).historyDepth, 0);
+});
+
 test('required participant becoming spectator rejects undo and clears invalid history', () => {
     const session = createInitialSession();
     session.phase = GamePhase.CaptainSelection;

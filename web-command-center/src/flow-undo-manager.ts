@@ -81,7 +81,7 @@ export interface FlowUndoEntry {
     snapshot: FlowUndoSnapshot;
 }
 
-export interface PersistedFlowUndoState {
+export interface FlowUndoState {
     sessionId: string | null;
     entries: FlowUndoEntry[];
 }
@@ -98,7 +98,7 @@ export type FlowUndoResult =
     | { ok: true; entry: FlowUndoEntry }
     | { ok: false; reason: string };
 
-let undoState: PersistedFlowUndoState = { sessionId: null, entries: [] };
+let undoState: FlowUndoState = { sessionId: null, entries: [] };
 
 const clonePlain = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
@@ -170,7 +170,9 @@ const getRequiredParticipantIds = (snapshot: FlowUndoSnapshot): string[] => {
     if (captains?.A) required.add(captains.A);
     if (captains?.B) required.add(captains.B);
     for (const [playerId, fields] of Object.entries(snapshot.players)) {
-        if (fields.rosterTeam === 'A' || fields.rosterTeam === 'B') required.add(playerId);
+        if (fields.role === 'Player' || fields.rosterTeam === 'A' || fields.rosterTeam === 'B') {
+            required.add(playerId);
+        }
     }
     return [...required];
 };
@@ -309,30 +311,4 @@ export const undoLatestFlowAction = (
     return { ok: true, entry };
 };
 
-export const exportFlowUndoState = (): PersistedFlowUndoState => clonePlain(undoState);
-
-export const importFlowUndoState = (raw: unknown, currentSessionId: string): boolean => {
-    clearFlowUndoHistory();
-    if (!raw || typeof raw !== 'object') return false;
-    const candidate = raw as Partial<PersistedFlowUndoState>;
-    if (candidate.sessionId !== currentSessionId || !Array.isArray(candidate.entries)) return false;
-    const entries = candidate.entries.filter((entry): entry is FlowUndoEntry => {
-        if (!entry || typeof entry !== 'object') return false;
-        const value = entry as FlowUndoEntry;
-        const snapshot = value.snapshot as FlowUndoSnapshot | undefined;
-        return value.sessionId === currentSessionId &&
-            typeof value.id === 'string' &&
-            typeof value.actorId === 'string' &&
-            typeof value.actorName === 'string' &&
-            typeof value.summary === 'string' &&
-            typeof value.createdAt === 'number' &&
-            Object.values(GamePhase).includes(value.restorePhase) &&
-            ['ADVANCE_PHASE', 'ADMIN_BAN_MAP', 'ASSIGN_ROSTER_TEAM'].includes(value.actionType) &&
-            !!snapshot && typeof snapshot === 'object' &&
-            !!snapshot.session && typeof snapshot.session === 'object' &&
-            !!snapshot.players && typeof snapshot.players === 'object' &&
-            snapshot.session.phase === value.restorePhase;
-    }).slice(-MAX_FLOW_UNDO_ENTRIES);
-    undoState = { sessionId: currentSessionId, entries: clonePlain(entries) };
-    return true;
-};
+export const exportFlowUndoState = (): FlowUndoState => clonePlain(undoState);
