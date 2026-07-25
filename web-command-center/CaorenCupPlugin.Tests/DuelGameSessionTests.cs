@@ -1,4 +1,5 @@
 using CaorenCupPlugin;
+using System.Reflection;
 using Xunit;
 
 namespace CaorenCupPlugin.Tests;
@@ -89,12 +90,58 @@ public sealed class DuelGameSessionTests
     {
         var session = new DuelGameSession();
         session.TryStart([T(), Ct()], false, out _);
+
         Assert.True(session.UpdateConnectedPlayers(new HashSet<string> { "ct1" }));
         Assert.Equal(DuelLifecycle.Paused, session.Lifecycle);
-        session.UpdateConnectedPlayers(new HashSet<string> { "t1", "ct1" });
+        Assert.False(session.UpdateConnectedPlayers(new HashSet<string> { "ct1" }));
+
+        Assert.False(session.UpdateConnectedPlayers(new HashSet<string> { "t1", "ct1" }));
         Assert.Equal(DuelLifecycle.Paused, session.Lifecycle);
         Assert.True(session.TryResume(out _));
         Assert.Equal(DuelLifecycle.Running, session.Lifecycle);
+    }
+
+    [Fact]
+    public void Resume_rejects_when_one_side_has_no_online_participant()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.UpdateConnectedPlayers(new HashSet<string> { "ct1" });
+
+        Assert.False(session.TryResume(out var error));
+        Assert.Equal("T 和 CT 双方都必须至少有一名在线参赛者才能恢复。", error);
+        Assert.Equal(DuelLifecycle.Paused, session.Lifecycle);
+    }
+
+    [Fact]
+    public void Game_managed_session_does_not_publish_match_telemetry()
+    {
+        var pluginType = typeof(global::CaorenCupPlugin.CaorenCupPlugin);
+        var publishMethod = pluginType
+            .GetMethod("ShouldPublishMatchTelemetry", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(publishMethod);
+        var plugin = System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(pluginType);
+        var sessionField = pluginType.GetField("_duelSession", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(sessionField);
+        sessionField.SetValue(plugin, new DuelGameSession());
+        var session = Assert.IsType<DuelGameSession>(sessionField.GetValue(plugin));
+        Assert.True(session.TryStart([T(), Ct()], false, out _));
+
+        Assert.False(Assert.IsType<bool>(publishMethod.Invoke(plugin, null)));
+    }
+
+    [Fact]
+    public void Accepted_missing_participants_only_pause_again_for_a_new_disconnect()
+    {
+        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin)
+            .GetMethod("HasNewMissingParticipant", BindingFlags.Static | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        var accepted = new HashSet<string>(StringComparer.Ordinal) { "t2", "ct2" };
+        Assert.False(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2", "ct2" }));
+        Assert.False(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2" }));
+        Assert.True(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2", "t1" }));
     }
 
     [Fact]
@@ -105,6 +152,12 @@ public sealed class DuelGameSessionTests
         session.UpdateConnectedPlayers(new HashSet<string> { "t1", "ct1" });
         Assert.True(session.TryResume(out _));
     }
+
+    private static bool InvokeHasNewMissingParticipant(
+        MethodInfo method,
+        IReadOnlySet<string> accepted,
+        IReadOnlySet<string> current) =>
+        Assert.IsType<bool>(method.Invoke(null, [accepted, current]));
 
     [Fact]
     public void Duplicate_round_end_does_not_double_score()
