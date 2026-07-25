@@ -25,6 +25,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private readonly HttpClient _http = new();
     private readonly DuelGameSession _duelSession = new();
+    private readonly DuelServerCvarScope _duelServerCvars = new();
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
     private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
     private readonly Dictionary<ulong, PlayerButtons> _previousButtonsBySteamId = new();
@@ -69,6 +70,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, string> _duelCurrentPrimary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _duelCurrentSecondary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingAwpRequest> _duelAwpRequests = new(StringComparer.Ordinal);
+    private bool _gameManagedDuelRuntimeActive;
     private bool _isUnloading;
     private bool _hasSuccessfulLobbyStateSync;
     private DateTimeOffset _lastSuccessfulLobbyStateSync;
@@ -571,21 +573,74 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        var config = _duelSession.Config;
-        _duelModeEnabled = true;
-        _duelPistolRounds = config.PistolRounds;
-        _duelRifleRounds = config.RifleRounds;
-        _duelSniperRounds = config.SniperRounds;
-        _duelUtilityMode = config.UtilityMode;
-        var tCount = participants.Count(item => item.Team == DuelTeam.Terrorist);
-        var ctCount = participants.Length - tCount;
-        Logger.LogInformation(
-            "Started game-managed duel session with {TCount} T and {CtCount} CT participants. WebTakeover={WebTakeover}",
-            tCount,
-            ctCount,
-            confirmWebTakeover);
-        ReplyToDuelCaller(player, command, $"[草人杯] 已接管当前 T/CT 真人并建立游戏内单挑：T {tCount} 人，CT {ctCount} 人。");
-        ReplyToDuelCaller(player, command, $"[草人杯] {FormatDuelConfig(config)}");
+        _gameManagedDuelRuntimeActive = true;
+        try
+        {
+            var config = _duelSession.Config;
+            _teamAssignments.Clear();
+            foreach (var participant in participants)
+            {
+                _teamAssignments[participant.SteamId] = participant.Team == DuelTeam.Terrorist
+                    ? CsTeam.Terrorist
+                    : CsTeam.CounterTerrorist;
+            }
+
+            _teamAssignmentBypass.Clear();
+            _teamLockEnabled = true;
+            _teamAssignmentsValidFromRound = 0;
+            _teamAssignmentsValidUntilRound = 0;
+
+            ResetLiveMatchStats(0);
+            ClearDuelEquipmentState();
+            _duelModeEnabled = true;
+            _duelPistolRounds = config.PistolRounds;
+            _duelRifleRounds = config.RifleRounds;
+            _duelSniperRounds = config.SniperRounds;
+            _duelUtilityMode = config.UtilityMode;
+
+            _duelServerCvars.Set("mp_maxrounds", config.TotalRounds.ToString(), "24");
+            _duelServerCvars.Set("mp_winlimit", "0", "0");
+            _duelServerCvars.Set("mp_match_can_clinch", "0", "1");
+            _duelServerCvars.Set(
+                "mp_roundtime",
+                config.RoundTimeMinutes.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
+                "1.92");
+            _duelServerCvars.Set("mp_freezetime", "0", "15");
+            _duelServerCvars.Set("mp_round_restart_delay", "2", "7");
+            _duelServerCvars.Set("mp_free_armor", "0", "0");
+            _duelServerCvars.Set("mp_halftime", "0", "1");
+            _duelServerCvars.Set("mp_autoteambalance", "0", "1");
+            _duelServerCvars.Set("mp_limitteams", "0", "2");
+            Server.ExecuteCommand("mp_warmup_end");
+            Server.ExecuteCommand("mp_restartgame 1");
+
+            var tNames = string.Join("、", participants
+                .Where(item => item.Team == DuelTeam.Terrorist)
+                .Select(item => item.Name));
+            var ctNames = string.Join("、", participants
+                .Where(item => item.Team == DuelTeam.CounterTerrorist)
+                .Select(item => item.Name));
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} {FormatDuelConfig(config)}");
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} T 参赛者：{tNames}");
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} CT 参赛者：{ctNames}");
+            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 独立单挑已正式开始，参赛队伍已锁定。");
+            if (player == null)
+            {
+                ReplyToDuelCaller(player, command, $"[草人杯] 独立单挑已正式开始：T {tNames}；CT {ctNames}。");
+                ReplyToDuelCaller(player, command, $"[草人杯] {FormatDuelConfig(config)}");
+            }
+            Logger.LogInformation(
+                "Started game-managed duel session with {TCount} T and {CtCount} CT participants. WebTakeover={WebTakeover}",
+                participants.Count(item => item.Team == DuelTeam.Terrorist),
+                participants.Count(item => item.Team == DuelTeam.CounterTerrorist),
+                confirmWebTakeover);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start game-managed duel; restoring server state.");
+            AbortGameManagedDuel($"开赛失败：{ex.Message}");
+            ReplyToDuelCaller(player, command, $"[草人杯] 独立单挑开赛失败，已清理比赛状态：{ex.Message}");
+        }
     }
 
     private void ShowDuelStatus(CCSPlayerController? player, CommandInfo command)
@@ -686,10 +741,12 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        _duelSession.Clear();
-        _duelModeEnabled = false;
         Logger.LogInformation("Game-managed duel state was stopped by an administrator.");
-        ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑已强制终止，本次不计算胜负。");
+        if (player == null)
+        {
+            ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑已强制终止，本次不计算胜负。");
+        }
+        AbortGameManagedDuel("管理员强制终止，本次不计算胜负");
     }
 
     private void SwitchDuelMap(CCSPlayerController? player, CommandInfo command, string input)
@@ -800,6 +857,11 @@ public sealed class CaorenCupPlugin : BasePlugin
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
         _currentRound++;
+        if (_duelSession.ControlMode == DuelControlMode.GameManaged &&
+            _duelSession.Lifecycle == DuelLifecycle.Running)
+        {
+            _duelSession.MarkRoundStarted();
+        }
         if (_duelModeEnabled) _duelFormalRound = Math.Max(1, _scoreCt + _scoreT + 1);
         StartDuelRoundProtection();
         RefreshRoundHealthState();
@@ -1026,27 +1088,161 @@ public sealed class CaorenCupPlugin : BasePlugin
     public HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
     {
         var winner = TeamName(@event.Winner);
-        if (winner == "CT") _scoreCt++;
-        else if (winner == "T") _scoreT++;
-
-        if (_duelSession.ControlMode == DuelControlMode.WebManaged &&
-            _scoreCt + _scoreT >= _duelSession.Config.TotalRounds)
+        var eventRound = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound;
+        var eventScoreCt = _scoreCt;
+        var eventScoreT = _scoreT;
+        if (_duelSession.ControlMode == DuelControlMode.GameManaged)
         {
-            _duelSession.Clear();
-            Logger.LogInformation("Web-managed duel reached its configured total rounds; control mode returned to None.");
+            if (winner is "T" or "CT")
+            {
+                var duelResult = _duelSession.RecordRoundEnd(
+                    winner == "T" ? DuelTeam.Terrorist : DuelTeam.CounterTerrorist);
+                if (duelResult.Counted)
+                {
+                    _scoreT = duelResult.ScoreT;
+                    _scoreCt = duelResult.ScoreCt;
+                    eventScoreT = duelResult.ScoreT;
+                    eventScoreCt = duelResult.ScoreCt;
+                }
+
+                if (duelResult.Finished)
+                {
+                    FinishGameManagedDuel(duelResult);
+                }
+            }
+        }
+        else
+        {
+            if (winner == "CT") _scoreCt++;
+            else if (winner == "T") _scoreT++;
+            eventScoreCt = _scoreCt;
+            eventScoreT = _scoreT;
+
+            if (_duelSession.ControlMode == DuelControlMode.WebManaged &&
+                _scoreCt + _scoreT >= _duelSession.Config.TotalRounds)
+            {
+                _duelSession.Clear();
+                Logger.LogInformation("Web-managed duel reached its configured total rounds; control mode returned to None.");
+            }
         }
 
         QueueEvent("round_end", new
         {
-            round = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound,
+            round = eventRound,
             winner,
-            scoreCT = _scoreCt,
-            scoreT = _scoreT,
+            scoreCT = eventScoreCt,
+            scoreT = eventScoreT,
             mapName = SafeMapName(),
             players = BuildLivePlayers()
         });
         QueueSnapshot();
         return HookResult.Continue;
+    }
+
+    private void FinishGameManagedDuel(DuelRoundResult result)
+    {
+        var outcome = result.ScoreT > result.ScoreCt
+            ? "T 获胜"
+            : result.ScoreCt > result.ScoreT
+                ? "CT 获胜"
+                : "双方战平";
+        try
+        {
+            Server.PrintToChatAll(
+                $" {ChatColors.Green}[草人杯]{ChatColors.Default} 独立单挑结束：T {result.ScoreT} : {result.ScoreCt} CT，{outcome}。");
+            Logger.LogInformation(
+                "Game-managed duel finished normally. ScoreT={ScoreT} ScoreCt={ScoreCt}",
+                result.ScoreT,
+                result.ScoreCt);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to broadcast the game-managed duel result.");
+        }
+        finally
+        {
+            CleanupGameManagedDuel();
+        }
+    }
+
+    private void AbortGameManagedDuel(string reason)
+    {
+        try
+        {
+            Server.PrintToChatAll(
+                $" {ChatColors.Green}[草人杯]{ChatColors.Default} 独立单挑已终止：{reason}。");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to broadcast game-managed duel termination reason: {Reason}", reason);
+        }
+        finally
+        {
+            CleanupGameManagedDuel();
+        }
+    }
+
+    private void CleanupGameManagedDuel()
+    {
+        if (!_gameManagedDuelRuntimeActive && _duelSession.ControlMode != DuelControlMode.GameManaged)
+        {
+            return;
+        }
+
+        _gameManagedDuelRuntimeActive = false;
+        if (_duelSession.Lifecycle == DuelLifecycle.Paused)
+        {
+            try
+            {
+                Server.ExecuteCommand("mp_unpause_match");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to unpause game-managed duel during cleanup.");
+            }
+        }
+
+        _teamLockEnabled = false;
+        _teamAssignments.Clear();
+        _teamAssignmentBypass.Clear();
+        _teamAssignmentsValidFromRound = 0;
+        _teamAssignmentsValidUntilRound = 0;
+        _duelModeEnabled = false;
+        ClearDuelEquipmentState();
+        ResetLiveMatchStats(0);
+
+        try
+        {
+            _duelServerCvars.RestoreAll();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to restore one or more game-managed duel cvars.");
+        }
+
+        try
+        {
+            Server.ExecuteCommand("mp_restartgame 1");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to restart the game after game-managed duel cleanup.");
+        }
+        finally
+        {
+            _duelSession.Clear();
+        }
+    }
+
+    private void ClearDuelEquipmentState()
+    {
+        _duelPendingPrimary.Clear();
+        _duelPendingSecondary.Clear();
+        _duelCurrentPrimary.Clear();
+        _duelCurrentSecondary.Clear();
+        _duelAwpRequests.Clear();
+        _duelRoundProtectionEndsAt = 0;
+        _duelProtectionNoticeAt.Clear();
     }
 
     private object[] BuildLivePlayers()

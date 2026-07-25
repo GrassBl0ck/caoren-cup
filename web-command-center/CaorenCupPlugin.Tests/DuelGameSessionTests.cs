@@ -78,6 +78,61 @@ public sealed class DuelGameSessionTests
         Assert.Equal(1, session.ScoreT);
     }
 
+    [Fact]
+    public void Paused_session_does_not_count_round_end()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.MarkRoundStarted();
+        session.Pause("管理员暂停");
+
+        var result = session.RecordRoundEnd(DuelTeam.Terrorist);
+
+        Assert.False(result.Counted);
+        Assert.Equal(0, session.CompletedRounds);
+        Assert.Equal(0, session.ScoreT);
+        Assert.Equal(0, session.ScoreCt);
+    }
+
+    [Fact]
+    public void Finished_session_does_not_count_another_round_end()
+    {
+        var session = new DuelGameSession(new DuelGameConfig(0, 30, 0, 1, "none"));
+        session.TryStart([T(), Ct()], false, out _);
+        for (var round = 0; round < session.Config.TotalRounds; round++)
+        {
+            session.MarkRoundStarted();
+            session.RecordRoundEnd(DuelTeam.Terrorist);
+        }
+
+        var result = session.RecordRoundEnd(DuelTeam.CounterTerrorist);
+
+        Assert.False(result.Counted);
+        Assert.Equal(DuelLifecycle.Finished, session.Lifecycle);
+        Assert.Equal(30, session.CompletedRounds);
+        Assert.Equal(30, session.ScoreT);
+        Assert.Equal(0, session.ScoreCt);
+    }
+
+    [Fact]
+    public void Clear_is_idempotent_and_returns_session_to_none_idle()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.MarkRoundStarted();
+        session.RecordRoundEnd(DuelTeam.Terrorist);
+
+        session.Clear();
+        session.Clear();
+
+        Assert.Equal(DuelControlMode.None, session.ControlMode);
+        Assert.Equal(DuelLifecycle.Idle, session.Lifecycle);
+        Assert.Empty(session.Participants);
+        Assert.Equal(0, session.CompletedRounds);
+        Assert.Equal(0, session.ScoreT);
+        Assert.Equal(0, session.ScoreCt);
+    }
+
     [Theory]
     [InlineData(8, 16, 5, 1, "none")]
     [InlineData(8, 16, 12, 0.2, "none")]
