@@ -171,12 +171,21 @@ dotnet build
 
 ### 4.1 指令、配置和开局
 
-- [ ] 输入 `/duel help`，确认显示可用子命令和确认要求；输入 `/duel status`，确认待开局、进行中和暂停时均给出与当前状态一致的信息。
-- [ ] 输入 `/duel reset`，确认只清理独立单挑的待处理状态，不影响网页大厅的普通流程。
-- [ ] 对地图、手枪/步枪/狙击各阶段回合数分别输入合法值，确认可保存；再输入零、负数、非数字、超范围值和缺少参数，确认被拒绝并给出中文提示，且既有合法配置不被覆盖。
-- [ ] 确认默认边界为手枪 8、步枪 16、狙击 12；配置为 0 回合时，确认该阶段被跳过且阶段衔接正确。
-- [ ] 在默认 8/16/12 和含 0 回合的配置各完成一次开局确认；确认总回合、阶段切换和最终结算均符合配置。
-- [ ] 网页存在未清理的旧对局状态时，游戏内执行 `/duel start confirm`；确认独立单挑仍可接管，且没有向网页创建、更新或结束比赛。
+- [ ] 输入 `/duel help`，确认逐条显示 `status`、`rounds`、`time`、`utility`、`reset`、`start`、`pause`、`resume`、`stop`、`maps`、`map` 的用法，以及 `start confirm`、`stop confirm` 的确认要求。
+- [ ] 分别在闲置、进行中、暂停和网页管理状态输入 `/duel status`；确认状态、已完成回合、T/CT 比分、完整配置和（暂停时）暂停原因都与实际一致。
+- [ ] 闲置时输入 `/duel rounds 0 18 12`（合法，总和 30），确认手枪阶段 0 回合被保存并在开局后跳过；再分别输入 `/duel rounds -1 19 12`、`/duel rounds 100 0 0`、`/duel rounds 8 x 22`、`/duel rounds 8 16`、`/duel rounds 8 16 5`，确认负数、超过 99、非数字、缺少参数和总和小于 30 都被拒绝，原配置不变。
+- [ ] 闲置时输入 `/duel time 1.25`（合法）后确认配置更新；再输入 `/duel time 0.2`、`/duel time 6`、`/duel time abc` 和 `/duel time`，确认范围外、非数字和缺少参数被拒绝，原配置不变。
+- [ ] 闲置时输入 `/duel utility random2`（合法）后确认配置更新；再输入 `/duel utility banana` 和 `/duel utility`，确认未知值和缺少参数被拒绝，原配置不变。
+- [ ] 在游戏内单挑已经开始（GameManaged）或网页管理状态（WebManaged）时，重复输入 `/duel rounds 8 16 12`、`/duel time 1`、`/duel utility none` 或 `/duel reset`；确认都被拒绝，既有状态和配置不改变。
+- [ ] 闲置时输入 `/duel reset`，确认恢复为手枪 8、步枪 16、狙击 12、每回合 1 分钟、道具 `none`；不要把 reset 预期写成“清理网页大厅”。
+- [ ] 闲置且当前 T、CT 都至少有一名真人时输入 `/duel start`，确认按当前 T/CT 真人开赛；已经有 GameManaged 单挑时再次输入 `/duel start`，确认被拒绝。
+- [ ] 网页存在未清理的旧对局状态时，先输入 `/duel start`，确认只提示使用 `/duel start confirm` 接管；再输入 `/duel start confirm`，确认独立单挑可接管，且没有向网页创建、更新或结束比赛。
+- [ ] 进行中的 GameManaged 单挑输入 `/duel pause`，确认比赛暂停；输入 `/duel resume`，确认在所有参赛者已就绪时恢复。闲置或已暂停时重复输入不适用的 pause/resume，确认被拒绝且状态不变。
+- [ ] 进行中的 GameManaged 单挑输入 `/duel stop`，确认只提示使用 `/duel stop confirm`，不会终止；输入 `/duel stop confirm` 后确认强制终止且本次不计算胜负。闲置时输入两者均应拒绝。
+- [ ] 输入 `/duel maps`，确认仅列出可用创意工坊地图及切图用法，不改变比赛状态；兼容指令 `/duel_maps` 应得到同样的地图列表。
+- [ ] 闲置时输入 `/duel map 1`（合法）或 `/duel map aim_redline`，确认开始切换对应地图；输入 `/duel map 999`（列表外）时确认不切图并显示地图帮助；输入 `/duel map`（缺少参数）时确认不切图并提示参数格式错误。兼容指令 `/duel_map 1` 应与 `/duel map 1` 行为一致。
+- [ ] GameManaged 单挑进行中或暂停时输入 `/duel map 1` 或 `/duel_map 1`，确认拒绝切图且比赛状态不变。
+- [ ] 确认默认配置为手枪 8、步枪 16、狙击 12；在默认 8/16/12 和合法的单阶段 0 回合配置各完成一次开局，确认总回合、阶段切换和最终结算均符合配置。
 
 ### 4.2 名单、队伍和观察者隔离
 
