@@ -10,22 +10,22 @@ public sealed class DuelServerCvarScope
 
     public void Set(string name, string value, string fallback)
     {
-        if (!IsSafeNumericToken(value))
+        if (!TryNormalizeSafeValue(value, out var normalizedValue))
         {
-            throw new ArgumentException("Duel cvar values must be a single invariant numeric token.", nameof(value));
+            throw new ArgumentException("Duel cvar values must be a single invariant numeric or boolean token.", nameof(value));
         }
 
-        if (!IsSafeNumericToken(fallback))
+        if (!TryNormalizeSafeValue(fallback, out var normalizedFallback))
         {
-            throw new ArgumentException("Duel cvar fallbacks must be a single invariant numeric token.", nameof(fallback));
+            throw new ArgumentException("Duel cvar fallbacks must be a single invariant numeric or boolean token.", nameof(fallback));
         }
 
         if (!_restore.ContainsKey(name))
         {
-            _restore[name] = ReadCurrentValue(name, fallback);
+            _restore[name] = ReadCurrentValue(name, normalizedFallback);
         }
 
-        Server.ExecuteCommand($"{name} {value}");
+        Server.ExecuteCommand($"{name} {normalizedValue}");
     }
 
     public void RestoreAll()
@@ -35,7 +35,7 @@ public sealed class DuelServerCvarScope
         {
             foreach (var item in _restore)
             {
-                if (!IsSafeNumericToken(item.Value))
+                if (!TryNormalizeSafeValue(item.Value, out var normalizedValue))
                 {
                     failures ??= [];
                     failures.Add(new InvalidOperationException($"Refused to restore unsafe cvar value for {item.Key}."));
@@ -44,7 +44,7 @@ public sealed class DuelServerCvarScope
 
                 try
                 {
-                    Server.ExecuteCommand($"{item.Key} {item.Value}");
+                    Server.ExecuteCommand($"{item.Key} {normalizedValue}");
                 }
                 catch (Exception ex)
                 {
@@ -69,7 +69,7 @@ public sealed class DuelServerCvarScope
         try
         {
             var current = ConVar.Find(name)?.StringValue;
-            return IsSafeNumericToken(current) ? current! : fallback;
+            return TryNormalizeSafeValue(current, out var normalized) ? normalized : fallback;
         }
         catch
         {
@@ -77,14 +77,33 @@ public sealed class DuelServerCvarScope
         }
     }
 
-    public static bool IsSafeNumericToken(string? value)
+    public static bool TryNormalizeSafeValue(string? raw, out string normalized)
     {
-        if (string.IsNullOrEmpty(value) || value.Contains(';') || value.Any(char.IsWhiteSpace))
+        normalized = string.Empty;
+        if (string.IsNullOrEmpty(raw) || raw.Contains(';') || raw.Any(char.IsWhiteSpace))
         {
             return false;
         }
 
-        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
-               double.IsFinite(parsed);
+        if (raw.Equals("true", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "1";
+            return true;
+        }
+
+        if (raw.Equals("false", StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = "0";
+            return true;
+        }
+
+        if (!double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ||
+            !double.IsFinite(parsed))
+        {
+            return false;
+        }
+
+        normalized = raw;
+        return true;
     }
 }

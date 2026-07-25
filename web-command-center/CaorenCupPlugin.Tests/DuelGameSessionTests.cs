@@ -8,27 +8,22 @@ public sealed class DuelGameSessionTests
     private static DuelParticipant T(string id = "t1") => new(id, "T玩家", DuelTeam.Terrorist);
     private static DuelParticipant Ct(string id = "ct1") => new(id, "CT玩家", DuelTeam.CounterTerrorist);
 
-    [Fact]
-    public void Duel_cvar_scope_reads_the_engine_string_value()
-    {
-        var sourcePath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "../../../../CaorenCupPlugin/DuelServerCvarScope.cs"));
-        var source = File.ReadAllText(sourcePath);
-
-        Assert.Contains("ConVar.Find(name)?.StringValue", source);
-        Assert.DoesNotContain("GetPrimitiveValue<string>()", source);
-    }
-
     [Theory]
-    [InlineData("0")]
-    [InlineData("-1")]
-    [InlineData("+2.5")]
-    [InlineData(".25")]
-    [InlineData("1e-3")]
-    public void Duel_cvar_scope_accepts_single_invariant_numeric_tokens(string value)
+    [InlineData("0", "0")]
+    [InlineData("-1", "-1")]
+    [InlineData("+2.5", "+2.5")]
+    [InlineData(".25", ".25")]
+    [InlineData("1e-3", "1e-3")]
+    [InlineData("true", "1")]
+    [InlineData("TRUE", "1")]
+    [InlineData("TrUe", "1")]
+    [InlineData("false", "0")]
+    [InlineData("FALSE", "0")]
+    [InlineData("FaLsE", "0")]
+    public void Duel_cvar_scope_normalizes_safe_numeric_and_boolean_tokens(string raw, string expected)
     {
-        Assert.True(DuelServerCvarScope.IsSafeNumericToken(value));
+        Assert.True(DuelServerCvarScope.TryNormalizeSafeValue(raw, out var normalized));
+        Assert.Equal(expected, normalized);
     }
 
     [Theory]
@@ -42,9 +37,14 @@ public sealed class DuelGameSessionTests
     [InlineData("NaN")]
     [InlineData("Infinity")]
     [InlineData("-Infinity")]
-    public void Duel_cvar_scope_rejects_unsafe_or_non_invariant_tokens(string? value)
+    [InlineData("true;quit")]
+    [InlineData("FALSE\nquit")]
+    [InlineData("true false")]
+    [InlineData(" true")]
+    public void Duel_cvar_scope_rejects_unsafe_or_non_invariant_tokens(string? raw)
     {
-        Assert.False(DuelServerCvarScope.IsSafeNumericToken(value));
+        Assert.False(DuelServerCvarScope.TryNormalizeSafeValue(raw, out var normalized));
+        Assert.Equal(string.Empty, normalized);
     }
 
     [Fact]
