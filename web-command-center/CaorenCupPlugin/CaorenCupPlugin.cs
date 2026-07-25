@@ -24,6 +24,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     public override string ModuleDescription => "Bridge CS2 score, player binding and match stats to the CaorenCup web command center.";
 
     private readonly HttpClient _http = new();
+    private readonly DuelGameSession _duelSession = new();
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
     private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
     private readonly Dictionary<ulong, PlayerButtons> _previousButtonsBySteamId = new();
@@ -183,6 +184,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
         AddCommand("css_guns", "查看单挑模式可切换枪械。用法：/guns", OnDuelGunsCommand);
         AddCommand("css_agree_awp", "同意对方在步枪阶段使用 AWP。用法：/agree_awp", OnDuelAgreeAwpCommand);
+        AddCommand("css_duel", "游戏内独立单挑管理。用法：/duel help", OnDuelAdminCommand);
         AddCommand("css_duel_map", "切换单挑创意工坊地图。用法：/duel_map <序号|地图名|创意工坊ID>", OnDuelMapCommand);
         AddCommand("css_duel_maps", "查看可切换的单挑地图。用法：/duel_maps", OnDuelMapsCommand);
         RegisterDuelWeaponCommands();
@@ -437,24 +439,247 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void OnDuelMapsCommand(CCSPlayerController? player, CommandInfo command)
     {
+        if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
+        {
+            ReplyToPlayer(player, "[草人杯] 只有服务器管理员可以管理单挑。");
+            return;
+        }
+
         ShowDuelMapHelp(player);
     }
 
     private void OnDuelMapCommand(CCSPlayerController? player, CommandInfo command)
     {
-        if (!IsRealPlayer(player))
+        if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
         {
-            command.ReplyToCommand("这条指令只能由玩家在游戏内执行。");
+            ReplyToPlayer(player, "[草人杯] 只有服务器管理员可以管理单挑。");
             return;
         }
 
-        if (!AdminManager.PlayerHasPermissions(player!, "@css/root"))
+        var inputParts = new List<string>();
+        for (var i = 1; i < command.ArgCount; i++)
         {
-            ReplyToPlayer(player, "[草人杯] 只有服务器管理员可以在游戏内切换单挑地图。");
+            var part = command.ArgByIndex(i);
+            if (!string.IsNullOrWhiteSpace(part)) inputParts.Add(part.Trim());
+        }
+        SwitchDuelMap(player, string.Join(' ', inputParts));
+    }
+
+    private void OnDuelAdminCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
+        {
+            ReplyToPlayer(player, "[草人杯] 只有服务器管理员可以管理单挑。");
             return;
         }
 
-        var input = command.ArgByIndex(1)?.Trim() ?? string.Empty;
+        var args = new List<string>();
+        for (var i = 1; i < command.ArgCount; i++)
+        {
+            var arg = command.ArgByIndex(i);
+            if (!string.IsNullOrWhiteSpace(arg)) args.Add(arg.Trim());
+        }
+
+        var parsed = DuelAdminCommandParser.Parse(args);
+        switch (parsed.Kind)
+        {
+            case DuelAdminCommandKind.Help:
+                ShowDuelAdminHelp(player);
+                break;
+            case DuelAdminCommandKind.Status:
+                ShowDuelStatus(player);
+                break;
+            case DuelAdminCommandKind.Rounds:
+                var rounds = parsed.Rounds!.Value;
+                ApplyDuelAdminConfig(player, _duelSession.Config with
+                {
+                    PistolRounds = rounds.Pistol,
+                    RifleRounds = rounds.Rifle,
+                    SniperRounds = rounds.Sniper
+                });
+                break;
+            case DuelAdminCommandKind.Time:
+                ApplyDuelAdminConfig(player, _duelSession.Config with
+                {
+                    RoundTimeMinutes = parsed.RoundTimeMinutes!.Value
+                });
+                break;
+            case DuelAdminCommandKind.Utility:
+                ApplyDuelAdminConfig(player, _duelSession.Config with
+                {
+                    UtilityMode = parsed.Value ?? string.Empty
+                });
+                break;
+            case DuelAdminCommandKind.Reset:
+                ApplyDuelAdminConfig(player, new DuelGameConfig());
+                break;
+            case DuelAdminCommandKind.Start:
+                StartGameManagedDuel(player, false);
+                break;
+            case DuelAdminCommandKind.StartConfirm:
+                StartGameManagedDuel(player, true);
+                break;
+            case DuelAdminCommandKind.Pause:
+                PauseGameManagedDuel(player);
+                break;
+            case DuelAdminCommandKind.Resume:
+                ResumeGameManagedDuel(player);
+                break;
+            case DuelAdminCommandKind.Stop:
+                RequestStopGameManagedDuel(player);
+                break;
+            case DuelAdminCommandKind.StopConfirm:
+                StopGameManagedDuel(player);
+                break;
+            case DuelAdminCommandKind.Maps:
+                ShowDuelMapHelp(player);
+                break;
+            case DuelAdminCommandKind.Map:
+                SwitchDuelMap(player, parsed.Value ?? string.Empty);
+                break;
+            default:
+                ReplyToPlayer(player, $"[草人杯] {parsed.Error ?? "未知子命令，请使用 /duel help。"}");
+                break;
+        }
+    }
+
+    private void ShowDuelAdminHelp(CCSPlayerController? player)
+    {
+        ReplyToPlayer(player, "[草人杯] /duel status：查看单挑状态和完整配置");
+        ReplyToPlayer(player, "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 30");
+        ReplyToPlayer(player, "[草人杯] /duel time <分钟>：设置每回合 0.25～5 分钟");
+        ReplyToPlayer(player, "[草人杯] /duel utility <none|random1|random2|random3|full>：设置道具");
+        ReplyToPlayer(player, "[草人杯] /duel reset：恢复默认配置；/duel start：按当前 T/CT 真人开赛");
+        ReplyToPlayer(player, "[草人杯] /duel pause、/duel resume、/duel stop、/duel stop confirm：控制比赛");
+        ReplyToPlayer(player, "[草人杯] /duel maps；/duel map <序号|地图名|创意工坊ID>：查看或切换地图");
+    }
+
+    private void StartGameManagedDuel(CCSPlayerController? player, bool confirmWebTakeover)
+    {
+        var participants = Utilities.GetPlayers()
+            .Where(IsRealPlayer)
+            .Where(candidate => candidate.Team is CsTeam.Terrorist or CsTeam.CounterTerrorist)
+            .Select(candidate => new DuelParticipant(
+                candidate.SteamID.ToString(),
+                SafePlayerName(candidate),
+                candidate.Team == CsTeam.Terrorist ? DuelTeam.Terrorist : DuelTeam.CounterTerrorist))
+            .ToArray();
+
+        if (!_duelSession.TryStart(participants, confirmWebTakeover, out var error))
+        {
+            ReplyToPlayer(player, $"[草人杯] 无法开始单挑：{error}");
+            return;
+        }
+
+        var config = _duelSession.Config;
+        _duelModeEnabled = true;
+        _duelPistolRounds = config.PistolRounds;
+        _duelRifleRounds = config.RifleRounds;
+        _duelSniperRounds = config.SniperRounds;
+        _duelUtilityMode = config.UtilityMode;
+        var tCount = participants.Count(item => item.Team == DuelTeam.Terrorist);
+        var ctCount = participants.Length - tCount;
+        Logger.LogInformation(
+            "Started game-managed duel session with {TCount} T and {CtCount} CT participants. WebTakeover={WebTakeover}",
+            tCount,
+            ctCount,
+            confirmWebTakeover);
+        ReplyToPlayer(player, $"[草人杯] 已接管当前 T/CT 真人并建立游戏内单挑：T {tCount} 人，CT {ctCount} 人。");
+        ReplyToPlayer(player, $"[草人杯] {FormatDuelConfig(config)}");
+    }
+
+    private void ShowDuelStatus(CCSPlayerController? player)
+    {
+        var mode = _duelSession.ControlMode switch
+        {
+            DuelControlMode.WebManaged => "网页管理",
+            DuelControlMode.GameManaged => "游戏内管理",
+            _ => "未启用"
+        };
+        var lifecycle = _duelSession.Lifecycle switch
+        {
+            DuelLifecycle.Running => "进行中",
+            DuelLifecycle.Paused => "已暂停",
+            DuelLifecycle.Finished => "已结束",
+            _ => "未开始"
+        };
+        ReplyToPlayer(player, $"[草人杯] 单挑状态：{mode} / {lifecycle}；已完成 {_duelSession.CompletedRounds} 回合；比分 T {_duelSession.ScoreT} : {_duelSession.ScoreCt} CT。");
+        ReplyToPlayer(player, $"[草人杯] {FormatDuelConfig(_duelSession.Config)}");
+        if (!string.IsNullOrWhiteSpace(_duelSession.PauseReason))
+        {
+            ReplyToPlayer(player, $"[草人杯] 暂停原因：{_duelSession.PauseReason}");
+        }
+    }
+
+    private void ApplyDuelAdminConfig(CCSPlayerController? player, DuelGameConfig config)
+    {
+        if (!_duelSession.TryUpdateConfig(config, out var error))
+        {
+            ReplyToPlayer(player, $"[草人杯] 配置未修改：{error}");
+            return;
+        }
+
+        ReplyToPlayer(player, $"[草人杯] 配置已更新：{FormatDuelConfig(_duelSession.Config)}");
+    }
+
+    private void PauseGameManagedDuel(CCSPlayerController? player)
+    {
+        if (_duelSession.ControlMode != DuelControlMode.GameManaged || _duelSession.Lifecycle != DuelLifecycle.Running)
+        {
+            ReplyToPlayer(player, "[草人杯] 当前没有正在进行的游戏内单挑可暂停。");
+            return;
+        }
+
+        _duelSession.Pause("管理员手动暂停");
+        Logger.LogInformation("Game-managed duel paused by an administrator.");
+        ReplyToPlayer(player, "[草人杯] 游戏内单挑状态已暂停。");
+    }
+
+    private void ResumeGameManagedDuel(CCSPlayerController? player)
+    {
+        if (!_duelSession.TryResume(out var error))
+        {
+            ReplyToPlayer(player, $"[草人杯] 无法恢复单挑：{error}");
+            return;
+        }
+
+        Logger.LogInformation("Game-managed duel resumed by an administrator.");
+        ReplyToPlayer(player, "[草人杯] 游戏内单挑状态已恢复。");
+    }
+
+    private void RequestStopGameManagedDuel(CCSPlayerController? player)
+    {
+        if (_duelSession.ControlMode != DuelControlMode.GameManaged)
+        {
+            ReplyToPlayer(player, "[草人杯] 当前没有游戏内单挑可终止。");
+            return;
+        }
+
+        ReplyToPlayer(player, "[草人杯] 终止不会计算胜负；请使用 /duel stop confirm 再次确认。");
+    }
+
+    private void StopGameManagedDuel(CCSPlayerController? player)
+    {
+        if (_duelSession.ControlMode != DuelControlMode.GameManaged)
+        {
+            ReplyToPlayer(player, "[草人杯] 当前没有游戏内单挑可终止。");
+            return;
+        }
+
+        _duelSession.Clear();
+        _duelModeEnabled = false;
+        Logger.LogInformation("Game-managed duel state was stopped by an administrator.");
+        ReplyToPlayer(player, "[草人杯] 游戏内单挑已强制终止，本次不计算胜负。");
+    }
+
+    private void SwitchDuelMap(CCSPlayerController? player, string input)
+    {
+        if (_duelSession.ControlMode == DuelControlMode.GameManaged)
+        {
+            ReplyToPlayer(player, "[草人杯] 游戏内单挑期间不能切换地图，请先终止本局。");
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(input))
         {
             ShowDuelMapHelp(player);
@@ -469,8 +694,23 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        ReplyToPlayer(player, $"[草人杯] 正在把下一局单挑地图设置为：{map.Name}。");
-        _ = SetDuelMapAsync(player!, map);
+        Server.ExecuteCommand($"host_workshop_map {map.WorkshopId}");
+        Logger.LogInformation("Switching directly to duel workshop map {Map} ({WorkshopId}).", map.Name, map.WorkshopId);
+        ReplyToPlayer(player, $"[草人杯] 正在切换单挑地图：{map.Name} ({map.WorkshopId})。");
+    }
+
+    private static string FormatDuelConfig(DuelGameConfig config)
+    {
+        var utility = config.UtilityMode switch
+        {
+            "none" => "无道具",
+            "random1" => "随机 1 个道具",
+            "random2" => "随机 2 个道具",
+            "random3" => "随机 3 个道具",
+            "full" => "全道具",
+            _ => config.UtilityMode
+        };
+        return $"配置：手枪 {config.PistolRounds} 回合，步枪 {config.RifleRounds} 回合，狙击枪 {config.SniperRounds} 回合，每回合 {config.RoundTimeMinutes:0.##} 分钟，道具 {utility}。";
     }
 
     private string BuildNoticeMessage(CommandInfo command)
@@ -757,6 +997,13 @@ public sealed class CaorenCupPlugin : BasePlugin
         var winner = TeamName(@event.Winner);
         if (winner == "CT") _scoreCt++;
         else if (winner == "T") _scoreT++;
+
+        if (_duelSession.ControlMode == DuelControlMode.WebManaged &&
+            _scoreCt + _scoreT >= _duelSession.Config.TotalRounds)
+        {
+            _duelSession.Clear();
+            Logger.LogInformation("Web-managed duel reached its configured total rounds; control mode returned to None.");
+        }
 
         QueueEvent("round_end", new
         {
@@ -1477,6 +1724,12 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ConfigureDuelMode(JsonElement payload)
     {
+        if (_duelSession.ControlMode == DuelControlMode.GameManaged)
+        {
+            Logger.LogWarning("Rejected CONFIGURE_DUEL_MODE because a game-managed duel is active.");
+            return;
+        }
+
         var pistol = 8;
         var rifle = 16;
         var sniper = 12;
@@ -1517,6 +1770,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _duelAwpRequests.Clear();
         _duelRoundProtectionEndsAt = 0;
         _duelProtectionNoticeAt.Clear();
+        _duelSession.EnterWebManaged(new DuelGameConfig(pistol, rifle, sniper, 1, utilityMode));
         var totalRounds = pistol + rifle + sniper;
         Server.NextFrame(() =>
         {
@@ -1800,34 +2054,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         catch (Exception ex)
         {
             Logger.LogDebug(ex, "Failed to apply duel loadout for {SteamId}", steamId);
-        }
-    }
-
-    private async Task SetDuelMapAsync(CCSPlayerController player, DuelWorkshopMap map)
-    {
-        try
-        {
-            var response = await _http.PostAsJsonAsync("api/plugin/duel-map", new
-            {
-                map = map.Name,
-                workshopId = map.WorkshopId,
-                requestedBySteamId = player.SteamID.ToString(),
-                requestedByName = SafePlayerName(player),
-            }, _jsonOptions);
-            var body = await response.Content.ReadAsStringAsync();
-            if (response.IsSuccessStatusCode)
-            {
-                ReplyToPlayer(player, $"[草人杯] 已设置下一局单挑地图：{map.Name}。开始单挑流程时会自动切图。");
-                return;
-            }
-
-            var error = ExtractErrorMessage(body);
-            ReplyToPlayer(player, $"[草人杯] 设置单挑地图失败：{error}");
-        }
-        catch (Exception ex)
-        {
-            ReplyToPlayer(player, "[草人杯] 设置单挑地图失败：无法连接网页指挥台。");
-            Logger.LogError(ex, "Failed to set duel map via command center");
         }
     }
 
@@ -2175,8 +2401,8 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ShowDuelMapHelp(CCSPlayerController? player)
     {
-        ReplyToPlayer(player, "[草人杯] 用法：/duel_map <序号|地图名|创意工坊ID>");
-        ReplyToPlayer(player, "[草人杯] 示例：/duel_map 1 或 /duel_map aim_redline 或 /duel_map 3199551320");
+        ReplyToPlayer(player, "[草人杯] 用法：/duel map <序号|地图名|创意工坊ID>（兼容 /duel_map）");
+        ReplyToPlayer(player, "[草人杯] 示例：/duel map 1 或 /duel map aim_redline 或 /duel map 3199551320");
         for (var i = 0; i < DuelWorkshopMaps.Length; i++)
         {
             var map = DuelWorkshopMaps[i];
