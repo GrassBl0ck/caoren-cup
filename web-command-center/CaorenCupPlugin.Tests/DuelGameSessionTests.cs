@@ -77,4 +77,56 @@ public sealed class DuelGameSessionTests
         session.RecordRoundEnd(DuelTeam.Terrorist);
         Assert.Equal(1, session.ScoreT);
     }
+
+    [Theory]
+    [InlineData(8, 16, 5, 1, "none")]
+    [InlineData(8, 16, 12, 0.2, "none")]
+    [InlineData(8, 16, 12, 1, "unknown")]
+    public void Update_config_rejects_invalid_values(int pistol, int rifle, int sniper, double roundTimeMinutes, string utilityMode)
+    {
+        var session = new DuelGameSession();
+
+        Assert.False(session.TryUpdateConfig(new DuelGameConfig(pistol, rifle, sniper, roundTimeMinutes, utilityMode), out var error));
+        Assert.False(string.IsNullOrWhiteSpace(error));
+    }
+
+    [Fact]
+    public void Update_config_accepts_valid_boundary_values()
+    {
+        var session = new DuelGameSession();
+
+        Assert.True(session.TryUpdateConfig(new DuelGameConfig(0, 30, 0, 0.25, "random3"), out var error));
+        Assert.Equal(string.Empty, error);
+        Assert.Equal(new DuelGameConfig(0, 30, 0, 0.25, "random3"), session.Config);
+    }
+
+    [Fact]
+    public void Update_config_is_rejected_while_game_is_running()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+
+        Assert.False(session.TryUpdateConfig(new DuelGameConfig(0, 30, 0, 0.25, "random3"), out var error));
+        Assert.False(string.IsNullOrWhiteSpace(error));
+    }
+
+    [Fact]
+    public void Reset_config_restores_defaults()
+    {
+        var session = new DuelGameSession();
+        session.TryUpdateConfig(new DuelGameConfig(0, 30, 0, 0.25, "random3"), out _);
+
+        session.ResetConfig();
+
+        Assert.Equal(new DuelGameConfig(), session.Config);
+    }
+
+    [Fact]
+    public void Update_config_rejects_non_numeric_round_time()
+    {
+        var session = new DuelGameSession();
+
+        Assert.False(session.TryUpdateConfig(new DuelGameConfig(8, 16, 12, double.NaN, "none"), out var error));
+        Assert.False(string.IsNullOrWhiteSpace(error));
+    }
 }

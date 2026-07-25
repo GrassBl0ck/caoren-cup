@@ -96,6 +96,48 @@ public sealed class DuelGameSession
         return true;
     }
 
+    public bool TryUpdateConfig(DuelGameConfig next, out string error)
+    {
+        if (ControlMode != DuelControlMode.None || Lifecycle != DuelLifecycle.Idle)
+        {
+            error = "仅能在单挑开始前修改配置。";
+            return false;
+        }
+
+        if (next.PistolRounds is < 0 or > 99 || next.RifleRounds is < 0 or > 99 || next.SniperRounds is < 0 or > 99)
+        {
+            error = "各阶段回合数必须在 0 到 99 之间。";
+            return false;
+        }
+
+        if (next.TotalRounds < 30)
+        {
+            error = "总回合数必须至少为 30。";
+            return false;
+        }
+
+        if (double.IsNaN(next.RoundTimeMinutes) || double.IsInfinity(next.RoundTimeMinutes) || next.RoundTimeMinutes is < 0.25 or > 5)
+        {
+            error = "每回合时间必须在 0.25 到 5 分钟之间。";
+            return false;
+        }
+
+        if (next.UtilityMode is not ("none" or "random1" or "random2" or "random3" or "full"))
+        {
+            error = "道具模式仅支持 none、random1、random2、random3 或 full。";
+            return false;
+        }
+
+        Config = next;
+        error = string.Empty;
+        return true;
+    }
+
+    public void ResetConfig()
+    {
+        Config = new DuelGameConfig();
+    }
+
     public void MarkRoundStarted()
     {
         if (ControlMode == DuelControlMode.GameManaged && Lifecycle == DuelLifecycle.Running)
