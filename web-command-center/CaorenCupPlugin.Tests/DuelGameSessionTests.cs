@@ -145,6 +145,46 @@ public sealed class DuelGameSessionTests
     }
 
     [Fact]
+    public void Game_managed_rejects_web_team_assignment_updates()
+    {
+        var method = GetPrivateStaticMethod("ShouldApplyWebTeamAssignments");
+
+        Assert.False(InvokePrivateBool(method, DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method, DuelControlMode.WebManaged));
+        Assert.True(InvokePrivateBool(method, DuelControlMode.None));
+    }
+
+    [Fact]
+    public void Game_managed_running_or_paused_blocks_web_map_changes_at_execution_time()
+    {
+        var method = GetPrivateStaticMethod("IsGameManagedMapChangeBlocked");
+
+        Assert.True(InvokePrivateBool(method, "changelevel de_dust2", DuelControlMode.GameManaged, DuelLifecycle.Running));
+        Assert.True(InvokePrivateBool(method, " HOST_WORKSHOP_MAP 123 ", DuelControlMode.GameManaged, DuelLifecycle.Paused));
+        Assert.False(InvokePrivateBool(method, "mp_restartgame 1", DuelControlMode.GameManaged, DuelLifecycle.Running));
+        Assert.False(InvokePrivateBool(method, "changelevel de_dust2", DuelControlMode.None, DuelLifecycle.Idle));
+    }
+
+    [Fact]
+    public void Game_managed_keeps_local_match_counters_from_web_responses()
+    {
+        var method = GetPrivateStaticMethod("ShouldApplyWebMatchCounters");
+
+        Assert.False(InvokePrivateBool(method, DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method, DuelControlMode.WebManaged));
+        Assert.True(InvokePrivateBool(method, DuelControlMode.None));
+    }
+
+    [Fact]
+    public void Unloading_blocks_plugin_continuations()
+    {
+        var method = GetPrivateStaticMethod("ShouldProcessPluginContinuation");
+
+        Assert.False(InvokePrivateBool(method, true));
+        Assert.True(InvokePrivateBool(method, false));
+    }
+
+    [Fact]
     public void Resume_only_requires_one_online_participant_per_side()
     {
         var session = new DuelGameSession();
@@ -159,6 +199,17 @@ public sealed class DuelGameSessionTests
         IReadOnlySet<string> current) =>
         Assert.IsType<bool>(method.Invoke(null, [accepted, current]));
 
+    private static MethodInfo GetPrivateStaticMethod(string name)
+    {
+        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin)
+            .GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return method;
+    }
+
+    private static bool InvokePrivateBool(MethodInfo method, params object[] arguments) =>
+        Assert.IsType<bool>(method.Invoke(null, arguments));
+
     [Fact]
     public void Duplicate_round_end_does_not_double_score()
     {
@@ -171,7 +222,7 @@ public sealed class DuelGameSessionTests
     }
 
     [Fact]
-    public void Paused_session_does_not_count_round_end()
+    public void Paused_round_end_is_ignored_and_open_round_resumes()
     {
         var session = new DuelGameSession();
         session.TryStart([T(), Ct()], false, out _);
@@ -184,6 +235,28 @@ public sealed class DuelGameSessionTests
         Assert.Equal(0, session.CompletedRounds);
         Assert.Equal(0, session.ScoreT);
         Assert.Equal(0, session.ScoreCt);
+
+        Assert.True(session.TryResume(out _));
+        var resumedResult = session.RecordRoundEnd(DuelTeam.Terrorist);
+
+        Assert.True(resumedResult.Counted);
+        Assert.Equal(1, session.CompletedRounds);
+        Assert.Equal(1, session.ScoreT);
+    }
+
+    [Fact]
+    public void Pause_and_resume_before_round_start_does_not_open_a_round()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+
+        session.Pause("管理员暂停");
+        Assert.True(session.TryResume(out _));
+
+        var result = session.RecordRoundEnd(DuelTeam.CounterTerrorist);
+
+        Assert.False(result.Counted);
+        Assert.Equal(0, session.CompletedRounds);
     }
 
     [Fact]

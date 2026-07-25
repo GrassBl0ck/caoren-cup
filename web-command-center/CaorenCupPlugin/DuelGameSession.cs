@@ -27,6 +27,7 @@ public sealed class DuelGameSession
     private readonly Dictionary<string, DuelParticipant> _participants = new(StringComparer.Ordinal);
     private readonly HashSet<string> _connected = new(StringComparer.Ordinal);
     private bool _roundOpen;
+    private bool _roundOpenBeforePause;
 
     public DuelGameSession(DuelGameConfig? config = null) => Config = config ?? new();
 
@@ -210,6 +211,8 @@ public sealed class DuelGameSession
         }
 
         Lifecycle = DuelLifecycle.Running;
+        _roundOpen = _roundOpenBeforePause;
+        _roundOpenBeforePause = false;
         PauseReason = null;
         error = string.Empty;
         return true;
@@ -219,6 +222,7 @@ public sealed class DuelGameSession
     {
         if (Lifecycle == DuelLifecycle.Running)
         {
+            _roundOpenBeforePause = _roundOpen;
             Lifecycle = DuelLifecycle.Paused;
             PauseReason = reason;
             _roundOpen = false;
@@ -233,6 +237,7 @@ public sealed class DuelGameSession
         ScoreT = 0;
         ScoreCt = 0;
         _roundOpen = false;
+        _roundOpenBeforePause = false;
         PauseReason = null;
         ControlMode = DuelControlMode.None;
         Lifecycle = DuelLifecycle.Idle;

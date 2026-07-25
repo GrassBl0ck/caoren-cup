@@ -31,6 +31,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<ulong, PlayerButtons> _previousButtonsBySteamId = new();
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
+    private CounterStrikeSharp.API.Modules.Timers.Timer? _gameManagedSafetyTimer;
     private readonly Channel<PluginOutboundMessage> _outboundQueue = Channel.CreateUnbounded<PluginOutboundMessage>(new UnboundedChannelOptions
     {
         SingleReader = true,
@@ -73,7 +74,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly HashSet<string> _gameManagedDuelAcceptedMissingSteamIds = new(StringComparer.Ordinal);
     private bool _gameManagedDuelRuntimeActive;
     private bool _gameManagedDuelReconnectReadyAnnounced;
-    private bool _isUnloading;
+    private volatile bool _isUnloading;
     private bool _hasSuccessfulLobbyStateSync;
     private DateTimeOffset _lastSuccessfulLobbyStateSync;
     private int _webStateRefreshInProgress;
@@ -251,16 +252,31 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         _timers.Clear();
+        _gameManagedSafetyTimer = null;
     }
 
     private void StartGameManagedSafetyTimer()
     {
-        _timers.Add(AddTimer(1.0f, () =>
+        if (_gameManagedSafetyTimer != null)
+        {
+            _timers.Remove(_gameManagedSafetyTimer);
+            try
+            {
+                _gameManagedSafetyTimer.Kill();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Failed to replace game-managed duel safety timer");
+            }
+        }
+
+        _gameManagedSafetyTimer = AddTimer(1.0f, () =>
         {
             if (_isUnloading) return;
             EnforceTeamAssignments();
             EvaluateGameManagedConnectivity();
-        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
+        }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+        _timers.Add(_gameManagedSafetyTimer);
     }
 
     private void LoadConfig()
@@ -316,10 +332,13 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task RequestGameLoginCodeAsync(CCSPlayerController player, string steamId, string name)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/game-login-code", new { steamId, name }, _jsonOptions);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             var body = await response.Content.ReadAsStringAsync();
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
 
             if (response.IsSuccessStatusCode)
             {
@@ -346,6 +365,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         catch (Exception ex)
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             ReplyToPlayer(player, "[草人杯] 获取网页登录码失败：无法连接网页指挥台。");
             Logger.LogError(ex, "Game login code failed: cannot connect to command center");
         }
@@ -1437,10 +1457,13 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task BindAsync(CCSPlayerController player, string bindCode, string steamId, string name)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/bind", new { bindCode, steamId, name }, _jsonOptions);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             var body = await response.Content.ReadAsStringAsync();
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (response.IsSuccessStatusCode)
             {
                 var result = JsonSerializer.Deserialize<PluginBindResponse>(body, _jsonOptions);
@@ -1457,6 +1480,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         catch (Exception ex)
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             ReplyToPlayer(player, "[草人杯] 绑定失败：无法连接网页指挥台，请联系管理员检查插件配置。");
             Logger.LogError(ex, "Bind failed: cannot connect to command center");
         }
@@ -1464,19 +1488,23 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task SendHeartbeatAsync(CCSPlayerController? replyTo = null)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/heartbeat", new { mapName = SafeMapName() }, _jsonOptions);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             var text = await response.Content.ReadAsStringAsync();
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (response.IsSuccessStatusCode)
             {
                 var state = JsonSerializer.Deserialize<PluginHeartbeatResponse>(text, _jsonOptions);
+                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
                 if (!string.IsNullOrWhiteSpace(state?.MatchId) && state.MatchId != _currentMatchId)
                 {
                     _currentMatchId = state.MatchId;
                     _stats.Clear();
                 }
-                if (state != null)
+                if (state != null && ShouldApplyWebMatchCounters(_duelSession.ControlMode))
                 {
                     _currentRound = Math.Max(0, state.CurrentRound);
                     _scoreCt = Math.Max(0, state.ScoreCT);
@@ -1487,6 +1515,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                     foreach (var command in state.Commands)
                     {
                         await ProcessPluginCommandAsync(command);
+                        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
                     }
                 }
                 LogDebug("Heartbeat OK: {Text}", text);
@@ -1498,13 +1527,14 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         catch (Exception ex)
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             Logger.LogWarning(ex, "Heartbeat failed");
         }
     }
 
     private async Task SendSnapshotAsync(CCSPlayerController? replyTo = null)
     {
-        if (!ShouldPublishMatchTelemetry()) return;
+        if (!ShouldProcessPluginContinuation(_isUnloading) || !ShouldPublishMatchTelemetry()) return;
 
         try
         {
@@ -1517,8 +1547,10 @@ public sealed class CaorenCupPlugin : BasePlugin
                 currentRound = _currentRound,
                 players = BuildLivePlayers()
             }, _jsonOptions);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
 
             var text = await response.Content.ReadAsStringAsync();
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (response.IsSuccessStatusCode)
             {
                 ProcessIdentityConfirmationChallenges(text);
@@ -1531,18 +1563,22 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         catch (Exception ex)
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             Logger.LogWarning(ex, "Snapshot failed");
         }
     }
 
     private async Task<bool> RefreshWebStateAsync()
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
         if (Interlocked.Exchange(ref _webStateRefreshInProgress, 1) == 1) return false;
         var stateGeneration = Volatile.Read(ref _webStateGeneration);
         try
         {
             var response = await _http.GetAsync("api/plugin/state");
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
             var text = await response.Content.ReadAsStringAsync();
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
             if (!response.IsSuccessStatusCode)
             {
                 Logger.LogWarning("Plugin state refresh failed: {Status} {Body}", response.StatusCode, text);
@@ -1580,6 +1616,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         catch (Exception ex)
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
             Logger.LogWarning(ex, "Plugin state refresh exception");
             return false;
         }
@@ -1652,7 +1689,9 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task SendNoticeAsync(CCSPlayerController? caller, string target, string customMessage)
     {
-        if (!await RefreshWebStateAsync())
+        var refreshed = await RefreshWebStateAsync();
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        if (!refreshed)
         {
             ReplyToPlayer(caller, "[草人杯] 无法读取网页指挥台状态，/notice 未发送。");
             return;
@@ -1743,6 +1782,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         Server.NextFrame(() =>
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (!player.IsValid) return;
             player.PrintToChat($" {ChatColors.Yellow}================ [草人杯 Notice] ================{ChatColors.Default}");
             player.PrintToChat($" {ChatColors.Red}[重要提醒]{ChatColors.Default} {ChatColors.Green}{targetLabel}{ChatColors.Default}");
@@ -1764,6 +1804,30 @@ public sealed class CaorenCupPlugin : BasePlugin
         attackerTeam == victimTeam;
 
     private bool ShouldPublishMatchTelemetry() => _duelSession.ControlMode != DuelControlMode.GameManaged;
+
+    private static bool ShouldApplyWebTeamAssignments(DuelControlMode controlMode) =>
+        controlMode != DuelControlMode.GameManaged;
+
+    private static bool IsGameManagedMapChangeBlocked(
+        string serverCommand,
+        DuelControlMode controlMode,
+        DuelLifecycle lifecycle)
+    {
+        if (controlMode != DuelControlMode.GameManaged ||
+            lifecycle is not (DuelLifecycle.Running or DuelLifecycle.Paused))
+        {
+            return false;
+        }
+
+        var commandName = serverCommand.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return string.Equals(commandName, "changelevel", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(commandName, "host_workshop_map", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ShouldApplyWebMatchCounters(DuelControlMode controlMode) =>
+        controlMode != DuelControlMode.GameManaged;
+
+    private static bool ShouldProcessPluginContinuation(bool isUnloading) => !isUnloading;
 
     private void QueueEvent(string type, object payload)
     {
@@ -1831,6 +1895,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task PostEventAsync(PluginOutboundMessage message, CancellationToken cancellationToken)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         var type = message.EventType ?? string.Empty;
         try
         {
@@ -1842,9 +1907,11 @@ public sealed class CaorenCupPlugin : BasePlugin
                 eventTimestampUtc = message.TimestampUtc,
                 payload = message.Body
             }, _jsonOptions, cancellationToken);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
                 if (ShouldLogEventFailure(type))
                 {
                     Logger.LogWarning("Event {Type} seq={Sequence} rejected: {Status} {Body}", type, message.Sequence, response.StatusCode, body);
@@ -1864,6 +1931,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         catch (Exception ex)
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (ShouldLogEventFailure(type))
             {
                 Logger.LogWarning(ex, "Failed to post event {Type} seq={Sequence}", type, message.Sequence);
@@ -1873,11 +1941,14 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task PostSnapshotAsync(object body, long sequence, CancellationToken cancellationToken)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/snapshot", body, _jsonOptions, cancellationToken);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
 
             var text = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (response.IsSuccessStatusCode)
             {
                 ProcessIdentityConfirmationChallenges(text);
@@ -1894,6 +1965,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         catch (Exception ex)
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             Logger.LogWarning(ex, "Snapshot seq={Sequence} failed", sequence);
         }
     }
@@ -1909,6 +1981,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ProcessIdentityConfirmationChallenges(string responseText)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         PluginSnapshotResponse? snapshot;
         try
         {
@@ -1922,7 +1995,11 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         var challenges = snapshot?.ConfirmationChallenges?.ToArray() ?? [];
         if (challenges.Length == 0) return;
-        Server.NextFrame(() => ShowIdentityConfirmationChallenges(challenges));
+        Server.NextFrame(() =>
+        {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            ShowIdentityConfirmationChallenges(challenges);
+        });
     }
 
     private void ShowIdentityConfirmationChallenges(IReadOnlyList<PluginIdentityConfirmationChallenge> challenges)
@@ -1961,11 +2038,19 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task ProcessPluginCommandAsync(PluginCommand command)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         if (string.IsNullOrWhiteSpace(command.Id) || string.IsNullOrWhiteSpace(command.Type)) return;
         try
         {
             if (string.Equals(command.Type, "RESET_LIVE_MATCH_STATS", StringComparison.OrdinalIgnoreCase))
             {
+                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+                if (!ShouldApplyWebMatchCounters(_duelSession.ControlMode))
+                {
+                    Logger.LogWarning("Rejected RESET_LIVE_MATCH_STATS because a game-managed duel is active.");
+                    return;
+                }
+
                 var currentRound = 1;
                 if (command.Payload.ValueKind == JsonValueKind.Object &&
                     command.Payload.TryGetProperty("currentRound", out var currentRoundElement) &&
@@ -2016,12 +2101,22 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         finally
         {
-            await AckCommandAsync(command.Id);
+            if (ShouldProcessPluginContinuation(_isUnloading))
+            {
+                await AckCommandAsync(command.Id);
+            }
         }
     }
 
     private void ApplyTeamAssignments(JsonElement payload)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        if (!ShouldApplyWebTeamAssignments(_duelSession.ControlMode))
+        {
+            Logger.LogWarning("Rejected APPLY_TEAM_ASSIGNMENTS because a game-managed duel is active.");
+            return;
+        }
+
         if (payload.ValueKind != JsonValueKind.Object ||
             !payload.TryGetProperty("assignments", out var assignmentsElement) ||
             assignmentsElement.ValueKind != JsonValueKind.Array)
@@ -2065,6 +2160,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             _teamAssignmentsValidUntilRound);
         Server.NextFrame(() =>
         {
+            if (_isUnloading) return;
             EnforceTeamAssignments();
             Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页强制分队已同步：{_teamAssignments.Count} 名玩家。");
         });
@@ -2072,6 +2168,13 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ClearTeamAssignments()
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        if (!ShouldApplyWebTeamAssignments(_duelSession.ControlMode))
+        {
+            Logger.LogWarning("Rejected CLEAR_TEAM_ASSIGNMENTS because a game-managed duel is active.");
+            return;
+        }
+
         _teamAssignments.Clear();
         _teamAssignmentBypass.Clear();
         _teamLockEnabled = false;
@@ -2080,12 +2183,14 @@ public sealed class CaorenCupPlugin : BasePlugin
         Logger.LogInformation("Cleared CaorenCup team assignments.");
         Server.NextFrame(() =>
         {
+            if (_isUnloading) return;
             Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页强制分队已解除。");
         });
     }
 
     private void ConfigureDuelMode(JsonElement payload)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         if (_duelSession.ControlMode == DuelControlMode.GameManaged)
         {
             Logger.LogWarning("Rejected CONFIGURE_DUEL_MODE because a game-managed duel is active.");
@@ -2136,6 +2241,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         var totalRounds = pistol + rifle + sniper;
         Server.NextFrame(() =>
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 本局游戏共{totalRounds}回合，其中手枪{pistol}回合，步枪{rifle}回合，狙击枪{sniper}回合。");
             Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 从第一回合开始，每隔8回合会提示你可使用 /guns 来切换枪械。");
         });
@@ -2584,6 +2690,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ExecuteAllowedServerCommand(string serverCommand, string label, int delaySeconds = 0)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         if (string.IsNullOrWhiteSpace(serverCommand))
         {
             Logger.LogWarning("Rejected empty web command from CaorenCup command center.");
@@ -2597,11 +2704,18 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        Logger.LogInformation("Executing CaorenCup web command: {Command}", serverCommand);
         void ExecuteNow()
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            if (IsGameManagedMapChangeBlocked(serverCommand, _duelSession.ControlMode, _duelSession.Lifecycle))
+            {
+                Logger.LogWarning("Rejected queued web map command because a game-managed duel is active: {Command}", serverCommand);
+                return;
+            }
+
             try
             {
+                Logger.LogInformation("Executing CaorenCup web command: {Command}", serverCommand);
                 Server.ExecuteCommand(serverCommand);
                 Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页修改已下发：{label}");
             }
@@ -2613,7 +2727,16 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         if (delaySeconds > 0)
         {
-            Server.NextFrame(() => AddTimer(delaySeconds, ExecuteNow));
+            Server.NextFrame(() =>
+            {
+                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+                if (IsGameManagedMapChangeBlocked(serverCommand, _duelSession.ControlMode, _duelSession.Lifecycle))
+                {
+                    Logger.LogWarning("Rejected delayed web map command because a game-managed duel is active: {Command}", serverCommand);
+                    return;
+                }
+                AddTimer(delaySeconds, ExecuteNow);
+            });
             return;
         }
 
@@ -2633,17 +2756,21 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private async Task AckCommandAsync(string commandId)
     {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/command-ack", new { commandId }, _jsonOptions);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync();
+                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
                 Logger.LogWarning("Command ack rejected: {Status} {Body}", response.StatusCode, body);
             }
         }
         catch (Exception ex)
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             Logger.LogWarning(ex, "Command ack exception");
         }
     }
@@ -2831,6 +2958,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (player == null) return;
         Server.NextFrame(() =>
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             try
             {
                 if (player.IsValid) player.PrintToChat(message);
@@ -2860,6 +2988,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (player == null) return;
         Server.NextFrame(() =>
         {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             try
             {
                 if (player.IsValid) player.PrintToCenter(message);
