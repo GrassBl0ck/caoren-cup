@@ -1,3 +1,4 @@
+using System.Globalization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Modules.Cvars;
 
@@ -9,6 +10,16 @@ public sealed class DuelServerCvarScope
 
     public void Set(string name, string value, string fallback)
     {
+        if (!IsSafeNumericToken(value))
+        {
+            throw new ArgumentException("Duel cvar values must be a single invariant numeric token.", nameof(value));
+        }
+
+        if (!IsSafeNumericToken(fallback))
+        {
+            throw new ArgumentException("Duel cvar fallbacks must be a single invariant numeric token.", nameof(fallback));
+        }
+
         if (!_restore.ContainsKey(name))
         {
             _restore[name] = ReadCurrentValue(name, fallback);
@@ -24,6 +35,13 @@ public sealed class DuelServerCvarScope
         {
             foreach (var item in _restore)
             {
+                if (!IsSafeNumericToken(item.Value))
+                {
+                    failures ??= [];
+                    failures.Add(new InvalidOperationException($"Refused to restore unsafe cvar value for {item.Key}."));
+                    continue;
+                }
+
                 try
                 {
                     Server.ExecuteCommand($"{item.Key} {item.Value}");
@@ -50,11 +68,23 @@ public sealed class DuelServerCvarScope
     {
         try
         {
-            return ConVar.Find(name)?.GetPrimitiveValue<string>() ?? fallback;
+            var current = ConVar.Find(name)?.StringValue;
+            return IsSafeNumericToken(current) ? current! : fallback;
         }
         catch
         {
             return fallback;
         }
+    }
+
+    public static bool IsSafeNumericToken(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Contains(';') || value.Any(char.IsWhiteSpace))
+        {
+            return false;
+        }
+
+        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
+               double.IsFinite(parsed);
     }
 }

@@ -9,6 +9,45 @@ public sealed class DuelGameSessionTests
     private static DuelParticipant Ct(string id = "ct1") => new(id, "CT玩家", DuelTeam.CounterTerrorist);
 
     [Fact]
+    public void Duel_cvar_scope_reads_the_engine_string_value()
+    {
+        var sourcePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../CaorenCupPlugin/DuelServerCvarScope.cs"));
+        var source = File.ReadAllText(sourcePath);
+
+        Assert.Contains("ConVar.Find(name)?.StringValue", source);
+        Assert.DoesNotContain("GetPrimitiveValue<string>()", source);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("+2.5")]
+    [InlineData(".25")]
+    [InlineData("1e-3")]
+    public void Duel_cvar_scope_accepts_single_invariant_numeric_tokens(string value)
+    {
+        Assert.True(DuelServerCvarScope.IsSafeNumericToken(value));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("1;quit")]
+    [InlineData("1\nquit")]
+    [InlineData("1 2")]
+    [InlineData("1,5")]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    public void Duel_cvar_scope_rejects_unsafe_or_non_invariant_tokens(string? value)
+    {
+        Assert.False(DuelServerCvarScope.IsSafeNumericToken(value));
+    }
+
+    [Fact]
     public void Start_requires_both_teams()
     {
         var session = new DuelGameSession();
