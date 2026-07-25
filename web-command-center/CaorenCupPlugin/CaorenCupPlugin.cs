@@ -445,7 +445,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        ShowDuelMapHelp(player);
+        ShowDuelMapHelp(player, command);
     }
 
     private void OnDuelMapCommand(CCSPlayerController? player, CommandInfo command)
@@ -462,7 +462,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             var part = command.ArgByIndex(i);
             if (!string.IsNullOrWhiteSpace(part)) inputParts.Add(part.Trim());
         }
-        SwitchDuelMap(player, string.Join(' ', inputParts));
+        SwitchDuelMap(player, command, string.Join(' ', inputParts));
     }
 
     private void OnDuelAdminCommand(CCSPlayerController? player, CommandInfo command)
@@ -484,14 +484,14 @@ public sealed class CaorenCupPlugin : BasePlugin
         switch (parsed.Kind)
         {
             case DuelAdminCommandKind.Help:
-                ShowDuelAdminHelp(player);
+                ShowDuelAdminHelp(player, command);
                 break;
             case DuelAdminCommandKind.Status:
-                ShowDuelStatus(player);
+                ShowDuelStatus(player, command);
                 break;
             case DuelAdminCommandKind.Rounds:
                 var rounds = parsed.Rounds!.Value;
-                ApplyDuelAdminConfig(player, _duelSession.Config with
+                ApplyDuelAdminConfig(player, command, _duelSession.Config with
                 {
                     PistolRounds = rounds.Pistol,
                     RifleRounds = rounds.Rifle,
@@ -499,62 +499,62 @@ public sealed class CaorenCupPlugin : BasePlugin
                 });
                 break;
             case DuelAdminCommandKind.Time:
-                ApplyDuelAdminConfig(player, _duelSession.Config with
+                ApplyDuelAdminConfig(player, command, _duelSession.Config with
                 {
                     RoundTimeMinutes = parsed.RoundTimeMinutes!.Value
                 });
                 break;
             case DuelAdminCommandKind.Utility:
-                ApplyDuelAdminConfig(player, _duelSession.Config with
+                ApplyDuelAdminConfig(player, command, _duelSession.Config with
                 {
                     UtilityMode = parsed.Value ?? string.Empty
                 });
                 break;
             case DuelAdminCommandKind.Reset:
-                ApplyDuelAdminConfig(player, new DuelGameConfig());
+                ApplyDuelAdminConfig(player, command, new DuelGameConfig());
                 break;
             case DuelAdminCommandKind.Start:
-                StartGameManagedDuel(player, false);
+                StartGameManagedDuel(player, command, false);
                 break;
             case DuelAdminCommandKind.StartConfirm:
-                StartGameManagedDuel(player, true);
+                StartGameManagedDuel(player, command, true);
                 break;
             case DuelAdminCommandKind.Pause:
-                PauseGameManagedDuel(player);
+                PauseGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Resume:
-                ResumeGameManagedDuel(player);
+                ResumeGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Stop:
-                RequestStopGameManagedDuel(player);
+                RequestStopGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.StopConfirm:
-                StopGameManagedDuel(player);
+                StopGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Maps:
-                ShowDuelMapHelp(player);
+                ShowDuelMapHelp(player, command);
                 break;
             case DuelAdminCommandKind.Map:
-                SwitchDuelMap(player, parsed.Value ?? string.Empty);
+                SwitchDuelMap(player, command, parsed.Value ?? string.Empty);
                 break;
             default:
-                ReplyToPlayer(player, $"[草人杯] {parsed.Error ?? "未知子命令，请使用 /duel help。"}");
+                ReplyToDuelCaller(player, command, $"[草人杯] {parsed.Error ?? "未知子命令，请使用 /duel help。"}");
                 break;
         }
     }
 
-    private void ShowDuelAdminHelp(CCSPlayerController? player)
+    private void ShowDuelAdminHelp(CCSPlayerController? player, CommandInfo command)
     {
-        ReplyToPlayer(player, "[草人杯] /duel status：查看单挑状态和完整配置");
-        ReplyToPlayer(player, "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 30");
-        ReplyToPlayer(player, "[草人杯] /duel time <分钟>：设置每回合 0.25～5 分钟");
-        ReplyToPlayer(player, "[草人杯] /duel utility <none|random1|random2|random3|full>：设置道具");
-        ReplyToPlayer(player, "[草人杯] /duel reset：恢复默认配置；/duel start：按当前 T/CT 真人开赛");
-        ReplyToPlayer(player, "[草人杯] /duel pause、/duel resume、/duel stop、/duel stop confirm：控制比赛");
-        ReplyToPlayer(player, "[草人杯] /duel maps；/duel map <序号|地图名|创意工坊ID>：查看或切换地图");
+        ReplyToDuelCaller(player, command, "[草人杯] /duel status：查看单挑状态和完整配置");
+        ReplyToDuelCaller(player, command, "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 30");
+        ReplyToDuelCaller(player, command, "[草人杯] /duel time <分钟>：设置每回合 0.25～5 分钟");
+        ReplyToDuelCaller(player, command, "[草人杯] /duel utility <none|random1|random2|random3|full>：设置道具");
+        ReplyToDuelCaller(player, command, "[草人杯] /duel reset：恢复默认配置；/duel start：按当前 T/CT 真人开赛");
+        ReplyToDuelCaller(player, command, "[草人杯] /duel pause、/duel resume、/duel stop、/duel stop confirm：控制比赛");
+        ReplyToDuelCaller(player, command, "[草人杯] /duel maps；/duel map <序号|地图名|创意工坊ID>：查看或切换地图");
     }
 
-    private void StartGameManagedDuel(CCSPlayerController? player, bool confirmWebTakeover)
+    private void StartGameManagedDuel(CCSPlayerController? player, CommandInfo command, bool confirmWebTakeover)
     {
         var participants = Utilities.GetPlayers()
             .Where(IsRealPlayer)
@@ -567,7 +567,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         if (!_duelSession.TryStart(participants, confirmWebTakeover, out var error))
         {
-            ReplyToPlayer(player, $"[草人杯] 无法开始单挑：{error}");
+            ReplyToDuelCaller(player, command, $"[草人杯] 无法开始单挑：{error}");
             return;
         }
 
@@ -584,119 +584,150 @@ public sealed class CaorenCupPlugin : BasePlugin
             tCount,
             ctCount,
             confirmWebTakeover);
-        ReplyToPlayer(player, $"[草人杯] 已接管当前 T/CT 真人并建立游戏内单挑：T {tCount} 人，CT {ctCount} 人。");
-        ReplyToPlayer(player, $"[草人杯] {FormatDuelConfig(config)}");
+        ReplyToDuelCaller(player, command, $"[草人杯] 已接管当前 T/CT 真人并建立游戏内单挑：T {tCount} 人，CT {ctCount} 人。");
+        ReplyToDuelCaller(player, command, $"[草人杯] {FormatDuelConfig(config)}");
     }
 
-    private void ShowDuelStatus(CCSPlayerController? player)
+    private void ShowDuelStatus(CCSPlayerController? player, CommandInfo command)
     {
-        var mode = _duelSession.ControlMode switch
+        var status = _duelSession.ControlMode switch
         {
-            DuelControlMode.WebManaged => "网页管理",
-            DuelControlMode.GameManaged => "游戏内管理",
-            _ => "未启用"
+            DuelControlMode.WebManaged => "网页管理 / 进行中",
+            DuelControlMode.GameManaged => $"游戏内管理 / {DuelLifecycleLabel(_duelSession.Lifecycle)}",
+            _ => "未启用 / 未开始"
         };
-        var lifecycle = _duelSession.Lifecycle switch
+        int completedRounds;
+        int scoreT;
+        int scoreCt;
+        if (_duelSession.ControlMode == DuelControlMode.WebManaged)
+        {
+            completedRounds = _scoreT + _scoreCt;
+            scoreT = _scoreT;
+            scoreCt = _scoreCt;
+        }
+        else
+        {
+            completedRounds = _duelSession.CompletedRounds;
+            scoreT = _duelSession.ScoreT;
+            scoreCt = _duelSession.ScoreCt;
+        }
+
+        ReplyToDuelCaller(player, command, $"[草人杯] 单挑状态：{status}；已完成 {completedRounds} 回合；比分 T {scoreT} : {scoreCt} CT。");
+        ReplyToDuelCaller(player, command, $"[草人杯] {FormatDuelConfig(_duelSession.Config)}");
+        if (_duelSession.ControlMode == DuelControlMode.GameManaged && !string.IsNullOrWhiteSpace(_duelSession.PauseReason))
+        {
+            ReplyToDuelCaller(player, command, $"[草人杯] 暂停原因：{_duelSession.PauseReason}");
+        }
+    }
+
+    private static string DuelLifecycleLabel(DuelLifecycle lifecycle)
+    {
+        return lifecycle switch
         {
             DuelLifecycle.Running => "进行中",
             DuelLifecycle.Paused => "已暂停",
             DuelLifecycle.Finished => "已结束",
             _ => "未开始"
         };
-        ReplyToPlayer(player, $"[草人杯] 单挑状态：{mode} / {lifecycle}；已完成 {_duelSession.CompletedRounds} 回合；比分 T {_duelSession.ScoreT} : {_duelSession.ScoreCt} CT。");
-        ReplyToPlayer(player, $"[草人杯] {FormatDuelConfig(_duelSession.Config)}");
-        if (!string.IsNullOrWhiteSpace(_duelSession.PauseReason))
-        {
-            ReplyToPlayer(player, $"[草人杯] 暂停原因：{_duelSession.PauseReason}");
-        }
     }
 
-    private void ApplyDuelAdminConfig(CCSPlayerController? player, DuelGameConfig config)
+    private void ApplyDuelAdminConfig(CCSPlayerController? player, CommandInfo command, DuelGameConfig config)
     {
         if (!_duelSession.TryUpdateConfig(config, out var error))
         {
-            ReplyToPlayer(player, $"[草人杯] 配置未修改：{error}");
+            ReplyToDuelCaller(player, command, $"[草人杯] 配置未修改：{error}");
             return;
         }
 
-        ReplyToPlayer(player, $"[草人杯] 配置已更新：{FormatDuelConfig(_duelSession.Config)}");
+        ReplyToDuelCaller(player, command, $"[草人杯] 配置已更新：{FormatDuelConfig(_duelSession.Config)}");
     }
 
-    private void PauseGameManagedDuel(CCSPlayerController? player)
+    private void PauseGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
         if (_duelSession.ControlMode != DuelControlMode.GameManaged || _duelSession.Lifecycle != DuelLifecycle.Running)
         {
-            ReplyToPlayer(player, "[草人杯] 当前没有正在进行的游戏内单挑可暂停。");
+            ReplyToDuelCaller(player, command, "[草人杯] 当前没有正在进行的游戏内单挑可暂停。");
             return;
         }
 
         _duelSession.Pause("管理员手动暂停");
         Logger.LogInformation("Game-managed duel paused by an administrator.");
-        ReplyToPlayer(player, "[草人杯] 游戏内单挑状态已暂停。");
+        ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑状态已暂停。");
     }
 
-    private void ResumeGameManagedDuel(CCSPlayerController? player)
+    private void ResumeGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
         if (!_duelSession.TryResume(out var error))
         {
-            ReplyToPlayer(player, $"[草人杯] 无法恢复单挑：{error}");
+            ReplyToDuelCaller(player, command, $"[草人杯] 无法恢复单挑：{error}");
             return;
         }
 
         Logger.LogInformation("Game-managed duel resumed by an administrator.");
-        ReplyToPlayer(player, "[草人杯] 游戏内单挑状态已恢复。");
+        ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑状态已恢复。");
     }
 
-    private void RequestStopGameManagedDuel(CCSPlayerController? player)
+    private void RequestStopGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
         if (_duelSession.ControlMode != DuelControlMode.GameManaged)
         {
-            ReplyToPlayer(player, "[草人杯] 当前没有游戏内单挑可终止。");
+            ReplyToDuelCaller(player, command, "[草人杯] 当前没有游戏内单挑可终止。");
             return;
         }
 
-        ReplyToPlayer(player, "[草人杯] 终止不会计算胜负；请使用 /duel stop confirm 再次确认。");
+        ReplyToDuelCaller(player, command, "[草人杯] 终止不会计算胜负；请使用 /duel stop confirm 再次确认。");
     }
 
-    private void StopGameManagedDuel(CCSPlayerController? player)
+    private void StopGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
         if (_duelSession.ControlMode != DuelControlMode.GameManaged)
         {
-            ReplyToPlayer(player, "[草人杯] 当前没有游戏内单挑可终止。");
+            ReplyToDuelCaller(player, command, "[草人杯] 当前没有游戏内单挑可终止。");
             return;
         }
 
         _duelSession.Clear();
         _duelModeEnabled = false;
         Logger.LogInformation("Game-managed duel state was stopped by an administrator.");
-        ReplyToPlayer(player, "[草人杯] 游戏内单挑已强制终止，本次不计算胜负。");
+        ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑已强制终止，本次不计算胜负。");
     }
 
-    private void SwitchDuelMap(CCSPlayerController? player, string input)
+    private void SwitchDuelMap(CCSPlayerController? player, CommandInfo command, string input)
     {
         if (_duelSession.ControlMode == DuelControlMode.GameManaged)
         {
-            ReplyToPlayer(player, "[草人杯] 游戏内单挑期间不能切换地图，请先终止本局。");
+            ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑期间不能切换地图，请先终止本局。");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(input))
         {
-            ShowDuelMapHelp(player);
+            ShowDuelMapHelp(player, command);
             return;
         }
 
         var map = ResolveDuelWorkshopMap(input);
         if (map == null)
         {
-            ReplyToPlayer(player, $"[草人杯] 没找到单挑地图：{input}");
-            ShowDuelMapHelp(player);
+            ReplyToDuelCaller(player, command, $"[草人杯] 没找到单挑地图：{input}");
+            ShowDuelMapHelp(player, command);
             return;
         }
 
         Server.ExecuteCommand($"host_workshop_map {map.WorkshopId}");
         Logger.LogInformation("Switching directly to duel workshop map {Map} ({WorkshopId}).", map.Name, map.WorkshopId);
-        ReplyToPlayer(player, $"[草人杯] 正在切换单挑地图：{map.Name} ({map.WorkshopId})。");
+        ReplyToDuelCaller(player, command, $"[草人杯] 正在切换单挑地图：{map.Name} ({map.WorkshopId})。");
+    }
+
+    private void ReplyToDuelCaller(CCSPlayerController? player, CommandInfo command, string message)
+    {
+        if (player == null)
+        {
+            command.ReplyToCommand(message);
+            return;
+        }
+
+        ReplyToPlayer(player, message);
     }
 
     private static string FormatDuelConfig(DuelGameConfig config)
@@ -2399,14 +2430,14 @@ public sealed class CaorenCupPlugin : BasePlugin
         return count;
     }
 
-    private void ShowDuelMapHelp(CCSPlayerController? player)
+    private void ShowDuelMapHelp(CCSPlayerController? player, CommandInfo command)
     {
-        ReplyToPlayer(player, "[草人杯] 用法：/duel map <序号|地图名|创意工坊ID>（兼容 /duel_map）");
-        ReplyToPlayer(player, "[草人杯] 示例：/duel map 1 或 /duel map aim_redline 或 /duel map 3199551320");
+        ReplyToDuelCaller(player, command, "[草人杯] 用法：/duel map <序号|地图名|创意工坊ID>（兼容 /duel_map）");
+        ReplyToDuelCaller(player, command, "[草人杯] 示例：/duel map 1 或 /duel map aim_redline 或 /duel map 3199551320");
         for (var i = 0; i < DuelWorkshopMaps.Length; i++)
         {
             var map = DuelWorkshopMaps[i];
-            ReplyToPlayer(player, $"[草人杯] {i + 1}. {map.Name} ({map.WorkshopId})");
+            ReplyToDuelCaller(player, command, $"[草人杯] {i + 1}. {map.Name} ({map.WorkshopId})");
         }
     }
 
