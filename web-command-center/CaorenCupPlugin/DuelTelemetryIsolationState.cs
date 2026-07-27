@@ -2,15 +2,19 @@ namespace CaorenCupPlugin;
 
 internal sealed class DuelTelemetryIsolationState
 {
+    private readonly HashSet<string> _staleMatchIds = new(StringComparer.Ordinal);
     private bool _cleanupRestartPending;
     private bool _cleanupRoundStartCompleted;
     private bool _safeHeartbeatObserved;
+    private bool _cvarRestoreReady = true;
     private bool _hasPendingHeartbeatState;
     private PluginHeartbeatResponse? _pendingHeartbeatState;
 
     public bool IsActive { get; private set; }
 
     public string? StaleMatchId { get; private set; }
+
+    public bool CleanupRestartPending => _cleanupRestartPending;
 
     public bool HasReleasedHeartbeatState => !IsActive && _hasPendingHeartbeatState;
 
@@ -20,10 +24,16 @@ internal sealed class DuelTelemetryIsolationState
     public void Begin(string? staleMatchId)
     {
         IsActive = true;
-        StaleMatchId = NormalizeMatchId(staleMatchId);
+        var normalizedStaleMatchId = NormalizeMatchId(staleMatchId);
+        if (normalizedStaleMatchId != null)
+        {
+            _staleMatchIds.Add(normalizedStaleMatchId);
+            StaleMatchId = normalizedStaleMatchId;
+        }
         _cleanupRestartPending = false;
         _cleanupRoundStartCompleted = false;
         _safeHeartbeatObserved = false;
+        _cvarRestoreReady = true;
         ClearReleasedHeartbeatState();
     }
 
@@ -33,6 +43,7 @@ internal sealed class DuelTelemetryIsolationState
         _cleanupRestartPending = true;
         _cleanupRoundStartCompleted = false;
         _safeHeartbeatObserved = false;
+        _cvarRestoreReady = true;
         ClearReleasedHeartbeatState();
     }
 
@@ -44,6 +55,12 @@ internal sealed class DuelTelemetryIsolationState
         ReleaseIfSafe();
     }
 
+    public void UpdateCvarRestoreReady(bool isReady)
+    {
+        _cvarRestoreReady = isReady;
+        ReleaseIfSafe();
+    }
+
     public void ObserveHeartbeat(string? matchId)
     {
         if (!IsActive) return;
@@ -52,22 +69,28 @@ internal sealed class DuelTelemetryIsolationState
         ReleaseIfSafe();
     }
 
-    public void ObserveHeartbeatState(PluginHeartbeatResponse? state)
+    public HeartbeatResponseDisposition ObserveHeartbeatState(PluginHeartbeatResponse? state)
     {
-        if (!IsActive) return;
+        if (!IsActive)
+        {
+            return IsStaleMatchId(state?.MatchId)
+                ? HeartbeatResponseDisposition.Stale
+                : HeartbeatResponseDisposition.Ready;
+        }
 
-        ObserveHeartbeatMatchId(state?.MatchId);
-        if (_safeHeartbeatObserved)
+        if (IsStaleMatchId(state?.MatchId))
         {
-            _pendingHeartbeatState = state;
-            _hasPendingHeartbeatState = true;
+            return HeartbeatResponseDisposition.Stale;
         }
-        else
-        {
-            ClearReleasedHeartbeatState();
-        }
+
+        _safeHeartbeatObserved = true;
+        _pendingHeartbeatState = state;
+        _hasPendingHeartbeatState = true;
 
         ReleaseIfSafe();
+        return IsActive
+            ? HeartbeatResponseDisposition.Deferred
+            : HeartbeatResponseDisposition.Ready;
     }
 
     public void ClearReleasedHeartbeatState()
@@ -78,16 +101,19 @@ internal sealed class DuelTelemetryIsolationState
 
     private void ObserveHeartbeatMatchId(string? matchId)
     {
+        if (!IsStaleMatchId(matchId)) _safeHeartbeatObserved = true;
+    }
+
+    private bool IsStaleMatchId(string? matchId)
+    {
         var normalizedMatchId = NormalizeMatchId(matchId);
-        _safeHeartbeatObserved = normalizedMatchId == null ||
-            !string.Equals(normalizedMatchId, StaleMatchId, StringComparison.Ordinal);
+        return normalizedMatchId != null && _staleMatchIds.Contains(normalizedMatchId);
     }
 
     private void ReleaseIfSafe()
     {
-        if (!_cleanupRoundStartCompleted || !_safeHeartbeatObserved) return;
+        if (!_cleanupRoundStartCompleted || !_safeHeartbeatObserved || !_cvarRestoreReady) return;
         IsActive = false;
-        StaleMatchId = null;
     }
 
     private static string? NormalizeMatchId(string? matchId) =>

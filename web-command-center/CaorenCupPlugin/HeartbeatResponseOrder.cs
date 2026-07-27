@@ -29,6 +29,19 @@ internal sealed class HeartbeatResponseOrder
 
 internal static class HeartbeatResponseProcessor
 {
+    public static async Task<HeartbeatResponseDisposition> ProcessTransactionAsync(
+        PluginHeartbeatResponse? response,
+        Func<Task<HeartbeatResponseDisposition>> classifyStateAsync,
+        Func<PluginHeartbeatResponse?, HeartbeatResponseDisposition, Task> processCommandsAsync)
+    {
+        ArgumentNullException.ThrowIfNull(classifyStateAsync);
+        ArgumentNullException.ThrowIfNull(processCommandsAsync);
+
+        var disposition = await classifyStateAsync();
+        await processCommandsAsync(response, disposition);
+        return disposition;
+    }
+
     public static async Task<bool> ProcessAsync(
         PluginHeartbeatResponse? response,
         Func<Task<bool>> applyStateAsync,

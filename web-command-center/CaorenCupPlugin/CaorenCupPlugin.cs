@@ -28,6 +28,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly DuelServerCvarScope _duelServerCvars = new();
     private readonly DuelTelemetryIsolationState _duelTelemetryIsolation = new();
     private readonly HeartbeatResponseOrder _heartbeatResponseOrder = new();
+    private readonly HeartbeatCommandTransactionGate _heartbeatCommandTransactions = new();
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
     private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
     private readonly Dictionary<ulong, PlayerButtons> _previousButtonsBySteamId = new();
@@ -76,6 +77,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly HashSet<string> _gameManagedDuelAcceptedMissingSteamIds = new(StringComparer.Ordinal);
     private bool _gameManagedDuelRuntimeActive;
     private bool _gameManagedDuelReconnectReadyAnnounced;
+    private bool _duelCvarRestorePending;
     private volatile bool _isUnloading;
     private bool _hasSuccessfulLobbyStateSync;
     private DateTimeOffset _lastSuccessfulLobbyStateSync;
@@ -83,6 +85,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private int _webStateGeneration;
     private const string DefaultNoticeSound = "training/bell_normal.vsnd_c";
     private static readonly TimeSpan LobbyStateMaxAge = TimeSpan.FromSeconds(15);
+    private static Action<Action> MapStartLifecycleSchedule => Server.NextWorldUpdate;
     private static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "css_ammo",
@@ -609,17 +612,21 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void StartGameManagedDuel(CCSPlayerController? player, CommandInfo command, bool confirmWebTakeover)
     {
-        if (!_duelServerCvars.IsReadyForNewDuel)
+        if (!_duelTelemetryIsolation.CleanupRestartPending &&
+            _duelCvarRestorePending)
         {
             RetryPendingGameManagedDuelCvarsAtSafePoint();
-            if (!_duelServerCvars.IsReadyForNewDuel)
-            {
-                ReplyToDuelCaller(
-                    player,
-                    command,
-                    "[草人杯] 无法开始单挑：上一次比赛的服务器参数仍在恢复中，请稍后重试。");
-                return;
-            }
+        }
+
+        if (IsDuelStartBlocked(
+            _duelTelemetryIsolation.CleanupRestartPending,
+            !_duelCvarRestorePending))
+        {
+            var reason = _duelTelemetryIsolation.CleanupRestartPending
+                ? "上一局清理重启尚未完成"
+                : "上一次比赛的服务器参数仍在恢复中";
+            ReplyToDuelCaller(player, command, $"[草人杯] 无法开始单挑：{reason}，请稍后重试。");
+            return;
         }
 
         var participants = Utilities.GetPlayers()
@@ -641,6 +648,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _duelTelemetryIsolation.Begin(_currentMatchId);
         _currentMatchId = null;
         _gameManagedDuelRuntimeActive = true;
+        _duelCvarRestorePending = false;
         _gameManagedDuelAcceptedMissingSteamIds.Clear();
         _gameManagedDuelReconnectReadyAnnounced = false;
         try
@@ -939,20 +947,24 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void SwitchDuelMap(CCSPlayerController? player, CommandInfo command, string input)
     {
-        if (!_duelServerCvars.IsReadyForNewDuel)
+        if (!_duelTelemetryIsolation.CleanupRestartPending &&
+            _duelCvarRestorePending)
         {
             RetryPendingGameManagedDuelCvarsAtSafePoint();
         }
 
-        var hasPendingCvarRestore = !_duelServerCvars.IsReadyForNewDuel;
+        var hasPendingCvarRestore = _duelCvarRestorePending;
         if (IsDuelMapChangeBlocked(
             _duelSession.ControlMode,
             _duelSession.Lifecycle,
-            hasPendingCvarRestore))
+            hasPendingCvarRestore,
+            _duelTelemetryIsolation.CleanupRestartPending))
         {
-            var message = hasPendingCvarRestore
-                ? "[草人杯] 上一次比赛的服务器参数仍在恢复中，暂时不能切换地图，请稍后重试。"
-                : "[草人杯] 游戏内单挑期间不能切换地图，请先终止本局。";
+            var message = _duelTelemetryIsolation.CleanupRestartPending
+                ? "[草人杯] 上一局清理重启尚未完成，暂时不能切换地图，请稍后重试。"
+                : hasPendingCvarRestore
+                    ? "[草人杯] 上一次比赛的服务器参数仍在恢复中，暂时不能切换地图，请稍后重试。"
+                    : "[草人杯] 游戏内单挑期间不能切换地图，请先终止本局。";
             ReplyToDuelCaller(player, command, message);
             return;
         }
@@ -976,10 +988,22 @@ public sealed class CaorenCupPlugin : BasePlugin
         ReplyToDuelCaller(player, command, $"[草人杯] 正在切换单挑地图：{map.Name} ({map.WorkshopId})。");
     }
 
+    private static bool IsDuelStartBlocked(
+        bool cleanupRestartPending,
+        bool cvarRestoreReady) =>
+        cleanupRestartPending || !cvarRestoreReady;
+
+    private static bool ShouldRetryPendingDuelCvars(
+        bool hasActiveRuntime,
+        bool restorePending) =>
+        !hasActiveRuntime && restorePending;
+
     private static bool IsDuelMapChangeBlocked(
         DuelControlMode controlMode,
         DuelLifecycle lifecycle,
-        bool hasPendingCvarRestore) =>
+        bool hasPendingCvarRestore,
+        bool cleanupRestartPending) =>
+        cleanupRestartPending ||
         hasPendingCvarRestore ||
         (controlMode == DuelControlMode.GameManaged &&
             lifecycle is DuelLifecycle.Running or DuelLifecycle.Paused);
@@ -1084,6 +1108,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         });
         _duelTelemetryIsolation.CompleteCleanupRoundStart();
         CommitReleasedDuelHeartbeatStateOnGameThread();
+        _ = DrainDeferredHeartbeatCommandsAsync();
         return HookResult.Continue;
     }
 
@@ -1399,7 +1424,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         var hasActiveRuntime = _gameManagedDuelRuntimeActive ||
             _duelSession.ControlMode == DuelControlMode.GameManaged;
-        if (!hasActiveRuntime && _duelServerCvars.PendingRestoreCount == 0)
+        if (!hasActiveRuntime && !_duelCvarRestorePending)
         {
             return;
         }
@@ -1413,6 +1438,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         _gameManagedDuelRuntimeActive = false;
         _heartbeatResponseOrder.BeginBarrier();
         _duelTelemetryIsolation.BeginCleanupRestart();
+        _duelCvarRestorePending = _duelServerCvars.PendingRestoreCount > 0;
+        _duelTelemetryIsolation.UpdateCvarRestoreReady(!_duelCvarRestorePending);
         _gameManagedDuelAcceptedMissingSteamIds.Clear();
         _gameManagedDuelReconnectReadyAnnounced = false;
         if (_duelSession.Lifecycle == DuelLifecycle.Paused)
@@ -1454,6 +1481,15 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void RestoreGameManagedDuelCvarsWithRetry()
     {
+        _duelCvarRestorePending = _duelServerCvars.PendingRestoreCount > 0;
+        _duelTelemetryIsolation.UpdateCvarRestoreReady(!_duelCvarRestorePending);
+        if (!_duelCvarRestorePending)
+        {
+            CommitReleasedDuelHeartbeatStateOnGameThread();
+            _ = DrainDeferredHeartbeatCommandsAsync();
+            return;
+        }
+
         var failedAttempt = 0;
         var restored = _duelServerCvars.TryRestoreAll(3, failure =>
         {
@@ -1470,11 +1506,18 @@ public sealed class CaorenCupPlugin : BasePlugin
                 "the periodic safety check and heartbeat safe point will keep retrying: {PendingCvars}",
                 string.Join(",", _duelServerCvars.PendingRestoreNames));
         }
+
+        _duelCvarRestorePending = !restored;
+        _duelTelemetryIsolation.UpdateCvarRestoreReady(restored);
+        CommitReleasedDuelHeartbeatStateOnGameThread();
+        if (restored) _ = DrainDeferredHeartbeatCommandsAsync();
     }
 
     private void RetryPendingGameManagedDuelCvarsAtSafePoint()
     {
-        if (_duelServerCvars.IsReadyForNewDuel) return;
+        var hasActiveRuntime = _gameManagedDuelRuntimeActive ||
+            _duelSession.ControlMode == DuelControlMode.GameManaged;
+        if (!ShouldRetryPendingDuelCvars(hasActiveRuntime, _duelCvarRestorePending)) return;
 
         var restored = _duelServerCvars.RetryPendingAtSafePoint(failure =>
         {
@@ -1486,6 +1529,11 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             Logger.LogInformation("All deferred game-managed duel cvars were restored.");
         }
+
+        _duelCvarRestorePending = !restored;
+        _duelTelemetryIsolation.UpdateCvarRestoreReady(restored);
+        CommitReleasedDuelHeartbeatStateOnGameThread();
+        if (restored) _ = DrainDeferredHeartbeatCommandsAsync();
     }
 
     private void ClearDuelEquipmentState()
@@ -1622,23 +1670,38 @@ public sealed class CaorenCupPlugin : BasePlugin
             {
                 var state = JsonSerializer.Deserialize<PluginHeartbeatResponse>(text, _jsonOptions);
                 if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-                var acceptedHeartbeatResponse = await HeartbeatResponseProcessor.ProcessAsync(
+                var disposition = await HeartbeatResponseProcessor.ProcessTransactionAsync(
                     state,
                     async () =>
                     {
-                        var stateAccepted = false;
+                        var stateDisposition = HeartbeatResponseDisposition.Expired;
                         await GameThreadApplicationScheduler.ScheduleAsync(
                             GameThreadApplicationScheduler.HibernationSafeServerSchedule,
-                            () => stateAccepted = ApplyHeartbeatStateOnGameThread(
+                            () => stateDisposition = ApplyHeartbeatStateOnGameThread(
                                 state,
                                 heartbeatRequestSequence));
-                        return stateAccepted;
+                        return stateDisposition;
                     },
-                    ProcessPluginCommandAsync);
+                    (heartbeatState, stateDisposition) =>
+                        _heartbeatCommandTransactions.ProcessResponseAsync(
+                            heartbeatState,
+                            stateDisposition,
+                            TryApplyAndAckPluginCommandAsync,
+                            RejectAndAckPluginCommandAsync,
+                            AckPluginCommandOnlyAsync));
                 if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-                if (!acceptedHeartbeatResponse)
+                await DrainDeferredHeartbeatCommandsAsync();
+                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+                if (disposition == HeartbeatResponseDisposition.Expired)
                 {
-                    LogDebug("Ignored stale heartbeat response seq={Sequence}.", heartbeatRequestSequence);
+                    LogDebug("Rejected expired heartbeat response seq={Sequence}.", heartbeatRequestSequence);
+                }
+                else if (disposition == HeartbeatResponseDisposition.Stale)
+                {
+                    LogDebug(
+                        "Rejected heartbeat response for a taken-over match seq={Sequence} MatchId={MatchId}.",
+                        heartbeatRequestSequence,
+                        state?.MatchId);
                 }
                 LogDebug("Heartbeat OK: {Text}", text);
             }
@@ -1654,36 +1717,44 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
     }
 
-    private bool ApplyHeartbeatStateOnGameThread(
+    private HeartbeatResponseDisposition ApplyHeartbeatStateOnGameThread(
         PluginHeartbeatResponse? state,
         long heartbeatRequestSequence)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading))
         {
-            return false;
+            return HeartbeatResponseDisposition.Expired;
         }
 
         RetryPendingGameManagedDuelCvarsAtSafePoint();
         if (!_heartbeatResponseOrder.TryAccept(heartbeatRequestSequence))
         {
-            return false;
+            return HeartbeatResponseDisposition.Expired;
+        }
+
+        var disposition = _duelTelemetryIsolation.ObserveHeartbeatState(state);
+        if (disposition == HeartbeatResponseDisposition.Stale)
+        {
+            if (_duelTelemetryIsolation.IsActive) _currentMatchId = null;
+            return disposition;
         }
 
         if (_duelTelemetryIsolation.IsActive)
         {
-            _duelTelemetryIsolation.ObserveHeartbeatState(state);
-            if (_duelTelemetryIsolation.IsActive)
-            {
-                _currentMatchId = null;
-                return true;
-            }
-
-            CommitReleasedDuelHeartbeatStateOnGameThread();
-            return true;
+            _currentMatchId = null;
+            return disposition;
         }
 
-        ApplyAcceptedHeartbeatStateOnGameThread(state, false);
-        return true;
+        if (_duelTelemetryIsolation.HasReleasedHeartbeatState)
+        {
+            CommitReleasedDuelHeartbeatStateOnGameThread();
+        }
+        else
+        {
+            ApplyAcceptedHeartbeatStateOnGameThread(state, false);
+        }
+
+        return HeartbeatResponseDisposition.Ready;
     }
 
     private void CommitReleasedDuelHeartbeatStateOnGameThread()
@@ -1819,7 +1890,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         ClearLobbyReminderState();
         if (!_isUnloading)
         {
-            Server.NextFrame(() =>
+            MapStartLifecycleSchedule(() =>
             {
                 if (_isUnloading) return;
                 if (gameManagedDuelWasActive && _duelSession.ControlMode == DuelControlMode.GameManaged)
@@ -2208,45 +2279,90 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
     }
 
-    private async Task ProcessPluginCommandAsync(PluginCommand command)
+    private async Task<PluginCommandExecutionResult> TryApplyAndAckPluginCommandAsync(
+        PluginCommand command)
     {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        if (string.IsNullOrWhiteSpace(command.Id) || string.IsNullOrWhiteSpace(command.Type)) return;
+        if (!ShouldProcessPluginContinuation(_isUnloading))
+        {
+            return PluginCommandExecutionResult.Deferred;
+        }
+        if (string.IsNullOrWhiteSpace(command.Id) || string.IsNullOrWhiteSpace(command.Type))
+        {
+            return PluginCommandExecutionResult.Completed;
+        }
+
         try
         {
-            var applied = await WebCommandGameThreadDispatcher.ScheduleAsync(
+            var disposition = await WebCommandGameThreadDispatcher.ScheduleTransactionAsync(
                 GameThreadApplicationScheduler.HibernationSafeServerSchedule,
                 command,
                 () => _duelSession.ControlMode,
-                ApplyPluginCommandOnGameThread);
-            if (!applied)
+                () => _duelTelemetryIsolation.CleanupRestartPending,
+                () => !_duelCvarRestorePending,
+                ApplyPluginCommandOnGameThreadAsync);
+
+            if (disposition == PluginCommandTransactionDisposition.Deferred)
+            {
+                return PluginCommandExecutionResult.Deferred;
+            }
+
+            if (disposition == PluginCommandTransactionDisposition.Rejected)
             {
                 Logger.LogWarning(
                     "Rejected queued web command because a game-managed duel is active: {Type}",
                     command.Type);
             }
+
+            if (!ShouldProcessPluginContinuation(_isUnloading))
+            {
+                return PluginCommandExecutionResult.FinalizedAwaitingAck;
+            }
+
+            return await AckCommandAsync(command.Id)
+                ? PluginCommandExecutionResult.Completed
+                : PluginCommandExecutionResult.FinalizedAwaitingAck;
         }
-        finally
+        catch (Exception ex)
         {
             if (ShouldProcessPluginContinuation(_isUnloading))
             {
-                await AckCommandAsync(command.Id);
+                Logger.LogWarning(
+                    ex,
+                    "Failed to apply queued web command; it remains deferred without ACK: {Type}",
+                    command.Type);
             }
+            return PluginCommandExecutionResult.Deferred;
         }
     }
 
-    private void ApplyPluginCommandOnGameThread(PluginCommand command)
+    private async Task<bool> RejectAndAckPluginCommandAsync(PluginCommand command)
     {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        if (WebCommandGameThreadDispatcher.IsBlockedByPendingCvarRestore(
-            command,
-            !_duelServerCvars.IsReadyForNewDuel))
-        {
-            Logger.LogWarning(
-                "Rejected web match-control command while previous duel cvars remain pending: {Type}",
-                command.Type);
-            return;
-        }
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
+        if (string.IsNullOrWhiteSpace(command.Id) || string.IsNullOrWhiteSpace(command.Type)) return true;
+
+        Logger.LogWarning(
+            "Rejected match-control command from an expired or taken-over heartbeat response: {Type}",
+            command.Type);
+        return await AckCommandAsync(command.Id);
+    }
+
+    private Task<bool> AckPluginCommandOnlyAsync(PluginCommand command) =>
+        string.IsNullOrWhiteSpace(command.Id)
+            ? Task.FromResult(true)
+            : AckCommandAsync(command.Id);
+
+    private Task DrainDeferredHeartbeatCommandsAsync() =>
+        _heartbeatCommandTransactions.DrainAsync(
+            () => ShouldProcessPluginContinuation(_isUnloading) &&
+                !_duelTelemetryIsolation.IsActive &&
+                !_duelTelemetryIsolation.CleanupRestartPending &&
+                !_duelCvarRestorePending,
+            TryApplyAndAckPluginCommandAsync,
+            AckPluginCommandOnlyAsync);
+
+    private Task<bool> ApplyPluginCommandOnGameThreadAsync(PluginCommand command)
+    {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return Task.FromResult(false);
 
         if (string.Equals(command.Type, "RESET_LIVE_MATCH_STATS", StringComparison.OrdinalIgnoreCase))
         {
@@ -2268,7 +2384,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 !command.Payload.TryGetProperty("command", out var serverCommandElement))
             {
                 Logger.LogWarning("EXECUTE_SERVER_COMMAND missing payload.command");
-                return;
+                return Task.FromResult(true);
             }
 
             var serverCommand = serverCommandElement.GetString()?.Trim() ?? string.Empty;
@@ -2279,7 +2395,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             }
 
             var delaySeconds = ReadPayloadInt(command.Payload, "delaySeconds", 0);
-            ExecuteAllowedServerCommand(serverCommand, label, delaySeconds);
+            return ExecuteAllowedServerCommandAsync(serverCommand, label, delaySeconds);
         }
         else if (string.Equals(command.Type, "APPLY_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
         {
@@ -2297,6 +2413,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
         }
+
+        return Task.FromResult(true);
     }
 
     private void ApplyTeamAssignments(JsonElement payload)
@@ -2878,58 +2996,69 @@ public sealed class CaorenCupPlugin : BasePlugin
         return team == CsTeam.CounterTerrorist ? "CT" : team == CsTeam.Terrorist ? "T" : team.ToString();
     }
 
-    private void ExecuteAllowedServerCommand(string serverCommand, string label, int delaySeconds = 0)
+    private Task<bool> ExecuteAllowedServerCommandAsync(
+        string serverCommand,
+        string label,
+        int delaySeconds = 0)
     {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return Task.FromResult(false);
         if (string.IsNullOrWhiteSpace(serverCommand))
         {
             Logger.LogWarning("Rejected empty web command from CaorenCup command center.");
-            return;
+            return Task.FromResult(true);
         }
 
         var commandName = serverCommand.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
         if (!AllowedBridgeServerCommands.Contains(commandName))
         {
             Logger.LogWarning("Rejected web command because it is not in bridge allowlist: {Command}", serverCommand);
-            return;
+            return Task.FromResult(true);
         }
 
-        void ExecuteNow()
+        bool ExecuteNow()
         {
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
+            var rejectedByGameManaged =
+                WebCommandGameThreadDispatcher.IsGameManagedMatchControlCommand(
+                    serverCommand,
+                    _duelSession.ControlMode);
             var executed = WebCommandGameThreadDispatcher.TryExecuteServerCommand(
                 serverCommand,
                 () => _duelSession.ControlMode,
-                () => !_duelServerCvars.IsReadyForNewDuel,
+                () => _duelCvarRestorePending,
+                () => _duelTelemetryIsolation.CleanupRestartPending,
                 () =>
                 {
+                    Logger.LogInformation("Executing CaorenCup web command: {Command}", serverCommand);
+                    Server.ExecuteCommand(serverCommand);
                     try
                     {
-                        Logger.LogInformation("Executing CaorenCup web command: {Command}", serverCommand);
-                        Server.ExecuteCommand(serverCommand);
                         Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页修改已下发：{label}");
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogError(ex, "Failed to execute CaorenCup web command: {Command}", serverCommand);
+                        Logger.LogWarning(ex, "Failed to announce executed CaorenCup web command: {Command}", serverCommand);
                     }
                 });
             if (!executed)
             {
                 Logger.LogWarning(
                     "Rejected web match-control command at execution time because a game-managed duel " +
-                    "is active or previous duel cvars remain pending: {Command}",
+                    "is active, cleanup is pending, or previous duel cvars remain pending: {Command}",
                     serverCommand);
             }
+
+            return executed || rejectedByGameManaged;
         }
 
         if (delaySeconds > 0)
         {
-            AddTimer(delaySeconds, ExecuteNow);
-            return;
+            return WebCommandGameThreadDispatcher.ScheduleDelayedExecution(
+                callback => AddTimer(delaySeconds, callback),
+                ExecuteNow);
         }
 
-        ExecuteNow();
+        return Task.FromResult(ExecuteNow());
     }
 
     private void ResetLiveMatchStats(int currentRound)
@@ -2945,26 +3074,47 @@ public sealed class CaorenCupPlugin : BasePlugin
         _duelProtectionNoticeAt.Clear();
     }
 
-    private async Task AckCommandAsync(string commandId)
+    private async Task<bool> AckCommandAsync(string commandId)
     {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/command-ack", new { commandId }, _jsonOptions);
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
+            if (IsTerminalCommandAckStatus(response.StatusCode))
+            {
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    LogDebug(
+                        "Command ack target was already absent and is treated as complete: {CommandId}",
+                        commandId);
+                }
+                return true;
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 var body = await response.Content.ReadAsStringAsync();
-                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+                if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
                 Logger.LogWarning("Command ack rejected: {Status} {Body}", response.StatusCode, body);
+                return false;
             }
+
+            return true;
         }
         catch (Exception ex)
         {
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            Logger.LogWarning(ex, "Command ack exception");
+            if (ShouldProcessPluginContinuation(_isUnloading))
+            {
+                Logger.LogWarning(ex, "Command ack exception");
+            }
+            return false;
         }
     }
+
+    private static bool IsTerminalCommandAckStatus(System.Net.HttpStatusCode statusCode) =>
+        statusCode == System.Net.HttpStatusCode.NotFound ||
+        (int)statusCode is >= 200 and <= 299;
 
     private LocalPlayerStats EnsureLocalStats(string steamId, string name)
     {

@@ -1,5 +1,12 @@
 namespace CaorenCupPlugin;
 
+internal enum PluginCommandTransactionDisposition
+{
+    Applied,
+    Rejected,
+    Deferred
+}
+
 internal static class GameThreadApplicationScheduler
 {
     public static Action<Action> HibernationSafeServerSchedule =>
@@ -78,6 +85,84 @@ internal static class WebCommandGameThreadDispatcher
         return completion.Task;
     }
 
+    public static Task<PluginCommandTransactionDisposition> ScheduleTransactionAsync(
+        Action<Action> schedule,
+        PluginCommand command,
+        Func<DuelControlMode> readControlMode,
+        Func<bool> readCleanupRestartPending,
+        Func<bool> readCvarRestoreReady,
+        Func<PluginCommand, Task<bool>> application)
+    {
+        var completion = new TaskCompletionSource<PluginCommandTransactionDisposition>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            schedule(() =>
+            {
+                try
+                {
+                    if (IsMatchControlPluginCommand(command))
+                    {
+                        if (readControlMode() == DuelControlMode.GameManaged)
+                        {
+                            completion.TrySetResult(PluginCommandTransactionDisposition.Rejected);
+                            return;
+                        }
+
+                        if (readCleanupRestartPending() || !readCvarRestoreReady())
+                        {
+                            completion.TrySetResult(PluginCommandTransactionDisposition.Deferred);
+                            return;
+                        }
+                    }
+
+                    var applicationTask = application(command);
+                    _ = CompleteApplicationAsync(applicationTask, completion);
+                }
+                catch (Exception ex)
+                {
+                    completion.TrySetException(ex);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetException(ex);
+        }
+
+        return completion.Task;
+    }
+
+    public static Task<bool> ScheduleDelayedExecution(
+        Action<Action> schedule,
+        Func<bool> execution)
+    {
+        ArgumentNullException.ThrowIfNull(schedule);
+        ArgumentNullException.ThrowIfNull(execution);
+
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            schedule(() =>
+            {
+                try
+                {
+                    completion.TrySetResult(execution());
+                }
+                catch (Exception ex)
+                {
+                    completion.TrySetException(ex);
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetException(ex);
+        }
+
+        return completion.Task;
+    }
+
     public static bool IsGameManagedMatchControlCommand(
         string serverCommand,
         DuelControlMode controlMode)
@@ -92,6 +177,11 @@ internal static class WebCommandGameThreadDispatcher
         bool hasPendingCvarRestore)
     {
         if (!hasPendingCvarRestore) return false;
+        return IsMatchControlPluginCommand(command);
+    }
+
+    public static bool IsMatchControlPluginCommand(PluginCommand command)
+    {
         if (BlockedStateMutationTypes.Contains(command.Type ?? string.Empty)) return true;
         if (!string.Equals(command.Type, "EXECUTE_SERVER_COMMAND", StringComparison.OrdinalIgnoreCase) ||
             command.Payload.ValueKind != System.Text.Json.JsonValueKind.Object ||
@@ -118,10 +208,12 @@ internal static class WebCommandGameThreadDispatcher
         string serverCommand,
         Func<DuelControlMode> readControlMode,
         Func<bool> readHasPendingCvarRestore,
+        Func<bool> readCleanupRestartPending,
         Action execution)
     {
         if (IsGameManagedMatchControlCommand(serverCommand, readControlMode()) ||
-            (readHasPendingCvarRestore() && IsMatchControlServerCommand(serverCommand)))
+            ((readHasPendingCvarRestore() || readCleanupRestartPending()) &&
+                IsMatchControlServerCommand(serverCommand)))
         {
             return false;
         }
@@ -133,16 +225,23 @@ internal static class WebCommandGameThreadDispatcher
     private static bool IsBlocked(PluginCommand command, DuelControlMode controlMode)
     {
         if (controlMode != DuelControlMode.GameManaged) return false;
-        if (BlockedStateMutationTypes.Contains(command.Type ?? string.Empty)) return true;
-        if (!string.Equals(command.Type, "EXECUTE_SERVER_COMMAND", StringComparison.OrdinalIgnoreCase) ||
-            command.Payload.ValueKind != System.Text.Json.JsonValueKind.Object ||
-            !command.Payload.TryGetProperty("command", out var serverCommandElement))
-        {
-            return false;
-        }
+        return IsMatchControlPluginCommand(command);
+    }
 
-        return IsGameManagedMatchControlCommand(
-            serverCommandElement.GetString()?.Trim() ?? string.Empty,
-            controlMode);
+    private static async Task CompleteApplicationAsync(
+        Task<bool> applicationTask,
+        TaskCompletionSource<PluginCommandTransactionDisposition> completion)
+    {
+        try
+        {
+            var applied = await applicationTask;
+            completion.TrySetResult(applied
+                ? PluginCommandTransactionDisposition.Applied
+                : PluginCommandTransactionDisposition.Deferred);
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetException(ex);
+        }
     }
 }

@@ -60,6 +60,129 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
+    public void Cleanup_restart_pending_is_exposed_until_its_round_start_is_consumed()
+    {
+        var isolation = CreateTelemetryIsolationState();
+        Invoke(isolation, "Begin", "taken-over-match-a");
+
+        Invoke(isolation, "BeginCleanupRestart");
+
+        Assert.True(ReadBool(isolation, "CleanupRestartPending"));
+
+        Invoke(isolation, "CompleteCleanupRoundStart");
+
+        Assert.False(ReadBool(isolation, "CleanupRestartPending"));
+    }
+
+    [Fact]
+    public void New_begin_preserves_previously_taken_over_match_id_history()
+    {
+        var isolation = CreateTelemetryIsolationState();
+        Invoke(isolation, "Begin", "taken-over-match-a");
+        Invoke(isolation, "BeginCleanupRestart");
+        Invoke(isolation, "ObserveHeartbeatState", new PluginHeartbeatResponse
+        {
+            MatchId = "safe-match-b"
+        });
+        Invoke(isolation, "CompleteCleanupRoundStart");
+        Assert.False(ReadBool(isolation, "IsActive"));
+
+        Invoke(isolation, "Begin", (object?)null);
+        Invoke(isolation, "BeginCleanupRestart");
+        Invoke(isolation, "CompleteCleanupRoundStart");
+        var disposition = InvokeResult(
+            isolation,
+            "ObserveHeartbeatState",
+            new PluginHeartbeatResponse { MatchId = "taken-over-match-a" });
+
+        Assert.Equal("Stale", disposition?.ToString());
+        Assert.True(ReadBool(isolation, "IsActive"));
+    }
+
+    [Fact]
+    public void Taken_over_match_id_remains_stale_after_isolation_has_released()
+    {
+        var isolation = CreateTelemetryIsolationState();
+        Invoke(isolation, "Begin", "taken-over-match-a");
+        Invoke(isolation, "BeginCleanupRestart");
+        Invoke(isolation, "ObserveHeartbeatState", new PluginHeartbeatResponse
+        {
+            MatchId = "safe-match-b"
+        });
+        Invoke(isolation, "CompleteCleanupRoundStart");
+        Assert.False(ReadBool(isolation, "IsActive"));
+
+        var disposition = InvokeResult(
+            isolation,
+            "ObserveHeartbeatState",
+            new PluginHeartbeatResponse { MatchId = "taken-over-match-a" });
+
+        Assert.Equal("Stale", disposition?.ToString());
+        Assert.False(ReadBool(isolation, "IsActive"));
+    }
+
+    [Fact]
+    public void Pending_cvar_restore_prevents_safe_heartbeat_release_until_recovery()
+    {
+        var isolation = CreateTelemetryIsolationState();
+        var safeHeartbeat = new PluginHeartbeatResponse
+        {
+            MatchId = "safe-match-b",
+            CurrentRound = 8,
+            ScoreCT = 5,
+            ScoreT = 3
+        };
+        Invoke(isolation, "Begin", "taken-over-match-a");
+        Invoke(isolation, "BeginCleanupRestart");
+        Invoke(isolation, "UpdateCvarRestoreReady", false);
+        Invoke(isolation, "ObserveHeartbeatState", safeHeartbeat);
+        Invoke(isolation, "CompleteCleanupRoundStart");
+
+        Assert.False(ReadBool(isolation, "CleanupRestartPending"));
+        Assert.True(ReadBool(isolation, "IsActive"));
+        Assert.False(ReadBool(isolation, "HasReleasedHeartbeatState"));
+
+        Invoke(isolation, "UpdateCvarRestoreReady", true);
+
+        Assert.False(ReadBool(isolation, "IsActive"));
+        Assert.True(ReadBool(isolation, "HasReleasedHeartbeatState"));
+        var released = Assert.IsType<PluginHeartbeatResponse>(ReadProperty(
+            isolation,
+            "ReleasedHeartbeatState"));
+        Assert.Equal("safe-match-b", released.MatchId);
+        Assert.Equal(8, released.CurrentRound);
+        Assert.Equal(5, released.ScoreCT);
+        Assert.Equal(3, released.ScoreT);
+    }
+
+    [Fact]
+    public void Later_stale_response_does_not_discard_an_already_buffered_safe_match()
+    {
+        var isolation = CreateTelemetryIsolationState();
+        Invoke(isolation, "Begin", "taken-over-match-a");
+        Invoke(isolation, "BeginCleanupRestart");
+        Invoke(isolation, "ObserveHeartbeatState", new PluginHeartbeatResponse
+        {
+            MatchId = "safe-match-b",
+            CurrentRound = 9
+        });
+
+        var staleDisposition = InvokeResult(
+            isolation,
+            "ObserveHeartbeatState",
+            new PluginHeartbeatResponse { MatchId = "taken-over-match-a" });
+        Invoke(isolation, "CompleteCleanupRoundStart");
+
+        Assert.Equal("Stale", staleDisposition?.ToString());
+        Assert.False(ReadBool(isolation, "IsActive"));
+        var released = Assert.IsType<PluginHeartbeatResponse>(ReadProperty(
+            isolation,
+            "ReleasedHeartbeatState"));
+        Assert.Equal("safe-match-b", released.MatchId);
+        Assert.Equal(9, released.CurrentRound);
+    }
+
+    [Fact]
     public async Task Web_command_parsed_before_duel_start_cannot_apply_after_the_duel_starts()
     {
         var dispatcherType = typeof(DuelGameSession).Assembly
@@ -118,6 +241,27 @@ public sealed class FinalReviewFixTests
 
         Assert.Equal("NextWorldUpdate", schedule.Method.Name);
         Assert.Equal("CounterStrikeSharp.API.Server", schedule.Method.DeclaringType?.FullName);
+    }
+
+    [Fact]
+    public void Production_map_start_lifecycle_scheduler_runs_during_server_hibernation()
+    {
+        var property = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetProperty(
+            "MapStartLifecycleSchedule",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(property);
+
+        var schedule = Assert.IsType<Action<Action>>(property!.GetValue(null));
+        var onMapStart = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
+            "OnMapStart",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var getterToken = BitConverter.GetBytes(property.GetMethod!.MetadataToken);
+        var onMapStartIl = onMapStart?.GetMethodBody()?.GetILAsByteArray();
+
+        Assert.Equal("NextWorldUpdate", schedule.Method.Name);
+        Assert.Equal("CounterStrikeSharp.API.Server", schedule.Method.DeclaringType?.FullName);
+        Assert.NotNull(onMapStartIl);
+        Assert.True(onMapStartIl.AsSpan().IndexOf(getterToken) >= 0);
     }
 
     [Fact]
@@ -180,6 +324,456 @@ public sealed class FinalReviewFixTests
 
         Assert.False(await processing);
         Assert.Equal(["queued-before-barrier"], processedCommandIds);
+    }
+
+    [Fact]
+    public async Task Heartbeat_processor_passes_state_disposition_to_commands_after_classification()
+    {
+        var response = new PluginHeartbeatResponse
+        {
+            MatchId = "taken-over-match-a",
+            Commands = [CreateServerCommand("mp_restartgame 1", "old-a-restart")]
+        };
+        var events = new List<string>();
+        Func<Task<HeartbeatResponseDisposition>> classifier = () =>
+        {
+            events.Add("state");
+            return Task.FromResult(HeartbeatResponseDisposition.Stale);
+        };
+        Func<PluginHeartbeatResponse?, HeartbeatResponseDisposition, Task> handler =
+            (state, disposition) =>
+            {
+                events.Add($"commands:{state?.Commands?[0].Id}:{disposition}");
+                return Task.CompletedTask;
+            };
+
+        var disposition = await HeartbeatResponseProcessor.ProcessTransactionAsync(
+            response,
+            classifier,
+            handler);
+
+        Assert.Equal(["state", "commands:old-a-restart:Stale"], events);
+        Assert.Equal(HeartbeatResponseDisposition.Stale, disposition);
+    }
+
+    [Fact]
+    public void Production_heartbeat_path_owns_the_transaction_gate_and_returns_a_disposition()
+    {
+        var pluginType = typeof(global::CaorenCupPlugin.CaorenCupPlugin);
+        var gateField = pluginType.GetField(
+            "_heartbeatCommandTransactions",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var classifier = pluginType.GetMethod(
+            "ApplyHeartbeatStateOnGameThread",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var applyAndAck = pluginType.GetMethod(
+            "TryApplyAndAckPluginCommandAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var acknowledge = pluginType.GetMethod(
+            "AckCommandAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(gateField);
+        Assert.Equal("HeartbeatCommandTransactionGate", gateField!.FieldType.Name);
+        Assert.NotNull(classifier);
+        Assert.Equal(typeof(HeartbeatResponseDisposition), classifier!.ReturnType);
+        Assert.NotNull(applyAndAck);
+        Assert.Equal(typeof(Task<PluginCommandExecutionResult>), applyAndAck!.ReturnType);
+        Assert.NotNull(acknowledge);
+        Assert.Equal(typeof(Task<bool>), acknowledge!.ReturnType);
+    }
+
+    [Fact]
+    public async Task Expired_response_rejects_and_acks_match_control_without_applying_it()
+    {
+        var gate = CreateHeartbeatCommandTransactionGate();
+        var response = new PluginHeartbeatResponse
+        {
+            MatchId = "taken-over-match-a",
+            Commands =
+            [
+                new PluginCommand
+                {
+                    Id = "old-a-configure",
+                    Type = "CONFIGURE_DUEL_MODE",
+                    Payload = JsonSerializer.SerializeToElement(new { })
+                }
+            ]
+        };
+        var events = new List<string>();
+        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        {
+            events.Add($"apply:{command.Id}");
+            events.Add($"ack:{command.Id}");
+            return Task.FromResult(PluginCommandExecutionResult.Completed);
+        };
+        Func<PluginCommand, Task<bool>> rejectAndAck = command =>
+        {
+            events.Add($"reject:{command.Id}");
+            events.Add($"ack:{command.Id}");
+            return Task.FromResult(true);
+        };
+        Func<PluginCommand, Task<bool>> ackOnly = _ => Task.FromResult(true);
+
+        await InvokeTask(
+            gate,
+            "ProcessResponseAsync",
+            response,
+            ReadEnum("CaorenCupPlugin.HeartbeatResponseDisposition", "Expired"),
+            applyAndAck,
+            rejectAndAck,
+            ackOnly);
+
+        Assert.Equal(["reject:old-a-configure", "ack:old-a-configure"], events);
+        Assert.Equal(0, ReadInt(gate, "DeferredCount"));
+    }
+
+    [Fact]
+    public async Task Safe_response_match_control_waits_then_applies_and_acks_in_order()
+    {
+        var gate = CreateHeartbeatCommandTransactionGate();
+        var response = new PluginHeartbeatResponse
+        {
+            MatchId = "safe-match-b",
+            Commands =
+            [
+                new PluginCommand
+                {
+                    Id = "safe-b-configure",
+                    Type = "CONFIGURE_DUEL_MODE",
+                    Payload = JsonSerializer.SerializeToElement(new { })
+                },
+                CreateServerCommand("mp_restartgame 1", "safe-b-restart")
+            ]
+        };
+        var events = new List<string>();
+        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        {
+            events.Add($"apply:{command.Id}");
+            events.Add($"ack:{command.Id}");
+            return Task.FromResult(PluginCommandExecutionResult.Completed);
+        };
+        Func<PluginCommand, Task<bool>> rejectAndAck = command =>
+        {
+            events.Add($"reject:{command.Id}");
+            events.Add($"ack:{command.Id}");
+            return Task.FromResult(true);
+        };
+        Func<PluginCommand, Task<bool>> ackOnly = _ => Task.FromResult(true);
+
+        await InvokeTask(
+            gate,
+            "ProcessResponseAsync",
+            response,
+            ReadEnum("CaorenCupPlugin.HeartbeatResponseDisposition", "Deferred"),
+            applyAndAck,
+            rejectAndAck,
+            ackOnly);
+
+        Assert.Empty(events);
+        Assert.Equal(2, ReadInt(gate, "DeferredCount"));
+
+        await InvokeTask(
+            gate,
+            "DrainAsync",
+            (Func<bool>)(() => true),
+            applyAndAck,
+            ackOnly);
+
+        Assert.Equal(
+            [
+                "apply:safe-b-configure",
+                "ack:safe-b-configure",
+                "apply:safe-b-restart",
+                "ack:safe-b-restart"
+            ],
+            events);
+        Assert.Equal(0, ReadInt(gate, "DeferredCount"));
+    }
+
+    [Fact]
+    public async Task Retransmitted_deferred_command_is_queued_and_applied_only_once()
+    {
+        var gate = CreateHeartbeatCommandTransactionGate();
+        var response = new PluginHeartbeatResponse
+        {
+            MatchId = "safe-match-b",
+            Commands = [CreateServerCommand("mp_restartgame 1", "safe-b-restart")]
+        };
+        var events = new List<string>();
+        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        {
+            events.Add($"apply:{command.Id}");
+            events.Add($"ack:{command.Id}");
+            return Task.FromResult(PluginCommandExecutionResult.Completed);
+        };
+        Func<PluginCommand, Task<bool>> rejectAndAck = _ => Task.FromResult(true);
+        Func<PluginCommand, Task<bool>> ackOnly = _ => Task.FromResult(true);
+        var deferred = ReadEnum("CaorenCupPlugin.HeartbeatResponseDisposition", "Deferred");
+
+        await InvokeTask(gate, "ProcessResponseAsync", response, deferred, applyAndAck, rejectAndAck, ackOnly);
+        await InvokeTask(gate, "ProcessResponseAsync", response, deferred, applyAndAck, rejectAndAck, ackOnly);
+
+        Assert.Equal(1, ReadInt(gate, "DeferredCount"));
+
+        await InvokeTask(gate, "DrainAsync", (Func<bool>)(() => true), applyAndAck, ackOnly);
+
+        Assert.Equal(["apply:safe-b-restart", "ack:safe-b-restart"], events);
+        Assert.Equal(0, ReadInt(gate, "DeferredCount"));
+    }
+
+    [Fact]
+    public async Task Concurrent_heartbeat_command_transactions_are_serialized_in_arrival_order()
+    {
+        var gate = new HeartbeatCommandTransactionGate();
+        var firstResponse = new PluginHeartbeatResponse
+        {
+            Commands = [CreateServerCommand("mp_restartgame 1", "first-command")]
+        };
+        var secondResponse = new PluginHeartbeatResponse
+        {
+            Commands = [CreateServerCommand("mp_roundtime 2", "second-command")]
+        };
+        var firstApplyStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstApply = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = async command =>
+        {
+            if (command.Id == "first-command")
+            {
+                firstApplyStarted.TrySetResult();
+                await releaseFirstApply.Task;
+            }
+            return PluginCommandExecutionResult.Completed;
+        };
+        Func<PluginCommand, Task<bool>> acknowledge = _ => Task.FromResult(true);
+
+        var first = gate.ProcessResponseAsync(
+            firstResponse,
+            HeartbeatResponseDisposition.Ready,
+            applyAndAck,
+            acknowledge,
+            acknowledge);
+        await firstApplyStarted.Task;
+        var second = gate.ProcessResponseAsync(
+            secondResponse,
+            HeartbeatResponseDisposition.Deferred,
+            applyAndAck,
+            acknowledge,
+            acknowledge);
+        await Task.Yield();
+
+        Assert.False(second.IsCompleted);
+
+        releaseFirstApply.TrySetResult();
+        await Task.WhenAll(first, second);
+        Assert.Equal(1, gate.DeferredCount);
+    }
+
+    [Fact]
+    public async Task Delayed_server_command_completion_waits_for_the_actual_timer_callback()
+    {
+        Action? delayedCallback = null;
+        var executionCount = 0;
+
+        var completion = WebCommandGameThreadDispatcher.ScheduleDelayedExecution(
+            callback => delayedCallback = callback,
+            () =>
+            {
+                executionCount++;
+                return true;
+            });
+
+        Assert.NotNull(delayedCallback);
+        Assert.False(completion.IsCompleted);
+        Assert.Equal(0, executionCount);
+
+        delayedCallback!();
+
+        Assert.True(await completion);
+        Assert.Equal(1, executionCount);
+    }
+
+    [Fact]
+    public void Production_delayed_server_command_path_returns_the_awaitable_completion()
+    {
+        var pluginType = typeof(global::CaorenCupPlugin.CaorenCupPlugin);
+        var apply = pluginType.GetMethod(
+            "ApplyPluginCommandOnGameThreadAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var execute = pluginType.GetMethod(
+            "ExecuteAllowedServerCommandAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var delayed = typeof(WebCommandGameThreadDispatcher).GetMethod(
+            "ScheduleDelayedExecution",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+
+        Assert.NotNull(apply);
+        Assert.NotNull(execute);
+        Assert.NotNull(delayed);
+        Assert.Equal(typeof(Task<bool>), apply!.ReturnType);
+        Assert.Equal(typeof(Task<bool>), execute!.ReturnType);
+
+        var applyIl = apply.GetMethodBody()?.GetILAsByteArray();
+        var executeIl = execute.GetMethodBody()?.GetILAsByteArray();
+        Assert.NotNull(applyIl);
+        Assert.NotNull(executeIl);
+        Assert.True(applyIl.AsSpan().IndexOf(BitConverter.GetBytes(execute.MetadataToken)) >= 0);
+        Assert.True(executeIl.AsSpan().IndexOf(BitConverter.GetBytes(delayed!.MetadataToken)) >= 0);
+    }
+
+    [Fact]
+    public async Task Ack_failure_retries_only_ack_without_reapplying_the_command()
+    {
+        var gate = new HeartbeatCommandTransactionGate();
+        var response = new PluginHeartbeatResponse
+        {
+            Commands = [CreateServerCommand("mp_restartgame 1", "ack-retry-command")]
+        };
+        var applicationCount = 0;
+        var ackOnlyCount = 0;
+        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = _ =>
+        {
+            applicationCount++;
+            return Task.FromResult(PluginCommandExecutionResult.FinalizedAwaitingAck);
+        };
+        Func<PluginCommand, Task<bool>> ackOnly = _ =>
+        {
+            ackOnlyCount++;
+            return Task.FromResult(true);
+        };
+
+        await gate.ProcessResponseAsync(
+            response,
+            HeartbeatResponseDisposition.Ready,
+            applyAndAck,
+            _ => Task.FromResult(true),
+            ackOnly);
+
+        Assert.Equal(1, applicationCount);
+        Assert.Equal(1, gate.DeferredCount);
+
+        await gate.DrainAsync(() => true, applyAndAck, ackOnly);
+
+        Assert.Equal(1, applicationCount);
+        Assert.Equal(1, ackOnlyCount);
+        Assert.Equal(0, gate.DeferredCount);
+    }
+
+    [Fact]
+    public async Task Deferred_command_retransmitted_by_stale_response_is_not_rejected_or_acked_early()
+    {
+        var gate = new HeartbeatCommandTransactionGate();
+        var response = new PluginHeartbeatResponse
+        {
+            Commands = [CreateServerCommand("mp_restartgame 1", "deferred-retransmit")]
+        };
+        var applicationCount = 0;
+        var rejectionCount = 0;
+        var ackOnlyCount = 0;
+        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = _ =>
+        {
+            applicationCount++;
+            return Task.FromResult(PluginCommandExecutionResult.Completed);
+        };
+        Func<PluginCommand, Task<bool>> rejectAndAck = _ =>
+        {
+            rejectionCount++;
+            return Task.FromResult(true);
+        };
+        Func<PluginCommand, Task<bool>> ackOnly = _ =>
+        {
+            ackOnlyCount++;
+            return Task.FromResult(true);
+        };
+
+        await gate.ProcessResponseAsync(
+            response,
+            HeartbeatResponseDisposition.Deferred,
+            applyAndAck,
+            rejectAndAck,
+            ackOnly);
+        await gate.ProcessResponseAsync(
+            response,
+            HeartbeatResponseDisposition.Stale,
+            applyAndAck,
+            rejectAndAck,
+            ackOnly);
+
+        Assert.Equal(0, applicationCount);
+        Assert.Equal(0, rejectionCount);
+        Assert.Equal(0, ackOnlyCount);
+        Assert.Equal(1, gate.DeferredCount);
+
+        await gate.DrainAsync(() => true, applyAndAck, ackOnly);
+
+        Assert.Equal(1, applicationCount);
+        Assert.Equal(0, rejectionCount);
+        Assert.Equal(0, ackOnlyCount);
+        Assert.Equal(0, gate.DeferredCount);
+    }
+
+    [Fact]
+    public async Task Same_batch_delayed_commands_are_all_registered_before_waiting_for_completion()
+    {
+        var gate = new HeartbeatCommandTransactionGate();
+        var response = new PluginHeartbeatResponse
+        {
+            Commands =
+            [
+                CreateServerCommand("mp_freezetime 3", "delayed-first"),
+                CreateServerCommand("mp_roundtime 2", "delayed-second"),
+                CreateServerCommand("mp_restartgame 1", "delayed-third")
+            ]
+        };
+        var registrations = new List<string?>();
+        var completions = new Dictionary<string, TaskCompletionSource<PluginCommandExecutionResult>>(
+            StringComparer.Ordinal);
+        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        {
+            registrations.Add(command.Id);
+            var completion = new TaskCompletionSource<PluginCommandExecutionResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            completions.Add(command.Id!, completion);
+            return completion.Task;
+        };
+        Func<PluginCommand, Task<bool>> acknowledge = _ => Task.FromResult(true);
+
+        var processing = gate.ProcessResponseAsync(
+            response,
+            HeartbeatResponseDisposition.Ready,
+            applyAndAck,
+            acknowledge,
+            acknowledge);
+        await Task.Yield();
+
+        Assert.Equal(
+            ["delayed-first", "delayed-second", "delayed-third"],
+            registrations);
+
+        foreach (var completion in completions.Values)
+        {
+            completion.TrySetResult(PluginCommandExecutionResult.Completed);
+        }
+        await processing;
+    }
+
+    [Fact]
+    public void Command_ack_not_found_is_terminal_but_server_errors_remain_retryable()
+    {
+        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
+            "IsTerminalCommandAckStatus",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        Assert.True(Assert.IsType<bool>(method!.Invoke(
+            null,
+            [System.Net.HttpStatusCode.OK])));
+        Assert.True(Assert.IsType<bool>(method.Invoke(
+            null,
+            [System.Net.HttpStatusCode.NotFound])));
+        Assert.False(Assert.IsType<bool>(method.Invoke(
+            null,
+            [System.Net.HttpStatusCode.InternalServerError])));
     }
 
     [Fact]
@@ -264,6 +858,68 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
+    public async Task Cleanup_pending_defers_web_match_control_without_applying_it()
+    {
+        var scheduleMethod = GetDispatcherMethod("ScheduleTransactionAsync");
+        var command = CreateServerCommand("mp_restartgame 1", "cleanup-pending-restart");
+        Action? scheduledApplication = null;
+        var applicationCalled = false;
+
+        var scheduledTask = Assert.IsAssignableFrom<Task>(scheduleMethod.Invoke(
+            null,
+            [
+                (Action<Action>)(callback => scheduledApplication = callback),
+                command,
+                (Func<DuelControlMode>)(() => DuelControlMode.None),
+                (Func<bool>)(() => true),
+                (Func<bool>)(() => true),
+                (Func<PluginCommand, Task<bool>>)(_ =>
+                {
+                    applicationCalled = true;
+                    return Task.FromResult(true);
+                })
+            ]));
+
+        Assert.NotNull(scheduledApplication);
+        scheduledApplication!();
+        await scheduledTask;
+
+        Assert.Equal("Deferred", ReadTaskResult(scheduledTask)?.ToString());
+        Assert.False(applicationCalled);
+    }
+
+    [Fact]
+    public async Task Pending_cvar_restore_defers_web_match_control_without_applying_it()
+    {
+        var scheduleMethod = GetDispatcherMethod("ScheduleTransactionAsync");
+        var command = CreateServerCommand("mp_restartgame 1", "cvar-pending-restart");
+        Action? scheduledApplication = null;
+        var applicationCalled = false;
+
+        var scheduledTask = Assert.IsAssignableFrom<Task>(scheduleMethod.Invoke(
+            null,
+            [
+                (Action<Action>)(callback => scheduledApplication = callback),
+                command,
+                (Func<DuelControlMode>)(() => DuelControlMode.None),
+                (Func<bool>)(() => false),
+                (Func<bool>)(() => false),
+                (Func<PluginCommand, Task<bool>>)(_ =>
+                {
+                    applicationCalled = true;
+                    return Task.FromResult(true);
+                })
+            ]));
+
+        Assert.NotNull(scheduledApplication);
+        scheduledApplication!();
+        await scheduledTask;
+
+        Assert.Equal("Deferred", ReadTaskResult(scheduledTask)?.ToString());
+        Assert.False(applicationCalled);
+    }
+
+    [Fact]
     public void Delayed_match_control_callback_rechecks_game_managed_mode_before_execution()
     {
         var tryExecuteMethod = GetDispatcherMethod("TryExecuteServerCommand");
@@ -275,6 +931,7 @@ public sealed class FinalReviewFixTests
             [
                 "sv_showimpacts_time 4",
                 (Func<DuelControlMode>)(() => session.ControlMode),
+                (Func<bool>)(() => false),
                 (Func<bool>)(() => false),
                 (Action)(() => executed = true)
             ]));
@@ -305,6 +962,7 @@ public sealed class FinalReviewFixTests
                 "mp_restartgame 1",
                 (Func<DuelControlMode>)(() => DuelControlMode.None),
                 (Func<bool>)(() => pendingCvarRestore),
+                (Func<bool>)(() => false),
                 (Action)(() => executed = true)
             ]));
 
@@ -318,11 +976,32 @@ public sealed class FinalReviewFixTests
                 "mp_restartgame 1",
                 (Func<DuelControlMode>)(() => DuelControlMode.None),
                 (Func<bool>)(() => pendingCvarRestore),
+                (Func<bool>)(() => false),
                 (Action)(() => executed = true)
             ]));
 
         Assert.True(executionResult);
         Assert.True(executed);
+    }
+
+    [Fact]
+    public void Delayed_match_control_callback_rechecks_cleanup_restart_before_execution()
+    {
+        var tryExecuteMethod = GetDispatcherMethod("TryExecuteServerCommand");
+        var executed = false;
+
+        var executionResult = Assert.IsType<bool>(tryExecuteMethod.Invoke(
+            null,
+            [
+                "mp_restartgame 1",
+                (Func<DuelControlMode>)(() => DuelControlMode.None),
+                (Func<bool>)(() => false),
+                (Func<bool>)(() => true),
+                (Action)(() => executed = true)
+            ]));
+
+        Assert.False(executionResult);
+        Assert.False(executed);
     }
 
     [Fact]
@@ -444,6 +1123,19 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
+    public void Active_duel_cvar_scope_is_not_treated_as_cleanup_restore_work()
+    {
+        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
+            "ShouldRetryPendingDuelCvars",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        Assert.False(Assert.IsType<bool>(method!.Invoke(null, [true, true])));
+        Assert.True(Assert.IsType<bool>(method.Invoke(null, [false, true])));
+        Assert.False(Assert.IsType<bool>(method.Invoke(null, [false, false])));
+    }
+
+    [Fact]
     public void New_duel_remains_blocked_until_every_pending_cvar_is_restored()
     {
         var constructor = typeof(DuelServerCvarScope).GetConstructor(
@@ -507,13 +1199,42 @@ public sealed class FinalReviewFixTests
 
         Assert.True(Assert.IsType<bool>(method!.Invoke(
             null,
-            [DuelControlMode.None, DuelLifecycle.Idle, true])));
+            [DuelControlMode.None, DuelLifecycle.Idle, true, false])));
         Assert.True(Assert.IsType<bool>(method.Invoke(
             null,
-            [DuelControlMode.GameManaged, DuelLifecycle.Running, false])));
+            [DuelControlMode.GameManaged, DuelLifecycle.Running, false, false])));
         Assert.False(Assert.IsType<bool>(method.Invoke(
             null,
-            [DuelControlMode.None, DuelLifecycle.Idle, false])));
+            [DuelControlMode.None, DuelLifecycle.Idle, false, false])));
+    }
+
+    [Fact]
+    public void Cleanup_pending_blocks_new_game_admin_start()
+    {
+        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
+            "IsDuelStartBlocked",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        Assert.True(Assert.IsType<bool>(method!.Invoke(null, [true, true])));
+        Assert.True(Assert.IsType<bool>(method.Invoke(null, [false, false])));
+        Assert.False(Assert.IsType<bool>(method.Invoke(null, [false, true])));
+    }
+
+    [Fact]
+    public void Cleanup_pending_blocks_game_admin_map_change()
+    {
+        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
+            "IsDuelMapChangeBlocked",
+            BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        Assert.True(Assert.IsType<bool>(method!.Invoke(
+            null,
+            [DuelControlMode.None, DuelLifecycle.Idle, false, true])));
+        Assert.False(Assert.IsType<bool>(method.Invoke(
+            null,
+            [DuelControlMode.None, DuelLifecycle.Idle, false, false])));
     }
 
     [Fact]
@@ -566,9 +1287,11 @@ public sealed class FinalReviewFixTests
         Assert.Contains("替换现有网页管理状态", output);
     }
 
-    private static PluginCommand CreateServerCommand(string serverCommand) => new()
+    private static PluginCommand CreateServerCommand(
+        string serverCommand,
+        string commandId = "server-command") => new()
     {
-        Id = "server-command",
+        Id = commandId,
         Type = "EXECUTE_SERVER_COMMAND",
         Payload = JsonSerializer.SerializeToElement(new { command = serverCommand })
     };
@@ -600,11 +1323,50 @@ public sealed class FinalReviewFixTests
         return instance!;
     }
 
+    private static object CreateHeartbeatCommandTransactionGate()
+    {
+        var type = typeof(DuelGameSession).Assembly
+            .GetType("CaorenCupPlugin.HeartbeatCommandTransactionGate");
+        Assert.NotNull(type);
+        var instance = Activator.CreateInstance(type!);
+        Assert.NotNull(instance);
+        return instance!;
+    }
+
+    private static object ReadEnum(string typeName, string value)
+    {
+        var type = typeof(DuelGameSession).Assembly.GetType(typeName);
+        Assert.NotNull(type);
+        return Enum.Parse(type!, value);
+    }
+
+    private static async Task InvokeTask(object target, string methodName, params object?[] arguments)
+    {
+        var method = target.GetType().GetMethod(methodName);
+        Assert.NotNull(method);
+        var task = Assert.IsAssignableFrom<Task>(method!.Invoke(target, arguments));
+        await task;
+    }
+
+    private static object? ReadTaskResult(Task task)
+    {
+        var property = task.GetType().GetProperty("Result");
+        Assert.NotNull(property);
+        return property!.GetValue(task);
+    }
+
     private static void Invoke(object target, string methodName, params object?[] arguments)
     {
         var method = target.GetType().GetMethod(methodName);
         Assert.NotNull(method);
         method.Invoke(target, arguments);
+    }
+
+    private static object? InvokeResult(object target, string methodName, params object?[] arguments)
+    {
+        var method = target.GetType().GetMethod(methodName);
+        Assert.NotNull(method);
+        return method!.Invoke(target, arguments);
     }
 
     private static bool ReadBool(object target, string propertyName)
