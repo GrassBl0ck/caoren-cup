@@ -1659,7 +1659,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private async Task SendHeartbeatAsync(CCSPlayerController? replyTo = null)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        var heartbeatRequestSequence = _heartbeatResponseOrder.NextRequestSequence();
+        var heartbeatRequest = _heartbeatResponseOrder.NextRequest();
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/heartbeat", new { mapName = SafeMapName() }, _jsonOptions);
@@ -1679,7 +1679,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                             GameThreadApplicationScheduler.HibernationSafeServerSchedule,
                             () => stateDisposition = ApplyHeartbeatStateOnGameThread(
                                 state,
-                                heartbeatRequestSequence));
+                                heartbeatRequest.Sequence));
                         return stateDisposition;
                     },
                     (heartbeatState, stateDisposition) =>
@@ -1688,19 +1688,20 @@ public sealed class CaorenCupPlugin : BasePlugin
                             stateDisposition,
                             TryApplyAndAckPluginCommandAsync,
                             RejectAndAckPluginCommandAsync,
-                            AckPluginCommandOnlyAsync));
+                            AckPluginCommandOnlyAsync,
+                            heartbeatRequest.BarrierGeneration));
                 if (!ShouldProcessPluginContinuation(_isUnloading)) return;
                 await DrainDeferredHeartbeatCommandsAsync();
                 if (!ShouldProcessPluginContinuation(_isUnloading)) return;
                 if (disposition == HeartbeatResponseDisposition.Expired)
                 {
-                    LogDebug("Rejected expired heartbeat response seq={Sequence}.", heartbeatRequestSequence);
+                    LogDebug("Rejected expired heartbeat response seq={Sequence}.", heartbeatRequest.Sequence);
                 }
                 else if (disposition == HeartbeatResponseDisposition.Stale)
                 {
                     LogDebug(
                         "Rejected heartbeat response for a taken-over match seq={Sequence} MatchId={MatchId}.",
-                        heartbeatRequestSequence,
+                        heartbeatRequest.Sequence,
                         state?.MatchId);
                 }
                 LogDebug("Heartbeat OK: {Text}", text);
@@ -2280,8 +2281,9 @@ public sealed class CaorenCupPlugin : BasePlugin
     }
 
     private async Task<PluginCommandExecutionResult> TryApplyAndAckPluginCommandAsync(
-        PluginCommand command)
+        HeartbeatPluginCommand heartbeatCommand)
     {
+        var command = heartbeatCommand.Command;
         if (!ShouldProcessPluginContinuation(_isUnloading))
         {
             return PluginCommandExecutionResult.Deferred;
@@ -2299,7 +2301,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 () => _duelSession.ControlMode,
                 () => _duelTelemetryIsolation.CleanupRestartPending,
                 () => !_duelCvarRestorePending,
-                ApplyPluginCommandOnGameThreadAsync);
+                _ => ApplyPluginCommandOnGameThreadAsync(heartbeatCommand));
 
             if (disposition == PluginCommandTransactionDisposition.Deferred)
             {
@@ -2360,9 +2362,21 @@ public sealed class CaorenCupPlugin : BasePlugin
             TryApplyAndAckPluginCommandAsync,
             AckPluginCommandOnlyAsync);
 
-    private Task<bool> ApplyPluginCommandOnGameThreadAsync(PluginCommand command)
+    private Task<bool> ApplyPluginCommandOnGameThreadAsync(
+        HeartbeatPluginCommand heartbeatCommand)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return Task.FromResult(false);
+        var command = heartbeatCommand.Command;
+        if (!IsHeartbeatCommandSourceCurrent(heartbeatCommand))
+        {
+            Logger.LogWarning(
+                "Rejected queued web command because its heartbeat source is no longer current: " +
+                "{Type} MatchId={MatchId} Generation={Generation}",
+                command.Type,
+                heartbeatCommand.HeartbeatMatchId,
+                heartbeatCommand.BarrierGeneration);
+            return Task.FromResult(true);
+        }
 
         if (string.Equals(command.Type, "RESET_LIVE_MATCH_STATS", StringComparison.OrdinalIgnoreCase))
         {
@@ -2395,7 +2409,11 @@ public sealed class CaorenCupPlugin : BasePlugin
             }
 
             var delaySeconds = ReadPayloadInt(command.Payload, "delaySeconds", 0);
-            return ExecuteAllowedServerCommandAsync(serverCommand, label, delaySeconds);
+            return ExecuteAllowedServerCommandAsync(
+                serverCommand,
+                label,
+                heartbeatCommand,
+                delaySeconds);
         }
         else if (string.Equals(command.Type, "APPLY_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
         {
@@ -2999,9 +3017,21 @@ public sealed class CaorenCupPlugin : BasePlugin
     private Task<bool> ExecuteAllowedServerCommandAsync(
         string serverCommand,
         string label,
+        HeartbeatPluginCommand heartbeatCommand,
         int delaySeconds = 0)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return Task.FromResult(false);
+        if (!IsHeartbeatCommandSourceCurrent(heartbeatCommand))
+        {
+            Logger.LogWarning(
+                "Rejected web command because its heartbeat source is no longer current: " +
+                "{Command} MatchId={MatchId} Generation={Generation}",
+                serverCommand,
+                heartbeatCommand.HeartbeatMatchId,
+                heartbeatCommand.BarrierGeneration);
+            return Task.FromResult(true);
+        }
+
         if (string.IsNullOrWhiteSpace(serverCommand))
         {
             Logger.LogWarning("Rejected empty web command from CaorenCup command center.");
@@ -3018,6 +3048,17 @@ public sealed class CaorenCupPlugin : BasePlugin
         bool ExecuteNow()
         {
             if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
+            if (!IsHeartbeatCommandSourceCurrent(heartbeatCommand))
+            {
+                Logger.LogWarning(
+                    "Rejected delayed web command because its heartbeat source is no longer current: " +
+                    "{Command} MatchId={MatchId} Generation={Generation}",
+                    serverCommand,
+                    heartbeatCommand.HeartbeatMatchId,
+                    heartbeatCommand.BarrierGeneration);
+                return true;
+            }
+
             var rejectedByGameManaged =
                 WebCommandGameThreadDispatcher.IsGameManagedMatchControlCommand(
                     serverCommand,
@@ -3060,6 +3101,10 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         return Task.FromResult(ExecuteNow());
     }
+
+    private bool IsHeartbeatCommandSourceCurrent(HeartbeatPluginCommand heartbeatCommand) =>
+        _heartbeatResponseOrder.IsCurrentGeneration(heartbeatCommand.BarrierGeneration) &&
+        !_duelTelemetryIsolation.IsStaleMatchId(heartbeatCommand.HeartbeatMatchId);
 
     private void ResetLiveMatchStats(int currentRound)
     {

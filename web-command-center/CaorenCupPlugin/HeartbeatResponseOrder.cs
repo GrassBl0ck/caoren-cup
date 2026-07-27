@@ -1,29 +1,56 @@
 namespace CaorenCupPlugin;
 
+internal readonly record struct HeartbeatRequestStamp(
+    long Sequence,
+    long BarrierGeneration);
+
 internal sealed class HeartbeatResponseOrder
 {
+    private readonly object _sync = new();
     private long _issuedSequence;
     private long _minimumAcceptedSequenceExclusive;
     private long _lastAcceptedSequence;
+    private long _barrierGeneration;
 
-    public long NextRequestSequence() => Interlocked.Increment(ref _issuedSequence);
+    public HeartbeatRequestStamp NextRequest()
+    {
+        lock (_sync)
+        {
+            _issuedSequence++;
+            return new HeartbeatRequestStamp(_issuedSequence, _barrierGeneration);
+        }
+    }
+
+    public long NextRequestSequence() => NextRequest().Sequence;
 
     public void BeginBarrier()
     {
-        var barrierSequence = NextRequestSequence();
-        Volatile.Write(ref _minimumAcceptedSequenceExclusive, barrierSequence);
+        lock (_sync)
+        {
+            _issuedSequence++;
+            _minimumAcceptedSequenceExclusive = _issuedSequence;
+            _barrierGeneration++;
+        }
     }
 
     public bool TryAccept(long requestSequence)
     {
-        if (requestSequence <= Volatile.Read(ref _minimumAcceptedSequenceExclusive) ||
-            requestSequence <= _lastAcceptedSequence)
+        lock (_sync)
         {
-            return false;
-        }
+            if (requestSequence <= _minimumAcceptedSequenceExclusive ||
+                requestSequence <= _lastAcceptedSequence)
+            {
+                return false;
+            }
 
-        _lastAcceptedSequence = requestSequence;
-        return true;
+            _lastAcceptedSequence = requestSequence;
+            return true;
+        }
+    }
+
+    public bool IsCurrentGeneration(long barrierGeneration)
+    {
+        lock (_sync) return barrierGeneration == _barrierGeneration;
     }
 }
 

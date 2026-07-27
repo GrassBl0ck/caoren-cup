@@ -289,6 +289,31 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
+    public void Heartbeat_request_generation_is_invalidated_by_the_next_barrier()
+    {
+        var order = CreateHeartbeatResponseOrder();
+        var request = InvokeResult(order, "NextRequest");
+        Assert.NotNull(request);
+        var generation = Assert.IsType<long>(ReadProperty(request!, "BarrierGeneration"));
+
+        Assert.True(InvokeBool(order, "IsCurrentGeneration", generation));
+
+        Invoke(order, "BeginBarrier");
+
+        Assert.False(InvokeBool(order, "IsCurrentGeneration", generation));
+    }
+
+    [Fact]
+    public void Taken_over_match_id_can_be_rechecked_when_a_queued_command_is_applied()
+    {
+        var isolation = CreateTelemetryIsolationState();
+        Invoke(isolation, "Begin", "  taken-over-match-a  ");
+
+        Assert.True(InvokeBool(isolation, "IsStaleMatchId", "taken-over-match-a"));
+        Assert.False(InvokeBool(isolation, "IsStaleMatchId", "safe-match-b"));
+    }
+
+    [Fact]
     public async Task Rejected_heartbeat_state_still_awaits_its_command_processor()
     {
         var processorType = typeof(DuelGameSession).Assembly
@@ -401,7 +426,7 @@ public sealed class FinalReviewFixTests
             ]
         };
         var events = new List<string>();
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
         {
             events.Add($"apply:{command.Id}");
             events.Add($"ack:{command.Id}");
@@ -422,7 +447,8 @@ public sealed class FinalReviewFixTests
             ReadEnum("CaorenCupPlugin.HeartbeatResponseDisposition", "Expired"),
             applyAndAck,
             rejectAndAck,
-            ackOnly);
+            ackOnly,
+            0L);
 
         Assert.Equal(["reject:old-a-configure", "ack:old-a-configure"], events);
         Assert.Equal(0, ReadInt(gate, "DeferredCount"));
@@ -447,8 +473,10 @@ public sealed class FinalReviewFixTests
             ]
         };
         var events = new List<string>();
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        var sources = new List<(string? MatchId, long Generation)>();
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
         {
+            sources.Add((command.HeartbeatMatchId, command.BarrierGeneration));
             events.Add($"apply:{command.Id}");
             events.Add($"ack:{command.Id}");
             return Task.FromResult(PluginCommandExecutionResult.Completed);
@@ -468,7 +496,8 @@ public sealed class FinalReviewFixTests
             ReadEnum("CaorenCupPlugin.HeartbeatResponseDisposition", "Deferred"),
             applyAndAck,
             rejectAndAck,
-            ackOnly);
+            ackOnly,
+            42L);
 
         Assert.Empty(events);
         Assert.Equal(2, ReadInt(gate, "DeferredCount"));
@@ -488,6 +517,9 @@ public sealed class FinalReviewFixTests
                 "ack:safe-b-restart"
             ],
             events);
+        Assert.Equal(
+            [("safe-match-b", 42L), ("safe-match-b", 42L)],
+            sources);
         Assert.Equal(0, ReadInt(gate, "DeferredCount"));
     }
 
@@ -501,7 +533,7 @@ public sealed class FinalReviewFixTests
             Commands = [CreateServerCommand("mp_restartgame 1", "safe-b-restart")]
         };
         var events = new List<string>();
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
         {
             events.Add($"apply:{command.Id}");
             events.Add($"ack:{command.Id}");
@@ -511,8 +543,8 @@ public sealed class FinalReviewFixTests
         Func<PluginCommand, Task<bool>> ackOnly = _ => Task.FromResult(true);
         var deferred = ReadEnum("CaorenCupPlugin.HeartbeatResponseDisposition", "Deferred");
 
-        await InvokeTask(gate, "ProcessResponseAsync", response, deferred, applyAndAck, rejectAndAck, ackOnly);
-        await InvokeTask(gate, "ProcessResponseAsync", response, deferred, applyAndAck, rejectAndAck, ackOnly);
+        await InvokeTask(gate, "ProcessResponseAsync", response, deferred, applyAndAck, rejectAndAck, ackOnly, 0L);
+        await InvokeTask(gate, "ProcessResponseAsync", response, deferred, applyAndAck, rejectAndAck, ackOnly, 0L);
 
         Assert.Equal(1, ReadInt(gate, "DeferredCount"));
 
@@ -536,7 +568,7 @@ public sealed class FinalReviewFixTests
         };
         var firstApplyStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseFirstApply = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = async command =>
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = async command =>
         {
             if (command.Id == "first-command")
             {
@@ -606,12 +638,18 @@ public sealed class FinalReviewFixTests
         var delayed = typeof(WebCommandGameThreadDispatcher).GetMethod(
             "ScheduleDelayedExecution",
             BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        var sourceCurrent = pluginType.GetMethod(
+            "IsHeartbeatCommandSourceCurrent",
+            BindingFlags.Instance | BindingFlags.NonPublic);
 
         Assert.NotNull(apply);
         Assert.NotNull(execute);
         Assert.NotNull(delayed);
+        Assert.NotNull(sourceCurrent);
         Assert.Equal(typeof(Task<bool>), apply!.ReturnType);
         Assert.Equal(typeof(Task<bool>), execute!.ReturnType);
+        Assert.Equal(typeof(HeartbeatPluginCommand), apply.GetParameters()[0].ParameterType);
+        Assert.Equal(typeof(HeartbeatPluginCommand), execute.GetParameters()[2].ParameterType);
 
         var applyIl = apply.GetMethodBody()?.GetILAsByteArray();
         var executeIl = execute.GetMethodBody()?.GetILAsByteArray();
@@ -619,6 +657,9 @@ public sealed class FinalReviewFixTests
         Assert.NotNull(executeIl);
         Assert.True(applyIl.AsSpan().IndexOf(BitConverter.GetBytes(execute.MetadataToken)) >= 0);
         Assert.True(executeIl.AsSpan().IndexOf(BitConverter.GetBytes(delayed!.MetadataToken)) >= 0);
+        var sourceCurrentToken = BitConverter.GetBytes(sourceCurrent!.MetadataToken);
+        Assert.True(applyIl.AsSpan().IndexOf(sourceCurrentToken) >= 0);
+        Assert.True(executeIl.AsSpan().IndexOf(sourceCurrentToken) >= 0);
     }
 
     [Fact]
@@ -631,7 +672,7 @@ public sealed class FinalReviewFixTests
         };
         var applicationCount = 0;
         var ackOnlyCount = 0;
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = _ =>
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = _ =>
         {
             applicationCount++;
             return Task.FromResult(PluginCommandExecutionResult.FinalizedAwaitingAck);
@@ -665,13 +706,21 @@ public sealed class FinalReviewFixTests
         var gate = new HeartbeatCommandTransactionGate();
         var response = new PluginHeartbeatResponse
         {
+            MatchId = "safe-match-b",
             Commands = [CreateServerCommand("mp_restartgame 1", "deferred-retransmit")]
+        };
+        var staleRetransmission = new PluginHeartbeatResponse
+        {
+            MatchId = "taken-over-match-a",
+            Commands = response.Commands
         };
         var applicationCount = 0;
         var rejectionCount = 0;
         var ackOnlyCount = 0;
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = _ =>
+        HeartbeatPluginCommand? appliedCommand = null;
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
         {
+            appliedCommand = command;
             applicationCount++;
             return Task.FromResult(PluginCommandExecutionResult.Completed);
         };
@@ -691,13 +740,15 @@ public sealed class FinalReviewFixTests
             HeartbeatResponseDisposition.Deferred,
             applyAndAck,
             rejectAndAck,
-            ackOnly);
+            ackOnly,
+            7L);
         await gate.ProcessResponseAsync(
-            response,
+            staleRetransmission,
             HeartbeatResponseDisposition.Stale,
             applyAndAck,
             rejectAndAck,
-            ackOnly);
+            ackOnly,
+            8L);
 
         Assert.Equal(0, applicationCount);
         Assert.Equal(0, rejectionCount);
@@ -707,6 +758,9 @@ public sealed class FinalReviewFixTests
         await gate.DrainAsync(() => true, applyAndAck, ackOnly);
 
         Assert.Equal(1, applicationCount);
+        Assert.NotNull(appliedCommand);
+        Assert.Equal("safe-match-b", appliedCommand!.HeartbeatMatchId);
+        Assert.Equal(7L, appliedCommand.BarrierGeneration);
         Assert.Equal(0, rejectionCount);
         Assert.Equal(0, ackOnlyCount);
         Assert.Equal(0, gate.DeferredCount);
@@ -728,7 +782,7 @@ public sealed class FinalReviewFixTests
         var registrations = new List<string?>();
         var completions = new Dictionary<string, TaskCompletionSource<PluginCommandExecutionResult>>(
             StringComparer.Ordinal);
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
         {
             registrations.Add(command.Id);
             var completion = new TaskCompletionSource<PluginCommandExecutionResult>(
@@ -755,6 +809,55 @@ public sealed class FinalReviewFixTests
             completion.TrySetResult(PluginCommandExecutionResult.Completed);
         }
         await processing;
+    }
+
+    [Fact]
+    public async Task Deferred_batch_starts_every_application_before_awaiting_any_completion()
+    {
+        var gate = new HeartbeatCommandTransactionGate();
+        var response = new PluginHeartbeatResponse
+        {
+            MatchId = "safe-match-b",
+            Commands =
+            [
+                CreateServerCommand("mp_freezetime 3", "deferred-first"),
+                CreateServerCommand("mp_roundtime 2", "deferred-second"),
+                CreateServerCommand("mp_restartgame 1", "deferred-third")
+            ]
+        };
+        var registrations = new List<string?>();
+        var completions = new Dictionary<string, TaskCompletionSource<PluginCommandExecutionResult>>(
+            StringComparer.Ordinal);
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAck = command =>
+        {
+            registrations.Add(command.Id);
+            var completion = new TaskCompletionSource<PluginCommandExecutionResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            completions.Add(command.Id!, completion);
+            return completion.Task;
+        };
+        Func<PluginCommand, Task<bool>> acknowledge = _ => Task.FromResult(true);
+
+        await gate.ProcessResponseAsync(
+            response,
+            HeartbeatResponseDisposition.Deferred,
+            applyAndAck,
+            acknowledge,
+            acknowledge);
+
+        var draining = gate.DrainAsync(() => true, applyAndAck, acknowledge);
+        await Task.Yield();
+
+        Assert.Equal(
+            ["deferred-first", "deferred-second", "deferred-third"],
+            registrations);
+
+        foreach (var completion in completions.Values)
+        {
+            completion.TrySetResult(PluginCommandExecutionResult.Completed);
+        }
+        await draining;
+        Assert.Equal(0, gate.DeferredCount);
     }
 
     [Fact]

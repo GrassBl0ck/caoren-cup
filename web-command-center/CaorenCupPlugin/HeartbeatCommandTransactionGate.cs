@@ -15,6 +15,16 @@ internal enum PluginCommandExecutionResult
     FinalizedAwaitingAck
 }
 
+internal sealed record HeartbeatPluginCommand(
+    PluginCommand Command,
+    string? HeartbeatMatchId,
+    long BarrierGeneration)
+{
+    public string? Id => Command.Id;
+
+    public string? Type => Command.Type;
+}
+
 internal sealed class HeartbeatCommandTransactionGate
 {
     private const int CompletedCommandCacheLimit = 1024;
@@ -37,9 +47,10 @@ internal sealed class HeartbeatCommandTransactionGate
     public async Task ProcessResponseAsync(
         PluginHeartbeatResponse? response,
         HeartbeatResponseDisposition disposition,
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAckAsync,
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAckAsync,
         Func<PluginCommand, Task<bool>> rejectAndAckAsync,
-        Func<PluginCommand, Task<bool>> ackOnlyAsync)
+        Func<PluginCommand, Task<bool>> ackOnlyAsync,
+        long barrierGeneration = 0)
     {
         ArgumentNullException.ThrowIfNull(applyAndAckAsync);
         ArgumentNullException.ThrowIfNull(rejectAndAckAsync);
@@ -52,19 +63,23 @@ internal sealed class HeartbeatCommandTransactionGate
             var startedApplications = new List<StartedPluginCommand>();
             foreach (var command in response.Commands)
             {
+                var heartbeatCommand = new HeartbeatPluginCommand(
+                    command,
+                    NormalizeMatchId(response.MatchId),
+                    barrierGeneration);
                 if (IsPendingOrInFlight(command)) continue;
                 if (IsCompleted(command))
                 {
                     if (!await ackOnlyAsync(command))
                     {
-                        Enqueue(command, PendingPluginCommandState.FinalizedAwaitingAck);
+                        Enqueue(heartbeatCommand, PendingPluginCommandState.FinalizedAwaitingAck);
                     }
                     continue;
                 }
 
                 if (!WebCommandGameThreadDispatcher.IsMatchControlPluginCommand(command))
                 {
-                    StartApplication(command, applyAndAckAsync, startedApplications);
+                    StartApplication(heartbeatCommand, applyAndAckAsync, startedApplications);
                     continue;
                 }
 
@@ -76,29 +91,29 @@ internal sealed class HeartbeatCommandTransactionGate
                     }
                     else
                     {
-                        Enqueue(command, PendingPluginCommandState.FinalizedAwaitingAck);
+                        Enqueue(heartbeatCommand, PendingPluginCommandState.FinalizedAwaitingAck);
                     }
                     continue;
                 }
 
                 if (disposition == HeartbeatResponseDisposition.Deferred || DeferredCount > 0)
                 {
-                    Enqueue(command, PendingPluginCommandState.PendingApplication);
+                    Enqueue(heartbeatCommand, PendingPluginCommandState.PendingApplication);
                     continue;
                 }
 
-                StartApplication(command, applyAndAckAsync, startedApplications);
+                StartApplication(heartbeatCommand, applyAndAckAsync, startedApplications);
             }
 
             foreach (var started in startedApplications)
             {
                 try
                 {
-                    StoreResult(started.Command, await started.Completion);
+                    StoreResult(started.HeartbeatCommand, await started.Completion);
                 }
                 finally
                 {
-                    ClearInFlight(started.Command);
+                    ClearInFlight(started.HeartbeatCommand.Command);
                 }
             }
         }
@@ -110,7 +125,7 @@ internal sealed class HeartbeatCommandTransactionGate
 
     public async Task DrainAsync(
         Func<bool> isReady,
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAckAsync,
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAckAsync,
         Func<PluginCommand, Task<bool>> ackOnlyAsync)
     {
         ArgumentNullException.ThrowIfNull(isReady);
@@ -129,23 +144,49 @@ internal sealed class HeartbeatCommandTransactionGate
                 }
 
                 if (pending == null) return;
+                if (pending.State == PendingPluginCommandState.Completed)
+                {
+                    DequeueCompleted(pending);
+                    continue;
+                }
+
                 if (pending.State == PendingPluginCommandState.FinalizedAwaitingAck)
                 {
-                    if (!await ackOnlyAsync(pending.Command)) return;
+                    if (!await ackOnlyAsync(pending.HeartbeatCommand.Command)) return;
                     DequeueCompleted(pending);
                     continue;
                 }
 
                 if (!isReady()) return;
-                var result = await applyAndAckAsync(pending.Command);
-                if (result == PluginCommandExecutionResult.Deferred) return;
-                if (result == PluginCommandExecutionResult.FinalizedAwaitingAck)
+                var pendingBatch = SnapshotPendingApplicationBatch();
+                var startedBatch = new List<StartedPendingPluginCommand>(pendingBatch.Count);
+                foreach (var queuedCommand in pendingBatch)
                 {
-                    pending.State = PendingPluginCommandState.FinalizedAwaitingAck;
-                    return;
+                    startedBatch.Add(new StartedPendingPluginCommand(
+                        queuedCommand,
+                        applyAndAckAsync(queuedCommand.HeartbeatCommand)));
                 }
 
-                DequeueCompleted(pending);
+                var hasUnfinishedCommand = false;
+                foreach (var started in startedBatch)
+                {
+                    var result = await started.Completion;
+                    switch (result)
+                    {
+                        case PluginCommandExecutionResult.Completed:
+                            started.Pending.State = PendingPluginCommandState.Completed;
+                            break;
+                        case PluginCommandExecutionResult.Deferred:
+                            hasUnfinishedCommand = true;
+                            break;
+                        case PluginCommandExecutionResult.FinalizedAwaitingAck:
+                            started.Pending.State = PendingPluginCommandState.FinalizedAwaitingAck;
+                            hasUnfinishedCommand = true;
+                            break;
+                    }
+                }
+
+                if (hasUnfinishedCommand) return;
             }
         }
         finally
@@ -171,27 +212,30 @@ internal sealed class HeartbeatCommandTransactionGate
         lock (_sync) return _completedIds.Contains(commandId);
     }
 
-    private void StoreResult(PluginCommand command, PluginCommandExecutionResult result)
+    private void StoreResult(
+        HeartbeatPluginCommand heartbeatCommand,
+        PluginCommandExecutionResult result)
     {
         switch (result)
         {
             case PluginCommandExecutionResult.Completed:
-                MarkCompleted(command);
+                MarkCompleted(heartbeatCommand.Command);
                 break;
             case PluginCommandExecutionResult.Deferred:
-                Enqueue(command, PendingPluginCommandState.PendingApplication);
+                Enqueue(heartbeatCommand, PendingPluginCommandState.PendingApplication);
                 break;
             case PluginCommandExecutionResult.FinalizedAwaitingAck:
-                Enqueue(command, PendingPluginCommandState.FinalizedAwaitingAck);
+                Enqueue(heartbeatCommand, PendingPluginCommandState.FinalizedAwaitingAck);
                 break;
         }
     }
 
     private void StartApplication(
-        PluginCommand command,
-        Func<PluginCommand, Task<PluginCommandExecutionResult>> applyAndAckAsync,
+        HeartbeatPluginCommand heartbeatCommand,
+        Func<HeartbeatPluginCommand, Task<PluginCommandExecutionResult>> applyAndAckAsync,
         List<StartedPluginCommand> startedApplications)
     {
+        var command = heartbeatCommand.Command;
         var commandId = NormalizeCommandId(command.Id);
         if (commandId != null)
         {
@@ -204,8 +248,8 @@ internal sealed class HeartbeatCommandTransactionGate
         try
         {
             startedApplications.Add(new StartedPluginCommand(
-                command,
-                applyAndAckAsync(command)));
+                heartbeatCommand,
+                applyAndAckAsync(heartbeatCommand)));
         }
         catch
         {
@@ -221,14 +265,17 @@ internal sealed class HeartbeatCommandTransactionGate
         lock (_sync) _inFlightIds.Remove(commandId);
     }
 
-    private void Enqueue(PluginCommand command, PendingPluginCommandState state)
+    private void Enqueue(
+        HeartbeatPluginCommand heartbeatCommand,
+        PendingPluginCommandState state)
     {
         lock (_sync)
         {
+            var command = heartbeatCommand.Command;
             var commandId = NormalizeCommandId(command.Id);
             if (commandId != null && _deferredById.ContainsKey(commandId)) return;
 
-            var pending = new PendingPluginCommand(command, state);
+            var pending = new PendingPluginCommand(heartbeatCommand, state);
             _deferred.Enqueue(pending);
             if (commandId != null) _deferredById[commandId] = pending;
         }
@@ -244,9 +291,23 @@ internal sealed class HeartbeatCommandTransactionGate
                 throw new InvalidOperationException("Deferred plugin command order changed unexpectedly.");
             }
 
-            var commandId = NormalizeCommandId(pending.Command.Id);
+            var commandId = NormalizeCommandId(pending.HeartbeatCommand.Command.Id);
             if (commandId != null) _deferredById.Remove(commandId);
-            MarkCompletedUnsafe(pending.Command);
+            MarkCompletedUnsafe(pending.HeartbeatCommand.Command);
+        }
+    }
+
+    private List<PendingPluginCommand> SnapshotPendingApplicationBatch()
+    {
+        lock (_sync)
+        {
+            var batch = new List<PendingPluginCommand>();
+            foreach (var pending in _deferred)
+            {
+                if (pending.State != PendingPluginCommandState.PendingApplication) break;
+                batch.Add(pending);
+            }
+            return batch;
         }
     }
 
@@ -270,22 +331,30 @@ internal sealed class HeartbeatCommandTransactionGate
     private static string? NormalizeCommandId(string? commandId) =>
         string.IsNullOrWhiteSpace(commandId) ? null : commandId.Trim();
 
+    private static string? NormalizeMatchId(string? matchId) =>
+        string.IsNullOrWhiteSpace(matchId) ? null : matchId.Trim();
+
     private sealed class PendingPluginCommand(
-        PluginCommand command,
+        HeartbeatPluginCommand heartbeatCommand,
         PendingPluginCommandState state)
     {
-        public PluginCommand Command { get; } = command;
+        public HeartbeatPluginCommand HeartbeatCommand { get; } = heartbeatCommand;
 
         public PendingPluginCommandState State { get; set; } = state;
     }
 
     private sealed record StartedPluginCommand(
-        PluginCommand Command,
+        HeartbeatPluginCommand HeartbeatCommand,
+        Task<PluginCommandExecutionResult> Completion);
+
+    private sealed record StartedPendingPluginCommand(
+        PendingPluginCommand Pending,
         Task<PluginCommandExecutionResult> Completion);
 
     private enum PendingPluginCommandState
     {
         PendingApplication,
+        Completed,
         FinalizedAwaitingAck
     }
 }

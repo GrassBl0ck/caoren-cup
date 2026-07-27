@@ -104,7 +104,7 @@ internal sealed class DuelTelemetryIsolationState
         if (!IsStaleMatchId(matchId)) _safeHeartbeatObserved = true;
     }
 
-    private bool IsStaleMatchId(string? matchId)
+    public bool IsStaleMatchId(string? matchId)
     {
         var normalizedMatchId = NormalizeMatchId(matchId);
         return normalizedMatchId != null && _staleMatchIds.Contains(normalizedMatchId);
