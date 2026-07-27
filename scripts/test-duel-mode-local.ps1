@@ -45,6 +45,7 @@ function Test-GamePluginChanged {
 
 $webRoot = Join-Path $repoRoot 'web-command-center'
 $bridgeRoot = Join-Path $webRoot 'CaorenCupPlugin'
+$bridgeTestsRoot = Join-Path $webRoot 'CaorenCupPlugin.Tests'
 $gamePluginRoot = Join-Path $repoRoot 'game-plugin'
 
 Write-Host "Duel mode local test gate" -ForegroundColor Green
@@ -62,6 +63,12 @@ Invoke-CheckedStep `
     -WorkingDirectory $webRoot `
     -Command 'node' `
     -Arguments @('--check', 'public\js\lobby-app.js')
+
+Invoke-CheckedStep `
+    -Name 'Web bridge plugin tests' `
+    -WorkingDirectory $bridgeTestsRoot `
+    -Command 'dotnet' `
+    -Arguments @('test')
 
 Invoke-CheckedStep `
     -Name 'Web bridge plugin build' `
