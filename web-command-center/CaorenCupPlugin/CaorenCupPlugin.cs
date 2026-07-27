@@ -202,6 +202,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
+        AddCommandListener("drop", OnDuelDropCommand, HookMode.Pre);
         _outboundWorker = Task.Run(() => ProcessOutboundQueueAsync(_outboundCts.Token));
 
         _timers.Add(AddTimer(Math.Max(3, _config.HeartbeatSeconds), () =>
@@ -2653,6 +2654,19 @@ public sealed class CaorenCupPlugin : BasePlugin
         return HookResult.Handled;
     }
 
+    private HookResult OnDuelDropCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!_duelModeEnabled || !IsRealPlayer(player)) return HookResult.Continue;
+        if (!DuelRuntimePolicy.ShouldBlockDrop(PlayerEquipment(player).ActiveWeapon))
+        {
+            return HookResult.Continue;
+        }
+
+        player!.PrintToChat(
+            $" {ChatColors.Green}[草人杯]{ChatColors.Default} 单挑期间不能丢弃枪械。");
+        return HookResult.Handled;
+    }
+
     private static CsTeam? ParseTeam(string? side)
     {
         return side?.Trim().ToUpperInvariant() switch
@@ -2868,6 +2882,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             DuelStage.Sniper => string.Empty,
             _ => GetPendingOrCurrent(_duelPendingSecondary, _duelCurrentSecondary, steamId, "weapon_usp_silencer")
         };
+        var rule = DuelRuntimePolicy.BuildLoadoutRule(stage, primary, secondary);
 
         try
         {
@@ -2878,11 +2893,83 @@ public sealed class CaorenCupPlugin : BasePlugin
             if (stage == DuelStage.Pistol) GivePlayerKevlar(player);
             else player.GiveNamedItem("item_assaultsuit");
             GiveDuelUtilities(player);
+            RemoveUnexpectedDuelFirearms(player, rule);
+            QueuePreferredDuelWeapon(player, rule);
         }
         catch (Exception ex)
         {
             Logger.LogDebug(ex, "Failed to apply duel loadout for {SteamId}", steamId);
         }
+    }
+
+    private static void RemoveUnexpectedDuelFirearms(
+        CCSPlayerController player,
+        DuelLoadoutRule rule)
+    {
+        var weapons = player.PlayerPawn?.Value?.WeaponServices?.MyWeapons.ToArray();
+        if (weapons is null) return;
+
+        foreach (var handle in weapons)
+        {
+            var weapon = handle.Value;
+            if (weapon is null || !weapon.IsValid) continue;
+            if (!DuelRuntimePolicy.IsFirearm(weapon.DesignerName)) continue;
+            if (rule.AllowedFirearms.Contains(weapon.DesignerName)) continue;
+            weapon.Remove();
+        }
+    }
+
+    private void QueuePreferredDuelWeapon(CCSPlayerController player, DuelLoadoutRule rule)
+    {
+        var steamId = player.SteamID;
+        Server.NextFrame(() =>
+        {
+            if (!CanApplyDuelLoadoutContinuation(player, steamId)) return;
+            TrySelectPreferredDuelWeapon(player, rule, allowRetry: true);
+        });
+    }
+
+    private void TrySelectPreferredDuelWeapon(
+        CCSPlayerController player,
+        DuelLoadoutRule rule,
+        bool allowRetry)
+    {
+        if (string.Equals(
+                PlayerEquipment(player).ActiveWeapon,
+                rule.PreferredWeapon,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var slotCommand = rule.PreferredSlot == DuelPreferredWeaponSlot.Primary ? "slot1" : "slot2";
+        player.ExecuteClientCommand(slotCommand);
+        if (!allowRetry) return;
+
+        var steamId = player.SteamID;
+        Server.NextFrame(() =>
+        {
+            if (!CanApplyDuelLoadoutContinuation(player, steamId)) return;
+            TrySelectPreferredDuelWeapon(player, rule, allowRetry: false);
+            if (!string.Equals(
+                    PlayerEquipment(player).ActiveWeapon,
+                    rule.PreferredWeapon,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.LogDebug(
+                    "Duel preferred weapon selection did not settle for {SteamId}: {Weapon}",
+                    steamId,
+                    rule.PreferredWeapon);
+            }
+        });
+    }
+
+    private bool CanApplyDuelLoadoutContinuation(CCSPlayerController player, ulong steamId)
+    {
+        return !_isUnloading
+            && _duelModeEnabled
+            && IsRealPlayer(player)
+            && player.SteamID == steamId;
     }
 
     private static string GetPendingOrCurrent(

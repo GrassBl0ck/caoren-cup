@@ -42,4 +42,17 @@ public sealed class DuelRuntimePolicyTests
         Assert.Contains(plan, item => item is { Name: "mp_death_drop_gun", Value: "0" });
         Assert.Contains(plan, item => item is { Name: "mp_roundtime", Value: "1.25" });
     }
+
+    [Fact]
+    public void BuildLoadoutRule_allows_only_the_configured_firearms()
+    {
+        var rule = DuelRuntimePolicy.BuildLoadoutRule(
+            DuelStage.Rifle,
+            "weapon_ak47",
+            "weapon_deagle");
+
+        Assert.Contains("weapon_ak47", rule.AllowedFirearms);
+        Assert.Contains("weapon_deagle", rule.AllowedFirearms);
+        Assert.DoesNotContain("weapon_awp", rule.AllowedFirearms);
+    }
 }

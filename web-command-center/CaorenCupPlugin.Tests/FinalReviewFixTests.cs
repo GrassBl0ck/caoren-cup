@@ -1186,6 +1186,16 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
+    public void Duel_drop_listener_and_single_retry_are_wired()
+    {
+        var source = ReadPluginSource();
+        Assert.Contains("AddCommandListener(\"drop\", OnDuelDropCommand, HookMode.Pre)", source);
+        Assert.Contains("RemoveUnexpectedDuelFirearms(player, rule)", source);
+        Assert.Contains("QueuePreferredDuelWeapon(player, rule)", source);
+        Assert.Contains("allowRetry: false", source);
+    }
+
+    [Fact]
     public void Cvar_cleanup_retry_is_bounded_and_keeps_unresolved_entries_pending()
     {
         var constructor = typeof(DuelServerCvarScope).GetConstructor(
