@@ -10,6 +10,7 @@
     "test:caoren-modules": "node scripts/check-caoren-modules.cjs",
     "test:postmatch-fun-stats": "node scripts/check-postmatch-fun-stats.cjs",
     "test:match-command-policy": "tsx src/match-command-policy.test.ts",
+    "test:duel-runtime": "tsx --test src/duel-runtime-config.test.ts",
     "test:fixed-member-ui": "node scripts/check-fixed-member-ui.cjs",
     "test:rules-content": "node scripts/check-rules-content.cjs",
     "test:rules-pdf": "node scripts/check-rules-pdf.cjs",

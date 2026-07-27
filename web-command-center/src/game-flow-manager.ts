@@ -46,6 +46,7 @@ import {
     normalizeDuelUtilityMode,
     resolveDuelMapConfig,
 } from './duel-config';
+import { buildDuelRuntimeConfigPayload } from './duel-runtime-config';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import {
     clearFlowUndoHistory,
@@ -690,39 +691,6 @@ const setupDuelFromLobby = (): boolean => {
     return true;
 };
 
-const queueDuelRulesCommands = (delaySeconds = 0) => {
-    const session = getSession();
-    const rounds = normalizeDuelRounds(session.matchOptions?.duelRounds);
-    const totalRounds = getDuelTotalRounds(rounds);
-    const roundTime = normalizeDuelRoundTimeMinutes(session.matchOptions?.duelRoundTimeMinutes || DUEL_DEFAULT_ROUND_TIME_MINUTES);
-    const commands = [
-        { command: `mp_maxrounds ${totalRounds}`, label: `duel total rounds ${totalRounds}` },
-        { command: 'mp_winlimit 0', label: 'duel no win limit' },
-        { command: 'mp_match_can_clinch 0', label: 'duel force full rounds' },
-        { command: `mp_roundtime ${roundTime}`, label: `duel round time ${roundTime}` },
-        { command: 'mp_freezetime 0', label: 'duel no freeze time' },
-        { command: 'mp_round_restart_delay 2', label: 'duel short round end' },
-        { command: 'mp_free_armor 0', label: 'duel no free armor' },
-        { command: 'mp_halftime 0', label: 'duel no halftime' },
-        { command: 'mp_autoteambalance 0', label: 'duel no auto balance' },
-        { command: 'mp_limitteams 0', label: 'duel no team limit' },
-        { command: 'sv_showimpacts 0', label: 'duel hide bullet impacts' },
-        { command: 'sv_showimpacts_time 0', label: 'duel clear bullet impact timer' },
-        { command: 'mp_warmup_end', label: 'duel end warmup' },
-        { command: 'mp_restartgame 1', label: 'duel restart' },
-    ];
-
-    for (const item of commands) {
-        enqueuePluginCommand('EXECUTE_SERVER_COMMAND', {
-            command: item.command,
-            label: item.label,
-            matchId: session.matchId,
-            delaySeconds,
-            requestedAt: Date.now(),
-        });
-    }
-};
-
 const queueDuelMapOnlySetup = () => {
     const session = getSession();
     const duelMap = resolveDuelMapConfig(session.matchOptions?.duelMap || DUEL_DEFAULT_MAP, session.matchOptions?.duelMapWorkshopId);
@@ -751,15 +719,12 @@ const queueDuelMapOnlySetup = () => {
     }
 };
 
-const queueDuelFormalStart = (delaySeconds = 0) => {
+const queueDuelFormalStart = () => {
     const session = getSession();
-    queueDuelRulesCommands(delaySeconds);
-    enqueuePluginCommand('CONFIGURE_DUEL_MODE', {
-        matchId: session.matchId,
-        rounds: normalizeDuelRounds(session.matchOptions?.duelRounds),
-        utilityMode: normalizeDuelUtilityMode(session.matchOptions?.duelUtilityMode),
-        requestedAt: Date.now(),
-    });
+    enqueuePluginCommand(
+        'CONFIGURE_DUEL_MODE',
+        buildDuelRuntimeConfigPayload(session.matchId, session.matchOptions, Date.now()),
+    );
 };
 
 const rollbackDuelToLobby = (reason = '单挑等待结束后参赛玩家不足，已回到大厅。') => {
@@ -827,7 +792,7 @@ const beginDuelFormalMatch = (matchId: string) => {
     session.liveGameData!.rawPluginRound = 1;
     session.liveGameData!.roundBaseOffset = 0;
     session.liveGameData!.formalRoundStartRaw = 1;
-    queueDuelFormalStart(0);
+    queueDuelFormalStart();
     enqueuePluginCommand('RESET_LIVE_MATCH_STATS', { currentRound: rawPluginRound });
     session.timerEndAt = null;
     session.timerPhase = null;
