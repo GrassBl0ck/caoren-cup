@@ -2623,7 +2623,9 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ActivateDuelRuntime(DuelGameConfig config)
     {
-        if (!_duelServerCvars.IsReadyForNewDuel)
+        if (!DuelRuntimePolicy.CanActivateRuntime(
+                _duelServerCvars.IsReadyForNewDuel,
+                _duelModeEnabled))
         {
             throw new InvalidOperationException("Previous duel CVar restore is incomplete.");
         }

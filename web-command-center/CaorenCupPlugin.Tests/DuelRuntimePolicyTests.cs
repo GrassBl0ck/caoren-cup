@@ -55,4 +55,18 @@ public sealed class DuelRuntimePolicyTests
         Assert.Contains("weapon_deagle", rule.AllowedFirearms);
         Assert.DoesNotContain("weapon_awp", rule.AllowedFirearms);
     }
+
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(false, false, false)]
+    public void CanActivateRuntime_allows_active_scope_reuse_for_confirmed_takeover(
+        bool cvarScopeReady,
+        bool duelRuntimeActive,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            DuelRuntimePolicy.CanActivateRuntime(cvarScopeReady, duelRuntimeActive));
+    }
 }

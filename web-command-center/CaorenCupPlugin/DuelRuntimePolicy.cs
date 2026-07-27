@@ -70,6 +70,9 @@ internal static class DuelRuntimePolicy
 
     public static bool ShouldBlockDrop(string? designerName) => IsFirearm(designerName);
 
+    public static bool CanActivateRuntime(bool cvarScopeReady, bool duelRuntimeActive) =>
+        cvarScopeReady || duelRuntimeActive;
+
     public static int EngineRoundLimit(int configuredTotalRounds)
     {
         if (configuredTotalRounds < 1)
