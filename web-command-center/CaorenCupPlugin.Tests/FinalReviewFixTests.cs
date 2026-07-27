@@ -1196,6 +1196,44 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
+    public void Duel_final_round_uses_restart_then_round_start_cleanup_order()
+    {
+        var source = ReadPluginSource();
+        var roundEnd = SliceSource(source, "public HookResult OnRoundEnd(", "private void FinishGameManagedDuel(");
+        var finalEventIndex = roundEnd.IndexOf("QueueEvent(\"round_end\"", StringComparison.Ordinal);
+        var finalSnapshotIndex = roundEnd.IndexOf("QueueSnapshot()", StringComparison.Ordinal);
+        var webCleanupIndex = roundEnd.IndexOf(
+            "BeginDuelCleanup(DuelControlMode.WebManaged)",
+            StringComparison.Ordinal);
+        Assert.True(finalEventIndex >= 0);
+        Assert.True(finalSnapshotIndex > finalEventIndex);
+        Assert.True(webCleanupIndex > finalSnapshotIndex);
+        Assert.Contains("if (wasGameManaged) return HookResult.Continue;", roundEnd);
+        Assert.DoesNotContain("RestoreGameManagedDuelCvarsWithRetry", roundEnd);
+
+        var beginCleanup = SliceSource(source, "private void BeginDuelCleanup(", "private void CompleteDuelCleanupAfterRestart(");
+        Assert.Contains("Server.ExecuteCommand(\"mp_restartgame 1\")", beginCleanup);
+        Assert.DoesNotContain("RestoreGameManagedDuelCvarsWithRetry", beginCleanup);
+
+        var roundStart = SliceSource(source, "public HookResult OnRoundStart(", "public HookResult OnPlayerDeath(");
+        Assert.True(
+            roundStart.IndexOf("CompleteDuelCleanupAfterRestart(cleanupMode)", StringComparison.Ordinal) <
+            roundStart.IndexOf("_currentRound++", StringComparison.Ordinal));
+
+        var completeCleanup = SliceSource(
+            source,
+            "private void CompleteDuelCleanupAfterRestart(",
+            "private void RestoreGameManagedDuelCvarsWithRetry(");
+        Assert.Contains("RestoreGameManagedDuelCvarsWithRetry()", completeCleanup);
+
+        var unload = SliceSource(source, "public override void Unload(", "private void StopTimers(");
+        Assert.Contains("CleanupDuelImmediately()", unload);
+        var mapStart = SliceSource(source, "private void OnMapStart(", "private void ClearLobbyReminderState(");
+        Assert.Contains("immediateRestore: true", mapStart);
+        Assert.Contains("CleanupDuelImmediately(DuelControlMode.WebManaged)", mapStart);
+    }
+
+    [Fact]
     public void Cvar_cleanup_retry_is_bounded_and_keeps_unresolved_entries_pending()
     {
         var constructor = typeof(DuelServerCvarScope).GetConstructor(
@@ -1473,6 +1511,15 @@ public sealed class FinalReviewFixTests
 
         throw new FileNotFoundException(
             "Could not locate CaorenCupPlugin.cs from the test output directory.");
+    }
+
+    private static string SliceSource(string source, string startMarker, string endMarker)
+    {
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Missing source marker: {startMarker}");
+        var end = source.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
+        Assert.True(end > start, $"Missing source marker after {startMarker}: {endMarker}");
+        return source[start..end];
     }
 
     private static MethodInfo GetDispatcherMethod(string methodName)

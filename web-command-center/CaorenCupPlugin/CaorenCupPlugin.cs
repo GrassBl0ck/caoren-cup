@@ -26,6 +26,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly HttpClient _http = new();
     private readonly DuelGameSession _duelSession = new();
     private readonly DuelServerCvarScope _duelServerCvars = new();
+    private readonly DuelCleanupState _duelCleanupState = new();
     private readonly DuelTelemetryIsolationState _duelTelemetryIsolation = new();
     private readonly HeartbeatResponseOrder _heartbeatResponseOrder = new();
     private readonly HeartbeatCommandTransactionGate _heartbeatCommandTransactions = new();
@@ -235,9 +236,10 @@ public sealed class CaorenCupPlugin : BasePlugin
     public override void Unload(bool hotReload)
     {
         _isUnloading = true;
-        CleanupGameManagedDuel();
+        CleanupDuelImmediately();
         StopTimers();
         RemoveCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
+        RemoveCommandListener("drop", OnDuelDropCommand, HookMode.Pre);
         _outboundCts.Cancel();
         ClearLobbyReminderState();
         _http.Dispose();
@@ -1068,6 +1070,12 @@ public sealed class CaorenCupPlugin : BasePlugin
     [GameEventHandler]
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
+        if (_duelCleanupState.TryConsumeRestartRound(out var cleanupMode))
+        {
+            CompleteDuelCleanupAfterRestart(cleanupMode);
+            return HookResult.Continue;
+        }
+
         _currentRound++;
         if (_duelSession.ControlMode == DuelControlMode.GameManaged &&
             _duelSession.Lifecycle == DuelLifecycle.Running)
@@ -1303,6 +1311,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     public HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
     {
         var wasGameManaged = _duelSession.ControlMode == DuelControlMode.GameManaged;
+        var wasWebManaged = _duelSession.ControlMode == DuelControlMode.WebManaged;
         var winner = TeamName(@event.Winner);
         var eventRound = _duelModeEnabled ? Math.Max(1, _duelFormalRound) : _currentRound;
         var eventScoreCt = _scoreCt;
@@ -1334,12 +1343,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             eventScoreCt = _scoreCt;
             eventScoreT = _scoreT;
 
-            if (_duelSession.ControlMode == DuelControlMode.WebManaged &&
-                _scoreCt + _scoreT >= _duelSession.Config.TotalRounds)
-            {
-                _duelSession.Clear();
-                Logger.LogInformation("Web-managed duel reached its configured total rounds; control mode returned to None.");
-            }
         }
 
         if (wasGameManaged) return HookResult.Continue;
@@ -1354,6 +1357,12 @@ public sealed class CaorenCupPlugin : BasePlugin
             players = BuildLivePlayers()
         });
         QueueSnapshot();
+        if (wasWebManaged && eventScoreCt + eventScoreT >= _duelSession.Config.TotalRounds)
+        {
+            Logger.LogInformation(
+                "Web-managed duel reached its configured total rounds; beginning cleanup restart.");
+            BeginDuelCleanup(DuelControlMode.WebManaged);
+        }
         return HookResult.Continue;
     }
 
@@ -1379,11 +1388,11 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         finally
         {
-            CleanupGameManagedDuel();
+            BeginDuelCleanup(DuelControlMode.GameManaged);
         }
     }
 
-    private void AbortGameManagedDuel(string reason)
+    private void AbortGameManagedDuel(string reason, bool immediateRestore = false)
     {
         try
         {
@@ -1396,54 +1405,33 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         finally
         {
-            CleanupGameManagedDuel();
+            if (immediateRestore) CleanupDuelImmediately(DuelControlMode.GameManaged);
+            else BeginDuelCleanup(DuelControlMode.GameManaged);
         }
     }
 
-    private void CleanupGameManagedDuel()
+    private void BeginDuelCleanup(DuelControlMode mode)
     {
-        var hasActiveRuntime = _gameManagedDuelRuntimeActive ||
-            _duelSession.ControlMode == DuelControlMode.GameManaged;
-        if (!hasActiveRuntime && !_duelCvarRestorePending)
-        {
-            return;
-        }
-
-        if (!hasActiveRuntime)
-        {
-            RestoreGameManagedDuelCvarsWithRetry();
-            return;
-        }
-
+        if (_duelCleanupState.RestartPending) return;
+        _duelCleanupState.Begin(mode);
         _gameManagedDuelRuntimeActive = false;
-        _heartbeatResponseOrder.BeginBarrier();
-        _duelTelemetryIsolation.BeginCleanupRestart();
-        _duelCvarRestorePending = _duelServerCvars.PendingRestoreCount > 0;
-        _duelTelemetryIsolation.UpdateCvarRestoreReady(!_duelCvarRestorePending);
-        _gameManagedDuelAcceptedMissingSteamIds.Clear();
-        _gameManagedDuelReconnectReadyAnnounced = false;
-        if (_duelSession.Lifecycle == DuelLifecycle.Paused)
-        {
-            try
-            {
-                Server.ExecuteCommand("mp_unpause_match");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogWarning(ex, "Failed to unpause game-managed duel during cleanup.");
-            }
-        }
-
+        _duelModeEnabled = false;
         _teamLockEnabled = false;
         _teamAssignments.Clear();
         _teamAssignmentBypass.Clear();
         _teamAssignmentsValidFromRound = 0;
         _teamAssignmentsValidUntilRound = 0;
-        _duelModeEnabled = false;
-        ClearDuelEquipmentState();
-        ResetLiveMatchStats(0);
+        _duelCvarRestorePending = _duelServerCvars.PendingRestoreCount > 0;
 
-        RestoreGameManagedDuelCvarsWithRetry();
+        if (mode == DuelControlMode.GameManaged)
+        {
+            _heartbeatResponseOrder.BeginBarrier();
+            _duelTelemetryIsolation.BeginCleanupRestart();
+            _duelTelemetryIsolation.UpdateCvarRestoreReady(false);
+            _gameManagedDuelAcceptedMissingSteamIds.Clear();
+            _gameManagedDuelReconnectReadyAnnounced = false;
+            TryUnpauseDuelDuringCleanup();
+        }
 
         try
         {
@@ -1451,11 +1439,81 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to restart the game after game-managed duel cleanup.");
+            Logger.LogError(ex, "Failed to restart the game during duel cleanup; restoring immediately.");
+            CleanupDuelImmediately(mode);
         }
-        finally
+    }
+
+    private void CompleteDuelCleanupAfterRestart(DuelControlMode mode)
+    {
+        ClearDuelEquipmentState();
+        ResetLiveMatchStats(0);
+        _duelSession.Clear();
+        RestoreGameManagedDuelCvarsWithRetry();
+
+        if (mode == DuelControlMode.GameManaged)
         {
-            _duelSession.Clear();
+            _duelTelemetryIsolation.CompleteCleanupRoundStart();
+            CommitReleasedDuelHeartbeatStateOnGameThread();
+            _ = DrainDeferredHeartbeatCommandsAsync();
+        }
+
+        _duelCleanupState.Reset();
+    }
+
+    private void CleanupDuelImmediately(DuelControlMode requestedMode = DuelControlMode.None)
+    {
+        var mode = requestedMode != DuelControlMode.None
+            ? requestedMode
+            : _duelSession.ControlMode != DuelControlMode.None
+                ? _duelSession.ControlMode
+                : _duelCleanupState.Mode;
+        var hasRuntime = _duelModeEnabled ||
+            _gameManagedDuelRuntimeActive ||
+            mode != DuelControlMode.None ||
+            _duelServerCvars.PendingRestoreCount > 0;
+        if (!hasRuntime) return;
+
+        _gameManagedDuelRuntimeActive = false;
+        _duelModeEnabled = false;
+        _teamLockEnabled = false;
+        _teamAssignments.Clear();
+        _teamAssignmentBypass.Clear();
+        _teamAssignmentsValidFromRound = 0;
+        _teamAssignmentsValidUntilRound = 0;
+        _gameManagedDuelAcceptedMissingSteamIds.Clear();
+        _gameManagedDuelReconnectReadyAnnounced = false;
+        TryUnpauseDuelDuringCleanup();
+        ClearDuelEquipmentState();
+        ResetLiveMatchStats(0);
+        _duelSession.Clear();
+
+        if (mode == DuelControlMode.GameManaged)
+        {
+            _heartbeatResponseOrder.BeginBarrier();
+            _duelTelemetryIsolation.BeginCleanupRestart();
+            _duelTelemetryIsolation.UpdateCvarRestoreReady(false);
+        }
+
+        RestoreGameManagedDuelCvarsWithRetry();
+        if (mode == DuelControlMode.GameManaged)
+        {
+            _duelTelemetryIsolation.CompleteCleanupRoundStart();
+            CommitReleasedDuelHeartbeatStateOnGameThread();
+        }
+        _duelCleanupState.Reset();
+    }
+
+    private void TryUnpauseDuelDuringCleanup()
+    {
+        if (_duelSession.Lifecycle != DuelLifecycle.Paused) return;
+        try
+        {
+            Server.ExecuteCommand("mp_unpause_match");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to unpause game-managed duel during cleanup.");
         }
     }
 
@@ -1867,17 +1925,24 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void OnMapStart(string _mapName)
     {
-        var gameManagedDuelWasActive = _duelSession.ControlMode == DuelControlMode.GameManaged;
+        var activeDuelMode = _duelSession.ControlMode;
         ClearLobbyReminderState();
         if (!_isUnloading)
         {
             MapStartLifecycleSchedule(() =>
             {
                 if (_isUnloading) return;
-                if (gameManagedDuelWasActive && _duelSession.ControlMode == DuelControlMode.GameManaged)
+                if (activeDuelMode == DuelControlMode.GameManaged &&
+                    _duelSession.ControlMode == DuelControlMode.GameManaged)
                 {
                     Logger.LogWarning("Aborting game-managed duel because the map changed during the match.");
-                    AbortGameManagedDuel("比赛中发生换图，本次不计算胜负");
+                    AbortGameManagedDuel("比赛中发生换图，本次不计算胜负", immediateRestore: true);
+                }
+                else if (activeDuelMode == DuelControlMode.WebManaged &&
+                    _duelSession.ControlMode == DuelControlMode.WebManaged)
+                {
+                    Logger.LogWarning("Cleaning up web-managed duel because the map changed during the match.");
+                    CleanupDuelImmediately(DuelControlMode.WebManaged);
                 }
                 StartGameManagedSafetyTimer();
             });
