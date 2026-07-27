@@ -59,6 +59,12 @@ Invoke-CheckedStep `
     -Arguments @('run', 'typecheck')
 
 Invoke-CheckedStep `
+    -Name 'Web duel runtime config tests' `
+    -WorkingDirectory $webRoot `
+    -Command 'npm' `
+    -Arguments @('run', 'test:duel-runtime')
+
+Invoke-CheckedStep `
     -Name 'Lobby JavaScript syntax check' `
     -WorkingDirectory $webRoot `
     -Command 'node' `
@@ -74,7 +80,7 @@ Invoke-CheckedStep `
     -Name 'Web bridge plugin build' `
     -WorkingDirectory $bridgeRoot `
     -Command 'dotnet' `
-    -Arguments @('build')
+    -Arguments @('build', '-c', 'Release')
 
 $shouldBuildGamePlugin = $IncludeGamePlugin -or ((Test-GamePluginChanged) -and -not $SkipGamePlugin)
 if ($shouldBuildGamePlugin) {

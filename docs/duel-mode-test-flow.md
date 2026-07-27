@@ -28,13 +28,14 @@ cd D:\OpenSourcework\caoren-cup-open-source
 ```powershell
 cd web-command-center
 npm run typecheck
+npm run test:duel-runtime
 node --check public\js\lobby-app.js
 
 cd CaorenCupPlugin.Tests
 dotnet test
 
 cd CaorenCupPlugin
-dotnet build
+dotnet build -c Release
 ```
 
 如果包含娱乐插件本体，还会执行：
@@ -76,7 +77,7 @@ dotnet build
 
 逐项确认：
 
-- [ ] 开局后服务器执行单挑配置：地图正确，`mp_maxrounds` 等于 X+Y+Z，不开启半场换边。
+- [ ] 开局后服务器执行单挑配置：地图正确，`mp_maxrounds` 等于 X+Y+Z+1（额外 1 回合用于插件主动清理），不开启半场换边。
 - [ ] 网页分到 A/B 的玩家，在游戏内确实进入相对两边，不出现网页不同边但游戏同队。
 - [ ] 第 1 回合默认：USP-S，无主武器。
 - [ ] 手枪阶段 `/guns` 显示手枪列表，输入 `/deagle` 后下回合生效。
@@ -91,6 +92,18 @@ dotnet build
 - [ ] 中途强制终止时，临时管理员输入 `TERMINATE`。
 - [ ] 如果管理员在线，强制终止需要管理员同意。
 - [ ] 强制终止通过后不进赛后页，效果等同强制清局。
+
+#### 武器与结束流程回归
+
+- [ ] 地图放置枪械不能进入参赛者库存。
+- [ ] 主武器或副武器按 `drop` 不会落地；投掷物仍可正常使用和切换。
+- [ ] 参赛者死亡后没有枪械掉落供对方拾取。
+- [ ] 手枪阶段连续 5 回合默认拿出手枪，不偶发持刀。
+- [ ] 步枪阶段连续 5 回合默认拿出主武器，不偶发持刀。
+- [ ] 狙击阶段连续 5 回合默认拿出狙击枪，不偶发持刀。
+- [ ] 网页单挑最终回合保留比分和赛后统计，且不出现 CS2 官方地图投票。
+- [ ] 游戏内独立单挑最终回合不出现在网页，且不出现 CS2 官方地图投票。
+- [ ] 结束后用服务器控制台确认 `mp_maxrounds`、`mp_weapons_allow_map_placed`、`mp_death_drop_gun` 已恢复。
 
 ### 1.3 开玩前最终确认
 
