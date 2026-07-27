@@ -171,8 +171,8 @@ dotnet build
 
 ### 4.1 指令、配置和开局
 
-- [ ] 输入 `/duel help`，确认显示当前实际帮助内容：`status`、`rounds`、`time`、`utility`、`reset`、`start`、`pause`、`resume`、`stop`、`stop confirm`、`maps`、`map` 的用法；不要求帮助输出列出 `start confirm`。
-- [ ] 分别在闲置、进行中、暂停和网页管理状态输入 `/duel status`；确认状态、已完成回合、T/CT 比分、完整配置和（暂停时）暂停原因都与实际一致。
+- [ ] 输入 `/duel help`，确认明确给出推荐顺序：先切换地图，等待玩家重连并选择 T/CT，再配置回合数、时间和道具，最后 `/duel start`；同时列出 `status`、`rounds`、`time`、`utility`、`reset`、`start`、`start confirm`、`pause`、`resume`、`stop`、`stop confirm`、`maps`、`map` 的用途，并说明 `/duel start confirm` 仅用于有意替换现有网页管理状态。
+- [ ] 分别在闲置、进行中、暂停和网页管理状态输入 `/duel status`；确认状态、已完成回合、T/CT 比分、完整配置和（暂停时）暂停原因都与实际一致；游戏内管理状态还必须显示 T/CT 参赛人数与姓名、当前阶段和剩余回合数。
 - [ ] 闲置时输入 `/duel rounds 0 18 12`（合法，总和 30），确认手枪阶段 0 回合被保存并在开局后跳过；再分别输入 `/duel rounds -1 19 12`、`/duel rounds 100 0 0`、`/duel rounds 8 x 22`、`/duel rounds 8 16`、`/duel rounds 8 16 5`，确认负数、超过 99、非数字、缺少参数和总和小于 30 都被拒绝，原配置不变。
 - [ ] 闲置时输入 `/duel time 1.25`（合法）后确认配置更新；再输入 `/duel time 0.2`、`/duel time 6`、`/duel time abc` 和 `/duel time`，确认范围外、非数字和缺少参数被拒绝，原配置不变。
 - [ ] 闲置时输入 `/duel utility random2`（合法）后确认配置更新；再输入 `/duel utility banana` 和 `/duel utility`，确认未知值和缺少参数被拒绝，原配置不变。

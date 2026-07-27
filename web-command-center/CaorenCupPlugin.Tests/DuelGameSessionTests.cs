@@ -155,14 +155,21 @@ public sealed class DuelGameSessionTests
     }
 
     [Fact]
-    public void Game_managed_running_or_paused_blocks_web_map_changes_at_execution_time()
+    public void Game_managed_running_or_paused_blocks_web_match_control_at_execution_time()
     {
-        var method = GetPrivateStaticMethod("IsGameManagedMapChangeBlocked");
+        var dispatcherType = typeof(global::CaorenCupPlugin.CaorenCupPlugin).Assembly
+            .GetType("CaorenCupPlugin.WebCommandGameThreadDispatcher");
+        Assert.NotNull(dispatcherType);
+        var method = dispatcherType!.GetMethod(
+            "IsGameManagedMatchControlCommand",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.NotNull(method);
 
-        Assert.True(InvokePrivateBool(method, "changelevel de_dust2", DuelControlMode.GameManaged, DuelLifecycle.Running));
-        Assert.True(InvokePrivateBool(method, " HOST_WORKSHOP_MAP 123 ", DuelControlMode.GameManaged, DuelLifecycle.Paused));
-        Assert.False(InvokePrivateBool(method, "mp_restartgame 1", DuelControlMode.GameManaged, DuelLifecycle.Running));
-        Assert.False(InvokePrivateBool(method, "changelevel de_dust2", DuelControlMode.None, DuelLifecycle.Idle));
+        Assert.True(InvokePrivateBool(method!, "changelevel de_dust2", DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method!, " HOST_WORKSHOP_MAP 123 ", DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method!, "mp_restartgame 1", DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method!, "sv_showimpacts_time 4", DuelControlMode.GameManaged));
+        Assert.False(InvokePrivateBool(method!, "changelevel de_dust2", DuelControlMode.None));
     }
 
     [Fact]
@@ -222,7 +229,7 @@ public sealed class DuelGameSessionTests
     }
 
     [Fact]
-    public void Paused_round_end_is_ignored_and_open_round_resumes()
+    public void Round_end_during_pause_consumes_the_saved_open_round_without_scoring()
     {
         var session = new DuelGameSession();
         session.TryStart([T(), Ct()], false, out _);
@@ -239,9 +246,32 @@ public sealed class DuelGameSessionTests
         Assert.True(session.TryResume(out _));
         var resumedResult = session.RecordRoundEnd(DuelTeam.Terrorist);
 
-        Assert.True(resumedResult.Counted);
+        Assert.False(resumedResult.Counted);
+        Assert.Equal(0, session.CompletedRounds);
+        Assert.Equal(0, session.ScoreT);
+
+        session.MarkRoundStarted();
+        var nextRoundResult = session.RecordRoundEnd(DuelTeam.Terrorist);
+
+        Assert.True(nextRoundResult.Counted);
         Assert.Equal(1, session.CompletedRounds);
         Assert.Equal(1, session.ScoreT);
+    }
+
+    [Fact]
+    public void Open_round_still_counts_after_resume_when_no_round_end_arrived_during_pause()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.MarkRoundStarted();
+        session.Pause("管理员暂停");
+
+        Assert.True(session.TryResume(out _));
+        var result = session.RecordRoundEnd(DuelTeam.CounterTerrorist);
+
+        Assert.True(result.Counted);
+        Assert.Equal(1, session.CompletedRounds);
+        Assert.Equal(1, session.ScoreCt);
     }
 
     [Fact]

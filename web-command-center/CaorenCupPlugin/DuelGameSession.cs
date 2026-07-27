@@ -149,6 +149,12 @@ public sealed class DuelGameSession
 
     public DuelRoundResult RecordRoundEnd(DuelTeam winner)
     {
+        if (ControlMode == DuelControlMode.GameManaged && Lifecycle == DuelLifecycle.Paused)
+        {
+            _roundOpenBeforePause = false;
+            return new(false, false, ScoreT, ScoreCt);
+        }
+
         if (ControlMode != DuelControlMode.GameManaged || Lifecycle != DuelLifecycle.Running || !_roundOpen)
         {
             return new(false, false, ScoreT, ScoreCt);

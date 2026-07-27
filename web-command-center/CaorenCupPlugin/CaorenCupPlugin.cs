@@ -26,6 +26,8 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly HttpClient _http = new();
     private readonly DuelGameSession _duelSession = new();
     private readonly DuelServerCvarScope _duelServerCvars = new();
+    private readonly DuelTelemetryIsolationState _duelTelemetryIsolation = new();
+    private readonly HeartbeatResponseOrder _heartbeatResponseOrder = new();
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
     private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
     private readonly Dictionary<ulong, PlayerButtons> _previousButtonsBySteamId = new();
@@ -273,6 +275,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _gameManagedSafetyTimer = AddTimer(1.0f, () =>
         {
             if (_isUnloading) return;
+            RetryPendingGameManagedDuelCvarsAtSafePoint();
             EnforceTeamAssignments();
             EvaluateGameManagedConnectivity();
         }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
@@ -585,17 +588,40 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ShowDuelAdminHelp(CCSPlayerController? player, CommandInfo command)
     {
-        ReplyToDuelCaller(player, command, "[草人杯] /duel status：查看单挑状态和完整配置");
-        ReplyToDuelCaller(player, command, "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 30");
-        ReplyToDuelCaller(player, command, "[草人杯] /duel time <分钟>：设置每回合 0.25～5 分钟");
-        ReplyToDuelCaller(player, command, "[草人杯] /duel utility <none|random1|random2|random3|full>：设置道具");
-        ReplyToDuelCaller(player, command, "[草人杯] /duel reset：恢复默认配置；/duel start：按当前 T/CT 真人开赛");
-        ReplyToDuelCaller(player, command, "[草人杯] /duel pause、/duel resume、/duel stop、/duel stop confirm：控制比赛");
-        ReplyToDuelCaller(player, command, "[草人杯] /duel maps；/duel map <序号|地图名|创意工坊ID>：查看或切换地图");
+        foreach (var line in BuildDuelAdminHelpLines())
+        {
+            ReplyToDuelCaller(player, command, line);
+        }
     }
+
+    private static IReadOnlyCollection<string> BuildDuelAdminHelpLines() =>
+    [
+        "[草人杯] 推荐顺序：先切换地图，等待玩家重连并选择 T/CT，再配置回合数、时间和道具，最后 /duel start 开赛。",
+        "[草人杯] 若要有意替换现有网页管理状态，请使用 /duel start confirm。",
+        "[草人杯] /duel status：查看单挑状态和完整配置",
+        "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 30",
+        "[草人杯] /duel time <分钟>：设置每回合 0.25～5 分钟",
+        "[草人杯] /duel utility <none|random1|random2|random3|full>：设置道具",
+        "[草人杯] /duel reset：恢复默认配置；/duel start：按当前 T/CT 真人开赛",
+        "[草人杯] /duel pause、/duel resume、/duel stop、/duel stop confirm：控制比赛",
+        "[草人杯] /duel maps；/duel map <序号|地图名|创意工坊ID>：查看或切换地图"
+    ];
 
     private void StartGameManagedDuel(CCSPlayerController? player, CommandInfo command, bool confirmWebTakeover)
     {
+        if (!_duelServerCvars.IsReadyForNewDuel)
+        {
+            RetryPendingGameManagedDuelCvarsAtSafePoint();
+            if (!_duelServerCvars.IsReadyForNewDuel)
+            {
+                ReplyToDuelCaller(
+                    player,
+                    command,
+                    "[草人杯] 无法开始单挑：上一次比赛的服务器参数仍在恢复中，请稍后重试。");
+                return;
+            }
+        }
+
         var participants = Utilities.GetPlayers()
             .Where(IsRealPlayer)
             .Where(candidate => candidate.Team is CsTeam.Terrorist or CsTeam.CounterTerrorist)
@@ -611,6 +637,9 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
+        _heartbeatResponseOrder.BeginBarrier();
+        _duelTelemetryIsolation.Begin(_currentMatchId);
+        _currentMatchId = null;
         _gameManagedDuelRuntimeActive = true;
         _gameManagedDuelAcceptedMissingSteamIds.Clear();
         _gameManagedDuelReconnectReadyAnnounced = false;
@@ -709,10 +738,43 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         ReplyToDuelCaller(player, command, $"[草人杯] 单挑状态：{status}；已完成 {completedRounds} 回合；比分 T {scoreT} : {scoreCt} CT。");
         ReplyToDuelCaller(player, command, $"[草人杯] {FormatDuelConfig(_duelSession.Config)}");
+        if (_duelSession.ControlMode == DuelControlMode.GameManaged)
+        {
+            foreach (var line in BuildGameManagedDuelStatusLines(_duelSession))
+            {
+                ReplyToDuelCaller(player, command, line);
+            }
+        }
         if (_duelSession.ControlMode == DuelControlMode.GameManaged && !string.IsNullOrWhiteSpace(_duelSession.PauseReason))
         {
             ReplyToDuelCaller(player, command, $"[草人杯] 暂停原因：{_duelSession.PauseReason}");
         }
+    }
+
+    private static IReadOnlyCollection<string> BuildGameManagedDuelStatusLines(DuelGameSession session)
+    {
+        var tNames = session.Participants.Values
+            .Where(participant => participant.Team == DuelTeam.Terrorist)
+            .Select(participant => participant.Name)
+            .ToArray();
+        var ctNames = session.Participants.Values
+            .Where(participant => participant.Team == DuelTeam.CounterTerrorist)
+            .Select(participant => participant.Name)
+            .ToArray();
+        var stage = session.CurrentStage switch
+        {
+            DuelGameStage.Pistol => "手枪",
+            DuelGameStage.Rifle => "步枪",
+            DuelGameStage.Sniper => "狙击枪",
+            _ => session.CurrentStage.ToString()
+        };
+        var remainingRounds = Math.Max(0, session.Config.TotalRounds - session.CompletedRounds);
+        return
+        [
+            $"[草人杯] 当前阶段：{stage}；剩余 {remainingRounds} 回合。",
+            $"[草人杯] T 参赛者（{tNames.Length}）：{string.Join("、", tNames)}",
+            $"[草人杯] CT 参赛者（{ctNames.Length}）：{string.Join("、", ctNames)}"
+        ];
     }
 
     private static string DuelLifecycleLabel(DuelLifecycle lifecycle)
@@ -877,10 +939,21 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void SwitchDuelMap(CCSPlayerController? player, CommandInfo command, string input)
     {
-        if (_duelSession.ControlMode == DuelControlMode.GameManaged &&
-            _duelSession.Lifecycle is DuelLifecycle.Running or DuelLifecycle.Paused)
+        if (!_duelServerCvars.IsReadyForNewDuel)
         {
-            ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑期间不能切换地图，请先终止本局。");
+            RetryPendingGameManagedDuelCvarsAtSafePoint();
+        }
+
+        var hasPendingCvarRestore = !_duelServerCvars.IsReadyForNewDuel;
+        if (IsDuelMapChangeBlocked(
+            _duelSession.ControlMode,
+            _duelSession.Lifecycle,
+            hasPendingCvarRestore))
+        {
+            var message = hasPendingCvarRestore
+                ? "[草人杯] 上一次比赛的服务器参数仍在恢复中，暂时不能切换地图，请稍后重试。"
+                : "[草人杯] 游戏内单挑期间不能切换地图，请先终止本局。";
+            ReplyToDuelCaller(player, command, message);
             return;
         }
 
@@ -902,6 +975,14 @@ public sealed class CaorenCupPlugin : BasePlugin
         Logger.LogInformation("Switching directly to duel workshop map {Map} ({WorkshopId}).", map.Name, map.WorkshopId);
         ReplyToDuelCaller(player, command, $"[草人杯] 正在切换单挑地图：{map.Name} ({map.WorkshopId})。");
     }
+
+    private static bool IsDuelMapChangeBlocked(
+        DuelControlMode controlMode,
+        DuelLifecycle lifecycle,
+        bool hasPendingCvarRestore) =>
+        hasPendingCvarRestore ||
+        (controlMode == DuelControlMode.GameManaged &&
+            lifecycle is DuelLifecycle.Running or DuelLifecycle.Paused);
 
     private void ReplyToDuelCaller(CCSPlayerController? player, CommandInfo command, string message)
     {
@@ -1001,6 +1082,8 @@ public sealed class CaorenCupPlugin : BasePlugin
             mapName = SafeMapName(),
             players = BuildLivePlayers()
         });
+        _duelTelemetryIsolation.CompleteCleanupRoundStart();
+        CommitReleasedDuelHeartbeatStateOnGameThread();
         return HookResult.Continue;
     }
 
@@ -1314,12 +1397,22 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void CleanupGameManagedDuel()
     {
-        if (!_gameManagedDuelRuntimeActive && _duelSession.ControlMode != DuelControlMode.GameManaged)
+        var hasActiveRuntime = _gameManagedDuelRuntimeActive ||
+            _duelSession.ControlMode == DuelControlMode.GameManaged;
+        if (!hasActiveRuntime && _duelServerCvars.PendingRestoreCount == 0)
         {
             return;
         }
 
+        if (!hasActiveRuntime)
+        {
+            RestoreGameManagedDuelCvarsWithRetry();
+            return;
+        }
+
         _gameManagedDuelRuntimeActive = false;
+        _heartbeatResponseOrder.BeginBarrier();
+        _duelTelemetryIsolation.BeginCleanupRestart();
         _gameManagedDuelAcceptedMissingSteamIds.Clear();
         _gameManagedDuelReconnectReadyAnnounced = false;
         if (_duelSession.Lifecycle == DuelLifecycle.Paused)
@@ -1343,14 +1436,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         ClearDuelEquipmentState();
         ResetLiveMatchStats(0);
 
-        try
-        {
-            _duelServerCvars.RestoreAll();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to restore one or more game-managed duel cvars.");
-        }
+        RestoreGameManagedDuelCvarsWithRetry();
 
         try
         {
@@ -1363,6 +1449,42 @@ public sealed class CaorenCupPlugin : BasePlugin
         finally
         {
             _duelSession.Clear();
+        }
+    }
+
+    private void RestoreGameManagedDuelCvarsWithRetry()
+    {
+        var failedAttempt = 0;
+        var restored = _duelServerCvars.TryRestoreAll(3, failure =>
+        {
+            failedAttempt++;
+            Logger.LogWarning(
+                failure,
+                "Game-managed duel cvar restore attempt {Attempt} failed; pending entries will be retried.",
+                failedAttempt);
+        });
+        if (!restored)
+        {
+            Logger.LogError(
+                "Game-managed duel cvars remain unresolved after bounded retries; " +
+                "the periodic safety check and heartbeat safe point will keep retrying: {PendingCvars}",
+                string.Join(",", _duelServerCvars.PendingRestoreNames));
+        }
+    }
+
+    private void RetryPendingGameManagedDuelCvarsAtSafePoint()
+    {
+        if (_duelServerCvars.IsReadyForNewDuel) return;
+
+        var restored = _duelServerCvars.RetryPendingAtSafePoint(failure =>
+        {
+            Logger.LogWarning(
+                failure,
+                "Deferred game-managed duel cvar restore failed; pending entries remain queued.");
+        });
+        if (restored)
+        {
+            Logger.LogInformation("All deferred game-managed duel cvars were restored.");
         }
     }
 
@@ -1489,6 +1611,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private async Task SendHeartbeatAsync(CCSPlayerController? replyTo = null)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        var heartbeatRequestSequence = _heartbeatResponseOrder.NextRequestSequence();
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/heartbeat", new { mapName = SafeMapName() }, _jsonOptions);
@@ -1499,24 +1622,23 @@ public sealed class CaorenCupPlugin : BasePlugin
             {
                 var state = JsonSerializer.Deserialize<PluginHeartbeatResponse>(text, _jsonOptions);
                 if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-                if (!string.IsNullOrWhiteSpace(state?.MatchId) && state.MatchId != _currentMatchId)
-                {
-                    _currentMatchId = state.MatchId;
-                    _stats.Clear();
-                }
-                if (state != null && ShouldApplyWebMatchCounters(_duelSession.ControlMode))
-                {
-                    _currentRound = Math.Max(0, state.CurrentRound);
-                    _scoreCt = Math.Max(0, state.ScoreCT);
-                    _scoreT = Math.Max(0, state.ScoreT);
-                }
-                if (state?.Commands is { Count: > 0 })
-                {
-                    foreach (var command in state.Commands)
+                var acceptedHeartbeatResponse = await HeartbeatResponseProcessor.ProcessAsync(
+                    state,
+                    async () =>
                     {
-                        await ProcessPluginCommandAsync(command);
-                        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-                    }
+                        var stateAccepted = false;
+                        await GameThreadApplicationScheduler.ScheduleAsync(
+                            GameThreadApplicationScheduler.HibernationSafeServerSchedule,
+                            () => stateAccepted = ApplyHeartbeatStateOnGameThread(
+                                state,
+                                heartbeatRequestSequence));
+                        return stateAccepted;
+                    },
+                    ProcessPluginCommandAsync);
+                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+                if (!acceptedHeartbeatResponse)
+                {
+                    LogDebug("Ignored stale heartbeat response seq={Sequence}.", heartbeatRequestSequence);
                 }
                 LogDebug("Heartbeat OK: {Text}", text);
             }
@@ -1529,6 +1651,71 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             Logger.LogWarning(ex, "Heartbeat failed");
+        }
+    }
+
+    private bool ApplyHeartbeatStateOnGameThread(
+        PluginHeartbeatResponse? state,
+        long heartbeatRequestSequence)
+    {
+        if (!ShouldProcessPluginContinuation(_isUnloading))
+        {
+            return false;
+        }
+
+        RetryPendingGameManagedDuelCvarsAtSafePoint();
+        if (!_heartbeatResponseOrder.TryAccept(heartbeatRequestSequence))
+        {
+            return false;
+        }
+
+        if (_duelTelemetryIsolation.IsActive)
+        {
+            _duelTelemetryIsolation.ObserveHeartbeatState(state);
+            if (_duelTelemetryIsolation.IsActive)
+            {
+                _currentMatchId = null;
+                return true;
+            }
+
+            CommitReleasedDuelHeartbeatStateOnGameThread();
+            return true;
+        }
+
+        ApplyAcceptedHeartbeatStateOnGameThread(state, false);
+        return true;
+    }
+
+    private void CommitReleasedDuelHeartbeatStateOnGameThread()
+    {
+        if (!_duelTelemetryIsolation.HasReleasedHeartbeatState) return;
+
+        var releasedState = _duelTelemetryIsolation.ReleasedHeartbeatState;
+        _duelTelemetryIsolation.ClearReleasedHeartbeatState();
+        ApplyAcceptedHeartbeatStateOnGameThread(releasedState, true);
+    }
+
+    private void ApplyAcceptedHeartbeatStateOnGameThread(
+        PluginHeartbeatResponse? state,
+        bool replaceIsolatedState)
+    {
+        var heartbeatMatchId = string.IsNullOrWhiteSpace(state?.MatchId) ? null : state.MatchId.Trim();
+        if (replaceIsolatedState)
+        {
+            _currentMatchId = heartbeatMatchId;
+            _stats.Clear();
+        }
+        else if (heartbeatMatchId != null && heartbeatMatchId != _currentMatchId)
+        {
+            _currentMatchId = heartbeatMatchId;
+            _stats.Clear();
+        }
+
+        if (state != null && ShouldApplyWebMatchCounters(_duelSession.ControlMode))
+        {
+            _currentRound = Math.Max(0, state.CurrentRound);
+            _scoreCt = Math.Max(0, state.ScoreCT);
+            _scoreT = Math.Max(0, state.ScoreT);
         }
     }
 
@@ -1803,26 +1990,11 @@ public sealed class CaorenCupPlugin : BasePlugin
         (attackerTeam == "CT" || attackerTeam == "T") &&
         attackerTeam == victimTeam;
 
-    private bool ShouldPublishMatchTelemetry() => _duelSession.ControlMode != DuelControlMode.GameManaged;
+    private bool ShouldPublishMatchTelemetry() =>
+        _duelSession.ControlMode != DuelControlMode.GameManaged && !_duelTelemetryIsolation.IsActive;
 
     private static bool ShouldApplyWebTeamAssignments(DuelControlMode controlMode) =>
         controlMode != DuelControlMode.GameManaged;
-
-    private static bool IsGameManagedMapChangeBlocked(
-        string serverCommand,
-        DuelControlMode controlMode,
-        DuelLifecycle lifecycle)
-    {
-        if (controlMode != DuelControlMode.GameManaged ||
-            lifecycle is not (DuelLifecycle.Running or DuelLifecycle.Paused))
-        {
-            return false;
-        }
-
-        var commandName = serverCommand.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        return string.Equals(commandName, "changelevel", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(commandName, "host_workshop_map", StringComparison.OrdinalIgnoreCase);
-    }
 
     private static bool ShouldApplyWebMatchCounters(DuelControlMode controlMode) =>
         controlMode != DuelControlMode.GameManaged;
@@ -2042,61 +2214,16 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (string.IsNullOrWhiteSpace(command.Id) || string.IsNullOrWhiteSpace(command.Type)) return;
         try
         {
-            if (string.Equals(command.Type, "RESET_LIVE_MATCH_STATS", StringComparison.OrdinalIgnoreCase))
+            var applied = await WebCommandGameThreadDispatcher.ScheduleAsync(
+                GameThreadApplicationScheduler.HibernationSafeServerSchedule,
+                command,
+                () => _duelSession.ControlMode,
+                ApplyPluginCommandOnGameThread);
+            if (!applied)
             {
-                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-                if (!ShouldApplyWebMatchCounters(_duelSession.ControlMode))
-                {
-                    Logger.LogWarning("Rejected RESET_LIVE_MATCH_STATS because a game-managed duel is active.");
-                    return;
-                }
-
-                var currentRound = 1;
-                if (command.Payload.ValueKind == JsonValueKind.Object &&
-                    command.Payload.TryGetProperty("currentRound", out var currentRoundElement) &&
-                    currentRoundElement.TryGetInt32(out var parsedRound))
-                {
-                    currentRound = Math.Max(0, parsedRound);
-                }
-
-                ResetLiveMatchStats(currentRound);
-                Logger.LogInformation("CaorenCup official stats reset. Current round is now {Round}.", _currentRound);
-                await SendSnapshotAsync();
-            }
-            else if (string.Equals(command.Type, "EXECUTE_SERVER_COMMAND", StringComparison.OrdinalIgnoreCase))
-            {
-                if (command.Payload.ValueKind != JsonValueKind.Object ||
-                    !command.Payload.TryGetProperty("command", out var serverCommandElement))
-                {
-                    Logger.LogWarning("EXECUTE_SERVER_COMMAND missing payload.command");
-                    return;
-                }
-
-                var serverCommand = serverCommandElement.GetString()?.Trim() ?? string.Empty;
-                var label = serverCommand;
-                if (command.Payload.TryGetProperty("label", out var labelElement))
-                {
-                    label = labelElement.GetString()?.Trim() ?? serverCommand;
-                }
-
-                var delaySeconds = ReadPayloadInt(command.Payload, "delaySeconds", 0);
-                ExecuteAllowedServerCommand(serverCommand, label, delaySeconds);
-            }
-            else if (string.Equals(command.Type, "APPLY_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
-            {
-                ApplyTeamAssignments(command.Payload);
-            }
-            else if (string.Equals(command.Type, "CLEAR_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
-            {
-                ClearTeamAssignments();
-            }
-            else if (string.Equals(command.Type, "CONFIGURE_DUEL_MODE", StringComparison.OrdinalIgnoreCase))
-            {
-                ConfigureDuelMode(command.Payload);
-            }
-            else
-            {
-                Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
+                Logger.LogWarning(
+                    "Rejected queued web command because a game-managed duel is active: {Type}",
+                    command.Type);
             }
         }
         finally
@@ -2105,6 +2232,70 @@ public sealed class CaorenCupPlugin : BasePlugin
             {
                 await AckCommandAsync(command.Id);
             }
+        }
+    }
+
+    private void ApplyPluginCommandOnGameThread(PluginCommand command)
+    {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        if (WebCommandGameThreadDispatcher.IsBlockedByPendingCvarRestore(
+            command,
+            !_duelServerCvars.IsReadyForNewDuel))
+        {
+            Logger.LogWarning(
+                "Rejected web match-control command while previous duel cvars remain pending: {Type}",
+                command.Type);
+            return;
+        }
+
+        if (string.Equals(command.Type, "RESET_LIVE_MATCH_STATS", StringComparison.OrdinalIgnoreCase))
+        {
+            var currentRound = 1;
+            if (command.Payload.ValueKind == JsonValueKind.Object &&
+                command.Payload.TryGetProperty("currentRound", out var currentRoundElement) &&
+                currentRoundElement.TryGetInt32(out var parsedRound))
+            {
+                currentRound = Math.Max(0, parsedRound);
+            }
+
+            ResetLiveMatchStats(currentRound);
+            Logger.LogInformation("CaorenCup official stats reset. Current round is now {Round}.", _currentRound);
+            _ = SendSnapshotAsync();
+        }
+        else if (string.Equals(command.Type, "EXECUTE_SERVER_COMMAND", StringComparison.OrdinalIgnoreCase))
+        {
+            if (command.Payload.ValueKind != JsonValueKind.Object ||
+                !command.Payload.TryGetProperty("command", out var serverCommandElement))
+            {
+                Logger.LogWarning("EXECUTE_SERVER_COMMAND missing payload.command");
+                return;
+            }
+
+            var serverCommand = serverCommandElement.GetString()?.Trim() ?? string.Empty;
+            var label = serverCommand;
+            if (command.Payload.TryGetProperty("label", out var labelElement))
+            {
+                label = labelElement.GetString()?.Trim() ?? serverCommand;
+            }
+
+            var delaySeconds = ReadPayloadInt(command.Payload, "delaySeconds", 0);
+            ExecuteAllowedServerCommand(serverCommand, label, delaySeconds);
+        }
+        else if (string.Equals(command.Type, "APPLY_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyTeamAssignments(command.Payload);
+        }
+        else if (string.Equals(command.Type, "CLEAR_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
+        {
+            ClearTeamAssignments();
+        }
+        else if (string.Equals(command.Type, "CONFIGURE_DUEL_MODE", StringComparison.OrdinalIgnoreCase))
+        {
+            ConfigureDuelMode(command.Payload);
+        }
+        else
+        {
+            Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
         }
     }
 
@@ -2687,7 +2878,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         return team == CsTeam.CounterTerrorist ? "CT" : team == CsTeam.Terrorist ? "T" : team.ToString();
     }
 
-
     private void ExecuteAllowedServerCommand(string serverCommand, string label, int delaySeconds = 0)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return;
@@ -2707,41 +2897,42 @@ public sealed class CaorenCupPlugin : BasePlugin
         void ExecuteNow()
         {
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            if (IsGameManagedMapChangeBlocked(serverCommand, _duelSession.ControlMode, _duelSession.Lifecycle))
+            var executed = WebCommandGameThreadDispatcher.TryExecuteServerCommand(
+                serverCommand,
+                () => _duelSession.ControlMode,
+                () => !_duelServerCvars.IsReadyForNewDuel,
+                () =>
+                {
+                    try
+                    {
+                        Logger.LogInformation("Executing CaorenCup web command: {Command}", serverCommand);
+                        Server.ExecuteCommand(serverCommand);
+                        Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页修改已下发：{label}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Failed to execute CaorenCup web command: {Command}", serverCommand);
+                    }
+                });
+            if (!executed)
             {
-                Logger.LogWarning("Rejected queued web map command because a game-managed duel is active: {Command}", serverCommand);
-                return;
-            }
-
-            try
-            {
-                Logger.LogInformation("Executing CaorenCup web command: {Command}", serverCommand);
-                Server.ExecuteCommand(serverCommand);
-                Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页修改已下发：{label}");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex, "Failed to execute CaorenCup web command: {Command}", serverCommand);
+                Logger.LogWarning(
+                    "Rejected web match-control command at execution time because a game-managed duel " +
+                    "is active or previous duel cvars remain pending: {Command}",
+                    serverCommand);
             }
         }
 
         if (delaySeconds > 0)
         {
-            Server.NextFrame(() =>
-            {
-                if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-                if (IsGameManagedMapChangeBlocked(serverCommand, _duelSession.ControlMode, _duelSession.Lifecycle))
-                {
-                    Logger.LogWarning("Rejected delayed web map command because a game-managed duel is active: {Command}", serverCommand);
-                    return;
-                }
-                AddTimer(delaySeconds, ExecuteNow);
-            });
+            AddTimer(delaySeconds, ExecuteNow);
             return;
         }
 
-        Server.NextFrame(ExecuteNow);
-    }    private void ResetLiveMatchStats(int currentRound)
+        ExecuteNow();
+    }
+
+    private void ResetLiveMatchStats(int currentRound)
     {
         _stats.Clear();
         _roundHealthBySteamId.Clear();

@@ -7,6 +7,27 @@ namespace CaorenCupPlugin;
 public sealed class DuelServerCvarScope
 {
     private readonly Dictionary<string, string> _restore = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Func<string, string, string> _readCurrentValue;
+    private readonly Action<string> _executeCommand;
+
+    public DuelServerCvarScope()
+        : this(ReadCurrentValue, Server.ExecuteCommand)
+    {
+    }
+
+    internal DuelServerCvarScope(
+        Func<string, string, string> readCurrentValue,
+        Action<string> executeCommand)
+    {
+        _readCurrentValue = readCurrentValue ?? throw new ArgumentNullException(nameof(readCurrentValue));
+        _executeCommand = executeCommand ?? throw new ArgumentNullException(nameof(executeCommand));
+    }
+
+    public int PendingRestoreCount => _restore.Count;
+
+    public IReadOnlyCollection<string> PendingRestoreNames => _restore.Keys.ToArray();
+
+    public bool IsReadyForNewDuel => _restore.Count == 0;
 
     public void Set(string name, string value, string fallback)
     {
@@ -22,40 +43,34 @@ public sealed class DuelServerCvarScope
 
         if (!_restore.ContainsKey(name))
         {
-            _restore[name] = ReadCurrentValue(name, normalizedFallback);
+            _restore[name] = _readCurrentValue(name, normalizedFallback);
         }
 
-        Server.ExecuteCommand($"{name} {normalizedValue}");
+        _executeCommand($"{name} {normalizedValue}");
     }
 
     public void RestoreAll()
     {
         List<Exception>? failures = null;
-        try
+        foreach (var item in _restore.ToArray())
         {
-            foreach (var item in _restore)
+            if (!TryNormalizeSafeValue(item.Value, out var normalizedValue))
             {
-                if (!TryNormalizeSafeValue(item.Value, out var normalizedValue))
-                {
-                    failures ??= [];
-                    failures.Add(new InvalidOperationException($"Refused to restore unsafe cvar value for {item.Key}."));
-                    continue;
-                }
-
-                try
-                {
-                    Server.ExecuteCommand($"{item.Key} {normalizedValue}");
-                }
-                catch (Exception ex)
-                {
-                    failures ??= [];
-                    failures.Add(new InvalidOperationException($"Failed to restore cvar {item.Key}.", ex));
-                }
+                failures ??= [];
+                failures.Add(new InvalidOperationException($"Refused to restore unsafe cvar value for {item.Key}."));
+                continue;
             }
-        }
-        finally
-        {
-            _restore.Clear();
+
+            try
+            {
+                _executeCommand($"{item.Key} {normalizedValue}");
+                _restore.Remove(item.Key);
+            }
+            catch (Exception ex)
+            {
+                failures ??= [];
+                failures.Add(new InvalidOperationException($"Failed to restore cvar {item.Key}.", ex));
+            }
         }
 
         if (failures is { Count: > 0 })
@@ -63,6 +78,31 @@ public sealed class DuelServerCvarScope
             throw new AggregateException("Failed to restore one or more duel cvars.", failures);
         }
     }
+
+    public bool TryRestoreAll(int maxAttempts, Action<AggregateException>? onFailure = null)
+    {
+        if (maxAttempts < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxAttempts), "Restore attempts must be at least one.");
+        }
+
+        for (var attempt = 0; attempt < maxAttempts && _restore.Count > 0; attempt++)
+        {
+            try
+            {
+                RestoreAll();
+            }
+            catch (AggregateException ex)
+            {
+                onFailure?.Invoke(ex);
+            }
+        }
+
+        return _restore.Count == 0;
+    }
+
+    public bool RetryPendingAtSafePoint(Action<AggregateException>? onFailure = null) =>
+        TryRestoreAll(1, onFailure);
 
     private static string ReadCurrentValue(string name, string fallback)
     {
