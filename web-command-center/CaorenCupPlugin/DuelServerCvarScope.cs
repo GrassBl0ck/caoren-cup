@@ -29,6 +29,15 @@ public sealed class DuelServerCvarScope
 
     public bool IsReadyForNewDuel => _restore.Count == 0;
 
+    internal void Apply(IEnumerable<DuelCvarSetting> settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        foreach (var setting in settings)
+        {
+            Set(setting.Name, setting.Value, setting.Fallback);
+        }
+    }
+
     public void Set(string name, string value, string fallback)
     {
         if (!TryNormalizeSafeValue(value, out var normalizedValue))

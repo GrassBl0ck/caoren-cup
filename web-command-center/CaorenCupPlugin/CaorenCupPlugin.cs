@@ -668,28 +668,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             _teamAssignmentsValidUntilRound = 0;
 
             ResetLiveMatchStats(0);
-            ClearDuelEquipmentState();
-            _duelModeEnabled = true;
-            _duelPistolRounds = config.PistolRounds;
-            _duelRifleRounds = config.RifleRounds;
-            _duelSniperRounds = config.SniperRounds;
-            _duelUtilityMode = config.UtilityMode;
-
-            _duelServerCvars.Set("mp_maxrounds", config.TotalRounds.ToString(), "24");
-            _duelServerCvars.Set("mp_winlimit", "0", "0");
-            _duelServerCvars.Set("mp_match_can_clinch", "0", "1");
-            _duelServerCvars.Set(
-                "mp_roundtime",
-                config.RoundTimeMinutes.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture),
-                "1.92");
-            _duelServerCvars.Set("mp_freezetime", "0", "15");
-            _duelServerCvars.Set("mp_round_restart_delay", "2", "7");
-            _duelServerCvars.Set("mp_free_armor", "0", "0");
-            _duelServerCvars.Set("mp_halftime", "0", "1");
-            _duelServerCvars.Set("mp_autoteambalance", "0", "1");
-            _duelServerCvars.Set("mp_limitteams", "0", "2");
-            Server.ExecuteCommand("mp_warmup_end");
-            Server.ExecuteCommand("mp_restartgame 1");
+            ActivateDuelRuntime(config);
 
             var tNames = string.Join("、", participants
                 .Where(item => item.Team == DuelTeam.Terrorist)
@@ -2541,6 +2520,8 @@ public sealed class CaorenCupPlugin : BasePlugin
             rifle = 16;
             sniper = 12;
         }
+
+        var roundTimeMinutes = ReadPayloadDouble(payload, "roundTimeMinutes", 1);
         var utilityMode = "none";
         if (payload.ValueKind == JsonValueKind.Object &&
             payload.TryGetProperty("utilityMode", out var utilityElement) &&
@@ -2549,21 +2530,22 @@ public sealed class CaorenCupPlugin : BasePlugin
             utilityMode = NormalizeDuelUtilityMode(utilityElement.GetString());
         }
 
-        _duelModeEnabled = true;
-        _duelPistolRounds = pistol;
-        _duelRifleRounds = rifle;
-        _duelSniperRounds = sniper;
-        _duelUtilityMode = utilityMode;
-        _duelFormalRound = 0;
-        _duelLastAnnouncedStage = null;
-        _duelPendingPrimary.Clear();
-        _duelPendingSecondary.Clear();
-        _duelCurrentPrimary.Clear();
-        _duelCurrentSecondary.Clear();
-        _duelAwpRequests.Clear();
-        _duelRoundProtectionEndsAt = 0;
-        _duelProtectionNoticeAt.Clear();
-        _duelSession.EnterWebManaged(new DuelGameConfig(pistol, rifle, sniper, 1, utilityMode));
+        var config = new DuelGameConfig(pistol, rifle, sniper, roundTimeMinutes, utilityMode);
+        try
+        {
+            _duelSession.EnterWebManaged(config);
+            ActivateDuelRuntime(config);
+        }
+        catch (Exception ex)
+        {
+            _duelModeEnabled = false;
+            ClearDuelEquipmentState();
+            _duelSession.Clear();
+            RestoreGameManagedDuelCvarsWithRetry();
+            Logger.LogError(ex, "Failed to configure web-managed duel runtime; restored server state.");
+            return;
+        }
+
         var totalRounds = pistol + rifle + sniper;
         Server.NextFrame(() =>
         {
@@ -2571,6 +2553,26 @@ public sealed class CaorenCupPlugin : BasePlugin
             Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 本局游戏共{totalRounds}回合，其中手枪{pistol}回合，步枪{rifle}回合，狙击枪{sniper}回合。");
             Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 从第一回合开始，每隔8回合会提示你可使用 /guns 来切换枪械。");
         });
+    }
+
+    private void ActivateDuelRuntime(DuelGameConfig config)
+    {
+        if (!_duelServerCvars.IsReadyForNewDuel)
+        {
+            throw new InvalidOperationException("Previous duel CVar restore is incomplete.");
+        }
+
+        _duelPistolRounds = config.PistolRounds;
+        _duelRifleRounds = config.RifleRounds;
+        _duelSniperRounds = config.SniperRounds;
+        _duelUtilityMode = config.UtilityMode;
+        _duelFormalRound = 0;
+        _duelLastAnnouncedStage = null;
+        ClearDuelEquipmentState();
+        _duelServerCvars.Apply(DuelRuntimePolicy.BuildCvarPlan(config));
+        _duelModeEnabled = true;
+        Server.ExecuteCommand("mp_warmup_end");
+        Server.ExecuteCommand("mp_restartgame 1");
     }
 
     private void EnforceTeamAssignments()
@@ -3006,6 +3008,19 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         return Math.Max(0, value);
+    }
+
+    private static double ReadPayloadDouble(JsonElement payload, string propertyName, double fallback)
+    {
+        if (payload.ValueKind != JsonValueKind.Object ||
+            !payload.TryGetProperty(propertyName, out var element) ||
+            !element.TryGetDouble(out var value) ||
+            !double.IsFinite(value))
+        {
+            return fallback;
+        }
+
+        return Math.Clamp(value, 0.25, 5);
     }
 
     private static string TeamLabel(CsTeam team)

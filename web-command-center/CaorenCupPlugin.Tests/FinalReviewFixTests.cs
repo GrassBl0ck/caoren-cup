@@ -1150,6 +1150,42 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
+    public void Duel_runtime_cvars_are_applied_and_restored_as_one_scope()
+    {
+        var executed = new List<string>();
+        var scope = CreateCvarScope((name, fallback) => name switch
+        {
+            "mp_weapons_allow_map_placed" => "1",
+            "mp_death_drop_gun" => "1",
+            "mp_maxrounds" => "24",
+            _ => fallback
+        }, executed.Add);
+
+        scope.Apply(DuelRuntimePolicy.BuildCvarPlan(new DuelGameConfig()));
+        Assert.Contains("mp_maxrounds 37", executed);
+        Assert.Contains("mp_weapons_allow_map_placed 0", executed);
+        Assert.Contains("mp_death_drop_gun 0", executed);
+
+        scope.RestoreAll();
+        Assert.Contains("mp_maxrounds 24", executed);
+        Assert.Contains("mp_weapons_allow_map_placed 1", executed);
+        Assert.Contains("mp_death_drop_gun 1", executed);
+    }
+
+    [Fact]
+    public void Both_duel_control_modes_use_the_shared_runtime_activation_path()
+    {
+        var source = ReadPluginSource();
+        Assert.Contains("private void ActivateDuelRuntime(DuelGameConfig config)", source);
+        Assert.Contains("_duelServerCvars.Apply(DuelRuntimePolicy.BuildCvarPlan(config));", source);
+        Assert.Contains("ReadPayloadDouble(payload, \"roundTimeMinutes\", 1)", source);
+        Assert.Contains("_duelSession.EnterWebManaged(config);", source);
+        Assert.DoesNotContain(
+            "_duelServerCvars.Set(\"mp_maxrounds\", config.TotalRounds.ToString()",
+            source);
+    }
+
+    [Fact]
     public void Cvar_cleanup_retry_is_bounded_and_keeps_unresolved_entries_pending()
     {
         var constructor = typeof(DuelServerCvarScope).GetConstructor(
@@ -1398,6 +1434,36 @@ public sealed class FinalReviewFixTests
         Type = "EXECUTE_SERVER_COMMAND",
         Payload = JsonSerializer.SerializeToElement(new { command = serverCommand })
     };
+
+    private static DuelServerCvarScope CreateCvarScope(
+        Func<string, string, string> read,
+        Action<string> execute)
+    {
+        var constructor = typeof(DuelServerCvarScope).GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            [typeof(Func<string, string, string>), typeof(Action<string>)],
+            modifiers: null);
+        Assert.NotNull(constructor);
+        return Assert.IsType<DuelServerCvarScope>(constructor!.Invoke([read, execute]));
+    }
+
+    private static string ReadPluginSource()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var candidate = Path.Combine(
+                directory.FullName,
+                "CaorenCupPlugin",
+                "CaorenCupPlugin.cs");
+            if (File.Exists(candidate)) return File.ReadAllText(candidate);
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate CaorenCupPlugin.cs from the test output directory.");
+    }
 
     private static MethodInfo GetDispatcherMethod(string methodName)
     {
