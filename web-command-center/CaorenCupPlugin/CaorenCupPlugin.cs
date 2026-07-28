@@ -81,6 +81,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private bool _duelCvarRestorePending;
     private volatile bool _isUnloading;
     private bool _hasSuccessfulLobbyStateSync;
+    private bool _lobbyRemindersEnabled = true;
     private DateTimeOffset _lastSuccessfulLobbyStateSync;
     private int _webStateRefreshInProgress;
     private int _webStateGeneration;
@@ -193,6 +194,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
+        AddCommand("css_lobbyreminder", "控制大厅验证提醒。用法：/lobbyreminder on|off|1|0", OnLobbyReminderCommand);
         AddCommand("css_guns", "查看单挑模式可切换枪械。用法：/guns", OnDuelGunsCommand);
         AddCommand("css_agree_awp", "同意对方在步枪阶段使用 AWP。用法：/agree_awp", OnDuelAgreeAwpCommand);
         AddCommand("css_duel", "游戏内独立单挑管理。用法：/duel help", OnDuelAdminCommand);
@@ -417,6 +419,37 @@ public sealed class CaorenCupPlugin : BasePlugin
         var target = command.ArgByIndex(1)?.Trim().ToLowerInvariant() ?? string.Empty;
         var message = BuildNoticeMessage(command);
         _ = SendNoticeAsync(player, target, message);
+    }
+
+    private void OnLobbyReminderCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!IsRealPlayer(player))
+        {
+            command.ReplyToCommand("这条指令只能由玩家在游戏内执行。");
+            return;
+        }
+
+        if (!AdminManager.PlayerHasPermissions(player!, "@css/root"))
+        {
+            ReplyToPlayer(player, "[草人杯] 你没有权限使用 /lobbyreminder。");
+            return;
+        }
+
+        if (command.ArgCount < 2)
+        {
+            var status = _lobbyRemindersEnabled ? "开启" : "关闭";
+            ReplyToPlayer(player, $"[草人杯] 大厅验证提醒当前为：{status}。用法：/lobbyreminder on|off|1|0");
+            return;
+        }
+
+        if (!LobbyReminderPolicy.TryParseEnabled(command.ArgByIndex(1), out var enabled))
+        {
+            ReplyToPlayer(player, "[草人杯] 参数无效。用法：/lobbyreminder on|off|1|0");
+            return;
+        }
+
+        _lobbyRemindersEnabled = enabled;
+        ReplyToPlayer(player, $"[草人杯] 大厅验证提醒已{(enabled ? "开启" : "关闭")}。");
     }
 
     private void RegisterDuelWeaponCommands()
@@ -1979,6 +2012,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             var isRealPlayer = IsRealPlayer(player);
             var steamId = isRealPlayer ? player.SteamID.ToString() : string.Empty;
             if (!LobbyReminderPolicy.ShouldRemind(
+                _lobbyRemindersEnabled,
                 isRealPlayer,
                 steamId,
                 hasSuccessfulSync,
