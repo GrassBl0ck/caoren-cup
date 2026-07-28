@@ -13,7 +13,13 @@ public sealed class LobbyReminderPolicyTests
     [Fact]
     public void Fresh_state_reminds_real_unregistered_player()
     {
-        Assert.True(LobbyReminderPolicy.ShouldRemind(true, ValidSteamId, true, Now, Now, MaxAge, Empty));
+        Assert.True(LobbyReminderPolicy.ShouldRemind(true, true, ValidSteamId, true, Now, Now, MaxAge, Empty));
+    }
+
+    [Fact]
+    public void Disabled_reminders_do_not_remind_unregistered_player()
+    {
+        Assert.False(LobbyReminderPolicy.ShouldRemind(false, true, ValidSteamId, true, Now, Now, MaxAge, Empty));
     }
 
     [Fact]
@@ -21,7 +27,7 @@ public sealed class LobbyReminderPolicyTests
     {
         IReadOnlySet<string> registered = new HashSet<string> { ValidSteamId };
 
-        Assert.False(LobbyReminderPolicy.ShouldRemind(true, ValidSteamId, true, Now, Now, MaxAge, registered));
+        Assert.False(LobbyReminderPolicy.ShouldRemind(true, true, ValidSteamId, true, Now, Now, MaxAge, registered));
     }
 
     [Theory]
@@ -31,19 +37,41 @@ public sealed class LobbyReminderPolicyTests
     [InlineData(true, "7656119800000006")]
     public void Invalid_or_non_real_players_are_not_reminded(bool isRealPlayer, string steamId)
     {
-        Assert.False(LobbyReminderPolicy.ShouldRemind(isRealPlayer, steamId, true, Now, Now, MaxAge, Empty));
+        Assert.False(LobbyReminderPolicy.ShouldRemind(true, isRealPlayer, steamId, true, Now, Now, MaxAge, Empty));
     }
 
     [Fact]
     public void State_that_never_synchronized_is_not_used()
     {
-        Assert.False(LobbyReminderPolicy.ShouldRemind(true, ValidSteamId, false, default, Now, MaxAge, Empty));
+        Assert.False(LobbyReminderPolicy.ShouldRemind(true, true, ValidSteamId, false, default, Now, MaxAge, Empty));
     }
 
     [Fact]
     public void State_at_maximum_age_is_still_valid_but_older_state_is_not()
     {
-        Assert.True(LobbyReminderPolicy.ShouldRemind(true, ValidSteamId, true, Now - MaxAge, Now, MaxAge, Empty));
-        Assert.False(LobbyReminderPolicy.ShouldRemind(true, ValidSteamId, true, Now - MaxAge - TimeSpan.FromMilliseconds(1), Now, MaxAge, Empty));
+        Assert.True(LobbyReminderPolicy.ShouldRemind(true, true, ValidSteamId, true, Now - MaxAge, Now, MaxAge, Empty));
+        Assert.False(LobbyReminderPolicy.ShouldRemind(true, true, ValidSteamId, true, Now - MaxAge - TimeSpan.FromMilliseconds(1), Now, MaxAge, Empty));
+    }
+
+    [Theory]
+    [InlineData("on", true)]
+    [InlineData("ON", true)]
+    [InlineData("1", true)]
+    [InlineData("off", false)]
+    [InlineData("OFF", false)]
+    [InlineData("0", false)]
+    public void Valid_command_values_are_parsed(string input, bool expected)
+    {
+        Assert.True(LobbyReminderPolicy.TryParseEnabled(input, out var enabled));
+        Assert.Equal(expected, enabled);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("toggle")]
+    [InlineData("2")]
+    public void Invalid_command_values_are_rejected(string input)
+    {
+        Assert.False(LobbyReminderPolicy.TryParseEnabled(input, out _));
     }
 }
