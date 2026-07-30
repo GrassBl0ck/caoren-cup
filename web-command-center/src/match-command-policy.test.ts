@@ -67,6 +67,7 @@ assert.equal(classifyServerCommand('mp_restartgame 1'), 'match-flow');
 assert.equal(classifyServerCommand('mp_warmup_end'), 'match-flow');
 assert.equal(classifyServerCommand('css_dmg t 2 100 5'), 'caoren-modifier');
 assert.equal(classifyServerCommand('host_workshop_map 3250543760'), 'map');
+assert.equal(classifyServerCommand('wp_refresh 76561198000000001 safe'), 'cosmetic');
 assert.equal(classifyServerCommand('sv_cheats 1'), 'unknown');
 
 const matchzyCompetitive = baseSession();
@@ -122,5 +123,6 @@ assertAllowed(
 );
 
 assertRejected(matchzyCompetitive, 'sv_cheats 1');
+assertAllowed(matchzyCompetitive, 'wp_refresh 76561198000000001 safe');
 
 console.log('match-command-policy tests passed');

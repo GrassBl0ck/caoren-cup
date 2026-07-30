@@ -75,7 +75,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private int _webStateGeneration;
     private const string DefaultNoticeSound = "training/bell_normal.vsnd_c";
     private static readonly TimeSpan LobbyStateMaxAge = TimeSpan.FromSeconds(15);
-    private static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly HashSet<string> AllowedBridgeServerCommands = new(StringComparer.OrdinalIgnoreCase)
     {
         "css_ammo",
         "css_armor",
@@ -117,7 +117,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         "mp_warmup_pausetimer",
         "mp_restartgame",
         "changelevel",
-        "host_workshop_map"
+        "host_workshop_map",
+        "wp_refresh"
 };
     private static readonly DuelWorkshopMap[] DuelWorkshopMaps =
     [
@@ -1970,8 +1971,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        var commandName = serverCommand.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
-        if (!AllowedBridgeServerCommands.Contains(commandName))
+        if (!BridgeServerCommandPolicy.IsAllowed(serverCommand))
         {
             Logger.LogWarning("Rejected web command because it is not in bridge allowlist: {Command}", serverCommand);
             return;
@@ -1983,7 +1983,10 @@ public sealed class CaorenCupPlugin : BasePlugin
             try
             {
                 Server.ExecuteCommand(serverCommand);
-                Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页修改已下发：{label}");
+                if (BridgeServerCommandPolicy.ShouldBroadcast(serverCommand))
+                {
+                    Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 网页修改已下发：{label}");
+                }
             }
             catch (Exception ex)
             {

@@ -26,6 +26,8 @@ https://github.com/GrassBl0ck/caoren-cup
 caoren-cup/
 ├─ game-plugin/
 │  └─ CS2 娱乐玩法插件本体
+├─ weaponpaints-plugin/
+│  └─ 独立 GPL-3.0 游戏内皮肤与饰品插件
 │
 ├─ web-command-center/
 │  ├─ src/
@@ -1088,6 +1090,8 @@ curl -I http://127.0.0.1:3000/assets/audio/manifest.json
 ## 许可证
 
 本项目使用 MIT License。
+
+许可证例外：`weaponpaints-plugin/` 基于 GPL-3.0 上游项目改造，该目录及其修改使用 GPL-3.0，不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `weaponpaints-plugin/UPSTREAM.md`。
 
 你可以自由使用、修改和分发本项目，但需要保留原始版权声明和许可证内容。
 

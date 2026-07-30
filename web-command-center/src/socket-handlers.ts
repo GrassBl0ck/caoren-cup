@@ -50,6 +50,7 @@ import {
     steamClaimTickets,
 } from './identity/identity-runtime';
 import { applyMembershipToPlayer, attachMembershipToSession } from './identity/session-integration';
+import { registerWeaponPaintsSocketHandlers } from './weaponpaints/socket-api';
 
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
@@ -326,6 +327,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
     };
 
     io.on('connection', (socket) => {
+        registerWeaponPaintsSocketHandlers(socket);
         console.log(`客户端连接: ${socket.id}`);
         socket.data.playerId = null;
         const isAuthenticatedActor = (claimedPlayerId: unknown): boolean => {

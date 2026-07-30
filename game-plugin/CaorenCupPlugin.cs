@@ -493,6 +493,11 @@ public override void Load(bool hotReload)
         player.PrintToChat($" {ChatColors.Green}/save_plu{ChatColors.Default} : 保存配置");
         player.PrintToChat($" {ChatColors.Green}/reset_plu{ChatColors.Default} : 一键重置");
         player.PrintToChat($" {ChatColors.Green}/hpcap <min> <max>{ChatColors.Default} : 设置模块血量全局上下限");
+
+        if (AdminManager.PlayerHasPermissions(player, "@css/root"))
+        {
+            player.PrintToChat($" {ChatColors.Green}/lobbyreminder on|off|1|0{ChatColors.Default} : 开启或关闭大厅验证提醒（管理员）");
+        }
     }
 
     private void OnCommandHelpPlu(CCSPlayerController? player, CommandInfo info)

@@ -38,6 +38,8 @@ import { registerIdentityAuthRoutes } from './identity/auth-routes';
 import { initializeIdentityRuntime } from './identity/identity-runtime';
 import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer, removeIdentityFromSession } from './identity/session-integration';
+import { registerWeaponPaintsHttpRoutes } from './weaponpaints/http-routes';
+import { initializeWeaponPaintsRuntime } from './weaponpaints/runtime';
 
 const app = express();
 if (process.env.TRUST_PROXY === 'loopback') app.set('trust proxy', 'loopback');
@@ -173,6 +175,8 @@ registerPluginRoutes(app, {
     notifyMessage,
 });
 
+registerWeaponPaintsHttpRoutes(app);
+
 registerSocketHandlers(io, {
     broadcastState,
     notifyMessage,
@@ -210,7 +214,7 @@ setInterval(() => {
 }, 1000);
 
 const PORT = process.env.PORT || 3000;
-initializeIdentityRuntime()
+Promise.all([initializeIdentityRuntime(), initializeWeaponPaintsRuntime()])
     .then(() => httpServer.listen(PORT, () => console.log(`草人杯指挥台已启动: http://localhost:${PORT}`)))
     .catch((error) => {
         console.error('[IdentityStore] 身份库加载失败，服务未启动：', error);
