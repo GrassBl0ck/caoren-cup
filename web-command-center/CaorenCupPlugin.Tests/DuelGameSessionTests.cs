@@ -1,0 +1,382 @@
+using CaorenCupPlugin;
+using System.Reflection;
+using Xunit;
+
+namespace CaorenCupPlugin.Tests;
+
+public sealed class DuelGameSessionTests
+{
+    private static DuelParticipant T(string id = "t1") => new(id, "T玩家", DuelTeam.Terrorist);
+    private static DuelParticipant Ct(string id = "ct1") => new(id, "CT玩家", DuelTeam.CounterTerrorist);
+
+    [Theory]
+    [InlineData("0", "0")]
+    [InlineData("-1", "-1")]
+    [InlineData("+2.5", "+2.5")]
+    [InlineData(".25", ".25")]
+    [InlineData("1e-3", "1e-3")]
+    [InlineData("true", "1")]
+    [InlineData("TRUE", "1")]
+    [InlineData("TrUe", "1")]
+    [InlineData("false", "0")]
+    [InlineData("FALSE", "0")]
+    [InlineData("FaLsE", "0")]
+    public void Duel_cvar_scope_normalizes_safe_numeric_and_boolean_tokens(string raw, string expected)
+    {
+        Assert.True(DuelServerCvarScope.TryNormalizeSafeValue(raw, out var normalized));
+        Assert.Equal(expected, normalized);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("1;quit")]
+    [InlineData("1\nquit")]
+    [InlineData("1 2")]
+    [InlineData("1,5")]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    [InlineData("true;quit")]
+    [InlineData("FALSE\nquit")]
+    [InlineData("true false")]
+    [InlineData(" true")]
+    public void Duel_cvar_scope_rejects_unsafe_or_non_invariant_tokens(string? raw)
+    {
+        Assert.False(DuelServerCvarScope.TryNormalizeSafeValue(raw, out var normalized));
+        Assert.Equal(string.Empty, normalized);
+    }
+
+    [Fact]
+    public void Start_requires_both_teams()
+    {
+        var session = new DuelGameSession();
+        Assert.False(session.TryStart([T()], false, out var error));
+        Assert.Equal("T 和 CT 双方都必须至少有一名真人玩家。", error);
+    }
+
+    [Fact]
+    public void Web_mode_requires_explicit_takeover()
+    {
+        var session = new DuelGameSession();
+        session.EnterWebManaged(new DuelGameConfig(8, 16, 12, 1, "none"));
+        Assert.False(session.TryStart([T(), Ct()], false, out _));
+        Assert.True(session.TryStart([T(), Ct()], true, out _));
+        Assert.Equal(DuelControlMode.GameManaged, session.ControlMode);
+    }
+
+    [Fact]
+    public void Round_boundaries_skip_zero_length_stage_and_finish_at_total()
+    {
+        var session = new DuelGameSession(new DuelGameConfig(0, 30, 0, 1, "none"));
+        Assert.True(session.TryStart([T(), Ct()], false, out _));
+        Assert.Equal(DuelGameStage.Rifle, session.CurrentStage);
+        for (var i = 0; i < 29; i++)
+        {
+            session.MarkRoundStarted();
+            Assert.False(session.RecordRoundEnd(DuelTeam.Terrorist).Finished);
+        }
+
+        session.MarkRoundStarted();
+        var result = session.RecordRoundEnd(DuelTeam.CounterTerrorist);
+        Assert.True(result.Finished);
+        Assert.Equal(29, result.ScoreT);
+        Assert.Equal(1, result.ScoreCt);
+    }
+
+    [Fact]
+    public void Disconnect_pauses_and_reconnect_does_not_auto_resume()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+
+        Assert.True(session.UpdateConnectedPlayers(new HashSet<string> { "ct1" }));
+        Assert.Equal(DuelLifecycle.Paused, session.Lifecycle);
+        Assert.False(session.UpdateConnectedPlayers(new HashSet<string> { "ct1" }));
+
+        Assert.False(session.UpdateConnectedPlayers(new HashSet<string> { "t1", "ct1" }));
+        Assert.Equal(DuelLifecycle.Paused, session.Lifecycle);
+        Assert.True(session.TryResume(out _));
+        Assert.Equal(DuelLifecycle.Running, session.Lifecycle);
+    }
+
+    [Fact]
+    public void Resume_rejects_when_one_side_has_no_online_participant()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.UpdateConnectedPlayers(new HashSet<string> { "ct1" });
+
+        Assert.False(session.TryResume(out var error));
+        Assert.Equal("T 和 CT 双方都必须至少有一名在线参赛者才能恢复。", error);
+        Assert.Equal(DuelLifecycle.Paused, session.Lifecycle);
+    }
+
+    [Fact]
+    public void Game_managed_session_does_not_publish_match_telemetry()
+    {
+        var pluginType = typeof(global::CaorenCupPlugin.CaorenCupPlugin);
+        var publishMethod = pluginType
+            .GetMethod("ShouldPublishMatchTelemetry", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(publishMethod);
+        var plugin = System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(pluginType);
+        var sessionField = pluginType.GetField("_duelSession", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(sessionField);
+        sessionField.SetValue(plugin, new DuelGameSession());
+        var session = Assert.IsType<DuelGameSession>(sessionField.GetValue(plugin));
+        Assert.True(session.TryStart([T(), Ct()], false, out _));
+
+        Assert.False(Assert.IsType<bool>(publishMethod.Invoke(plugin, null)));
+    }
+
+    [Fact]
+    public void Accepted_missing_participants_only_pause_again_for_a_new_disconnect()
+    {
+        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin)
+            .GetMethod("HasNewMissingParticipant", BindingFlags.Static | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        var accepted = new HashSet<string>(StringComparer.Ordinal) { "t2", "ct2" };
+        Assert.False(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2", "ct2" }));
+        Assert.False(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2" }));
+        Assert.True(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2", "t1" }));
+    }
+
+    [Fact]
+    public void Game_managed_rejects_web_team_assignment_updates()
+    {
+        var method = GetPrivateStaticMethod("ShouldApplyWebTeamAssignments");
+
+        Assert.False(InvokePrivateBool(method, DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method, DuelControlMode.WebManaged));
+        Assert.True(InvokePrivateBool(method, DuelControlMode.None));
+    }
+
+    [Fact]
+    public void Game_managed_running_or_paused_blocks_web_match_control_at_execution_time()
+    {
+        var dispatcherType = typeof(global::CaorenCupPlugin.CaorenCupPlugin).Assembly
+            .GetType("CaorenCupPlugin.WebCommandGameThreadDispatcher");
+        Assert.NotNull(dispatcherType);
+        var method = dispatcherType!.GetMethod(
+            "IsGameManagedMatchControlCommand",
+            BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        Assert.True(InvokePrivateBool(method!, "changelevel de_dust2", DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method!, " HOST_WORKSHOP_MAP 123 ", DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method!, "mp_restartgame 1", DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method!, "sv_showimpacts_time 4", DuelControlMode.GameManaged));
+        Assert.False(InvokePrivateBool(method!, "changelevel de_dust2", DuelControlMode.None));
+    }
+
+    [Fact]
+    public void Game_managed_keeps_local_match_counters_from_web_responses()
+    {
+        var method = GetPrivateStaticMethod("ShouldApplyWebMatchCounters");
+
+        Assert.False(InvokePrivateBool(method, DuelControlMode.GameManaged));
+        Assert.True(InvokePrivateBool(method, DuelControlMode.WebManaged));
+        Assert.True(InvokePrivateBool(method, DuelControlMode.None));
+    }
+
+    [Fact]
+    public void Unloading_blocks_plugin_continuations()
+    {
+        var method = GetPrivateStaticMethod("ShouldProcessPluginContinuation");
+
+        Assert.False(InvokePrivateBool(method, true));
+        Assert.True(InvokePrivateBool(method, false));
+    }
+
+    [Fact]
+    public void Resume_only_requires_one_online_participant_per_side()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T("t1"), T("t2"), Ct("ct1"), Ct("ct2")], false, out _);
+        session.UpdateConnectedPlayers(new HashSet<string> { "t1", "ct1" });
+        Assert.True(session.TryResume(out _));
+    }
+
+    private static bool InvokeHasNewMissingParticipant(
+        MethodInfo method,
+        IReadOnlySet<string> accepted,
+        IReadOnlySet<string> current) =>
+        Assert.IsType<bool>(method.Invoke(null, [accepted, current]));
+
+    private static MethodInfo GetPrivateStaticMethod(string name)
+    {
+        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin)
+            .GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.NotNull(method);
+        return method;
+    }
+
+    private static bool InvokePrivateBool(MethodInfo method, params object[] arguments) =>
+        Assert.IsType<bool>(method.Invoke(null, arguments));
+
+    [Fact]
+    public void Duplicate_round_end_does_not_double_score()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.MarkRoundStarted();
+        session.RecordRoundEnd(DuelTeam.Terrorist);
+        session.RecordRoundEnd(DuelTeam.Terrorist);
+        Assert.Equal(1, session.ScoreT);
+    }
+
+    [Fact]
+    public void Round_end_during_pause_consumes_the_saved_open_round_without_scoring()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.MarkRoundStarted();
+        session.Pause("管理员暂停");
+
+        var result = session.RecordRoundEnd(DuelTeam.Terrorist);
+
+        Assert.False(result.Counted);
+        Assert.Equal(0, session.CompletedRounds);
+        Assert.Equal(0, session.ScoreT);
+        Assert.Equal(0, session.ScoreCt);
+
+        Assert.True(session.TryResume(out _));
+        var resumedResult = session.RecordRoundEnd(DuelTeam.Terrorist);
+
+        Assert.False(resumedResult.Counted);
+        Assert.Equal(0, session.CompletedRounds);
+        Assert.Equal(0, session.ScoreT);
+
+        session.MarkRoundStarted();
+        var nextRoundResult = session.RecordRoundEnd(DuelTeam.Terrorist);
+
+        Assert.True(nextRoundResult.Counted);
+        Assert.Equal(1, session.CompletedRounds);
+        Assert.Equal(1, session.ScoreT);
+    }
+
+    [Fact]
+    public void Open_round_still_counts_after_resume_when_no_round_end_arrived_during_pause()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.MarkRoundStarted();
+        session.Pause("管理员暂停");
+
+        Assert.True(session.TryResume(out _));
+        var result = session.RecordRoundEnd(DuelTeam.CounterTerrorist);
+
+        Assert.True(result.Counted);
+        Assert.Equal(1, session.CompletedRounds);
+        Assert.Equal(1, session.ScoreCt);
+    }
+
+    [Fact]
+    public void Pause_and_resume_before_round_start_does_not_open_a_round()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+
+        session.Pause("管理员暂停");
+        Assert.True(session.TryResume(out _));
+
+        var result = session.RecordRoundEnd(DuelTeam.CounterTerrorist);
+
+        Assert.False(result.Counted);
+        Assert.Equal(0, session.CompletedRounds);
+    }
+
+    [Fact]
+    public void Finished_session_does_not_count_another_round_end()
+    {
+        var session = new DuelGameSession(new DuelGameConfig(0, 30, 0, 1, "none"));
+        session.TryStart([T(), Ct()], false, out _);
+        for (var round = 0; round < session.Config.TotalRounds; round++)
+        {
+            session.MarkRoundStarted();
+            session.RecordRoundEnd(DuelTeam.Terrorist);
+        }
+
+        var result = session.RecordRoundEnd(DuelTeam.CounterTerrorist);
+
+        Assert.False(result.Counted);
+        Assert.Equal(DuelLifecycle.Finished, session.Lifecycle);
+        Assert.Equal(30, session.CompletedRounds);
+        Assert.Equal(30, session.ScoreT);
+        Assert.Equal(0, session.ScoreCt);
+    }
+
+    [Fact]
+    public void Clear_is_idempotent_and_returns_session_to_none_idle()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+        session.MarkRoundStarted();
+        session.RecordRoundEnd(DuelTeam.Terrorist);
+
+        session.Clear();
+        session.Clear();
+
+        Assert.Equal(DuelControlMode.None, session.ControlMode);
+        Assert.Equal(DuelLifecycle.Idle, session.Lifecycle);
+        Assert.Empty(session.Participants);
+        Assert.Equal(0, session.CompletedRounds);
+        Assert.Equal(0, session.ScoreT);
+        Assert.Equal(0, session.ScoreCt);
+    }
+
+    [Theory]
+    [InlineData(8, 16, 5, 1, "none")]
+    [InlineData(8, 16, 12, 0.2, "none")]
+    [InlineData(8, 16, 12, 1, "unknown")]
+    public void Update_config_rejects_invalid_values(int pistol, int rifle, int sniper, double roundTimeMinutes, string utilityMode)
+    {
+        var session = new DuelGameSession();
+
+        Assert.False(session.TryUpdateConfig(new DuelGameConfig(pistol, rifle, sniper, roundTimeMinutes, utilityMode), out var error));
+        Assert.False(string.IsNullOrWhiteSpace(error));
+    }
+
+    [Fact]
+    public void Update_config_accepts_valid_boundary_values()
+    {
+        var session = new DuelGameSession();
+
+        Assert.True(session.TryUpdateConfig(new DuelGameConfig(0, 30, 0, 0.25, "random3"), out var error));
+        Assert.Equal(string.Empty, error);
+        Assert.Equal(new DuelGameConfig(0, 30, 0, 0.25, "random3"), session.Config);
+    }
+
+    [Fact]
+    public void Update_config_is_rejected_while_game_is_running()
+    {
+        var session = new DuelGameSession();
+        session.TryStart([T(), Ct()], false, out _);
+
+        Assert.False(session.TryUpdateConfig(new DuelGameConfig(0, 30, 0, 0.25, "random3"), out var error));
+        Assert.False(string.IsNullOrWhiteSpace(error));
+    }
+
+    [Fact]
+    public void Reset_config_restores_defaults()
+    {
+        var session = new DuelGameSession();
+        session.TryUpdateConfig(new DuelGameConfig(0, 30, 0, 0.25, "random3"), out _);
+
+        session.ResetConfig();
+
+        Assert.Equal(new DuelGameConfig(), session.Config);
+    }
+
+    [Fact]
+    public void Update_config_rejects_non_numeric_round_time()
+    {
+        var session = new DuelGameSession();
+
+        Assert.False(session.TryUpdateConfig(new DuelGameConfig(8, 16, 12, double.NaN, "none"), out var error));
+        Assert.False(string.IsNullOrWhiteSpace(error));
+    }
+}

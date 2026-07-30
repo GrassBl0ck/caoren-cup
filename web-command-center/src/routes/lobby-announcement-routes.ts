@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { Express } from 'express';
+import { sanitizeAnnouncementHtml } from '../announcement-html';
 
 export type LobbyAnnouncement = {
   enabled: boolean;
@@ -27,72 +28,8 @@ const DEFAULT_ANNOUNCEMENT: LobbyAnnouncement = {
   updatedAt: null,
 };
 
-const ALLOWED_TAGS = new Set([
-  'a',
-  'b',
-  'blockquote',
-  'br',
-  'code',
-  'div',
-  'em',
-  'h2',
-  'h3',
-  'hr',
-  'i',
-  'li',
-  'ol',
-  'p',
-  'pre',
-  's',
-  'span',
-  'strong',
-  'u',
-  'ul',
-]);
-
-const escapeText = (value: unknown) => String(value ?? '')
-  .replace(/&/g, '&amp;')
-  .replace(/</g, '&lt;')
-  .replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;')
-  .replace(/'/g, '&#39;');
-
-const sanitizeUrl = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  if (/^(https?:|mailto:)/i.test(trimmed)) return escapeText(trimmed);
-  if (/^[#/]/.test(trimmed)) return escapeText(trimmed);
-  return '';
-};
-
-export const sanitizeLobbyAnnouncementHtml = (rawHtml: unknown) => {
-  let html = String(rawHtml ?? '').slice(0, MAX_HTML_LENGTH);
-  html = html
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<\s*(script|style|iframe|object|embed|meta|link)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-    .replace(/<\s*\/?\s*(script|style|iframe|object|embed|meta|link)[^>]*>/gi, '');
-
-  return html.replace(/<[^>]*>/g, (tag) => {
-    const match = tag.match(/^<\s*(\/?)\s*([a-zA-Z0-9]+)([^>]*)>/);
-    if (!match) return '';
-
-    const isClosing = match[1] === '/';
-    const tagName = match[2].toLowerCase();
-    const attrText = match[3] || '';
-    if (!ALLOWED_TAGS.has(tagName)) return '';
-
-    if (isClosing) return tagName === 'br' || tagName === 'hr' ? '' : `</${tagName}>`;
-    if (tagName === 'br' || tagName === 'hr') return `<${tagName}>`;
-
-    if (tagName === 'a') {
-      const hrefMatch = attrText.match(/\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i);
-      const safeHref = sanitizeUrl(hrefMatch?.[1] || hrefMatch?.[2] || hrefMatch?.[3] || '');
-      return safeHref ? `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">` : '<a>';
-    }
-
-    return `<${tagName}>`;
-  });
-};
+export const sanitizeLobbyAnnouncementHtml = (rawHtml: unknown) =>
+  sanitizeAnnouncementHtml(rawHtml, MAX_HTML_LENGTH);
 
 const normalizeAnnouncement = (raw: any, updatedAt = Date.now()): LobbyAnnouncement => {
   const title = String(raw?.title || DEFAULT_ANNOUNCEMENT.title).trim().slice(0, MAX_TITLE_LENGTH);

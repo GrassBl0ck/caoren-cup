@@ -86,7 +86,30 @@ dotnet restore
 dotnet build -c Release
 ```
 
-## 7. Do Not Commit Local Config
+## 7. Build CS2 Mini Games Plugin
+
+```powershell
+cd mini-games-plugin
+dotnet restore
+dotnet test '.\CS2MiniGames.sln' --no-restore
+dotnet build '.\CS2MiniGames.sln' -c Release --no-restore -warnaserror
+```
+
+Create the Release asset from the repository root:
+
+```powershell
+.\scripts\package-caoren-minigames.ps1 -Version vX.X.X
+```
+
+Deploy the ZIP contents to:
+
+```text
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CS2MiniGames/
+```
+
+Before overwriting, back up the existing plugin directory. Preserve `minigames.db`, SQLite sidecar files, and CounterStrikeSharp runtime configuration. Do not deploy the other three components when only the mini games plugin changed.
+
+## 8. Do Not Commit Local Config
 
 不要提交：
 

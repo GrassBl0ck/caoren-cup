@@ -144,6 +144,31 @@ export interface SideVoteState {
     timeoutAt: number;
 }
 
+export type FlowUndoActionType = 'ADVANCE_PHASE' | 'ADMIN_BAN_MAP' | 'ASSIGN_ROSTER_TEAM';
+
+export interface FlowUndoRequest {
+    expectedPhase: GamePhase;
+    expectedHistoryDepth: number;
+    expectedEntryId: string;
+}
+
+export interface FlowUndoStatus {
+    count: number;
+    historyDepth: number;
+    canUndo: boolean;
+    targetPhase: GamePhase | null;
+    disabledReason?: string;
+    latest?: {
+        id: string;
+        actionType: FlowUndoActionType;
+        summary: string;
+        actorId: string;
+        actorName: string;
+        createdAt: number;
+        restorePhase: GamePhase;
+    };
+}
+
 export interface DuelRoundConfig {
     pistol: number;
     rifle: number;
@@ -299,4 +324,8 @@ export enum WsEvents {
     PRIVATE_DATA = 'PRIVATE_DATA',
     NOTIFICATION = 'NOTIFICATION',
     LOBBY_ANNOUNCEMENT = 'LOBBY_ANNOUNCEMENT',
+    UPDATE_ANNOUNCEMENTS = 'UPDATE_ANNOUNCEMENTS',
+    UPDATE_ANNOUNCEMENT_ADMIN_LIST = 'UPDATE_ANNOUNCEMENT_ADMIN_LIST',
+    UPDATE_ANNOUNCEMENT_ADMIN_SAVE = 'UPDATE_ANNOUNCEMENT_ADMIN_SAVE',
+    UPDATE_ANNOUNCEMENT_ADMIN_SET_STATUS = 'UPDATE_ANNOUNCEMENT_ADMIN_SET_STATUS',
 }

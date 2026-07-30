@@ -45,6 +45,7 @@ function Test-GamePluginChanged {
 
 $webRoot = Join-Path $repoRoot 'web-command-center'
 $bridgeRoot = Join-Path $webRoot 'CaorenCupPlugin'
+$bridgeTestsRoot = Join-Path $webRoot 'CaorenCupPlugin.Tests'
 $gamePluginRoot = Join-Path $repoRoot 'game-plugin'
 
 Write-Host "Duel mode local test gate" -ForegroundColor Green
@@ -58,16 +59,28 @@ Invoke-CheckedStep `
     -Arguments @('run', 'typecheck')
 
 Invoke-CheckedStep `
+    -Name 'Web duel runtime config tests' `
+    -WorkingDirectory $webRoot `
+    -Command 'npm' `
+    -Arguments @('run', 'test:duel-runtime')
+
+Invoke-CheckedStep `
     -Name 'Lobby JavaScript syntax check' `
     -WorkingDirectory $webRoot `
     -Command 'node' `
     -Arguments @('--check', 'public\js\lobby-app.js')
 
 Invoke-CheckedStep `
+    -Name 'Web bridge plugin tests' `
+    -WorkingDirectory $bridgeTestsRoot `
+    -Command 'dotnet' `
+    -Arguments @('test')
+
+Invoke-CheckedStep `
     -Name 'Web bridge plugin build' `
     -WorkingDirectory $bridgeRoot `
     -Command 'dotnet' `
-    -Arguments @('build')
+    -Arguments @('build', '-c', 'Release')
 
 $shouldBuildGamePlugin = $IncludeGamePlugin -or ((Test-GamePluginChanged) -and -not $SkipGamePlugin)
 if ($shouldBuildGamePlugin) {

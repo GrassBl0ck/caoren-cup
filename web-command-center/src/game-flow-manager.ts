@@ -20,6 +20,7 @@ import { calculateScores } from './scoring';
 import { getDefaultTaskTemplate, assignTaskGridToPlayer } from './task-system';
 import {
     clearDraftPickTimer,
+    clearAllFlowTimers,
     clearMapVoteTimer,
     clearSideVoteTimer,
     setDraftPickTimer,
@@ -45,7 +46,13 @@ import {
     normalizeDuelUtilityMode,
     resolveDuelMapConfig,
 } from './duel-config';
+import { buildDuelRuntimeConfigPayload } from './duel-runtime-config';
 import { enqueuePluginCommand } from './plugin-command-queue';
+import {
+    clearFlowUndoHistory,
+    commitFlowUndoCheckpoint,
+    prepareFlowUndoCheckpoint,
+} from './flow-undo-manager';
 
 // ========== Broadcast and notification hooks ==========
 let broadcast: (() => void) | null = null;
@@ -384,6 +391,42 @@ const finishSideVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     advancePhase(GamePhase.SidePick, GamePhase.PreGameSetup);
 };
 
+const resumeRestoredPregameFlow = () => {
+    const session = getSession();
+    clearAllFlowTimers();
+    if (session.rollTimeout) clearTimeout(session.rollTimeout);
+    session.rollTimeout = undefined;
+    session.timerEndAt = null;
+    session.timerPhase = null;
+
+    if (session.phase === GamePhase.PlayerDraft && session.draftCaptainsActive && !isDraftComplete()) {
+        startDraftPickTimerFunc(false);
+        return;
+    }
+
+    if (session.phase === GamePhase.MapBan && session.mapVote) {
+        const durationSeconds = getMapBanVoteDurationSeconds();
+        session.mapVote.timeoutAt = Date.now() + durationSeconds * 1000;
+        session.timerEndAt = session.mapVote.timeoutAt;
+        session.timerPhase = GamePhase.MapBan;
+        setMapVoteTimer(setTimeout(() => {
+            setMapVoteTimer(null);
+            finishMapVote('timeout');
+        }, durationSeconds * 1000));
+        return;
+    }
+
+    if (session.phase === GamePhase.SidePick && session.sideVote) {
+        session.sideVote.timeoutAt = Date.now() + SIDE_PICK_VOTE_SECONDS * 1000;
+        session.timerEndAt = session.sideVote.timeoutAt;
+        session.timerPhase = GamePhase.SidePick;
+        setSideVoteTimer(setTimeout(() => {
+            setSideVoteTimer(null);
+            finishSideVote('timeout');
+        }, SIDE_PICK_VOTE_SECONDS * 1000));
+    }
+};
+
 const setRosterLiveSides = (teamASide: Team) => {
     const session = getSession();
     const teamBSide = oppositeSide(teamASide);
@@ -648,39 +691,6 @@ const setupDuelFromLobby = (): boolean => {
     return true;
 };
 
-const queueDuelRulesCommands = (delaySeconds = 0) => {
-    const session = getSession();
-    const rounds = normalizeDuelRounds(session.matchOptions?.duelRounds);
-    const totalRounds = getDuelTotalRounds(rounds);
-    const roundTime = normalizeDuelRoundTimeMinutes(session.matchOptions?.duelRoundTimeMinutes || DUEL_DEFAULT_ROUND_TIME_MINUTES);
-    const commands = [
-        { command: `mp_maxrounds ${totalRounds}`, label: `duel total rounds ${totalRounds}` },
-        { command: 'mp_winlimit 0', label: 'duel no win limit' },
-        { command: 'mp_match_can_clinch 0', label: 'duel force full rounds' },
-        { command: `mp_roundtime ${roundTime}`, label: `duel round time ${roundTime}` },
-        { command: 'mp_freezetime 0', label: 'duel no freeze time' },
-        { command: 'mp_round_restart_delay 2', label: 'duel short round end' },
-        { command: 'mp_free_armor 0', label: 'duel no free armor' },
-        { command: 'mp_halftime 0', label: 'duel no halftime' },
-        { command: 'mp_autoteambalance 0', label: 'duel no auto balance' },
-        { command: 'mp_limitteams 0', label: 'duel no team limit' },
-        { command: 'sv_showimpacts 0', label: 'duel hide bullet impacts' },
-        { command: 'sv_showimpacts_time 0', label: 'duel clear bullet impact timer' },
-        { command: 'mp_warmup_end', label: 'duel end warmup' },
-        { command: 'mp_restartgame 1', label: 'duel restart' },
-    ];
-
-    for (const item of commands) {
-        enqueuePluginCommand('EXECUTE_SERVER_COMMAND', {
-            command: item.command,
-            label: item.label,
-            matchId: session.matchId,
-            delaySeconds,
-            requestedAt: Date.now(),
-        });
-    }
-};
-
 const queueDuelMapOnlySetup = () => {
     const session = getSession();
     const duelMap = resolveDuelMapConfig(session.matchOptions?.duelMap || DUEL_DEFAULT_MAP, session.matchOptions?.duelMapWorkshopId);
@@ -709,19 +719,17 @@ const queueDuelMapOnlySetup = () => {
     }
 };
 
-const queueDuelFormalStart = (delaySeconds = 0) => {
+const queueDuelFormalStart = () => {
     const session = getSession();
-    queueDuelRulesCommands(delaySeconds);
-    enqueuePluginCommand('CONFIGURE_DUEL_MODE', {
-        matchId: session.matchId,
-        rounds: normalizeDuelRounds(session.matchOptions?.duelRounds),
-        utilityMode: normalizeDuelUtilityMode(session.matchOptions?.duelUtilityMode),
-        requestedAt: Date.now(),
-    });
+    enqueuePluginCommand(
+        'CONFIGURE_DUEL_MODE',
+        buildDuelRuntimeConfigPayload(session.matchId, session.matchOptions, Date.now()),
+    );
 };
 
 const rollbackDuelToLobby = (reason = '单挑等待结束后参赛玩家不足，已回到大厅。') => {
     const session = getSession();
+    clearFlowUndoHistory();
     session.phase = GamePhase.Lobby;
     session.matchId = uuidv4();
     session.liveGameData = undefined;
@@ -784,7 +792,7 @@ const beginDuelFormalMatch = (matchId: string) => {
     session.liveGameData!.rawPluginRound = 1;
     session.liveGameData!.roundBaseOffset = 0;
     session.liveGameData!.formalRoundStartRaw = 1;
-    queueDuelFormalStart(0);
+    queueDuelFormalStart();
     enqueuePluginCommand('RESET_LIVE_MATCH_STATS', { currentRound: rawPluginRound });
     session.timerEndAt = null;
     session.timerPhase = null;
@@ -883,15 +891,41 @@ const resolveNextPhaseByMatchOptions = (from: GamePhase, requestedTo: GamePhase)
     return requestedTo;
 };
 
-const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
+const REVERSIBLE_PREGAME_PHASES = [
+    GamePhase.Lobby,
+    GamePhase.CaptainSelection,
+    GamePhase.Roll,
+    GamePhase.PlayerDraft,
+    GamePhase.MapBan,
+    GamePhase.SidePick,
+    GamePhase.PreGameSetup,
+];
+
+const advancePhase = (
+    from: GamePhase,
+    to: GamePhase,
+    triggeredBy = '系统',
+    triggeredById = 'SYSTEM',
+    recordUndo = true,
+): boolean => {
     let nextTo = resolveNextPhaseByMatchOptions(from, to);
     const session = getSession();
-    if (session.phase !== from) return;
+    if (session.phase !== from) return false;
+    if (from === GamePhase.Lobby && isDuelMode()) nextTo = GamePhase.PreGameSetup;
+    const checkpoint = recordUndo &&
+        REVERSIBLE_PREGAME_PHASES.includes(from) &&
+        nextTo !== GamePhase.LiveGame
+        ? prepareFlowUndoCheckpoint(session, {
+            actionType: 'ADVANCE_PHASE',
+            actorId: triggeredById,
+            actorName: triggeredBy,
+            summary: `推进阶段：${from} → ${nextTo}`,
+        })
+        : undefined;
     if (from === GamePhase.Lobby && isDuelMode()) {
-        if (!setupDuelFromLobby()) return;
-        nextTo = GamePhase.PreGameSetup;
+        if (!setupDuelFromLobby()) return false;
     }
-    if (!canTransition(from, nextTo)) return;
+    if (!canTransition(from, nextTo)) return false;
 
     if (from === GamePhase.Roll) {
         if (session.rollValues.A === null) session.rollValues.A = Math.floor(Math.random() * 100) + 1;
@@ -899,10 +933,12 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
         broadcast?.();
         if (session.rollTimeout) clearTimeout(session.rollTimeout);
         session.rollTimeout = setTimeout(() => {
+            if (session.phase !== GamePhase.Roll) return;
             session.phase = GamePhase.PlayerDraft;
             performPhaseTransition(GamePhase.PlayerDraft);
+            if (checkpoint) commitFlowUndoCheckpoint(checkpoint);
         }, 3000);
-        return;
+        return true;
     }
 
     if (from === GamePhase.PlayerDraft) {
@@ -952,6 +988,8 @@ const advancePhase = (from: GamePhase, to: GamePhase, triggeredBy?: string) => {
 
     session.phase = nextTo;
     performPhaseTransition(nextTo);
+    if (checkpoint) commitFlowUndoCheckpoint(checkpoint);
+    return true;
 };
 
 export const markStandardMatchLiveFromMatchZy = (): boolean => {
@@ -1058,6 +1096,7 @@ const performPhaseTransition = (to: GamePhase) => {
             }
             break;
         case GamePhase.LiveGame:
+            clearFlowUndoHistory();
             session.matchId = uuidv4();
             session.rolesReleased = true;
             const ue = session.matchOptions?.undercoverModeEnabled !== false;
@@ -1203,6 +1242,7 @@ export {
     getAvailableMaps,
     // Side pick
     finishSideVote,
+    resumeRestoredPregameFlow,
     startSideVoteFunc as startSideVote,
     setRosterLiveSides,
     // Roles

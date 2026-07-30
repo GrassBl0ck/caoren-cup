@@ -33,6 +33,7 @@ import {
     syncPendingDraftOrderWithRoster,
     setRosterLiveSides,
     extendDuelWaitingIfLateJoin,
+    resumeRestoredPregameFlow,
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
 import { ADMIN_PASSWORD } from './game-constants';
@@ -51,6 +52,13 @@ import {
 } from './identity/identity-runtime';
 import { applyMembershipToPlayer, attachMembershipToSession } from './identity/session-integration';
 import { registerWeaponPaintsSocketHandlers } from './weaponpaints/socket-api';
+import {
+    clearFlowUndoHistory,
+    discardFlowUndoCheckpoint,
+    getFlowUndoStatus,
+    pushFlowUndoCheckpoint,
+    undoLatestFlowAction,
+} from './flow-undo-manager';
 
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
@@ -224,13 +232,15 @@ const duelManagedActions = new Set([
     'RESET_FORMAL_MATCH_COUNTERS',
     'DUEL_SET_MAP',
     'DUEL_SET_ROUNDS',
+    'UNDO_FLOW_ACTION',
 ]);
 
 export function registerSocketHandlers(io: SocketIOServer, deps: {
     broadcastState: () => void;
     notifyMessage: (msg: string) => void;
+    persistSessionNow?: () => void;
 }) {
-    const { broadcastState, notifyMessage } = deps;
+    const { broadcastState, notifyMessage, persistSessionNow } = deps;
     const inviteGuard = new LobbyInviteGuard();
 
     const sendPrivateData = (socketId: string, playerId: string) => {
@@ -299,6 +309,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
 
     const resetCurrentGame = async (reason: string) => {
         clearAllFlowTimers();
+        clearFlowUndoHistory();
         const oldMembershipIds = new Map(
             Object.values(getSession().players)
                 .filter((player) => !!player.membershipId)
@@ -312,10 +323,12 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
         }
         notifyMessage(reason);
         broadcastState();
+        persistSessionNow?.();
     };
 
     const terminateCurrentGameAndKickAll = (reason: string) => {
         clearAllFlowTimers();
+        clearFlowUndoHistory();
         const oldSession = getSession();
         for (const playerId of Object.keys(oldSession.players)) {
             io.to(playerId).emit(WsEvents.LOGIN_RESPONSE, { success: false, resetClient: true, message: reason });
@@ -324,6 +337,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
         terminateAndClear();
         notifyMessage(reason);
         broadcastState();
+        persistSessionNow?.();
     };
 
     io.on('connection', (socket) => {
@@ -628,16 +642,16 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有管理员才能执行此操作' });
                 return;
             }
-            if (session.duelTempAdminId && admin.role === 'Admin' && duelManagedActions.has(data.action)) {
+            if (session.duelTempAdminId && admin.role === 'Admin' && duelManagedActions.has(data.action) && data.action !== 'UNDO_FLOW_ACTION') {
                 socket.emit(WsEvents.NOTIFICATION, { message: '当前已有单挑临时管理员，管理员不能直接操作单挑相关设置。' });
                 return;
             }
 
             if (data.action === 'ADVANCE_PHASE') {
-                if (session.duelTempAdminId && admin.playerId === session.duelTempAdminId) enableDuelModeForTempAdmin();
+                const enablesDuelForTempAdmin = !!session.duelTempAdminId && admin.playerId === session.duelTempAdminId;
                 const current = session.phase;
                 let nextPhase: GamePhase | null = null;
-                const duelMode = isDuelMode();
+                const duelMode = enablesDuelForTempAdmin || isDuelMode();
                 switch (current) {
                     case GamePhase.Lobby: nextPhase = duelMode ? GamePhase.PreGameSetup : GamePhase.CaptainSelection; break;
                     case GamePhase.CaptainSelection: nextPhase = GamePhase.Roll; break;
@@ -696,12 +710,71 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (nextPhase === GamePhase.Scoreboard) {
                     try { calculateScores(session); } catch (err) { console.error('[ADVANCE_PHASE] calculateScores failed:', err); }
                 }
+                const reversibleAdvance = [
+                    GamePhase.Lobby,
+                    GamePhase.CaptainSelection,
+                    GamePhase.Roll,
+                    GamePhase.PlayerDraft,
+                    GamePhase.MapBan,
+                    GamePhase.SidePick,
+                ].includes(current) && nextPhase !== GamePhase.LiveGame;
+                const checkpoint = reversibleAdvance && enablesDuelForTempAdmin
+                    ? pushFlowUndoCheckpoint(session, {
+                        actionType: 'ADVANCE_PHASE',
+                        actorId: admin.playerId,
+                        actorName: admin.name,
+                        summary: `推进阶段：${current} → ${nextPhase}`,
+                    })
+                    : undefined;
+                if (enablesDuelForTempAdmin) enableDuelModeForTempAdmin();
                 const wasScoreboard = String(current) === GamePhase.Scoreboard;
-                advancePhase(current, nextPhase, admin.name);
+                const advanced = advancePhase(current, nextPhase, admin.name, admin.playerId, !checkpoint);
+                if (!advanced) {
+                    if (checkpoint && enablesDuelForTempAdmin) {
+                        const status = getFlowUndoStatus(session, admin);
+                        undoLatestFlowAction(session, admin, {
+                            expectedPhase: session.phase,
+                            expectedHistoryDepth: status.historyDepth,
+                            expectedEntryId: status.latest?.id || '',
+                        });
+                    }
+                    else if (checkpoint) discardFlowUndoCheckpoint(checkpoint.id);
+                    socket.emit(WsEvents.NOTIFICATION, { message: '阶段推进未生效，未创建撤销记录。' });
+                    return;
+                }
+                persistSessionNow?.();
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame && !isDuelMode()) {
                     socket.emit(WsEvents.NOTIFICATION, { message: '网页流程已完成。请管理员在游戏内使用 MatchZy .start 开始比赛，网页不会直接重启或开赛。' });
                 }
                 if (wasScoreboard) clearDuelTempAdmin();
+                return;
+            }
+
+            if (data.action === 'UNDO_FLOW_ACTION') {
+                const status = getFlowUndoStatus(session, admin);
+                if (!status.canUndo) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: status.disabledReason || '当前没有可撤销的操作。' });
+                    return;
+                }
+                const result = undoLatestFlowAction(session, admin, {
+                    expectedPhase: data.payload?.expectedPhase as GamePhase,
+                    expectedHistoryDepth: Number(data.payload?.expectedHistoryDepth),
+                    expectedEntryId: typeof data.payload?.expectedEntryId === 'string'
+                        ? data.payload.expectedEntryId
+                        : '',
+                });
+                if ('reason' in result) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: result.reason });
+                    broadcastState();
+                    return;
+                }
+                clearAllFlowTimers();
+                if (session.rollTimeout) clearTimeout(session.rollTimeout);
+                session.rollTimeout = undefined;
+                resumeRestoredPregameFlow();
+                notifyMessage(`${admin.name} 已撤销「${result.entry.summary}」，当前阶段：${session.phase}。`);
+                broadcastState();
+                persistSessionNow?.();
                 return;
             }
 
@@ -786,6 +859,12 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (session.phase === GamePhase.MapBan && session.mapVote) {
                     const map = data.payload?.map;
                     if (getAvailableMaps().includes(map)) {
+                        pushFlowUndoCheckpoint(session, {
+                            actionType: 'ADMIN_BAN_MAP',
+                            actorId: admin.playerId,
+                            actorName: admin.name,
+                            summary: `强 Ban 地图 ${map}`,
+                        });
                         clearMapVoteTimer();
                         session.bannedMaps.push(map);
                         session.mapVote = undefined;
@@ -794,12 +873,13 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                         session.timerPhase = null;
                         if (getAvailableMaps().length === 1) {
                             session.selectedMap = getAvailableMaps()[0];
-                            advancePhase(GamePhase.MapBan, GamePhase.SidePick);
+                            advancePhase(GamePhase.MapBan, GamePhase.SidePick, admin.name, admin.playerId, false);
                         } else {
                             const nextIdx = session.bannedMaps.length;
                             if (nextIdx < session.banSequence.length) startMapVote(session.banSequence[nextIdx]);
                             broadcastState();
                         }
+                        persistSessionNow?.();
                     }
                 }
             } else if (data.action === 'SET_ROLES_COUNT') {
@@ -847,8 +927,21 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const team = data.payload?.team as RosterTeam;
                 if (team !== 'A' && team !== 'B') return;
                 const target = findPlayerById(session, targetId);
+                if (target?.rosterTeam === team) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: `${target.name} 已经在 ${team} 队，未创建撤销记录。` });
+                    return;
+                }
+                const checkpoint = session.phase === GamePhase.LiveGame
+                    ? undefined
+                    : pushFlowUndoCheckpoint(session, {
+                        actionType: 'ASSIGN_ROSTER_TEAM',
+                        actorId: admin.playerId,
+                        actorName: admin.name,
+                        summary: `将 ${target?.name || '玩家'} 分入 ${team} 队`,
+                    });
                 if (canAssignDuelWaiting) {
                     if (!target || target.role === 'Admin' || target.role === 'Spectator') {
+                        if (checkpoint) discardFlowUndoCheckpoint(checkpoint.id);
                         socket.emit(WsEvents.NOTIFICATION, { message: '无法分配该玩家：管理员或旁观者不能加入单挑队伍。' });
                         return;
                     }
@@ -858,6 +951,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     target.isReady = false;
                     if (!session.teams[team].players.includes(targetId)) session.teams[team].players.push(targetId);
                 } else if (!assignPlayerToRoster(targetId, team)) {
+                    if (checkpoint) discardFlowUndoCheckpoint(checkpoint.id);
                     socket.emit(WsEvents.NOTIFICATION, { message: '\u65e0\u6cd5\u5206\u914d\u8be5\u73a9\u5bb6\uff1a\u961f\u957f\u3001\u7ba1\u7406\u5458\u6216\u65c1\u89c2\u8005\u4e0d\u80fd\u5728\u8fd9\u91cc\u76f4\u63a5\u6539\u961f\u3002' });
                     return;
                 }
@@ -869,6 +963,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 } else if (isDraftComplete()) finishDraftPick('manual');
                 else if (session.draftCaptainsActive) startDraftPickTimer(true);
                 else broadcastState();
+                persistSessionNow?.();
             } else if (data.action === 'UNASSIGN_ROSTER_TEAM') {
                 const canAssignDuelWaiting = isDuelMode() &&
                     (session.phase === GamePhase.PreGameSetup ||

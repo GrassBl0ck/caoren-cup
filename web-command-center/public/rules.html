@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>草人杯 - 赛前指引</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="rules-page-body">
+    <div class="rules-page-shell">
+        <header class="rules-site-header">
+            <a class="rules-brand" href="/" aria-label="返回草人杯大厅">
+                <strong>草人杯</strong>
+                <span>对局指挥台</span>
+            </a>
+            <nav class="rules-site-nav" aria-label="规则页导航">
+                <a href="/">进入大厅</a>
+                <a class="is-active" aria-current="page" href="/rules.html">赛前指引</a>
+                <a href="/downloads/caoren-cup-full-rules.pdf" download>完整规则 PDF</a>
+            </nav>
+            <button id="theme-toggle" class="theme-toggle" type="button">深色模式</button>
+        </header>
+
+        <main class="rules-main">
+            <section class="rules-hero" aria-labelledby="rules-title">
+                <div>
+                    <span class="rules-eyebrow">开赛前 3 分钟</span>
+                    <h1 id="rules-title">先知道怎么玩，再进入草人杯大厅。</h1>
+                    <p>了解登录方式、两种主要对局模式和游戏内必要提示后，就可以放心加入。详细积分、娱乐修改与完整流程请查看 PDF。</p>
+                </div>
+                <a class="rules-download-link" href="/downloads/caoren-cup-full-rules.pdf" download>下载完整规则 PDF</a>
+            </section>
+
+            <div class="rules-layout">
+                <aside class="rules-toc" aria-label="本页目录">
+                    <span>本页内容</span>
+                    <a href="#rules-join">进入大厅</a>
+                    <a href="#rules-modes">对局模式</a>
+                    <a href="#rules-cs2">进入 CS2</a>
+                    <a href="#rules-conduct">通用规则</a>
+                    <a href="#rules-help">常用指令与帮助</a>
+                </aside>
+
+                <article class="rules-guide">
+                    <section id="rules-join" class="rules-section" aria-labelledby="rules-join-title">
+                        <span class="rules-eyebrow">第一步</span>
+                        <h2 id="rules-join-title">选择你的登录方式</h2>
+                        <p>不用判断自己属于哪类参赛者。管理员给了你成员密码，就选择“成员账号登录”；管理员给了你本场邀请码，就选择“使用邀请码加入”。两种方式都需要先进入网页大厅，再连接 CS2。</p>
+                        <div class="rules-card-grid">
+                            <div class="rules-card">
+                                <span class="rules-eyebrow">收到成员密码</span>
+                                <h3>成员账号登录</h3>
+                                <p>输入管理员登记的 17 位 SteamID64 与草人杯独立密码，不需要邀请码和昵称。</p>
+                                <ol class="rules-steps">
+                                    <li>输入 SteamID64 与密码</li>
+                                    <li>进入当前网页大厅</li>
+                                    <li>连接 CS2，等待自动确认</li>
+                                </ol>
+                                <p class="rules-small-note">游戏 SteamID 与预设 SteamID 一致时自动完成本场确认，不需要确认码、<code>!cclogin</code> 或 <code>!ccbind</code>。</p>
+                            </div>
+                            <div class="rules-card">
+                                <span class="rules-eyebrow">收到本场邀请码</span>
+                                <h3>使用邀请码加入</h3>
+                                <p>输入管理员发放的本场邀请码、本场昵称与 17 位 SteamID64。</p>
+                                <ol class="rules-steps">
+                                    <li>填写邀请码、昵称与 SteamID64</li>
+                                    <li>进入当前网页大厅</li>
+                                    <li>连接 CS2，完成确认码流程</li>
+                                </ol>
+                                <p class="rules-small-note">原有游戏码和旧命令继续保留，用于首次识别失败或特殊情况恢复。</p>
+                            </div>
+                        </div>
+                        <div class="rules-warning-note">
+                            <strong>密码提醒</strong>
+                            <p>草人杯当前使用 HTTP。使用成员账号登录时，请使用只给草人杯使用的独立密码，不要与 Steam、QQ、邮箱、游戏平台或其他网站共用。</p>
+                        </div>
+                    </section>
+
+                    <section id="rules-modes" class="rules-section" aria-labelledby="rules-modes-title">
+                        <span class="rules-eyebrow">第二步</span>
+                        <h2 id="rules-modes-title">先了解这局怎么玩</h2>
+                        <div class="rules-mode-grid">
+                            <div class="rules-mode-card">
+                                <h3>不平衡竞技</h3>
+                                <p>双方人数可以不同。人数较少的一方通常由纸面实力更强的玩家组成，并会获得技能点、buff 或其他补偿。</p>
+                                <p>少人方可按本局规则使用 <code>.sp 1/3/5/r</code> 申请技能。服务器会在下一个冻结时间暂停并处理修改。</p>
+                            </div>
+                            <div class="rules-mode-card">
+                                <h3>卧底模式</h3>
+                                <p>除正常竞技外，还会分配士兵、卧底和侦探。卧底需要隐藏身份并完成 3×3 九宫格任务。</p>
+                                <p>第 12 回合后进行中场问答；比赛结束后进行终局指认，并根据战绩、任务、指认与胜负结算。</p>
+                            </div>
+                        </div>
+                        <h3>共同流程</h3>
+                        <ol class="rules-steps rules-shared-steps">
+                            <li>进入网页大厅并完成本场确认</li>
+                            <li>选队长、Roll 点、蛇形选人</li>
+                            <li>进行地图 BP 与 CT/T 选边</li>
+                            <li>进入对局，按本局模式规则进行</li>
+                        </ol>
+                    </section>
+
+                    <section id="rules-cs2" class="rules-section" aria-labelledby="rules-cs2-title">
+                        <span class="rules-eyebrow">第三步</span>
+                        <h2 id="rules-cs2-title">进入 CS2 后注意什么</h2>
+                        <div class="rules-success-note">
+                            <strong>尚未进入网页大厅时会收到提示</strong>
+                            <p>如果你已经连接 CS2，但还没有进入当前网页大厅，游戏内会提示你先打开草人杯客户端。完成网页登录后提示立即停止。</p>
+                        </div>
+                        <ul class="rules-list">
+                            <li>可使用网页中的“连接 CS2”按钮，或在控制台输入 <code>connect 119.45.166.182:27015</code>。</li>
+                            <li>建议输入 <code>snd_toolvolume 0.3</code>，推荐范围为 0.3 至 0.5，用于降低自定义音效音量。</li>
+                            <li>使用成员账号登录时无需手动输入确认码；使用邀请码加入时按网页提示完成确认。</li>
+                            <li>若弹出创意工坊地图下载请求，请选择允许或下载。</li>
+                        </ul>
+                    </section>
+
+                    <section id="rules-conduct" class="rules-section" aria-labelledby="rules-conduct-title">
+                        <span class="rules-eyebrow">第四步</span>
+                        <h2 id="rules-conduct-title">通用规则</h2>
+                        <div class="rules-card-grid">
+                            <div class="rules-card">
+                                <h3>公平与沟通</h3>
+                                <ul class="rules-list">
+                                    <li>禁止作弊。</li>
+                                    <li>避免因队友失误红温，有规则疑问及时反馈。</li>
+                                    <li>禁止长时间吵闹、吼叫或恶意干扰他人操作。</li>
+                                </ul>
+                            </div>
+                            <div class="rules-card">
+                                <h3>暂停与异常</h3>
+                                <ul class="rules-list">
+                                    <li>需要紧急暂停时，直接在游戏内语音说明。</li>
+                                    <li>部分插件修改可能要到下一回合才完全生效。</li>
+                                    <li>局势失控或规则出现严重漏洞时，及时联系管理员。</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="rules-help" class="rules-section" aria-labelledby="rules-help-title">
+                        <span class="rules-eyebrow">需要帮助？</span>
+                        <h2 id="rules-help-title">常用指令与完整规则</h2>
+                        <dl class="rules-command-list">
+                            <div><dt><code>.r</code></dt><dd>准备</dd></div>
+                            <div><dt><code>.tac</code></dt><dd>战术暂停</dd></div>
+                            <div><dt><code>.tech</code></dt><dd>技术暂停</dd></div>
+                            <div><dt><code>.sp 1/3/5/r</code></dt><dd>不平衡竞技中申请技能</dd></div>
+                            <div><dt><code>!ws</code></dt><dd>打开换肤界面</dd></div>
+                            <div><dt><code>!cclogin / !cccode / !ccbind</code></dt><dd>首次识别失败或特殊情况恢复</dd></div>
+                        </dl>
+                        <p>如有规则问题，可联系 GrassBl0ck / 草方块，QQ：3465434029。</p>
+                        <a class="rules-download-link" href="/downloads/caoren-cup-full-rules.pdf" download>下载完整规则 PDF</a>
+                    </section>
+                </article>
+            </div>
+        </main>
+    </div>
+
+    <script>
+    (function () {
+        var saved = localStorage.getItem('caoren-theme');
+        var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = saved === 'dark' || saved === 'light' ? saved : (systemDark ? 'dark' : 'light');
+        var button = document.getElementById('theme-toggle');
+
+        function applyTheme(value, persist) {
+            document.body.dataset.theme = value;
+            if (persist) localStorage.setItem('caoren-theme', value);
+            button.textContent = value === 'dark' ? '浅色模式' : '深色模式';
+            button.setAttribute('aria-label', value === 'dark' ? '切换到浅色模式' : '切换到深色模式');
+        }
+
+        button.addEventListener('click', function () {
+            applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark', true);
+        });
+        applyTheme(theme, false);
+    })();
+    </script>
+</body>
+</html>

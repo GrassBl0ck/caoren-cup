@@ -1,5 +1,6 @@
 // server.ts
 import { createServer } from 'http';
+import path from 'node:path';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import multer from 'multer';
@@ -8,8 +9,8 @@ import {
     WsEvents,
 } from './types';
 import { getSession } from './session-manager';
-import { restoreSessionSnapshot, scheduleSessionSnapshotSave } from './session-persistence';
-import { findPlayerById, sanitizeForPublic } from './player-utils';
+import { restoreSessionSnapshot, saveSessionSnapshotNow, scheduleSessionSnapshotSave } from './session-persistence';
+import { findPlayerById, sanitizeGameStateForViewer } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
 import {
@@ -17,6 +18,7 @@ import {
     readLobbyAnnouncement,
     registerLobbyAnnouncementRoutes,
 } from './routes/lobby-announcement-routes';
+import { registerUpdateAnnouncementRoutes } from './routes/update-announcement-routes';
 import { registerPluginRoutes } from './plugin-api';
 import { registerSocketHandlers } from './socket-handlers';
 import { registerGameCodeLogin } from './v1333-game-login';
@@ -27,6 +29,7 @@ import {
     finishDraftPick,
     finishMapVote,
     finishSideVote,
+    resumeRestoredPregameFlow,
 } from './game-flow-manager';
 import {
     enqueuePluginCommand,
@@ -40,6 +43,10 @@ import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer, removeIdentityFromSession } from './identity/session-integration';
 import { registerWeaponPaintsHttpRoutes } from './weaponpaints/http-routes';
 import { initializeWeaponPaintsRuntime } from './weaponpaints/runtime';
+import { UpdateAnnouncementService } from './update-announcements/update-announcement-service';
+import { UpdateAnnouncementStore } from './update-announcements/update-announcement-store';
+import { registerUpdateAnnouncementAdminSocketHandlers } from './update-announcements/update-announcement-admin-socket';
+import type { PublicUpdateAnnouncement } from './update-announcements/update-announcement-types';
 
 const app = express();
 if (process.env.TRUST_PROXY === 'loopback') app.set('trust proxy', 'loopback');
@@ -67,18 +74,28 @@ app.use(express.static('public', {
     }
 }));
 const upload = multer({ storage: multer.memoryStorage() });
-restoreSessionSnapshot();
+const restoredSessionSnapshot = restoreSessionSnapshot();
 
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
+const updateAnnouncementStore = new UpdateAnnouncementStore(
+    process.env.UPDATE_ANNOUNCEMENT_STORE_PATH
+        || path.resolve(__dirname, '..', 'runtime', 'update-announcements.json'),
+);
+const updateAnnouncementService = new UpdateAnnouncementService(updateAnnouncementStore);
+
+const broadcastUpdateAnnouncements = (announcements: PublicUpdateAnnouncement[]) => {
+    io.emit(WsEvents.UPDATE_ANNOUNCEMENTS, { announcements });
+};
+
 const broadcastState = () => {
     const session = getSession();
     for (const socket of io.sockets.sockets.values()) {
         const viewerId = socket.data?.playerId || null;
-        socket.emit(WsEvents.GAME_STATE, sanitizeForPublic(session, viewerId));
+        socket.emit(WsEvents.GAME_STATE, sanitizeGameStateForViewer(session, viewerId));
     }
     scheduleSessionSnapshotSave();
 };
@@ -114,6 +131,7 @@ const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {
 
 injectFlowBroadcast(broadcastState);
 injectNotify(notifyMessage);
+if (restoredSessionSnapshot) resumeRestoredPregameFlow();
 
 const ensureMatchOptions = () => {
     const session = getSession();
@@ -170,6 +188,19 @@ registerLobbyAnnouncementRoutes(app, {
     broadcastAnnouncement,
 });
 
+registerUpdateAnnouncementRoutes(app, {
+    adminPassword: ADMIN_PASSWORD,
+    service: updateAnnouncementService,
+    broadcastPublic: broadcastUpdateAnnouncements,
+});
+
+registerUpdateAnnouncementAdminSocketHandlers({
+    io,
+    service: updateAnnouncementService,
+    getSession,
+    broadcastPublic: broadcastUpdateAnnouncements,
+});
+
 registerPluginRoutes(app, {
     broadcastState,
     notifyMessage,
@@ -180,10 +211,16 @@ registerWeaponPaintsHttpRoutes(app);
 registerSocketHandlers(io, {
     broadcastState,
     notifyMessage,
+    persistSessionNow: saveSessionSnapshotNow,
 });
 
 io.on('connection', (socket) => {
     socket.emit(WsEvents.LOBBY_ANNOUNCEMENT, { announcement: readLobbyAnnouncement() });
+    if (updateAnnouncementService.isAvailable()) {
+        socket.emit(WsEvents.UPDATE_ANNOUNCEMENTS, {
+            announcements: updateAnnouncementService.listPublic(),
+        });
+    }
 });
 
 registerGameCodeLogin(app, io, {
@@ -214,9 +251,13 @@ setInterval(() => {
 }, 1000);
 
 const PORT = process.env.PORT || 3000;
-Promise.all([initializeIdentityRuntime(), initializeWeaponPaintsRuntime()])
+Promise.all([
+    initializeIdentityRuntime(),
+    initializeWeaponPaintsRuntime(),
+    updateAnnouncementService.initialize(),
+])
     .then(() => httpServer.listen(PORT, () => console.log(`草人杯指挥台已启动: http://localhost:${PORT}`)))
     .catch((error) => {
-        console.error('[IdentityStore] 身份库加载失败，服务未启动：', error);
+        console.error('[Startup] 核心服务初始化失败，服务未启动：', error);
         process.exitCode = 1;
     });

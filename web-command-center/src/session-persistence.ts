@@ -2,8 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import { GameSession } from './types';
 import { createInitialSession, getSession, setSession } from './session-manager';
+import { clearFlowUndoHistory } from './flow-undo-manager';
 
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 const SNAPSHOT_DIR = path.resolve(__dirname, '..', 'runtime');
 const SNAPSHOT_PATH = path.join(SNAPSHOT_DIR, 'live-session-snapshot.json');
 
@@ -24,7 +25,13 @@ const sanitizePlayersForSnapshot = (players: GameSession['players']) => {
     return result;
 };
 
-const sanitizeSessionForSnapshot = (session: GameSession) => ({
+export interface SessionSnapshotPayloadV2 {
+    version: 2;
+    savedAt: number;
+    session: Record<string, unknown>;
+}
+
+export const buildSessionSnapshotPayload = (session: GameSession): SessionSnapshotPayloadV2 => ({
     version: SNAPSHOT_VERSION,
     savedAt: Date.now(),
     session: {
@@ -36,9 +43,25 @@ const sanitizeSessionForSnapshot = (session: GameSession) => ({
         playerOrder: session.playerOrder,
         teams: session.teams,
         captains: session.captains,
+        rollValues: session.rollValues,
+        draftOrder: session.draftOrder,
+        draftOriginalOrder: session.draftOriginalOrder,
+        draftIndex: session.draftIndex,
+        draftCaptainsActive: session.draftCaptainsActive,
+        draftPickTimeoutAt: session.draftPickTimeoutAt,
+        mapPool: session.mapPool,
+        bannedMaps: session.bannedMaps,
         selectedMap: session.selectedMap,
+        currentBanTeam: session.currentBanTeam,
+        banSequence: session.banSequence,
+        mapVote: session.mapVote,
+        sidePickTeam: session.sidePickTeam,
+        sideVote: session.sideVote,
         selectedSide: session.selectedSide,
         matchOptions: session.matchOptions,
+        undercoverCount: session.undercoverCount,
+        detectiveCount: session.detectiveCount,
+        rolesReleased: session.rolesReleased,
         duelTempAdminId: session.duelTempAdminId,
         duelAdminVote: session.duelAdminVote,
         duelAdminRequest: session.duelAdminRequest,
@@ -50,6 +73,11 @@ const sanitizeSessionForSnapshot = (session: GameSession) => ({
         currentQuestion: session.currentQuestion,
         questionAnswer: session.questionAnswer,
         secondQuestionAnswered: session.secondQuestionAnswered,
+        timerEndAt: session.timerEndAt,
+        timerPhase: session.timerPhase,
+        adminLock: session.adminLock,
+        createdAt: session.createdAt,
+        autoClearMinutes: session.autoClearMinutes,
     },
 });
 
@@ -65,6 +93,13 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     restored.playerOrder = Array.isArray(restored.playerOrder) ? restored.playerOrder : Object.keys(restored.players);
     restored.teams = restored.teams || base.teams;
     restored.captains = restored.captains || base.captains;
+    restored.rollValues = restored.rollValues || base.rollValues;
+    restored.draftOrder = Array.isArray(restored.draftOrder) ? restored.draftOrder : base.draftOrder;
+    restored.draftOriginalOrder = Array.isArray(restored.draftOriginalOrder) ? restored.draftOriginalOrder : base.draftOriginalOrder;
+    restored.draftIndex = Number.isFinite(restored.draftIndex) ? restored.draftIndex : base.draftIndex;
+    restored.mapPool = Array.isArray(restored.mapPool) ? restored.mapPool : base.mapPool;
+    restored.bannedMaps = Array.isArray(restored.bannedMaps) ? restored.bannedMaps : base.bannedMaps;
+    restored.banSequence = Array.isArray(restored.banSequence) ? restored.banSequence : base.banSequence;
     restored.matchOptions = {
         ...base.matchOptions,
         ...(restored.matchOptions || {}),
@@ -80,8 +115,6 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     restored.duelAdminVote = undefined;
     restored.duelAdminRequest = restored.duelAdminRequest;
     restored.duelTerminateRequest = restored.duelTerminateRequest;
-    restored.timerEndAt = null;
-    restored.timerPhase = null;
     restored.rollTimeout = undefined;
     for (const player of Object.values(restored.players)) {
         if (player.gameRole !== 'Undercover') player.undercoverTaskAckStage = undefined;
@@ -90,13 +123,19 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     return restored;
 };
 
+export const restoreSessionSnapshotData = (parsed: any): boolean => {
+    if (!parsed?.session || (parsed.version !== 1 && parsed.version !== SNAPSHOT_VERSION)) return false;
+    const restored = normalizeRestoredSession(parsed.session);
+    setSession(restored);
+    clearFlowUndoHistory();
+    return true;
+};
+
 export const restoreSessionSnapshot = (): boolean => {
     if (!fs.existsSync(SNAPSHOT_PATH)) return false;
     try {
         const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, 'utf8'));
-        if (parsed?.version !== SNAPSHOT_VERSION || !parsed?.session) return false;
-        setSession(normalizeRestoredSession(parsed.session));
-        return true;
+        return restoreSessionSnapshotData(parsed);
     } catch (err) {
         console.warn('[SessionPersistence] failed to restore snapshot:', err);
         return false;
@@ -106,8 +145,10 @@ export const restoreSessionSnapshot = (): boolean => {
 export const saveSessionSnapshotNow = () => {
     try {
         fs.mkdirSync(SNAPSHOT_DIR, { recursive: true });
-        const payload = sanitizeSessionForSnapshot(getSession());
-        fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(payload, null, 2), 'utf8');
+        const payload = buildSessionSnapshotPayload(getSession());
+        const tempPath = `${SNAPSHOT_PATH}.tmp`;
+        fs.writeFileSync(tempPath, JSON.stringify(payload, null, 2), 'utf8');
+        fs.renameSync(tempPath, SNAPSHOT_PATH);
     } catch (err) {
         console.warn('[SessionPersistence] failed to save snapshot:', err);
     }
