@@ -26,8 +26,11 @@ export class WeaponPaintsRuntime {
         const dataRoot = process.env.WEAPONPAINTS_DATA_ROOT
             ? path.resolve(process.env.WEAPONPAINTS_DATA_ROOT)
             : path.resolve(process.cwd(), '..', 'weaponpaints-plugin', 'data');
+        const imageRoot = process.env.WEAPONPAINTS_IMAGE_ROOT
+            ? path.resolve(process.env.WEAPONPAINTS_IMAGE_ROOT)
+            : path.resolve(process.cwd(), 'public', 'weaponpaints');
         try {
-            this.catalog = await WeaponPaintsCatalog.load(dataRoot);
+            this.catalog = await WeaponPaintsCatalog.load(dataRoot, imageRoot);
             this.catalogError = undefined;
         } catch (error) {
             this.catalog = undefined;

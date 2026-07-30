@@ -17,7 +17,8 @@
 .weaponpaints-search-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; margin-bottom:12px; }
 .weaponpaints-search-row input { min-width:0; }
 .weaponpaints-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:10px; }
-.weaponpaints-card { min-height:92px; padding:12px; text-align:left; display:flex; flex-direction:column; justify-content:space-between; gap:8px; border:1px solid var(--border); background:var(--panel); color:var(--text); }
+.weaponpaints-card { min-height:210px; padding:10px; text-align:left; display:flex; flex-direction:column; justify-content:space-between; gap:8px; border:1px solid var(--border); background:var(--panel); color:var(--text); overflow:hidden; }
+.weaponpaints-card-image { width:100%; height:128px; object-fit:contain; border-radius:6px; background:var(--panel-soft); }
 .weaponpaints-card:hover,.weaponpaints-card.selected { border-color:#2563eb; box-shadow:0 0 0 1px #2563eb inset; }
 .weaponpaints-card small { color:var(--muted); overflow-wrap:anywhere; }
 .weaponpaints-editor { padding:16px; border-left:1px solid var(--border); background:var(--panel-soft); }
@@ -32,5 +33,5 @@
 body[data-theme="dark"] .weaponpaints-health.ok,body[data-theme="dark"] .weaponpaints-notice.success { background:#052e2b; color:#6ee7b7; }
 body[data-theme="dark"] .weaponpaints-health.error,body[data-theme="dark"] .weaponpaints-notice.error { background:#450a0a; color:#fca5a5; }
 @media (max-width:1050px) { .weaponpaints-layout { grid-template-columns:130px minmax(0,1fr); } .weaponpaints-editor { grid-column:1/-1; border-left:0; border-top:1px solid var(--border); } }
-@media (max-width:650px) { .weaponpaints-header { padding:16px; } .weaponpaints-layout { display:block; } .weaponpaints-categories { border-right:0; border-bottom:1px solid var(--border); flex-direction:row; overflow-x:auto; } .weaponpaints-categories button { flex:0 0 auto; } .weaponpaints-grid { grid-template-columns:1fr 1fr; } .weaponpaints-admin-bar label { min-width:100%; } .weaponpaints-editor-grid { grid-template-columns:1fr; } }
+@media (max-width:650px) { .weaponpaints-header { padding:16px; } .weaponpaints-layout { display:block; } .weaponpaints-categories { border-right:0; border-bottom:1px solid var(--border); flex-direction:row; overflow-x:auto; } .weaponpaints-categories button { flex:0 0 auto; } .weaponpaints-grid { grid-template-columns:1fr 1fr; } .weaponpaints-card { min-height:180px; } .weaponpaints-card-image { height:100px; } .weaponpaints-admin-bar label { min-width:100%; } .weaponpaints-editor-grid { grid-template-columns:1fr; } }
 @media (max-width:420px) { .weaponpaints-grid { grid-template-columns:1fr; } }

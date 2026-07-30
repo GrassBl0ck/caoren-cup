@@ -93,8 +93,10 @@
     function renderGrid() {
         const grid = el('weaponpaints-grid');
         if (!grid) return;
-        grid.innerHTML = state.items.length ? state.items.map((item, index) =>
-            `<button type="button" class="weaponpaints-card" data-wp-item="${index}"><strong>${escapeHtml(item.name || item.englishName || item.key)}</strong><small>${escapeHtml(itemSubtitle(item))}</small></button>`
+        grid.innerHTML = state.items.length ? state.items.map((item, index) => {
+            const imageUrl = item.imageUrl || '/assets/weaponpaints-placeholder.svg';
+            return `<button type="button" class="weaponpaints-card" data-wp-item="${index}"><img class="weaponpaints-card-image" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/weaponpaints-placeholder.svg'"><strong>${escapeHtml(item.name || item.englishName || item.key)}</strong><small>${escapeHtml(itemSubtitle(item))}</small></button>`;
+        }
         ).join('') : '<p class="muted-line">没有找到符合条件的本地物品。</p>';
         el('weaponpaints-more-btn').hidden = state.items.length >= state.total;
     }

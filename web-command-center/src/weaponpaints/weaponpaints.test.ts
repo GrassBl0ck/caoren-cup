@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import path from 'node:path';
+import { promises as fs } from 'node:fs';
 
 import { WeaponPaintsCatalog } from './catalog';
 import { resolveSkinActor } from './permissions';
@@ -19,6 +20,40 @@ test('本地目录能够提供完整分类，并拒绝目录外的物品 ID', as
     assert.ok(catalog.search('sticker', '印花', { limit: 10 }).items.length > 0);
     assert.equal(catalog.hasSimpleItem('sticker', 999_999_999), false);
     assert.equal(catalog.hasWeaponPaint(7, 999_999_999), false);
+});
+
+test('本地图片清单为目录物品提供站内 URL，缺图时不返回远程地址', async () => {
+    const imageRoot = path.resolve(process.cwd(), 'runtime', `test-weaponpaints-images-${process.pid}`);
+    try {
+        await fs.mkdir(path.join(imageRoot, 'base'), { recursive: true });
+        await fs.mkdir(path.join(imageRoot, 'stickers'), { recursive: true });
+        await fs.writeFile(path.join(imageRoot, 'base', 'manifest.json'), JSON.stringify({
+            schemaVersion: 1,
+            pack: 'base',
+            items: [
+                { category: 'skin', key: 'weapon_ak47:1466', image: 'images/weapon_ak47-1466.png', available: true },
+                { category: 'skin', key: 'weapon_ak47:1449', image: null, available: false },
+            ],
+        }), 'utf8');
+        await fs.writeFile(path.join(imageRoot, 'stickers', 'manifest.json'), JSON.stringify({
+            schemaVersion: 1,
+            pack: 'stickers',
+            items: [
+                { category: 'sticker', key: '1', image: 'images/sticker-1.png', available: true },
+                { category: 'sticker', key: '10', image: 'https://example.invalid/remote.png', available: true },
+            ],
+        }), 'utf8');
+
+        const catalog = await WeaponPaintsCatalog.load(dataRoot, imageRoot);
+        assert.equal(catalog.search('skin', 'Consequence of the Jinn').items[0]?.imageUrl,
+            '/weaponpaints/base/images/weapon_ak47-1466.png');
+        assert.equal(catalog.search('skin', 'AUTOEXEC').items[0]?.imageUrl, undefined);
+        assert.equal(catalog.search('sticker', 'Shooter').items[0]?.imageUrl,
+            '/weaponpaints/stickers/images/sticker-1.png');
+        assert.equal(catalog.search('sticker', 'Mountain').items[0]?.imageUrl, undefined);
+    } finally {
+        await fs.rm(imageRoot, { recursive: true, force: true });
+    }
 });
 
 test('玩家只能编辑已确认的本人 SteamID，管理员可代管已验证玩家', () => {

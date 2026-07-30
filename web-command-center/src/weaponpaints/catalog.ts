@@ -11,6 +11,7 @@ export interface CatalogItem {
     weaponKey?: string;
     defIndex?: number;
     team?: 2 | 3;
+    imageUrl?: string;
 }
 
 export interface CatalogSearchResult {
@@ -28,6 +29,36 @@ const FILES: Record<CatalogCategory, string> = {
     pin: 'collectibles.json',
     sticker: 'stickers.json',
     keychain: 'keychains.json',
+};
+
+type ImageManifestItem = {
+    category?: unknown;
+    key?: unknown;
+    image?: unknown;
+    available?: unknown;
+};
+
+const imageIndexKey = (category: CatalogCategory, key: string) => `${category}\0${key.toLowerCase()}`;
+
+const readImageManifest = async (
+    imageRoot: string,
+    pack: 'base' | 'stickers',
+    imageIndex: Map<string, string>,
+) => {
+    try {
+        const manifestText = await fs.readFile(path.join(imageRoot, pack, 'manifest.json'), 'utf8');
+        const manifest = JSON.parse(manifestText) as { items?: ImageManifestItem[] };
+        for (const item of Array.isArray(manifest.items) ? manifest.items : []) {
+            const category = String(item.category || '') as CatalogCategory;
+            const key = String(item.key || '').trim();
+            const image = String(item.image || '').replace(/\\/g, '/');
+            if (!FILES[category] || !key || item.available !== true) continue;
+            if (!image.startsWith('images/') || image.includes('..') || !/^[a-zA-Z0-9._/-]+$/.test(image)) continue;
+            imageIndex.set(imageIndexKey(category, key), `/weaponpaints/${pack}/${image}`);
+        }
+    } catch {
+        // 图片包可以独立安装；未安装或清单损坏时，目录仍可用并由前端显示占位图。
+    }
 };
 
 const asUInt = (value: unknown): number => {
@@ -71,8 +102,16 @@ export class WeaponPaintsCatalog {
         private readonly categories: Map<CatalogCategory, CatalogItem[]>,
     ) {}
 
-    static async load(dataRoot: string): Promise<WeaponPaintsCatalog> {
+    static async load(dataRoot: string, imageRoot?: string): Promise<WeaponPaintsCatalog> {
         const normalizedRoot = path.resolve(String(dataRoot || ''));
+        const imageIndex = new Map<string, string>();
+        if (imageRoot) {
+            const normalizedImageRoot = path.resolve(imageRoot);
+            await Promise.all([
+                readImageManifest(normalizedImageRoot, 'base', imageIndex),
+                readImageManifest(normalizedImageRoot, 'stickers', imageIndex),
+            ]);
+        }
         const categories = new Map<CatalogCategory, CatalogItem[]>();
         for (const category of Object.keys(FILES) as CatalogCategory[]) {
             const [englishText, chineseText] = await Promise.all([
@@ -83,7 +122,9 @@ export class WeaponPaintsCatalog {
             const chinese = new Map(parseItems(category, JSON.parse(chineseText)).map((item) => [item.key.toLowerCase(), item]));
             categories.set(category, english.map((item) => {
                 const localized = chinese.get(item.key.toLowerCase());
-                return localized?.name ? { ...item, name: localized.name } : item;
+                const localizedItem = localized?.name ? { ...item, name: localized.name } : item;
+                const imageUrl = imageIndex.get(imageIndexKey(category, item.key));
+                return imageUrl ? { ...localizedItem, imageUrl } : localizedItem;
             }));
         }
         return new WeaponPaintsCatalog(normalizedRoot, categories);
