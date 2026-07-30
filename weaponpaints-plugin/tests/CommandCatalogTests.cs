@@ -6,6 +6,12 @@ namespace CaorenCup.WeaponPaints.Tests;
 public sealed class CommandCatalogTests
 {
     [Fact]
+    public void ReleaseVersion_DoesNotContainDevelopmentSuffix()
+    {
+        Assert.Equal("1.9.0", CaorenWeaponPaintsPlugin.ReleaseVersion);
+    }
+
+    [Fact]
     public void PlayerAliases_KeepApprovedLegacyCommandsAndExcludeKill()
     {
         Assert.Contains("skin", SkinCommandCatalog.PlayerCommands.Keys);

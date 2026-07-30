@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 
 import { enqueuePluginCommand } from '../plugin-command-queue';
 import { WeaponPaintsCatalog } from './catalog';
@@ -6,6 +7,13 @@ import { buildWeaponPaintsHealth, type WeaponPaintsHealthInput } from './health'
 import { createWeaponPaintsConnectionOptions, MySqlLoadoutRepository } from './mysql-repository';
 import { WeaponPaintsService } from './service';
 import { requireWeaponPaintsWebEnabled, WeaponPaintsSettingsStore } from './settings';
+
+export const resolveWeaponPaintsDataRoot = (cwd: string, configuredRoot?: string) => {
+    if (configuredRoot) return path.resolve(cwd, configuredRoot);
+    const packagedRoot = path.resolve(cwd, 'weaponpaints-data');
+    if (existsSync(packagedRoot)) return packagedRoot;
+    return path.resolve(cwd, '..', 'weaponpaints-plugin', 'data');
+};
 
 export class WeaponPaintsRuntime {
     catalog?: WeaponPaintsCatalog;
@@ -23,9 +31,7 @@ export class WeaponPaintsRuntime {
 
     async initialize() {
         await this.settings.initialize();
-        const dataRoot = process.env.WEAPONPAINTS_DATA_ROOT
-            ? path.resolve(process.env.WEAPONPAINTS_DATA_ROOT)
-            : path.resolve(process.cwd(), '..', 'weaponpaints-plugin', 'data');
+        const dataRoot = resolveWeaponPaintsDataRoot(process.cwd(), process.env.WEAPONPAINTS_DATA_ROOT);
         const imageRoot = process.env.WEAPONPAINTS_IMAGE_ROOT
             ? path.resolve(process.env.WEAPONPAINTS_IMAGE_ROOT)
             : path.resolve(process.cwd(), 'public', 'weaponpaints');

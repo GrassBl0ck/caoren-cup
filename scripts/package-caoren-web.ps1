@@ -9,9 +9,11 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $webRoot = Join-Path $repoRoot 'web-command-center'
 $pluginRoot = Join-Path $webRoot 'CaorenCupPlugin'
+$weaponPaintsDataRoot = Join-Path $repoRoot 'weaponpaints-plugin\data'
 $releaseOutput = Join-Path $repoRoot 'release-output'
 $releaseBuild = Join-Path $repoRoot 'release-build'
 $webStage = Join-Path $releaseBuild 'web-command-center'
+$webWeaponPaintsDataStage = Join-Path $webStage 'weaponpaints-data'
 $pluginPublish = Join-Path $releaseBuild 'CaorenCupPlugin-publish'
 
 $utf8 = [System.Text.Encoding]::UTF8
@@ -83,7 +85,8 @@ function Copy-CleanTree {
         [string]$Source,
         [Parameter(Mandatory = $true)]
         [string]$Destination,
-        [string[]]$AdditionalTopLevelExcludes = @()
+        [string[]]$AdditionalTopLevelExcludes = @(),
+        [string[]]$AdditionalRelativeExcludes = @()
     )
 
     if (Test-Path -LiteralPath $Destination) {
@@ -95,8 +98,15 @@ function Copy-CleanTree {
     Get-ChildItem -LiteralPath $sourceFull -Force -Recurse | ForEach-Object {
         $relative = Get-RelativePathCompat -BasePath $sourceFull -TargetPath $_.FullName
         $top = ($relative -split '[\\/]')[0]
+        $normalizedRelative = $relative.Replace('/', '\').TrimEnd('\')
 
         if ($AdditionalTopLevelExcludes -contains $top) { return }
+        foreach ($excludedRelative in $AdditionalRelativeExcludes) {
+            $normalizedExcluded = $excludedRelative.Replace('/', '\').TrimEnd('\')
+            if ($normalizedRelative -eq $normalizedExcluded -or $normalizedRelative.StartsWith($normalizedExcluded + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+                return
+            }
+        }
         if (Test-ExcludedPath -Item $_ -SourceRoot $sourceFull) { return }
 
         $target = Join-Path $Destination $relative
@@ -124,6 +134,7 @@ function Assert-ZipClean {
             $name = $entry.FullName
             if ($name.Contains('\') -or
                 $name -match '(^|/)(node_modules|\.vs|bin|obj|runtime|release-build|release-output)(/|$)' -or
+                $name -match '^public/weaponpaints(/|$)' -or
                 $name -match '(^|/)backup(_|-|_before_)' -or
                 $name -match '\.(bak|backup|log|zip|rar|7z)(-|$|\.)' -or
                 $name -match '(^|/)(\.env|caoren_config\.json|ecosystem\.config\.cjs)$') {
@@ -179,7 +190,10 @@ if (Test-Path -LiteralPath $pluginZip) {
     throw "Output already exists: $pluginZip"
 }
 
-Copy-CleanTree -Source $webRoot -Destination $webStage -AdditionalTopLevelExcludes @('CaorenCupPlugin', 'CaorenCupPlugin.Tests')
+Copy-CleanTree -Source $webRoot -Destination $webStage `
+    -AdditionalTopLevelExcludes @('CaorenCupPlugin', 'CaorenCupPlugin.Tests') `
+    -AdditionalRelativeExcludes @('public\weaponpaints')
+Copy-CleanTree -Source $weaponPaintsDataRoot -Destination $webWeaponPaintsDataStage
 
 if (Test-Path -LiteralPath $pluginPublish) {
     Remove-Item -LiteralPath $pluginPublish -Recurse -Force

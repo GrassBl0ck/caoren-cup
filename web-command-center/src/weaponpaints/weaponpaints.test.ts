@@ -10,6 +10,7 @@ import { WeaponPaintsService } from './service';
 import type { LoadoutRepository, SkinAuditEntry } from './repository';
 import { createWeaponPaintsConnectionOptions, WEAPONPAINTS_WEB_SCHEMA_SQL, WEAPONPAINTS_RESET_SQL } from './mysql-repository';
 import { executeWeaponPaintsAction } from './socket-api';
+import { resolveWeaponPaintsDataRoot } from './runtime';
 
 const dataRoot = path.resolve(process.cwd(), '..', 'weaponpaints-plugin', 'data');
 
@@ -53,6 +54,24 @@ test('本地图片清单为目录物品提供站内 URL，缺图时不返回远�
         assert.equal(catalog.search('sticker', 'Mountain').items[0]?.imageUrl, undefined);
     } finally {
         await fs.rm(imageRoot, { recursive: true, force: true });
+    }
+});
+
+test('发布版优先读取网页包内目录，开发环境回退到仓库目录', async () => {
+    const runtimeRoot = path.resolve(process.cwd(), 'runtime', `test-weaponpaints-root-${process.pid}`);
+    try {
+        await fs.mkdir(path.join(runtimeRoot, 'weaponpaints-data'), { recursive: true });
+        assert.equal(resolveWeaponPaintsDataRoot(runtimeRoot), path.join(runtimeRoot, 'weaponpaints-data'));
+        assert.equal(
+            resolveWeaponPaintsDataRoot(path.join(runtimeRoot, 'without-package')),
+            path.resolve(runtimeRoot, 'weaponpaints-plugin', 'data'),
+        );
+        assert.equal(
+            resolveWeaponPaintsDataRoot(runtimeRoot, './configured-data'),
+            path.resolve(runtimeRoot, 'configured-data'),
+        );
+    } finally {
+        await fs.rm(runtimeRoot, { recursive: true, force: true });
     }
 });
 

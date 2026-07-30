@@ -6,10 +6,12 @@ namespace CaorenCup.WeaponPaints;
 [MinimumApiVersion(338)]
 public partial class CaorenWeaponPaintsPlugin : BasePlugin, IPluginConfig<CaorenWeaponPaintsConfig>
 {
+    public const string ReleaseVersion = "1.9.0";
+
     public override string ModuleName => "CaorenWeaponPaints";
     public override string ModuleAuthor => "Nereziel, daffyy & Caoren Cup contributors";
     public override string ModuleDescription => "草人杯独立枪皮与饰品菜单插件";
-    public override string ModuleVersion => "1.9.0-step1";
+    public override string ModuleVersion => ReleaseVersion;
 
     public CaorenWeaponPaintsConfig Config { get; set; } = new();
 

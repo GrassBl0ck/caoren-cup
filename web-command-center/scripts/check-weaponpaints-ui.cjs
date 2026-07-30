@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'weaponpaints-app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'weaponpaints.css'), 'utf8');
+const webPackageScript = fs.readFileSync(path.join(root, '..', 'scripts', 'package-caoren-web.ps1'), 'utf8');
 
 assert.match(html, /id="weaponpaints-open-btn"/);
 assert.match(html, /id="weaponpaints-panel"/);
@@ -26,5 +27,7 @@ assert.match(css, /grid-template-columns/);
 assert.match(css, /\.weaponpaints-card-image/);
 assert.match(css, /@media\s*\(max-width:/);
 assert.doesNotMatch(js, /https?:\/\//i, '换肤 UI 不应依赖远程图片或接口');
+assert.match(webPackageScript, /public[\\\\/]weaponpaints/, '网页主包必须排除独立发布的 WeaponPaints 图片目录');
+assert.match(webPackageScript, /weaponpaints-data/, '网页主包必须携带 WeaponPaints 本地目录数据');
 
 console.log('weaponpaints UI checks passed');
