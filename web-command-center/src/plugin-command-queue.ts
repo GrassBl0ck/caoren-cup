@@ -46,6 +46,18 @@ const PLUGIN_COMMAND_MAX_SEND_ATTEMPTS = Math.max(
 
 const pluginCommandQueue: BridgeCommand[] = [];
 
+export const cancelPluginCommands = (
+  predicate: (command: Readonly<BridgeCommand>) => boolean
+): number => {
+  let removed = 0;
+  for (let index = pluginCommandQueue.length - 1; index >= 0; index--) {
+    if (!predicate(pluginCommandQueue[index])) continue;
+    pluginCommandQueue.splice(index, 1);
+    removed++;
+  }
+  return removed;
+};
+
 const refreshRetryableCommands = (now: number) => {
   for (const cmd of pluginCommandQueue) {
     if (cmd.status !== 'sent') continue;

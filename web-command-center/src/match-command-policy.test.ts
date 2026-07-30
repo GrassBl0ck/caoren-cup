@@ -124,5 +124,10 @@ assertAllowed(
 
 assertRejected(matchzyCompetitive, 'sv_cheats 1');
 assertAllowed(matchzyCompetitive, 'wp_refresh 76561198000000001 safe');
+assertAllowed(matchzyCompetitive, 'wp_refresh 76561198000000001');
+assertRejected(matchzyCompetitive, 'wp_refresh all');
+assertRejected(matchzyCompetitive, 'wp_refresh 76561198000000001 unsafe');
+assertRejected(matchzyCompetitive, 'wp_refresh 76561198000000001 safe; sv_cheats 1');
+assertRejected(matchzyCompetitive, "wp_refresh 76561198000000001 safe\nsv_cheats 1");
 
 console.log('match-command-policy tests passed');

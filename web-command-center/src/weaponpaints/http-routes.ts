@@ -1,13 +1,20 @@
 import type { Express } from 'express';
 
+import { V1333_PLUGIN_ONLINE_TTL_MS } from '../game-constants';
+import { getSession } from '../session-manager';
 import type { CatalogCategory } from './catalog';
+import { buildBridgeHealth } from './health';
 import { weaponPaintsRuntime } from './runtime';
 
 const CATEGORIES = new Set<CatalogCategory>(['skin', 'glove', 'agent', 'music', 'pin', 'sticker', 'keychain']);
 
 export const registerWeaponPaintsHttpRoutes = (app: Express) => {
     app.get('/api/weaponpaints/health', async (_req, res) => {
-        const health = await weaponPaintsRuntime.health();
+        const health = await weaponPaintsRuntime.health(buildBridgeHealth(
+            getSession().liveGameData,
+            Date.now(),
+            V1333_PLUGIN_ONLINE_TTL_MS,
+        ));
         res.status(health.ok ? 200 : 503).json(health);
     });
 
