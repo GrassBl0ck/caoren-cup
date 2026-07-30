@@ -80,15 +80,29 @@ internal static class DuelRuntimePolicy
             throw new ArgumentOutOfRangeException(nameof(configuredTotalRounds));
         }
 
-        return checked(configuredTotalRounds + 1);
+        return configuredTotalRounds;
     }
 
     public static IReadOnlyList<DuelCvarSetting> BuildCvarPlan(DuelGameConfig config)
     {
+        return BuildCvarPlan(config, EngineRoundLimit(config.TotalRounds), includeNativePostMatch: true);
+    }
+
+    internal static IReadOnlyList<DuelCvarSetting> BuildWebManagedCvarPlan(DuelGameConfig config)
+    {
         ArgumentNullException.ThrowIfNull(config);
-        return
-        [
-            new("mp_maxrounds", EngineRoundLimit(config.TotalRounds).ToString(CultureInfo.InvariantCulture), "24"),
+        return BuildCvarPlan(config, checked(config.TotalRounds + 1), includeNativePostMatch: false);
+    }
+
+    private static IReadOnlyList<DuelCvarSetting> BuildCvarPlan(
+        DuelGameConfig config,
+        int engineRoundLimit,
+        bool includeNativePostMatch)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        var settings = new List<DuelCvarSetting>
+        {
+            new("mp_maxrounds", engineRoundLimit.ToString(CultureInfo.InvariantCulture), "24"),
             new("mp_winlimit", "0", "0"),
             new("mp_match_can_clinch", "0", "1"),
             new("mp_roundtime", config.RoundTimeMinutes.ToString("0.##", CultureInfo.InvariantCulture), "1.92"),
@@ -99,7 +113,18 @@ internal static class DuelRuntimePolicy
             new("mp_autoteambalance", "0", "1"),
             new("mp_limitteams", "0", "2"),
             new("mp_weapons_allow_map_placed", "0", "1"),
-            new("mp_death_drop_gun", "0", "1")
-        ];
+            new("mp_death_drop_gun", "0", "1"),
+            new("sv_showimpacts", "0", "0"),
+            new("sv_showimpacts_time", "0", "4")
+        };
+
+        if (includeNativePostMatch)
+        {
+            settings.Add(new("mp_overtime_enable", "0", "1"));
+            settings.Add(new("mp_endmatch_votenextmap", "0", "1"));
+            settings.Add(new("mp_match_end_restart", "1", "0"));
+        }
+
+        return settings;
     }
 }

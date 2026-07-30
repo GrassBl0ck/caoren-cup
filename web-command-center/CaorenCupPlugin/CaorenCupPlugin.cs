@@ -1421,7 +1421,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
         finally
         {
-            BeginDuelCleanup(DuelControlMode.GameManaged);
+            BeginDuelCleanup(DuelControlMode.GameManaged, waitForEngineRestart: true);
         }
     }
 
@@ -1443,7 +1443,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
     }
 
-    private void BeginDuelCleanup(DuelControlMode mode)
+    private void BeginDuelCleanup(DuelControlMode mode, bool waitForEngineRestart = false)
     {
         if (_duelCleanupState.RestartPending) return;
         _duelCleanupState.Begin(mode);
@@ -1465,6 +1465,8 @@ public sealed class CaorenCupPlugin : BasePlugin
             _gameManagedDuelReconnectReadyAnnounced = false;
             TryUnpauseDuelDuringCleanup();
         }
+
+        if (waitForEngineRestart) return;
 
         try
         {
@@ -2671,7 +2673,10 @@ public sealed class CaorenCupPlugin : BasePlugin
         _duelFormalRound = 0;
         _duelLastAnnouncedStage = null;
         ClearDuelEquipmentState();
-        _duelServerCvars.Apply(DuelRuntimePolicy.BuildCvarPlan(config));
+        var cvarPlan = _duelSession.ControlMode == DuelControlMode.GameManaged
+            ? DuelRuntimePolicy.BuildCvarPlan(config)
+            : DuelRuntimePolicy.BuildWebManagedCvarPlan(config);
+        _duelServerCvars.Apply(cvarPlan);
         _duelModeEnabled = true;
         Server.ExecuteCommand("mp_warmup_end");
         Server.ExecuteCommand("mp_restartgame 1");
@@ -2994,29 +2999,11 @@ public sealed class CaorenCupPlugin : BasePlugin
             if (stage == DuelStage.Pistol) GivePlayerKevlar(player);
             else player.GiveNamedItem("item_assaultsuit");
             GiveDuelUtilities(player);
-            RemoveUnexpectedDuelFirearms(player, rule);
             QueuePreferredDuelWeapon(player, rule);
         }
         catch (Exception ex)
         {
             Logger.LogDebug(ex, "Failed to apply duel loadout for {SteamId}", steamId);
-        }
-    }
-
-    private static void RemoveUnexpectedDuelFirearms(
-        CCSPlayerController player,
-        DuelLoadoutRule rule)
-    {
-        var weapons = player.PlayerPawn?.Value?.WeaponServices?.MyWeapons.ToArray();
-        if (weapons is null) return;
-
-        foreach (var handle in weapons)
-        {
-            var weapon = handle.Value;
-            if (weapon is null || !weapon.IsValid) continue;
-            if (!DuelRuntimePolicy.IsFirearm(weapon.DesignerName)) continue;
-            if (rule.AllowedFirearms.Contains(weapon.DesignerName)) continue;
-            weapon.Remove();
         }
     }
 
@@ -3048,7 +3035,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (!allowRetry) return;
 
         var steamId = player.SteamID;
-        Server.NextFrame(() =>
+        AddTimer(0.1f, () =>
         {
             if (!CanApplyDuelLoadoutContinuation(player, steamId)) return;
             TrySelectPreferredDuelWeapon(player, rule, allowRetry: false);
@@ -3062,7 +3049,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                     steamId,
                     rule.PreferredWeapon);
             }
-        });
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private bool CanApplyDuelLoadoutContinuation(CCSPlayerController player, ulong steamId)
@@ -3144,28 +3131,29 @@ public sealed class CaorenCupPlugin : BasePlugin
         var pawn = player.PlayerPawn.Value;
         if (pawn == null || !pawn.IsValid) return;
         pawn.ArmorValue = 100;
-        try
+        var itemServices = pawn.ItemServices?.As<CCSPlayer_ItemServices>();
+        if (itemServices is not null)
         {
-            dynamic dynPawn = pawn;
-            dynPawn.HasHelmet = false;
+            itemServices.HasHelmet = false;
         }
-        catch
-        {
-        }
+        player.PawnHasHelmet = false;
         try
         {
             Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_ArmorValue");
-            Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_bHasHelmet");
         }
         catch
         {
             try
             {
                 Utilities.SetStateChanged(pawn, "CCSPlayerPawnBase", "m_ArmorValue");
-                Utilities.SetStateChanged(pawn, "CCSPlayerPawnBase", "m_bHasHelmet");
             }
             catch { }
         }
+        try
+        {
+            Utilities.SetStateChanged(player, "CCSPlayerController", "m_bPawnHasHelmet");
+        }
+        catch { }
     }
 
     private static bool IsDuelSniperWeapon(string weapon)

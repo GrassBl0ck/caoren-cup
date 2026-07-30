@@ -30,17 +30,38 @@ public sealed class DuelRuntimePolicyTests
         Assert.Equal(expected, DuelRuntimePolicy.ShouldBlockDrop(item));
 
     [Fact]
-    public void Engine_round_limit_reserves_one_round() =>
-        Assert.Equal(37, DuelRuntimePolicy.EngineRoundLimit(36));
+    public void Engine_round_limit_allows_native_post_match_at_configured_total() =>
+        Assert.Equal(36, DuelRuntimePolicy.EngineRoundLimit(36));
 
     [Fact]
-    public void Cvar_plan_contains_weapon_guards_and_reserved_round()
+    public void Cvar_plan_contains_native_post_match_and_duel_safety_settings()
     {
         var plan = DuelRuntimePolicy.BuildCvarPlan(new DuelGameConfig(8, 16, 12, 1.25, "random2"));
-        Assert.Contains(plan, item => item is { Name: "mp_maxrounds", Value: "37" });
+        Assert.Contains(plan, item => item is { Name: "mp_maxrounds", Value: "36" });
         Assert.Contains(plan, item => item is { Name: "mp_weapons_allow_map_placed", Value: "0" });
         Assert.Contains(plan, item => item is { Name: "mp_death_drop_gun", Value: "0" });
         Assert.Contains(plan, item => item is { Name: "mp_roundtime", Value: "1.25" });
+        Assert.Contains(plan, item => item is { Name: "sv_showimpacts", Value: "0" });
+        Assert.Contains(plan, item => item is { Name: "sv_showimpacts_time", Value: "0" });
+        Assert.Contains(plan, item => item is { Name: "mp_overtime_enable", Value: "0" });
+        Assert.Contains(plan, item => item is { Name: "mp_endmatch_votenextmap", Value: "0" });
+        Assert.Contains(plan, item => item is { Name: "mp_match_end_restart", Value: "1" });
+    }
+
+    [Fact]
+    public void Web_managed_cvar_plan_keeps_the_reserved_round_without_native_post_match()
+    {
+        var method = typeof(DuelRuntimePolicy).GetMethod(
+            "BuildWebManagedCvarPlan",
+            System.Reflection.BindingFlags.Static |
+            System.Reflection.BindingFlags.Public |
+            System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var plan = Assert.IsAssignableFrom<IReadOnlyList<DuelCvarSetting>>(
+            method!.Invoke(null, [new DuelGameConfig(8, 16, 12, 1.25, "random2")]));
+        Assert.Contains(plan, item => item is { Name: "mp_maxrounds", Value: "37" });
+        Assert.DoesNotContain(plan, item => item.Name == "mp_match_end_restart");
     }
 
     [Fact]
