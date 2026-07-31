@@ -8,9 +8,10 @@ import { resolveSkinActor } from './permissions';
 import { validateWeaponUpdate } from './validation';
 import { WeaponPaintsService } from './service';
 import type { LoadoutRepository, SkinAuditEntry } from './repository';
-import { createWeaponPaintsConnectionOptions, WEAPONPAINTS_WEB_SCHEMA_SQL, WEAPONPAINTS_RESET_SQL } from './mysql-repository';
+import { buildTeamCopyStatements, createWeaponPaintsConnectionOptions, WEAPONPAINTS_WEB_SCHEMA_SQL, WEAPONPAINTS_RESET_SQL } from './mysql-repository';
 import { executeWeaponPaintsAction } from './socket-api';
 import { resolveWeaponPaintsDataRoot } from './runtime';
+import { parseSelectedPaints } from './http-routes';
 
 const dataRoot = path.resolve(process.cwd(), '..', 'weaponpaints-plugin', 'data');
 
@@ -21,6 +22,40 @@ test('本地目录能够提供完整分类，并拒绝目录外的物品 ID', as
     assert.ok(catalog.search('sticker', '印花', { limit: 10 }).items.length > 0);
     assert.equal(catalog.hasSimpleItem('sticker', 999_999_999), false);
     assert.equal(catalog.hasWeaponPaint(7, 999_999_999), false);
+});
+
+test('枪械、刀具和手套按型号分组，并使用已保存涂装作为预览', async () => {
+    const catalog = await WeaponPaintsCatalog.load(dataRoot);
+    const guns = catalog.searchGroups('skin', '', { kind: 'gun', team: 2, selectedPaints: new Map([[7, 1466]]) });
+    const knives = catalog.searchGroups('skin', '', { kind: 'knife', team: 2 });
+    const gloves = catalog.searchGroups('glove', '', { team: 2 });
+
+    assert.ok(guns.groups.length < catalog.search('skin', '', { kind: 'gun' }).total);
+    assert.equal(new Set(guns.groups.map((group) => group.defIndex)).size, guns.groups.length);
+    assert.equal(new Set(knives.groups.map((group) => group.defIndex)).size, knives.groups.length);
+    assert.equal(new Set(gloves.groups.map((group) => group.defIndex)).size, gloves.groups.length);
+    assert.equal(guns.groups.find((group) => group.defIndex === 7)?.representative.id, 1466);
+    assert.equal(catalog.searchGroups('skin', '精灵之噬', {
+        kind: 'gun', team: 2, selectedPaints: new Map([[7, 0]]),
+    }).groups[0]?.representative.id, 1466);
+});
+
+test('枪械目录按阵营隐藏不可用的专属武器', async () => {
+    const catalog = await WeaponPaintsCatalog.load(dataRoot);
+    const tDefIndexes = new Set(catalog.searchGroups('skin', '', { kind: 'gun', team: 2 }).groups.map((group) => group.defIndex));
+    const ctDefIndexes = new Set(catalog.searchGroups('skin', '', { kind: 'gun', team: 3 }).groups.map((group) => group.defIndex));
+
+    assert.equal(tDefIndexes.has(7), true, 'T 应显示 AK-47');
+    assert.equal(tDefIndexes.has(16), false, 'T 不应显示 M4A4');
+    assert.equal(tDefIndexes.has(60), false, 'T 不应显示 M4A1-S');
+    assert.equal(ctDefIndexes.has(7), false, 'CT 不应显示 AK-47');
+    assert.equal(ctDefIndexes.has(16), true, 'CT 应显示 M4A4');
+    assert.equal(ctDefIndexes.has(60), true, 'CT 应显示 M4A1-S');
+});
+
+test('分组目录只接受有界的已保存涂装映射', () => {
+    assert.deepEqual([...parseSelectedPaints('7:1466,16:309').entries()], [[7, 1466], [16, 309]]);
+    assert.deepEqual([...parseSelectedPaints('bad,7:-1,0:1,16:abc').entries()], []);
 });
 
 test('本地图片清单为目录物品提供站内 URL，缺图时不返回远程地址', async () => {
@@ -140,7 +175,7 @@ test('保存武器时校验本地目录、记录审计并请求安全刷新', as
     const actor = { actorPlayerId: 'player-1', actorRole: 'Player' as const, targetSteamId: '76561198000000001' };
 
     await service.saveWeapon(actor, {
-        team: 3, weaponDefIndex: 7, paintId: 0, wear: 0.1, seed: 4,
+        team: 2, weaponDefIndex: 7, paintId: 0, wear: 0.1, seed: 4,
         nameTag: '', statTrakEnabled: false, statTrakCount: 0, stickers: [],
     });
 
@@ -150,6 +185,63 @@ test('保存武器时校验本地目录、记录审计并请求安全刷新', as
         service.saveWeapon(actor, { team: 3, weaponDefIndex: 7, paintId: 999_999_999 }),
         /本地目录/,
     );
+    await assert.rejects(
+        service.saveWeapon(actor, { team: 3, weaponDefIndex: 7, paintId: 0 }),
+        /当前阵营/,
+    );
+    await assert.rejects(
+        service.saveWeapon(actor, {
+            team: 3, weaponDefIndex: 500, paintId: 0,
+            stickers: [{ slot: 0, id: 1 }],
+        }),
+        /只有枪械可以使用印花/,
+    );
+    await assert.rejects(
+        service.saveWeapon(actor, {
+            team: 3, weaponDefIndex: 500, paintId: 0,
+            keychain: { id: 1 },
+        }),
+        /只有枪械可以使用挂件/,
+    );
+});
+
+test('复制阵营时仅传递目标阵营可用武器和枪械印花规则', async () => {
+    const catalog = await WeaponPaintsCatalog.load(dataRoot);
+    let capturedRules: { excludedWeaponDefIndexes: readonly number[]; stickerEligibleWeaponDefIndexes: readonly number[] } | undefined;
+    const repository: LoadoutRepository = {
+        health: async () => ({ ok: true }),
+        load: async (steamId) => ({ steamId, weapons: [], cosmetics: [] }),
+        saveWeapon: async () => undefined,
+        saveCosmetic: async () => undefined,
+        copyTeam: async (_steamId, _fromTeam, _toTeam, rules) => { capturedRules = rules; },
+        reset: async () => undefined,
+        audit: async () => undefined,
+    };
+    const service = new WeaponPaintsService(catalog, repository, () => undefined);
+    const actor = { actorPlayerId: 'player-1', actorRole: 'Player' as const, targetSteamId: '76561198000000001' };
+
+    await service.copyTeam(actor, 2, 3);
+
+    assert.ok(capturedRules?.excludedWeaponDefIndexes.includes(7));
+    assert.ok(capturedRules?.excludedWeaponDefIndexes.includes(16));
+    assert.ok(capturedRules?.stickerEligibleWeaponDefIndexes.includes(9));
+    assert.equal(capturedRules?.stickerEligibleWeaponDefIndexes.includes(16), false);
+    assert.equal(capturedRules?.stickerEligibleWeaponDefIndexes.includes(500), false);
+});
+
+test('复制阵营 SQL 过滤专属枪械、非枪械印花和探员', () => {
+    const statements = buildTeamCopyStatements('76561198000000001', 2, 3, {
+        excludedWeaponDefIndexes: [7, 16],
+        stickerEligibleWeaponDefIndexes: [9],
+    });
+    const sql = statements.map((statement) => statement.sql).join('\n');
+
+    assert.match(statements[0].sql, /weapon_defindex` NOT IN \(\?,\?\)/);
+    assert.deepEqual(statements[0].params.slice(-2), [7, 16]);
+    assert.match(statements[1].sql, /weapon_defindex` IN \(\?\)/);
+    assert.deepEqual(statements[1].params.slice(-1), [9]);
+    assert.match(statements[2].sql, /kind` <> 'Agent'/);
+    assert.doesNotMatch(sql, /\b(?:DELETE|DROP|TRUNCATE)\b/i);
 });
 
 test('只有管理员可以重置和立即强刷', async () => {

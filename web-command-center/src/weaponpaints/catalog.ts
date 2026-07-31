@@ -1,6 +1,8 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import { isWeaponAvailableForTeam, TEAM_EXCLUSIVE_WEAPON_DEF_INDEXES } from './team-policy';
+
 export type CatalogCategory = 'skin' | 'glove' | 'agent' | 'music' | 'pin' | 'sticker' | 'keychain';
 
 export interface CatalogItem {
@@ -20,6 +22,30 @@ export interface CatalogSearchResult {
     offset: number;
     limit: number;
 }
+
+export interface CatalogGroup {
+    key: string;
+    name: string;
+    englishName: string;
+    weaponKey?: string;
+    defIndex: number;
+    representative: CatalogItem;
+}
+
+export interface CatalogGroupSearchResult {
+    groups: CatalogGroup[];
+    total: number;
+    offset: number;
+    limit: number;
+}
+
+type GroupSearchOptions = {
+    offset?: number;
+    limit?: number;
+    team?: 2 | 3;
+    kind?: 'gun' | 'knife';
+    selectedPaints?: ReadonlyMap<number, number>;
+};
 
 const FILES: Record<CatalogCategory, string> = {
     skin: 'skins.json',
@@ -96,6 +122,12 @@ const parseItems = (category: CatalogCategory, raw: unknown): CatalogItem[] => {
     return raw.map((entry) => itemFrom(category, entry as Record<string, unknown>)).filter((item): item is CatalogItem => !!item);
 };
 
+const isKnifeItem = (item: CatalogItem): boolean => /knife|bayonet/i.test(item.weaponKey || '');
+const baseItemName = (name: string, fallback: string): string => name.split('|')[0]?.trim() || fallback;
+const matchesQuery = (item: CatalogItem, needle: string): boolean => (
+    !needle || `${item.name}\n${item.englishName}\n${item.key}`.toLocaleLowerCase('zh-CN').includes(needle)
+);
+
 export class WeaponPaintsCatalog {
     private constructor(
         readonly dataRoot: string,
@@ -138,12 +170,71 @@ export class WeaponPaintsCatalog {
             if (options.team && item.team && item.team !== options.team) return false;
             if (options.defIndex && item.defIndex !== options.defIndex) return false;
             if (category === 'skin' && options.kind) {
-                const isKnife = /knife|bayonet/i.test(item.weaponKey || '');
+                const isKnife = isKnifeItem(item);
                 if ((options.kind === 'knife') !== isKnife) return false;
+                if (options.kind === 'gun' && options.team && !isWeaponAvailableForTeam(item.defIndex || 0, options.team)) return false;
             }
-            return !needle || `${item.name}\n${item.englishName}\n${item.key}`.toLocaleLowerCase('zh-CN').includes(needle);
+            return matchesQuery(item, needle);
         });
         return { items: filtered.slice(offset, offset + limit), total: filtered.length, offset, limit };
+    }
+
+    searchGroups(category: 'skin' | 'glove', query: string, options: GroupSearchOptions = {}): CatalogGroupSearchResult {
+        const offset = Math.max(0, Number.isInteger(options.offset) ? Number(options.offset) : 0);
+        const limit = Math.min(100, Math.max(1, Number.isInteger(options.limit) ? Number(options.limit) : 60));
+        const needle = String(query || '').trim().toLocaleLowerCase('zh-CN');
+        const grouped = new Map<string, CatalogItem[]>();
+
+        for (const item of this.categories.get(category) || []) {
+            if (!item.defIndex && item.id !== 0) continue;
+            if (category === 'skin' && options.kind) {
+                const isKnife = isKnifeItem(item);
+                if ((options.kind === 'knife') !== isKnife) continue;
+                if (options.kind === 'gun' && options.team && !isWeaponAvailableForTeam(item.defIndex || 0, options.team)) continue;
+            }
+            const key = category === 'skin' ? String(item.weaponKey || item.defIndex) : String(item.defIndex);
+            const entries = grouped.get(key) || [];
+            entries.push(item);
+            grouped.set(key, entries);
+        }
+
+        const groups: CatalogGroup[] = [];
+        for (const [key, items] of grouped) {
+            const matchingItems = needle ? items.filter((item) => matchesQuery(item, needle)) : items;
+            if (!matchingItems.length) continue;
+            const defIndex = items[0]?.defIndex || 0;
+            const selectedPaint = options.selectedPaints?.get(defIndex);
+            const representative = (needle ? matchingItems[0] : undefined)
+                || items.find((item) => item.id === selectedPaint)
+                || items.find((item) => item.id === 0)
+                || items[0];
+            if (!representative) continue;
+            groups.push({
+                key,
+                name: baseItemName(representative.name, representative.weaponKey || key),
+                englishName: baseItemName(representative.englishName, representative.weaponKey || key),
+                weaponKey: representative.weaponKey,
+                defIndex,
+                representative,
+            });
+        }
+        return { groups: groups.slice(offset, offset + limit), total: groups.length, offset, limit };
+    }
+
+    isGunDefIndex(defIndex: number): boolean {
+        return (this.categories.get('skin') || []).some((item) => item.defIndex === defIndex && !isKnifeItem(item));
+    }
+
+    gunDefIndexes(team?: 2 | 3): number[] {
+        return [...new Set((this.categories.get('skin') || [])
+            .filter((item) => !isKnifeItem(item) && (!team || isWeaponAvailableForTeam(item.defIndex || 0, team)))
+            .map((item) => item.defIndex || 0)
+            .filter(Boolean))];
+    }
+
+    teamExclusiveWeaponDefIndexes(): number[] {
+        const catalogDefIndexes = new Set(this.gunDefIndexes());
+        return TEAM_EXCLUSIVE_WEAPON_DEF_INDEXES.filter((defIndex) => catalogDefIndexes.has(defIndex));
     }
 
     hasWeaponPaint(defIndex: number, paintId: number): boolean {

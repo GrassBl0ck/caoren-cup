@@ -26,12 +26,17 @@ export interface SkinAuditEntry {
     details?: Record<string, unknown>;
 }
 
+export interface TeamCopyRules {
+    excludedWeaponDefIndexes: readonly number[];
+    stickerEligibleWeaponDefIndexes: readonly number[];
+}
+
 export interface LoadoutRepository {
     health(): Promise<{ ok: boolean; error?: string }>;
     load(steamId: string): Promise<PlayerLoadout>;
     saveWeapon(steamId: string, update: WeaponUpdate, audit: SkinAuditEntry): Promise<void>;
     saveCosmetic(steamId: string, update: CosmeticUpdate, audit: SkinAuditEntry): Promise<void>;
-    copyTeam(steamId: string, fromTeam: 2 | 3, toTeam: 2 | 3, audit: SkinAuditEntry): Promise<void>;
+    copyTeam(steamId: string, fromTeam: 2 | 3, toTeam: 2 | 3, rules: TeamCopyRules, audit: SkinAuditEntry): Promise<void>;
     reset(steamId: string, team: 2 | 3 | undefined, audit: SkinAuditEntry): Promise<void>;
     audit(entry: SkinAuditEntry): Promise<void>;
 }

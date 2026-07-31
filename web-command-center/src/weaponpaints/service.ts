@@ -1,6 +1,7 @@
 import { WeaponPaintsCatalog } from './catalog';
 import type { CosmeticKind, CosmeticUpdate, LoadoutRepository, SkinAuditEntry } from './repository';
 import type { ResolvedSkinActor } from './permissions';
+import { isWeaponAvailableForTeam } from './team-policy';
 import { validateTeam, validateWeaponUpdate } from './validation';
 
 const auditFor = (
@@ -28,6 +29,16 @@ export class WeaponPaintsService {
         const update = validateWeaponUpdate(raw);
         if (!this.catalog.hasWeaponPaint(update.weaponDefIndex, update.paintId)) {
             throw new Error('所选武器皮肤不在服务器本地目录中。');
+        }
+        const isGun = this.catalog.isGunDefIndex(update.weaponDefIndex);
+        if (isGun && !isWeaponAvailableForTeam(update.weaponDefIndex, update.team)) {
+            throw new Error('所选枪械不可用于当前阵营。');
+        }
+        if (!isGun && update.stickers.some((sticker) => sticker.id)) {
+            throw new Error('只有枪械可以使用印花。');
+        }
+        if (!isGun && update.keychain?.id) {
+            throw new Error('只有枪械可以使用挂件。');
         }
         for (const sticker of update.stickers) {
             if (sticker.id && !this.catalog.hasSimpleItem('sticker', sticker.id)) throw new Error(`印花槽 ${sticker.slot + 1} 的 ID 不在服务器本地目录中。`);
@@ -67,7 +78,17 @@ export class WeaponPaintsService {
         const fromTeam = validateTeam(fromTeamRaw);
         const toTeam = validateTeam(toTeamRaw);
         if (fromTeam === toTeam) throw new Error('来源阵营和目标阵营不能相同。');
-        await this.repository.copyTeam(actor.targetSteamId, fromTeam, toTeam, auditFor(actor, 'copy_team', { fromTeam, toTeam }));
+        const excludedWeaponDefIndexes = this.catalog.teamExclusiveWeaponDefIndexes();
+        const excluded = new Set(excludedWeaponDefIndexes);
+        const stickerEligibleWeaponDefIndexes = this.catalog.gunDefIndexes()
+            .filter((defIndex) => !excluded.has(defIndex));
+        await this.repository.copyTeam(
+            actor.targetSteamId,
+            fromTeam,
+            toTeam,
+            { excludedWeaponDefIndexes, stickerEligibleWeaponDefIndexes },
+            auditFor(actor, 'copy_team', { fromTeam, toTeam }),
+        );
         this.requestSafeRefresh(actor.targetSteamId);
     }
 
