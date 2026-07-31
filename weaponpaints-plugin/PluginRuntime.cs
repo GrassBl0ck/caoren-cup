@@ -32,6 +32,7 @@ public partial class CaorenWeaponPaintsPlugin
     private bool _catalogReady;
     private bool _gameDataReady;
     private bool _officialRoundActive;
+    private bool _mvpPlayed;
     private bool _giveNamedItemHooked;
     private int _databaseInitializationActive;
 
@@ -393,6 +394,7 @@ public partial class CaorenWeaponPaintsPlugin
     private HookResult OnRoundStart(EventRoundStart _, GameEventInfo __)
     {
         _officialRoundActive = true;
+        _mvpPlayed = false;
         return HookResult.Continue;
     }
 
@@ -404,6 +406,11 @@ public partial class CaorenWeaponPaintsPlugin
 
     private HookResult OnRoundMvp(EventRoundMvp @event, GameEventInfo info)
     {
+        if (_mvpPlayed)
+        {
+            return HookResult.Continue;
+        }
+
         var player = @event.Userid;
         if (!WeaponPaintsUtility.IsPlayerValid(player) || player is null ||
             !GPlayersMusic.TryGetValue(player.Slot, out var kits) ||
@@ -415,6 +422,7 @@ public partial class CaorenWeaponPaintsPlugin
         @event.Musickitid = kit;
         @event.Nomusic = 0;
         info.DontBroadcast = true;
+        _mvpPlayed = true;
         new EventRoundMvp(true) { Userid = player, Musickitid = kit, Nomusic = 0 }.FireEvent(false);
         return HookResult.Continue;
     }

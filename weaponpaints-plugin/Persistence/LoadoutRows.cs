@@ -7,10 +7,10 @@ public sealed record WeaponRow(
     byte Team,
     ushort WeaponDefIndex,
     uint PaintId,
-    float Wear,
-    uint Seed,
+    decimal Wear,
+    ushort Seed,
     string NameTag,
-    bool StatTrakEnabled,
+    byte StatTrakEnabled,
     int StatTrakCount,
     uint KeychainId,
     float KeychainOffsetX,
@@ -52,10 +52,10 @@ public static class LoadoutRecordMapper
 
             var selection = new WeaponSelection(row.WeaponDefIndex, row.PaintId)
             {
-                Wear = row.Wear,
+                Wear = (float)row.Wear,
                 Seed = row.Seed,
                 NameTag = row.NameTag ?? string.Empty,
-                StatTrakEnabled = row.StatTrakEnabled,
+                StatTrakEnabled = row.StatTrakEnabled != 0,
                 StatTrakCount = row.StatTrakCount,
                 Keychain = row.KeychainId == 0
                     ? null

@@ -7,13 +7,24 @@ namespace CaorenCup.WeaponPaints.Tests;
 public sealed class RecordMapperTests
 {
     [Fact]
+    public void WeaponRow_UsesMySqlProviderTypesForDecimalAndUnsignedSmallintColumns()
+    {
+        var parameters = typeof(WeaponRow).GetConstructors().Single().GetParameters()
+            .ToDictionary(parameter => parameter.Name!);
+
+        Assert.Equal(typeof(decimal), parameters[nameof(WeaponRow.Wear)].ParameterType);
+        Assert.Equal(typeof(ushort), parameters[nameof(WeaponRow.Seed)].ParameterType);
+        Assert.Equal(typeof(byte), parameters[nameof(WeaponRow.StatTrakEnabled)].ParameterType);
+    }
+
+    [Fact]
     public void Mapper_RebuildsCompleteTeamSpecificLoadout()
     {
         var weapons = new[]
         {
-            new WeaponRow("76561198000000001", 2, 7, 801, 0.12f, 321, "草人杯", true, 9,
+            new WeaponRow("76561198000000001", 2, 7, 801, 0.12m, 321, "草人杯", 1, 9,
                 4, 0.1f, 0.2f, 0.3f, 99),
-            new WeaponRow("76561198000000001", 3, 7, 302, 0.01f, 12, "", false, 0,
+            new WeaponRow("76561198000000001", 3, 7, 302, 0.01m, 12, "", 0, 0,
                 0, 0, 0, 0, 0)
         };
         var stickers = new[]
@@ -42,7 +53,7 @@ public sealed class RecordMapperTests
     {
         var loadout = LoadoutRecordMapper.Map(
             "76561198000000001",
-            [new WeaponRow("76561198000000001", 1, 7, 801, 0, 0, "", false, 0, 0, 0, 0, 0, 0)],
+            [new WeaponRow("76561198000000001", 1, 7, 801, 0, 0, "", 0, 0, 0, 0, 0, 0, 0)],
             [new StickerRow("76561198000000001", 2, 7, 9, 123, 0, 0, 0, 0, 1, 0)],
             [new CosmeticRow("76561198000000001", 2, "Unknown", "value")]);
 
