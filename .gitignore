@@ -33,6 +33,7 @@ desktop-client/dist/
 desktop-client/out/
 desktop-client/*.exe
 web-command-center/public/downloads/*.exe
+web-command-center/public/weaponpaints/
 
 # Archives / backups
 *.zip

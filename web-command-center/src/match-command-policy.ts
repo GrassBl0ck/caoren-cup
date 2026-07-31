@@ -4,6 +4,7 @@ export type ServerCommandClass =
   | 'match-flow'
   | 'caoren-modifier'
   | 'duel-flow'
+  | 'cosmetic'
   | 'map'
   | 'unknown';
 
@@ -67,8 +68,16 @@ const MAP_COMMANDS = new Set([
   'host_workshop_map',
 ]);
 
+const COSMETIC_COMMANDS = new Set(['wp_refresh']);
+
 const commandNameOf = (command: string): string =>
   String(command || '').trim().split(/\s+/)[0]?.toLowerCase() || '';
+
+export const isAllowedWeaponPaintsRefreshCommand = (command: string): boolean => {
+  const normalized = String(command || '');
+  return !/[;\r\n]/.test(normalized) &&
+    /^wp_refresh 7656119[0-9]{10}(?: safe)?$/i.test(normalized);
+};
 
 export const classifyServerCommand = (command: string): ServerCommandClass => {
   const commandName = commandNameOf(command);
@@ -77,6 +86,7 @@ export const classifyServerCommand = (command: string): ServerCommandClass => {
   if (CAOREN_MODIFIER_COMMANDS.has(commandName)) return 'caoren-modifier';
   if (DUEL_FLOW_COMMANDS.has(commandName)) return 'duel-flow';
   if (MAP_COMMANDS.has(commandName)) return 'map';
+  if (COSMETIC_COMMANDS.has(commandName)) return 'cosmetic';
   return 'unknown';
 };
 
@@ -90,6 +100,15 @@ export const canEnqueueServerCommand = (
     ? 'caoren'
     : (matchMode === 'duel' ? 'caoren' : 'matchzy');
   const caorenModifiersEnabled = session.matchOptions?.caorenModifiersEnabled === true;
+
+  if (commandClass === 'cosmetic') {
+    return isAllowedWeaponPaintsRefreshCommand(command)
+      ? { allowed: true }
+      : {
+          allowed: false,
+          reason: '换肤刷新命令格式无效，只允许指定 SteamID64 的安全刷新或管理员强刷。',
+        };
+  }
 
   if (commandClass === 'unknown') {
     return {

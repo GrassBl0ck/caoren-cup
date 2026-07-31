@@ -1,0 +1,477 @@
+[
+    {
+        "weapon_defindex":  0,
+        "paint":  0,
+        "paint_name":  "Gloves | Default"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10010",
+        "paint_name":  "裹手（★） | 云杉 DDPAT"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10081",
+        "paint_name":  "裹手（★） | 沙漠头巾"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10036",
+        "paint_name":  "裹手（★） | 恶土"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10084",
+        "paint_name":  "裹手（★） | 警告！"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10055",
+        "paint_name":  "裹手（★） | 防水布胶带"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10053",
+        "paint_name":  "裹手（★） | 钴蓝骷髅"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10054",
+        "paint_name":  "裹手（★） | 套印"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10082",
+        "paint_name":  "裹手（★） | 长颈鹿"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10056",
+        "paint_name":  "裹手（★） | 森林色调"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10009",
+        "paint_name":  "裹手（★） | 皮革"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10083",
+        "paint_name":  "裹手（★） | 蟒蛇"
+    },
+    {
+        "weapon_defindex":  5032,
+        "paint":  "10021",
+        "paint_name":  "裹手（★） | 屠夫"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10024",
+        "paint_name":  "摩托手套（★） | 日蚀"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10050",
+        "paint_name":  "摩托手套（★） | 玳瑁"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10079",
+        "paint_name":  "摩托手套（★） | 血压"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10077",
+        "paint_name":  "摩托手套（★） | 终点线"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10049",
+        "paint_name":  "摩托手套（★） | 嘭！"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10080",
+        "paint_name":  "摩托手套（★） | 第三特种兵连"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10026",
+        "paint_name":  "摩托手套（★） | 薄荷"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10027",
+        "paint_name":  "摩托手套（★） | *嘣！*"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10078",
+        "paint_name":  "摩托手套（★） | 小心烟雾弹"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10028",
+        "paint_name":  "摩托手套（★） | 清凉薄荷"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10052",
+        "paint_name":  "摩托手套（★） | 多边形"
+    },
+    {
+        "weapon_defindex":  5033,
+        "paint":  "10051",
+        "paint_name":  "摩托手套（★） | 交运"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "1398",
+        "paint_name":  "★ Driver Gloves | Wave Chaser"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "1404",
+        "paint_name":  "★ Driver Gloves | Seigaiha"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "1412",
+        "paint_name":  "★ Driver Gloves | Plum Quill"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "1439",
+        "paint_name":  "★ Driver Gloves | Hand Sweaters"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "1402",
+        "paint_name":  "★ Driver Gloves | Garden"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "1401",
+        "paint_name":  "★ Driver Gloves | Dragon Fists"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "1400",
+        "paint_name":  "★ Driver Gloves | Brocade Flowers"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "1399",
+        "paint_name":  "★ Driver Gloves | Brocade Crane"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10013",
+        "paint_name":  "驾驶手套（★） | 月色织物"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10070",
+        "paint_name":  "驾驶手套（★） | 雪豹"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10071",
+        "paint_name":  "驾驶手套（★） | 美洲豹女王"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10015",
+        "paint_name":  "驾驶手套（★） | 护卫"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10042",
+        "paint_name":  "驾驶手套（★） | 蓝紫格子"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10016",
+        "paint_name":  "驾驶手套（★） | 深红织物"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10069",
+        "paint_name":  "驾驶手套（★） | 绯红列赞"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10041",
+        "paint_name":  "驾驶手套（★） | 王蛇"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10040",
+        "paint_name":  "驾驶手套（★） | 菱背蛇纹"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10043",
+        "paint_name":  "驾驶手套（★） | 超越"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10072",
+        "paint_name":  "驾驶手套（★） | 西装革履"
+    },
+    {
+        "weapon_defindex":  5031,
+        "paint":  "10044",
+        "paint_name":  "驾驶手套（★） | 墨绿色调"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "1416",
+        "paint_name":  "★ Specialist Gloves | Sunburst"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "1438",
+        "paint_name":  "★ Specialist Gloves | Pillow Punchers"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "1413",
+        "paint_name":  "★ Specialist Gloves | Lime Polycam"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "1440",
+        "paint_name":  "★ Specialist Gloves | Cloud Chaser"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "1415",
+        "paint_name":  "★ Specialist Gloves | Chocolate Chesterfield"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "1414",
+        "paint_name":  "★ Specialist Gloves | Blackbook"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "1437",
+        "paint_name":  "★ Specialist Gloves | Big Swell"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10030",
+        "paint_name":  "专业手套（★） | 森林 DDPAT"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10034",
+        "paint_name":  "专业手套（★） | 翠绿之网"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10063",
+        "paint_name":  "专业手套（★） | 渐变之色"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10068",
+        "paint_name":  "专业手套（★） | 一线特工"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10062",
+        "paint_name":  "专业手套（★） | 狩鹿"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10033",
+        "paint_name":  "专业手套（★） | 深红和服"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10065",
+        "paint_name":  "专业手套（★） | 渐变大理石"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10035",
+        "paint_name":  "专业手套（★） | 元勋"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10066",
+        "paint_name":  "专业手套（★） | 陆军少尉长官"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10067",
+        "paint_name":  "专业手套（★） | 老虎精英"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10061",
+        "paint_name":  "专业手套（★） | 深红之网"
+    },
+    {
+        "weapon_defindex":  5034,
+        "paint":  "10064",
+        "paint_name":  "专业手套（★） | 大腕"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "1405",
+        "paint_name":  "★ Sport Gloves | Violet Beadwork"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "1410",
+        "paint_name":  "★ Sport Gloves | Ultra Violent"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "1409",
+        "paint_name":  "★ Sport Gloves | Red Racer"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "1417",
+        "paint_name":  "★ Sport Gloves | Occult"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "1406",
+        "paint_name":  "★ Sport Gloves | Frosty"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "1408",
+        "paint_name":  "★ Sport Gloves | Creme Pinstripe"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "1407",
+        "paint_name":  "★ Sport Gloves | Blaze"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10047",
+        "paint_name":  "运动手套（★） | 欧米伽"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10048",
+        "paint_name":  "运动手套（★） | 迈阿密风云"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10038",
+        "paint_name":  "运动手套（★） | 树篱迷宫"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10075",
+        "paint_name":  "运动手套（★） | 猩红头巾"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10074",
+        "paint_name":  "运动手套（★） | 大型猎物"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10076",
+        "paint_name":  "运动手套（★） | 夜行衣"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10018",
+        "paint_name":  "运动手套（★） | 超导体"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10019",
+        "paint_name":  "运动手套（★） | 干旱"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10045",
+        "paint_name":  "运动手套（★） | 双栖"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10046",
+        "paint_name":  "运动手套（★） | 青铜形态"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10037",
+        "paint_name":  "运动手套（★） | 潘多拉之盒"
+    },
+    {
+        "weapon_defindex":  5030,
+        "paint":  "10073",
+        "paint_name":  "运动手套（★） | 弹弓"
+    },
+    {
+        "weapon_defindex":  5027,
+        "paint":  "10006",
+        "paint_name":  "血猎手套（★） | 焦炭"
+    },
+    {
+        "weapon_defindex":  5027,
+        "paint":  "10039",
+        "paint_name":  "血猎手套（★） | 游击队"
+    },
+    {
+        "weapon_defindex":  5027,
+        "paint":  "10008",
+        "paint_name":  "血猎手套（★） | 染铜"
+    },
+    {
+        "weapon_defindex":  5027,
+        "paint":  "10007",
+        "paint_name":  "血猎手套（★） | 蛇咬"
+    },
+    {
+        "weapon_defindex":  4725,
+        "paint":  "10087",
+        "paint_name":  "狂牙手套（★） | 针尖"
+    },
+    {
+        "weapon_defindex":  4725,
+        "paint":  "10085",
+        "paint_name":  "狂牙手套（★） | 翡翠"
+    },
+    {
+        "weapon_defindex":  4725,
+        "paint":  "10086",
+        "paint_name":  "狂牙手套（★） | 黄色斑纹"
+    },
+    {
+        "weapon_defindex":  4725,
+        "paint":  "10088",
+        "paint_name":  "狂牙手套（★） | 精神错乱"
+    },
+    {
+        "weapon_defindex":  5035,
+        "paint":  "10057",
+        "paint_name":  "九头蛇手套（★） | 翡翠色调"
+    },
+    {
+        "weapon_defindex":  5035,
+        "paint":  "10060",
+        "paint_name":  "九头蛇手套（★） | 表面淬火"
+    },
+    {
+        "weapon_defindex":  5035,
+        "paint":  "10058",
+        "paint_name":  "九头蛇手套（★） | 红树林"
+    },
+    {
+        "weapon_defindex":  5035,
+        "paint":  "10059",
+        "paint_name":  "九头蛇手套（★） | 响尾蛇"
+    }
+]

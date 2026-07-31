@@ -40,6 +40,7 @@
     <link rel="stylesheet" href="/css/update-announcements.css">
     <link rel="stylesheet" href="/css/caoren-mod-panel.css">
     <link rel="stylesheet" href="/css/caoren-motion.css">
+    <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9-weaponpaints-advanced-decoration">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
 <body class="caoren-modifiers-disabled">
@@ -174,10 +175,38 @@
                 <div id="lobby-phase-summary" class="lobby-phase-summary">当前阶段读取中</div>
                 <button id="v1333-lobby-connect-server-btn" type="button" disabled>连接 CS2</button>
                 <button id="device-logout-btn" type="button" style="display:none;">退出设备登录</button>
+                <button id="weaponpaints-open-btn" type="button">我的换肤</button>
                 <div id="timer-display"></div><div id="lobby-notification-display" style="display:none;"></div>
             </div>
         </div>
         <p id="my-identity" class="my-identity-line"></p>
+        <section id="weaponpaints-panel" class="weaponpaints-panel panel" hidden aria-labelledby="weaponpaints-title">
+            <header class="weaponpaints-header">
+                <div><span class="section-eyebrow">Caoren Cup v1.9</span><h2 id="weaponpaints-title">换肤工坊</h2><p>网页与桌面客户端共用；保存后会按回合安全规则应用。</p></div>
+                <button id="weaponpaints-close-btn" type="button" aria-label="关闭换肤工坊">关闭</button>
+            </header>
+            <div id="weaponpaints-health" class="weaponpaints-health" aria-live="polite">正在检查换肤服务...</div>
+            <div id="weaponpaints-admin-bar" class="weaponpaints-admin-bar" hidden>
+                <label>代管玩家<select id="weaponpaints-target"></select></label>
+                <button id="weaponpaints-reset-btn" type="button" class="danger-btn">重置当前玩家</button>
+                <button id="weaponpaints-force-btn" type="button">管理员强刷</button>
+            </div>
+            <div class="weaponpaints-team-bar" role="tablist" aria-label="阵营配置">
+                <button type="button" class="active" data-wp-team="3">CT 配置</button>
+                <button type="button" data-wp-team="2">T 配置</button>
+                <button id="weaponpaints-copy-btn" type="button">复制到 T</button>
+            </div>
+            <div class="weaponpaints-layout">
+                <nav id="weaponpaints-categories" class="weaponpaints-categories" aria-label="换肤分类"></nav>
+                <main class="weaponpaints-browser">
+                    <div class="weaponpaints-search-row"><input id="weaponpaints-search" type="search" placeholder="搜索中文名、英文名或 ID"><button id="weaponpaints-search-btn" type="button">搜索</button></div>
+                    <div id="weaponpaints-grid" class="weaponpaints-grid" aria-live="polite"></div>
+                    <button id="weaponpaints-more-btn" type="button" hidden>加载更多</button>
+                </main>
+                <aside id="weaponpaints-editor" class="weaponpaints-editor"><p class="muted-line">选择枪皮或刀皮后，可在这里调整高级参数。</p></aside>
+            </div>
+            <div id="weaponpaints-notice" class="weaponpaints-notice" aria-live="polite"></div>
+        </section>
         <div id="admin-controls" class="lobby-workspace" style="display:none;">
             <section id="flow-undo-safety-bar" class="flow-undo-safety-bar" aria-live="polite" hidden>
                 <div class="flow-undo-summary">
@@ -736,5 +765,6 @@
 
 
 <script src="/js/game-code-login.js?v=desktop-refresh-20260603"></script>
+<script src="/js/weaponpaints-app.js?v=1.9-weaponpaints-advanced-decoration"></script>
 </body>
 </html>

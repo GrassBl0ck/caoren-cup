@@ -1,5 +1,6 @@
 /* Main lobby app extracted from index.html */
 const ws = io();
+window.__caorenCupLobbySocket = ws;
         let myPlayerId = null;
         let countdownInterval = null;
         let currentTimerEndAt = null;

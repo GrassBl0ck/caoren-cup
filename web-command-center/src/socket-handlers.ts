@@ -51,6 +51,7 @@ import {
     steamClaimTickets,
 } from './identity/identity-runtime';
 import { applyMembershipToPlayer, attachMembershipToSession } from './identity/session-integration';
+import { registerWeaponPaintsSocketHandlers } from './weaponpaints/socket-api';
 import {
     clearFlowUndoHistory,
     discardFlowUndoCheckpoint,
@@ -340,6 +341,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
     };
 
     io.on('connection', (socket) => {
+        registerWeaponPaintsSocketHandlers(socket);
         console.log(`客户端连接: ${socket.id}`);
         socket.data.playerId = null;
         const isAuthenticatedActor = (claimedPlayerId: unknown): boolean => {

@@ -1158,18 +1158,30 @@ public sealed class FinalReviewFixTests
             "mp_weapons_allow_map_placed" => "1",
             "mp_death_drop_gun" => "1",
             "mp_maxrounds" => "24",
+            "sv_showimpacts" => "1",
+            "sv_showimpacts_time" => "4",
+            "mp_endmatch_votenextmap" => "1",
+            "mp_match_end_restart" => "0",
             _ => fallback
         }, executed.Add);
 
         scope.Apply(DuelRuntimePolicy.BuildCvarPlan(new DuelGameConfig()));
-        Assert.Contains("mp_maxrounds 37", executed);
+        Assert.Contains("mp_maxrounds 36", executed);
         Assert.Contains("mp_weapons_allow_map_placed 0", executed);
         Assert.Contains("mp_death_drop_gun 0", executed);
+        Assert.Contains("sv_showimpacts 0", executed);
+        Assert.Contains("sv_showimpacts_time 0", executed);
+        Assert.Contains("mp_endmatch_votenextmap 0", executed);
+        Assert.Contains("mp_match_end_restart 1", executed);
 
         scope.RestoreAll();
         Assert.Contains("mp_maxrounds 24", executed);
         Assert.Contains("mp_weapons_allow_map_placed 1", executed);
         Assert.Contains("mp_death_drop_gun 1", executed);
+        Assert.Contains("sv_showimpacts 1", executed);
+        Assert.Contains("sv_showimpacts_time 4", executed);
+        Assert.Contains("mp_endmatch_votenextmap 1", executed);
+        Assert.Contains("mp_match_end_restart 0", executed);
     }
 
     [Fact]
@@ -1177,7 +1189,8 @@ public sealed class FinalReviewFixTests
     {
         var source = ReadPluginSource();
         Assert.Contains("private void ActivateDuelRuntime(DuelGameConfig config)", source);
-        Assert.Contains("_duelServerCvars.Apply(DuelRuntimePolicy.BuildCvarPlan(config));", source);
+        Assert.Contains("DuelRuntimePolicy.BuildWebManagedCvarPlan(config)", source);
+        Assert.Contains("DuelRuntimePolicy.BuildCvarPlan(config)", source);
         Assert.Contains("ReadPayloadDouble(payload, \"roundTimeMinutes\", 1)", source);
         Assert.Contains("_duelSession.EnterWebManaged(config);", source);
         Assert.DoesNotContain(
@@ -1186,17 +1199,35 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
-    public void Duel_drop_listener_and_single_retry_are_wired()
+    public void Duel_weapon_rules_avoid_direct_entity_removal_and_use_delayed_retry()
     {
         var source = ReadPluginSource();
         Assert.Contains("AddCommandListener(\"drop\", OnDuelDropCommand, HookMode.Pre)", source);
-        Assert.Contains("RemoveUnexpectedDuelFirearms(player, rule)", source);
+        Assert.DoesNotContain("RemoveUnexpectedDuelFirearms", source);
+        Assert.DoesNotContain("weapon.Remove()", source);
         Assert.Contains("QueuePreferredDuelWeapon(player, rule)", source);
+        Assert.Contains("AddTimer(0.1f", source);
         Assert.Contains("allowRetry: false", source);
     }
 
     [Fact]
-    public void Duel_final_round_uses_restart_then_round_start_cleanup_order()
+    public void Duel_kevlar_only_marks_networked_armor_state_changed()
+    {
+        var source = ReadPluginSource();
+        var giveKevlar = SliceSource(
+            source,
+            "private static void GivePlayerKevlar(",
+            "private static bool IsDuelSniperWeapon(");
+        Assert.Contains("ItemServices?.As<CCSPlayer_ItemServices>()", giveKevlar);
+        Assert.Contains("itemServices.HasHelmet = false", giveKevlar);
+        Assert.Contains("player.PawnHasHelmet = false", giveKevlar);
+        Assert.Contains("Utilities.SetStateChanged(player, \"CCSPlayerController\", \"m_bPawnHasHelmet\")", giveKevlar);
+        Assert.Contains("Utilities.SetStateChanged(pawn, \"CCSPlayerPawn\", \"m_ArmorValue\")", giveKevlar);
+        Assert.DoesNotContain("m_bHasHelmet", giveKevlar);
+    }
+
+    [Fact]
+    public void Duel_final_round_waits_for_native_same_map_restart_then_cleans_up()
     {
         var source = ReadPluginSource();
         var roundEnd = SliceSource(source, "public HookResult OnRoundEnd(", "private void FinishGameManagedDuel(");
@@ -1211,7 +1242,16 @@ public sealed class FinalReviewFixTests
         Assert.Contains("if (wasGameManaged) return HookResult.Continue;", roundEnd);
         Assert.DoesNotContain("RestoreGameManagedDuelCvarsWithRetry", roundEnd);
 
+        var finishGameManaged = SliceSource(
+            source,
+            "private void FinishGameManagedDuel(",
+            "private void AbortGameManagedDuel(");
+        Assert.Contains(
+            "BeginDuelCleanup(DuelControlMode.GameManaged, waitForEngineRestart: true)",
+            finishGameManaged);
+
         var beginCleanup = SliceSource(source, "private void BeginDuelCleanup(", "private void CompleteDuelCleanupAfterRestart(");
+        Assert.Contains("if (waitForEngineRestart) return;", beginCleanup);
         Assert.Contains("Server.ExecuteCommand(\"mp_restartgame 1\")", beginCleanup);
         Assert.DoesNotContain("RestoreGameManagedDuelCvarsWithRetry", beginCleanup);
 

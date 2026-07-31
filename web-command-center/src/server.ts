@@ -41,6 +41,8 @@ import { registerIdentityAuthRoutes } from './identity/auth-routes';
 import { initializeIdentityRuntime } from './identity/identity-runtime';
 import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer, removeIdentityFromSession } from './identity/session-integration';
+import { registerWeaponPaintsHttpRoutes } from './weaponpaints/http-routes';
+import { initializeWeaponPaintsRuntime } from './weaponpaints/runtime';
 import { UpdateAnnouncementService } from './update-announcements/update-announcement-service';
 import { UpdateAnnouncementStore } from './update-announcements/update-announcement-store';
 import { registerUpdateAnnouncementAdminSocketHandlers } from './update-announcements/update-announcement-admin-socket';
@@ -204,6 +206,8 @@ registerPluginRoutes(app, {
     notifyMessage,
 });
 
+registerWeaponPaintsHttpRoutes(app);
+
 registerSocketHandlers(io, {
     broadcastState,
     notifyMessage,
@@ -249,6 +253,7 @@ setInterval(() => {
 const PORT = process.env.PORT || 3000;
 Promise.all([
     initializeIdentityRuntime(),
+    initializeWeaponPaintsRuntime(),
     updateAnnouncementService.initialize(),
 ])
     .then(() => httpServer.listen(PORT, () => console.log(`草人杯指挥台已启动: http://localhost:${PORT}`)))
