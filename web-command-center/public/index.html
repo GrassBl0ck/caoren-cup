@@ -184,44 +184,6 @@
             </div>
         </div>
         <p id="my-identity" class="my-identity-line"></p>
-        <section id="weaponpaints-panel" class="weaponpaints-panel panel" hidden aria-labelledby="weaponpaints-title">
-            <header class="weaponpaints-header">
-                <div><span class="section-eyebrow">Caoren Cup v1.9</span><h2 id="weaponpaints-title">换肤工坊</h2><p>网页与桌面客户端共用；保存后会按回合安全规则应用。</p></div>
-                <button id="weaponpaints-close-btn" type="button" aria-label="关闭换肤工坊">关闭</button>
-            </header>
-            <div id="weaponpaints-health" class="weaponpaints-health" aria-live="polite">正在检查换肤服务...</div>
-            <div id="weaponpaints-admin-bar" class="weaponpaints-admin-bar" hidden>
-                <label>代管玩家<select id="weaponpaints-target"></select></label>
-                <button id="weaponpaints-reset-btn" type="button" class="danger-btn">重置当前玩家</button>
-                <button id="weaponpaints-force-btn" type="button">管理员强刷</button>
-            </div>
-            <div class="weaponpaints-team-bar" role="tablist" aria-label="阵营配置">
-                <button type="button" class="active" data-wp-team="3">CT 配置</button>
-                <button type="button" data-wp-team="2">T 配置</button>
-            </div>
-            <div class="weaponpaints-layout">
-                <nav id="weaponpaints-categories" class="weaponpaints-categories" aria-label="换肤分类"></nav>
-                <main class="weaponpaints-browser">
-                    <div class="weaponpaints-search-row"><input id="weaponpaints-search" type="search" placeholder="搜索中文名、英文名或 ID"><button id="weaponpaints-search-btn" type="button">搜索</button></div>
-                    <div id="weaponpaints-grid" class="weaponpaints-grid" aria-live="polite"></div>
-                    <button id="weaponpaints-more-btn" type="button" hidden>加载更多</button>
-                </main>
-                <aside id="weaponpaints-editor" class="weaponpaints-editor"><p class="muted-line">选择枪皮或刀皮后，可在这里调整高级参数。</p></aside>
-            </div>
-            <div id="weaponpaints-notice" class="weaponpaints-toast" aria-live="polite"></div>
-            <div id="weaponpaints-unsaved-dialog" class="weaponpaints-unsaved-dialog" hidden>
-                <section role="dialog" aria-modal="true" aria-labelledby="weaponpaints-unsaved-title">
-                    <h3 id="weaponpaints-unsaved-title">当前修改尚未保存</h3>
-                    <p>继续操作会丢失当前武器或装饰配置的修改。</p>
-                    <p id="weaponpaints-unsaved-error" class="weaponpaints-dialog-error" aria-live="polite"></p>
-                    <div class="weaponpaints-dialog-actions">
-                        <button id="weaponpaints-unsaved-save" class="primary-btn" type="button">保存并继续</button>
-                        <button id="weaponpaints-unsaved-discard" type="button">放弃更改</button>
-                        <button id="weaponpaints-unsaved-cancel" type="button">返回编辑</button>
-                    </div>
-                </section>
-            </div>
-        </section>
         <div id="admin-controls" class="lobby-workspace" style="display:none;">
             <section id="flow-undo-safety-bar" class="flow-undo-safety-bar" aria-live="polite" hidden>
                 <div class="flow-undo-summary">
@@ -737,6 +699,45 @@
             <button onclick="closeQuit()">取消</button>
         </div>
     </div>
+
+    <section id="weaponpaints-panel" class="weaponpaints-panel panel" hidden aria-labelledby="weaponpaints-title">
+        <header class="weaponpaints-header">
+            <div><span class="section-eyebrow">Caoren Cup v1.9</span><h2 id="weaponpaints-title">换肤工坊</h2><p>网页与桌面客户端共用；保存后会按回合安全规则应用。</p></div>
+            <button id="weaponpaints-close-btn" type="button" aria-label="关闭换肤工坊">关闭</button>
+        </header>
+        <div id="weaponpaints-health" class="weaponpaints-health" aria-live="polite">正在检查换肤服务...</div>
+        <div id="weaponpaints-admin-bar" class="weaponpaints-admin-bar" hidden>
+            <label>代管玩家<select id="weaponpaints-target"></select></label>
+            <button id="weaponpaints-reset-btn" type="button" class="danger-btn">重置当前玩家</button>
+            <button id="weaponpaints-force-btn" type="button">管理员强刷</button>
+        </div>
+        <div class="weaponpaints-team-bar" role="tablist" aria-label="阵营配置">
+            <button type="button" class="active" data-wp-team="3">CT 配置</button>
+            <button type="button" data-wp-team="2">T 配置</button>
+        </div>
+        <div class="weaponpaints-layout">
+            <nav id="weaponpaints-categories" class="weaponpaints-categories" aria-label="换肤分类"></nav>
+            <main class="weaponpaints-browser">
+                <div class="weaponpaints-search-row"><input id="weaponpaints-search" type="search" placeholder="搜索中文名、英文名或 ID"><button id="weaponpaints-search-btn" type="button">搜索</button></div>
+                <div id="weaponpaints-grid" class="weaponpaints-grid" aria-live="polite"></div>
+                <button id="weaponpaints-more-btn" type="button" hidden>加载更多</button>
+            </main>
+            <aside id="weaponpaints-editor" class="weaponpaints-editor"><p class="muted-line">选择枪皮或刀皮后，可在这里调整高级参数。</p></aside>
+        </div>
+        <div id="weaponpaints-notice" class="weaponpaints-toast" aria-live="polite"></div>
+        <div id="weaponpaints-unsaved-dialog" class="weaponpaints-unsaved-dialog" hidden>
+            <section role="dialog" aria-modal="true" aria-labelledby="weaponpaints-unsaved-title">
+                <h3 id="weaponpaints-unsaved-title">当前修改尚未保存</h3>
+                <p>继续操作会丢失当前武器或装饰配置的修改。</p>
+                <p id="weaponpaints-unsaved-error" class="weaponpaints-dialog-error" aria-live="polite"></p>
+                <div class="weaponpaints-dialog-actions">
+                    <button id="weaponpaints-unsaved-save" class="primary-btn" type="button">保存并继续</button>
+                    <button id="weaponpaints-unsaved-discard" type="button">放弃更改</button>
+                    <button id="weaponpaints-unsaved-cancel" type="button">返回编辑</button>
+                </div>
+            </section>
+        </div>
+    </section>
 
     <div id="update-announcement-backdrop" class="update-announcement-backdrop" hidden></div>
     <aside id="update-announcement-drawer" class="update-announcement-drawer" role="dialog" aria-modal="true" aria-labelledby="update-announcement-drawer-title" hidden>

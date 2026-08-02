@@ -15,6 +15,14 @@ const mysqlRepository = fs.readFileSync(path.join(root, 'src', 'weaponpaints', '
 
 assert.match(html, /id="weaponpaints-open-btn"/);
 assert.match(html, /id="weaponpaints-panel"/);
+const lobbyAreaStart = html.indexOf('<div id="lobby-area"');
+const postLobbyMarker = html.indexOf('<!-- 须知模态框 -->', lobbyAreaStart);
+assert.ok(lobbyAreaStart >= 0 && postLobbyMarker > lobbyAreaStart, '必须能定位大厅容器边界');
+assert.doesNotMatch(
+    html.slice(lobbyAreaStart, postLobbyMarker),
+    /id="weaponpaints-panel"/,
+    '换肤面板必须位于隐藏大厅容器之外，确保未参赛玩家也能打开',
+);
 assert.match(html, /weaponpaints-app\.js/);
 assert.match(html, /weaponpaints\.css/);
 assert.match(html, /weaponpaints\.css\?v=1\.9\.2-qol/);
