@@ -77,6 +77,7 @@ export const buildSessionSnapshotPayload = (session: GameSession): SessionSnapsh
         adminLock: session.adminLock,
         createdAt: session.createdAt,
         autoClearMinutes: session.autoClearMinutes,
+        lastActivityAt: session.lastActivityAt,
     },
 });
 

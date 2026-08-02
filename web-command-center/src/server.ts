@@ -47,6 +47,11 @@ import { UpdateAnnouncementService } from './update-announcements/update-announc
 import { UpdateAnnouncementStore } from './update-announcements/update-announcement-store';
 import { registerUpdateAnnouncementAdminSocketHandlers } from './update-announcements/update-announcement-admin-socket';
 import type { PublicUpdateAnnouncement } from './update-announcements/update-announcement-types';
+import {
+    GAME_INACTIVITY_CHECK_INTERVAL_MS,
+    GameInactivityMonitor,
+    GameInactivityTracker,
+} from './game-inactivity-watchdog';
 
 const app = express();
 if (process.env.TRUST_PROXY === 'loopback') app.set('trust proxy', 'loopback');
@@ -109,9 +114,11 @@ const broadcastUpdateAnnouncements = (announcements: PublicUpdateAnnouncement[])
 };
 
 let scoreboardCleanupSessionId = '';
+const gameInactivityTracker = new GameInactivityTracker();
 
 const broadcastState = () => {
     const session = getSession();
+    gameInactivityTracker.observe(session);
     for (const socket of io.sockets.sockets.values()) {
         const viewerId = socket.data?.playerId || null;
         socket.emit(WsEvents.GAME_STATE, sanitizeGameStateForViewer(session, viewerId));
@@ -273,11 +280,24 @@ registerPluginRoutes(app, {
 
 registerWeaponPaintsHttpRoutes(app);
 
-registerSocketHandlers(io, {
+const socketHandlers = registerSocketHandlers(io, {
     broadcastState,
     notifyMessage,
     persistSessionNow: saveSessionSnapshotNow,
 });
+
+const gameInactivityMonitor = new GameInactivityMonitor(
+    gameInactivityTracker,
+    getSession,
+    socketHandlers.terminateCurrentGameAndKickAll,
+    scheduleSessionSnapshotSave,
+);
+
+setInterval(() => {
+    void gameInactivityMonitor.tick().catch((error) => {
+        console.error('[GameInactivity] 自动结束无操作比赛失败：', error);
+    });
+}, GAME_INACTIVITY_CHECK_INTERVAL_MS);
 
 io.on('connection', (socket) => {
     if (socket.data.playerCenterSessionInvalid) socket.emit('PLAYER_CENTER_SESSION_INVALID');

@@ -40,7 +40,7 @@
     <link rel="stylesheet" href="/css/update-announcements.css">
     <link rel="stylesheet" href="/css/caoren-mod-panel.css">
     <link rel="stylesheet" href="/css/caoren-motion.css">
-    <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9-weaponpaints-advanced-decoration">
+    <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9.2-qol">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
 <body class="caoren-modifiers-disabled">
@@ -63,7 +63,7 @@
         <section id="player-center-entry" class="panel player-center-entry" aria-labelledby="player-center-entry-title">
             <div class="login-panel-header">
                 <div>
-                    <span class="section-eyebrow">草人杯 1.9.1</span>
+                    <span class="section-eyebrow">草人杯 1.9.2</span>
                     <h2 id="player-center-entry-title">玩家中心</h2>
                     <p>账号登录只进入玩家中心，不会自动加入比赛。</p>
                 </div>
@@ -198,7 +198,6 @@
             <div class="weaponpaints-team-bar" role="tablist" aria-label="阵营配置">
                 <button type="button" class="active" data-wp-team="3">CT 配置</button>
                 <button type="button" data-wp-team="2">T 配置</button>
-                <button id="weaponpaints-copy-btn" type="button">复制到 T</button>
             </div>
             <div class="weaponpaints-layout">
                 <nav id="weaponpaints-categories" class="weaponpaints-categories" aria-label="换肤分类"></nav>
@@ -209,7 +208,19 @@
                 </main>
                 <aside id="weaponpaints-editor" class="weaponpaints-editor"><p class="muted-line">选择枪皮或刀皮后，可在这里调整高级参数。</p></aside>
             </div>
-            <div id="weaponpaints-notice" class="weaponpaints-notice" aria-live="polite"></div>
+            <div id="weaponpaints-notice" class="weaponpaints-toast" aria-live="polite"></div>
+            <div id="weaponpaints-unsaved-dialog" class="weaponpaints-unsaved-dialog" hidden>
+                <section role="dialog" aria-modal="true" aria-labelledby="weaponpaints-unsaved-title">
+                    <h3 id="weaponpaints-unsaved-title">当前修改尚未保存</h3>
+                    <p>继续操作会丢失当前武器或装饰配置的修改。</p>
+                    <p id="weaponpaints-unsaved-error" class="weaponpaints-dialog-error" aria-live="polite"></p>
+                    <div class="weaponpaints-dialog-actions">
+                        <button id="weaponpaints-unsaved-save" class="primary-btn" type="button">保存并继续</button>
+                        <button id="weaponpaints-unsaved-discard" type="button">放弃更改</button>
+                        <button id="weaponpaints-unsaved-cancel" type="button">返回编辑</button>
+                    </div>
+                </section>
+            </div>
         </section>
         <div id="admin-controls" class="lobby-workspace" style="display:none;">
             <section id="flow-undo-safety-bar" class="flow-undo-safety-bar" aria-live="polite" hidden>
@@ -757,8 +768,9 @@
 <!-- PHASE2_SAFE_ADMIN_VISIBILITY_V3_END -->
 
 
-<script src="/js/access-admin.js?v=1.9.1"></script>
-<script src="/js/player-center.js?v=1.9.1"></script>
-<script src="/js/weaponpaints-app.js?v=1.9.1"></script>
+<script src="/js/access-admin.js?v=1.9.2"></script>
+<script src="/js/player-center.js?v=1.9.2"></script>
+<script src="/js/weaponpaints-draft.js?v=1.9.2"></script>
+<script src="/js/weaponpaints-app.js?v=1.9.2"></script>
 </body>
 </html>

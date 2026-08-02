@@ -74,24 +74,6 @@ export class WeaponPaintsService {
         return update;
     }
 
-    async copyTeam(actor: ResolvedSkinActor, fromTeamRaw: unknown, toTeamRaw: unknown) {
-        const fromTeam = validateTeam(fromTeamRaw);
-        const toTeam = validateTeam(toTeamRaw);
-        if (fromTeam === toTeam) throw new Error('来源阵营和目标阵营不能相同。');
-        const excludedWeaponDefIndexes = this.catalog.teamExclusiveWeaponDefIndexes();
-        const excluded = new Set(excludedWeaponDefIndexes);
-        const stickerEligibleWeaponDefIndexes = this.catalog.gunDefIndexes()
-            .filter((defIndex) => !excluded.has(defIndex));
-        await this.repository.copyTeam(
-            actor.targetSteamId,
-            fromTeam,
-            toTeam,
-            { excludedWeaponDefIndexes, stickerEligibleWeaponDefIndexes },
-            auditFor(actor, 'copy_team', { fromTeam, toTeam }),
-        );
-        this.requestSafeRefresh(actor.targetSteamId);
-    }
-
     async reset(actor: ResolvedSkinActor, teamRaw?: unknown) {
         this.requireAdmin(actor);
         const team = teamRaw === undefined || teamRaw === null || teamRaw === '' ? undefined : validateTeam(teamRaw);

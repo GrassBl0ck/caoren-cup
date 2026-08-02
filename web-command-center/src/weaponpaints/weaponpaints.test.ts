@@ -8,7 +8,7 @@ import { resolveSkinActor } from './permissions';
 import { validateWeaponUpdate } from './validation';
 import { WeaponPaintsService } from './service';
 import type { LoadoutRepository, SkinAuditEntry } from './repository';
-import { buildTeamCopyStatements, createWeaponPaintsConnectionOptions, WEAPONPAINTS_WEB_SCHEMA_SQL, WEAPONPAINTS_RESET_SQL } from './mysql-repository';
+import { createWeaponPaintsConnectionOptions, WEAPONPAINTS_WEB_SCHEMA_SQL, WEAPONPAINTS_RESET_SQL } from './mysql-repository';
 import { executeWeaponPaintsAction } from './socket-api';
 import { resolveWeaponPaintsDataRoot } from './runtime';
 import { parseSelectedPaints } from './http-routes';
@@ -22,6 +22,31 @@ test('本地目录能够提供完整分类，并拒绝目录外的物品 ID', as
     assert.ok(catalog.search('sticker', '印花', { limit: 10 }).items.length > 0);
     assert.equal(catalog.hasSimpleItem('sticker', 999_999_999), false);
     assert.equal(catalog.hasWeaponPaint(7, 999_999_999), false);
+});
+
+test('正式皮肤目录包含固定稀有度，叛徒保持隐秘级红色', async () => {
+    const catalog = await WeaponPaintsCatalog.load(dataRoot);
+    const traitor = catalog.search('skin', 'The Traitor', { defIndex: 61, limit: 10 }).items
+        .find((item) => item.id === 1040);
+
+    assert.deepEqual(traitor?.rarity, {
+        id: 'rarity_ancient_weapon',
+        name: 'Covert',
+        color: '#eb4b4b',
+    });
+});
+
+test('稀有度快照固定来源版本并覆盖当前全部非默认皮肤', async () => {
+    const rarityPayload = JSON.parse(await fs.readFile(path.join(dataRoot, 'skin-rarities.json'), 'utf8'));
+    const skins = JSON.parse(await fs.readFile(path.join(dataRoot, 'en', 'skins.json'), 'utf8'));
+    const expectedKeys = new Set<string>((skins as any[])
+        .filter((item: any) => Number(item.paint) !== 0)
+        .map((item: any) => `${Number(item.weapon_defindex)}:${Number(item.paint)}`));
+
+    assert.equal(rarityPayload.schemaVersion, 1);
+    assert.equal(rarityPayload.source.commit, '0501ac099994f3df291e67730b2acb0a494d77b8');
+    assert.equal(Object.keys(rarityPayload.records).length, expectedKeys.size);
+    assert.equal([...expectedKeys].every((key) => rarityPayload.records[key]), true);
 });
 
 test('枪械、刀具和手套按型号分组，并使用已保存涂装作为预览', async () => {
@@ -184,7 +209,6 @@ test('保存武器时校验本地目录、记录审计并请求安全刷新', as
         load: async (steamId) => ({ steamId, weapons: [], cosmetics: [] }),
         saveWeapon: async (steamId, update, audit) => { calls.push({ kind: 'save', value: { steamId, update, audit } }); },
         saveCosmetic: async () => undefined,
-        copyTeam: async () => undefined,
         reset: async () => undefined,
         audit: async (entry: SkinAuditEntry) => { calls.push({ kind: 'audit', value: entry }); },
     };
@@ -222,45 +246,6 @@ test('保存武器时校验本地目录、记录审计并请求安全刷新', as
     );
 });
 
-test('复制阵营时仅传递目标阵营可用武器和枪械印花规则', async () => {
-    const catalog = await WeaponPaintsCatalog.load(dataRoot);
-    let capturedRules: { excludedWeaponDefIndexes: readonly number[]; stickerEligibleWeaponDefIndexes: readonly number[] } | undefined;
-    const repository: LoadoutRepository = {
-        health: async () => ({ ok: true }),
-        load: async (steamId) => ({ steamId, weapons: [], cosmetics: [] }),
-        saveWeapon: async () => undefined,
-        saveCosmetic: async () => undefined,
-        copyTeam: async (_steamId, _fromTeam, _toTeam, rules) => { capturedRules = rules; },
-        reset: async () => undefined,
-        audit: async () => undefined,
-    };
-    const service = new WeaponPaintsService(catalog, repository, () => undefined);
-    const actor = { actorPlayerId: 'player-1', actorRole: 'Player' as const, targetSteamId: '76561198000000001' };
-
-    await service.copyTeam(actor, 2, 3);
-
-    assert.ok(capturedRules?.excludedWeaponDefIndexes.includes(7));
-    assert.ok(capturedRules?.excludedWeaponDefIndexes.includes(16));
-    assert.ok(capturedRules?.stickerEligibleWeaponDefIndexes.includes(9));
-    assert.equal(capturedRules?.stickerEligibleWeaponDefIndexes.includes(16), false);
-    assert.equal(capturedRules?.stickerEligibleWeaponDefIndexes.includes(500), false);
-});
-
-test('复制阵营 SQL 过滤专属枪械、非枪械印花和探员', () => {
-    const statements = buildTeamCopyStatements('76561198000000001', 2, 3, {
-        excludedWeaponDefIndexes: [7, 16],
-        stickerEligibleWeaponDefIndexes: [9],
-    });
-    const sql = statements.map((statement) => statement.sql).join('\n');
-
-    assert.match(statements[0].sql, /weapon_defindex` NOT IN \(\?,\?\)/);
-    assert.deepEqual(statements[0].params.slice(-2), [7, 16]);
-    assert.match(statements[1].sql, /weapon_defindex` IN \(\?\)/);
-    assert.deepEqual(statements[1].params.slice(-1), [9]);
-    assert.match(statements[2].sql, /kind` <> 'Agent'/);
-    assert.doesNotMatch(sql, /\b(?:DELETE|DROP|TRUNCATE)\b/i);
-});
-
 test('只有管理员可以重置和立即强刷', async () => {
     const catalog = await WeaponPaintsCatalog.load(dataRoot);
     const commands: string[] = [];
@@ -269,7 +254,6 @@ test('只有管理员可以重置和立即强刷', async () => {
         load: async (steamId) => ({ steamId, weapons: [], cosmetics: [] }),
         saveWeapon: async () => undefined,
         saveCosmetic: async () => undefined,
-        copyTeam: async () => undefined,
         reset: async () => undefined,
         audit: async () => undefined,
     };
@@ -310,7 +294,6 @@ test('Socket 操作以服务器认证身份为准，不接受前端冒充玩家'
         load: async (steamId) => { loaded.push(steamId); return { steamId, weapons: [], cosmetics: [] }; },
         saveWeapon: async () => undefined,
         saveCosmetic: async () => undefined,
-        copyTeam: async () => undefined,
         reset: async () => undefined,
         audit: async () => undefined,
     };

@@ -118,7 +118,6 @@ const executeResolvedWeaponPaintsAction = async (
         case 'load': return service.load(actor);
         case 'saveWeapon': return service.saveWeapon(actor, payload.weapon || {});
         case 'saveCosmetic': return service.saveCosmetic(actor, payload.cosmetic || {});
-        case 'copyTeam': return service.copyTeam(actor, payload.fromTeam, payload.toTeam);
         case 'reset': return service.reset(actor, payload.team);
         case 'forceRefresh': return service.forceRefresh(actor);
         default: throw new Error('未知的换肤操作。');

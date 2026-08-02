@@ -1,11 +1,12 @@
 {
   "name": "caoren-cup-web",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx src/server.ts",
+    "check": "npm run typecheck && npm run test:caoren-modules && npm run test:postmatch-fun-stats && npm run test:match-command-policy && npm run test:duel-runtime && npm run test:player-center-ui && npm run test:legacy-login-removed && npm run test:lobby-identity && npm run test:weaponpaints && npm run test:rules-content && npm run test:rules-pdf && npm run test:rules-guide && npm run test:update-announcements && npm run test:update-announcement-ui && npm run test:phase-rollback && npm run test:game-inactivity",
     "typecheck": "tsc --noEmit",
     "test:caoren-modules": "node scripts/check-caoren-modules.cjs",
     "test:postmatch-fun-stats": "node scripts/check-postmatch-fun-stats.cjs",
@@ -14,7 +15,8 @@
     "test:player-center-ui": "node scripts/check-player-center-ui.cjs",
     "test:legacy-login-removed": "node scripts/check-legacy-player-login-removed.cjs",
     "test:lobby-identity": "tsx --test src/identity/*.test.ts src/v1333-game-login.test.ts",
-    "test:weaponpaints": "tsx --test src/weaponpaints/*.test.ts && node scripts/check-weaponpaints-ui.cjs",
+    "test:weaponpaints": "tsx --test src/weaponpaints/*.test.ts && node scripts/check-weaponpaints-draft.cjs && node scripts/check-weaponpaints-ui.cjs",
+    "sync:weaponpaints-rarities": "node scripts/sync-weaponpaints-rarities.mjs",
     "test:rules-content": "node scripts/check-rules-content.cjs",
     "test:rules-pdf": "node scripts/check-rules-pdf.cjs",
     "test:rules-guide": "node scripts/check-rules-guide.cjs",
@@ -22,7 +24,8 @@
     "test:update-announcement-ui": "node scripts/check-update-announcement-ui.cjs",
     "test:flow-undo-ui": "node scripts/check-flow-undo-ui.cjs",
     "test:flow-undo": "tsx --test src/flow-undo-manager.test.ts src/session-persistence.test.ts src/flow-runtime.test.ts src/flow-undo-integration.test.ts src/flow-undo-visibility.test.ts",
-    "test:phase-rollback": "npm run test:flow-undo && npm run test:flow-undo-ui"
+    "test:phase-rollback": "npm run test:flow-undo && npm run test:flow-undo-ui",
+    "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts"
   },
   "dependencies": {
     "express": "^4.18.3",

@@ -5,7 +5,6 @@ import type {
     LoadoutRepository,
     PlayerLoadout,
     SkinAuditEntry,
-    TeamCopyRules,
 } from './repository';
 import type { WeaponUpdate } from './validation';
 
@@ -61,42 +60,6 @@ const insertAudit = async (connection: Pool | PoolConnection, entry: SkinAuditEn
         entry.action,
         JSON.stringify(entry.details || {}),
     ]);
-};
-
-export const buildTeamCopyStatements = (
-    steamId: string,
-    fromTeam: 2 | 3,
-    toTeam: 2 | 3,
-    rules: TeamCopyRules,
-): Array<{ sql: string; params: Array<string | number> }> => {
-    const excludedPlaceholders = rules.excludedWeaponDefIndexes.map(() => '?').join(',') || 'NULL';
-    const stickerPlaceholders = rules.stickerEligibleWeaponDefIndexes.map(() => '?').join(',') || 'NULL';
-    return [
-        {
-            sql: `INSERT INTO \`weapon_loadouts\`
-                 (\`steamid\`,\`team\`,\`weapon_defindex\`,\`paint_id\`,\`wear\`,\`seed\`,\`name_tag\`,\`stattrak_enabled\`,\`stattrak_count\`,\`keychain_id\`,\`keychain_offset_x\`,\`keychain_offset_y\`,\`keychain_offset_z\`,\`keychain_seed\`)
-                 SELECT \`steamid\`,?,\`weapon_defindex\`,\`paint_id\`,\`wear\`,\`seed\`,\`name_tag\`,\`stattrak_enabled\`,\`stattrak_count\`,\`keychain_id\`,\`keychain_offset_x\`,\`keychain_offset_y\`,\`keychain_offset_z\`,\`keychain_seed\`
-                 FROM \`weapon_loadouts\` WHERE \`steamid\`=? AND \`team\`=?
-                   AND \`weapon_defindex\` NOT IN (${excludedPlaceholders})
-                 ON DUPLICATE KEY UPDATE \`paint_id\`=VALUES(\`paint_id\`),\`wear\`=VALUES(\`wear\`),\`seed\`=VALUES(\`seed\`),\`name_tag\`=VALUES(\`name_tag\`),\`stattrak_enabled\`=VALUES(\`stattrak_enabled\`),\`stattrak_count\`=VALUES(\`stattrak_count\`),\`keychain_id\`=VALUES(\`keychain_id\`),\`keychain_offset_x\`=VALUES(\`keychain_offset_x\`),\`keychain_offset_y\`=VALUES(\`keychain_offset_y\`),\`keychain_offset_z\`=VALUES(\`keychain_offset_z\`),\`keychain_seed\`=VALUES(\`keychain_seed\`)`,
-            params: [toTeam, steamId, fromTeam, ...rules.excludedWeaponDefIndexes],
-        },
-        {
-            sql: `INSERT INTO \`weapon_stickers\` (\`steamid\`,\`team\`,\`weapon_defindex\`,\`slot\`,\`sticker_id\`,\`sticker_schema\`,\`offset_x\`,\`offset_y\`,\`wear\`,\`scale\`,\`rotation\`)
-                 SELECT \`steamid\`,?,\`weapon_defindex\`,\`slot\`,\`sticker_id\`,\`sticker_schema\`,\`offset_x\`,\`offset_y\`,\`wear\`,\`scale\`,\`rotation\`
-                 FROM \`weapon_stickers\` WHERE \`steamid\`=? AND \`team\`=?
-                   AND \`weapon_defindex\` IN (${stickerPlaceholders})
-                 ON DUPLICATE KEY UPDATE \`sticker_id\`=VALUES(\`sticker_id\`),\`sticker_schema\`=VALUES(\`sticker_schema\`),\`offset_x\`=VALUES(\`offset_x\`),\`offset_y\`=VALUES(\`offset_y\`),\`wear\`=VALUES(\`wear\`),\`scale\`=VALUES(\`scale\`),\`rotation\`=VALUES(\`rotation\`)`,
-            params: [toTeam, steamId, fromTeam, ...rules.stickerEligibleWeaponDefIndexes],
-        },
-        {
-            sql: `INSERT INTO \`player_cosmetics\` (\`steamid\`,\`team\`,\`kind\`,\`item_key\`)
-                 SELECT \`steamid\`,?,\`kind\`,\`item_key\` FROM \`player_cosmetics\`
-                 WHERE \`steamid\`=? AND \`team\`=? AND \`kind\` <> 'Agent'
-                 ON DUPLICATE KEY UPDATE \`item_key\`=VALUES(\`item_key\`)`,
-            params: [toTeam, steamId, fromTeam],
-        },
-    ];
 };
 
 export class MySqlLoadoutRepository implements LoadoutRepository {
@@ -230,22 +193,6 @@ export class MySqlLoadoutRepository implements LoadoutRepository {
                  VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE \`item_key\`=VALUES(\`item_key\`)`,
                 [steamId, update.team, update.kind, update.itemKey],
             );
-            await insertAudit(connection, audit);
-        });
-    }
-
-    async copyTeam(
-        steamId: string,
-        fromTeam: 2 | 3,
-        toTeam: 2 | 3,
-        rules: TeamCopyRules,
-        audit: SkinAuditEntry,
-    ): Promise<void> {
-        await this.transaction(async (connection) => {
-            await this.resetRows(connection, steamId, toTeam);
-            for (const statement of buildTeamCopyStatements(steamId, fromTeam, toTeam, rules)) {
-                await connection.execute(statement.sql, statement.params);
-            }
             await insertAudit(connection, audit);
         });
     }

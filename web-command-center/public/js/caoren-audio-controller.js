@@ -476,7 +476,7 @@
       return;
     }
 
-    state.socket = window.io();
+    state.socket = window.__caorenCupLobbySocket || window.__caorenCupSocket || window.io();
 
     state.socket.on("connect", function () {
       updateStatus("音频控制器已连接比赛状态。");

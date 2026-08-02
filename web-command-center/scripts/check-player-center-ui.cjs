@@ -4,6 +4,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'player-center.js'), 'utf8');
+const audioJs = fs.readFileSync(path.join(root, 'public', 'js', 'caoren-audio-controller.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 
 for (const id of [
@@ -55,6 +56,12 @@ for (const field of ['steamId', 'passwordHash', 'tokenHash', 'sessionId', 'membe
 }
 for (const token of ['.player-center-entry', '.player-center-home', '.player-center-settings-grid']) {
   if (!css.includes(token)) throw new Error(`missing player-center styles: ${token}`);
+}
+if (!js.includes('window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket')) {
+  throw new Error('player-center must send match tickets through the lobby socket');
+}
+if (!audioJs.includes('window.__caorenCupLobbySocket || window.__caorenCupSocket || window.io()')) {
+  throw new Error('audio controller must reuse the lobby socket instead of replacing it');
 }
 
 console.log('Player-center UI contract checks passed.');

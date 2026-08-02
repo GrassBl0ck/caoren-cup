@@ -1242,4 +1242,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             broadcastState();
         });
     });
+
+    return { terminateCurrentGameAndKickAll };
 }
