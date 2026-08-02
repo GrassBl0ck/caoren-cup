@@ -43,18 +43,18 @@ const deriveScrypt = (
     });
 });
 
-export const validateFixedMemberPassword = (value: unknown): string => {
+export const validateAccountPassword = (value: unknown): string => {
     if (typeof value !== 'string') throw new Error('password_invalid');
     const length = Array.from(value).length;
     if (length < 8 || length > 128) throw new Error('password_invalid');
     return value;
 };
 
-export const hashFixedMemberPassword = async (
+export const hashAccountPassword = async (
     rawPassword: unknown,
     options: PasswordHashOptions = {},
 ): Promise<PasswordCredential> => {
-    const password = validateFixedMemberPassword(rawPassword);
+    const password = validateAccountPassword(rawPassword);
     const params = { ...DEFAULT_SCRYPT_PARAMS };
     const salt = (options.randomBytes || crypto.randomBytes)(32);
     const hash = await deriveScrypt(password, salt, params);
@@ -67,13 +67,13 @@ export const hashFixedMemberPassword = async (
     };
 };
 
-export const verifyFixedMemberPassword = async (
+export const verifyAccountPassword = async (
     rawPassword: unknown,
     credential: PasswordCredential,
 ): Promise<boolean> => {
     let password: string;
     try {
-        password = validateFixedMemberPassword(rawPassword);
+        password = validateAccountPassword(rawPassword);
     } catch {
         return false;
     }
@@ -102,7 +102,7 @@ interface LoginAttemptState {
 
 export type LoginGuardResult = { blocked: false } | { blocked: true; retryAt: number };
 
-export class FixedMemberLoginGuard {
+export class AccountLoginGuard {
     private readonly attempts = new Map<string, LoginAttemptState>();
     private readonly now: () => number;
     private readonly attemptWindowMs: number;

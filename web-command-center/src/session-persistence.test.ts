@@ -48,15 +48,24 @@ test('schema v2 persists complete pregame flow without undo history or login sec
     assert.equal(payload.version, 2);
     assert.equal(serialized.includes('BIND-SECRET'), false);
     assert.equal(serialized.includes('SESSION-SECRET'), false);
+    assert.equal(serialized.includes('lobbyAccess'), false);
     assert.equal(Object.prototype.hasOwnProperty.call(payload, 'flowUndo'), false);
 
-    const legacyPayload = { ...payload, flowUndo: exportFlowUndoState() };
+    const legacyPayload = {
+        ...payload,
+        flowUndo: exportFlowUndoState(),
+        session: {
+            ...payload.session,
+            lobbyAccess: { inviteCode: 'OLD-INVITE', inviteCreatedAt: 1, inviteExpiresAt: 2 },
+        },
+    };
     setSession(createInitialSession());
     assert.equal(restoreSessionSnapshotData(legacyPayload), true);
     assert.equal(getSession().phase, GamePhase.MapBan);
     assert.deepEqual(getSession().draftOriginalOrder, ['A', 'B']);
     assert.deepEqual(getSession().bannedMaps, ['Dust II']);
     assert.equal(getSession().mapVote?.votes.admin, 'Inferno');
+    assert.equal(Object.prototype.hasOwnProperty.call(getSession(), 'lobbyAccess'), false);
     assert.equal(exportFlowUndoState().entries.length, 0);
 });
 

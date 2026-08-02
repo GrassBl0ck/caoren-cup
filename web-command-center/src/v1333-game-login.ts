@@ -1,16 +1,9 @@
-﻿// v1333-game-login.ts
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { GamePhase, Player, WsEvents } from './types';
-import { getSession, setSession } from './session-manager';
-import {
-    normalizeSteamId,
-    normalizeLoginText,
-    findPlayerBySteamId,
-    generateBindCode,
-    getGamePlayers,
-} from './player-utils';
+import { Player, WsEvents } from './types';
+import { getSession } from './session-manager';
+import { normalizeSteamId, normalizeLoginText, generateBindCode } from './player-utils';
 import {
     V1333_GAME_LOGIN_CODE_TTL_SECONDS,
     V1333_PLUGIN_ONLINE_TTL_MS,
@@ -18,18 +11,21 @@ import {
     ADMIN_PASSWORD,
     PLUGIN_TOKEN,
 } from './game-constants';
-import { deviceEnrollmentTickets, lobbyIdentityService } from './identity/identity-runtime';
-import { applyMembershipToPlayer, attachMembershipToSession } from './identity/session-integration';
-import { lastForwardedValue } from './identity/auth-core';
 
-// 管理游戏内登录码
-const v1333GameLoginTickets = new Map<string, any>();
+interface GameLoginTicket {
+    code: string;
+    steamId: string;
+    name: string;
+    expiresAt: number;
+}
+
+const v1333GameLoginTickets = new Map<string, GameLoginTicket>();
 
 const v1333MakeGameLoginCode = (): string => {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     for (let attempt = 0; attempt < 20; attempt++) {
         let code = '';
-        for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+        for (let index = 0; index < 6; index++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
         if (!v1333GameLoginTickets.has(code)) return code;
     }
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -42,65 +38,48 @@ const v1333CleanupGameLoginTickets = () => {
     }
 };
 
-export const v1333IssueGameLoginCode = (steamIdRaw: unknown, nameRaw: unknown): any => {
+export const v1333IssueGameLoginCode = (steamIdRaw: unknown, nameRaw: unknown): GameLoginTicket => {
     v1333CleanupGameLoginTickets();
-
     const steamId = normalizeSteamId(steamIdRaw);
     if (!steamId) throw new Error('invalid steamId');
-
     const name = normalizeLoginText(nameRaw) || `Steam ${steamId.slice(-6)}`;
-
     for (const [oldCode, ticket] of v1333GameLoginTickets.entries()) {
         if (ticket.steamId === steamId) v1333GameLoginTickets.delete(oldCode);
     }
-
     const ticket = {
         code: v1333MakeGameLoginCode(),
         steamId,
         name,
         expiresAt: Date.now() + V1333_GAME_LOGIN_CODE_TTL_SECONDS * 1000,
     };
-
     v1333GameLoginTickets.set(ticket.code, ticket);
     return ticket;
 };
 
-export const v1333ConsumeGameLoginTicket = (codeRaw: unknown): any | undefined => {
+// !cclogin 的单次游戏码只允许由账号开户/恢复 HTTP 接口消费。
+export const v1333ConsumeGameLoginTicket = (codeRaw: unknown): GameLoginTicket | undefined => {
     v1333CleanupGameLoginTickets();
-
     const code = normalizeLoginText(codeRaw).toUpperCase();
     if (!code) return undefined;
-
     const ticket = v1333GameLoginTickets.get(code);
     if (!ticket) return undefined;
-
-    if (ticket.expiresAt <= Date.now()) {
-        v1333GameLoginTickets.delete(code);
-        return undefined;
-    }
     v1333GameLoginTickets.delete(code);
-    return ticket;
+    return ticket.expiresAt <= Date.now() ? undefined : ticket;
 };
 
 export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, deps: {
     broadcastState: () => void;
 }) {
-    const { broadcastState } = deps;
-
-    // 服务器状态查询
     app.get('/api/public/server-status', (_req, res) => {
-        const session = getSession();
-        const live = session.liveGameData;
+        const live = getSession().liveGameData;
         const lastHeartbeatAt = live?.lastPluginHeartbeatAt || null;
         const heartbeatFresh = !!lastHeartbeatAt && Date.now() - Number(lastHeartbeatAt) < V1333_PLUGIN_ONLINE_TTL_MS;
         const pluginReady = live?.pluginConnected === true && heartbeatFresh;
-        const joinAllowed = !!V1333_GAME_SERVER_CONNECT_URL;
-
         res.json({
             success: true,
             online: pluginReady,
             pluginReady,
-            joinAllowed,
+            joinAllowed: !!V1333_GAME_SERVER_CONNECT_URL,
             pluginConnected: live?.pluginConnected === true,
             heartbeatFresh,
             lastHeartbeatAt,
@@ -110,7 +89,6 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
         });
     });
 
-    // 插件生成登录码
     app.post('/api/plugin/game-login-code', (req, res) => {
         const token = req.header('x-caoren-plugin-token') || req.query?.token;
         if (!PLUGIN_TOKEN || token !== PLUGIN_TOKEN) {
@@ -125,172 +103,56 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
                 steamId: ticket.steamId,
                 name: ticket.name,
             });
-        } catch (err: any) {
-            return res.status(400).json({ success: false, error: err?.message || 'failed to create game login code' });
+        } catch (error) {
+            return res.status(400).json({
+                success: false,
+                error: error instanceof Error ? error.message : 'failed to create game login code',
+            });
         }
     });
 
-    // 游戏内码登录 Socket 事件
+    // 兼容现有管理员客户端：GAME_CODE_LOGIN 仅接受管理员密码，绝不消费玩家游戏码。
     io.on('connection', (socket) => {
-        socket.on('GAME_CODE_LOGIN', async (payload: any) => {
-            const session = getSession();
+        socket.on('GAME_CODE_LOGIN', (payload: { credential?: unknown }) => {
             const credentialRaw = normalizeLoginText(payload?.credential);
-            const credential = credentialRaw.toUpperCase();
-
-            if (!credential) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '请输入游戏内返回的码或管理员密码。' });
+            if (credentialRaw !== ADMIN_PASSWORD) {
+                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员密码错误。' });
                 return;
             }
-
-            if (credentialRaw === ADMIN_PASSWORD) {
-                // 创建或复用管理员
-                const existingAdmin = Object.values(session.players).find(p => p.role === 'Admin' && p.name === 'Admin');
-                const adminPlayer = existingAdmin || (() => {
-                    const id = uuidv4();
-                    const player: Player = {
-                        playerId: id,
-                        name: 'Admin',
-                        role: 'Admin',
-                        bindCode: generateBindCode(),
-                        isReady: true,
-                    };
-                    session.players[id] = player;
-                    session.playerOrder.push(id);
-                    return player;
-                })();
-                adminPlayer.isOnline = true;
-                socket.data.playerId = adminPlayer.playerId;
-                socket.join(adminPlayer.playerId);
-                socket.emit(WsEvents.LOGIN_RESPONSE, {
-                    success: true,
-                    playerId: adminPlayer.playerId,
-                    player: adminPlayer,
-                    role: adminPlayer.role,
-                    name: adminPlayer.name,
-                    bindCode: adminPlayer.bindCode,
-                    message: '管理员登录成功。',
-                });
-                // 发送私有数据
-                const privateSocket = io.sockets.sockets.get(socket.id);
-                if (privateSocket) {
-                    privateSocket.emit(WsEvents.PRIVATE_DATA, {
-                        bindCode: adminPlayer.bindCode,
-                        taskGrid: undefined,
-                        gameRole: undefined,
-                        undercoverTaskAckStage: undefined,
-                    });
-                }
-                broadcastState();
-                return;
-            }
-
-            if (credential === 'SPEC') {
+            const session = getSession();
+            const existingAdmin = Object.values(session.players).find((player) => player.role === 'Admin' && player.name === 'Admin');
+            const adminPlayer = existingAdmin || (() => {
                 const playerId = uuidv4();
-                const spectator: Player = {
+                const player: Player = {
                     playerId,
-                    name: 'Spectator',
-                    role: 'Spectator',
+                    name: 'Admin',
+                    role: 'Admin',
                     bindCode: generateBindCode(),
-                    isReady: false,
-                    isOnline: true,
+                    isReady: true,
                 };
-                session.players[playerId] = spectator;
+                session.players[playerId] = player;
                 session.playerOrder.push(playerId);
-                socket.data.playerId = playerId;
-                socket.join(playerId);
-                socket.emit(WsEvents.LOGIN_RESPONSE, {
-                    success: true,
-                    playerId,
-                    player: spectator,
-                    role: 'Spectator',
-                    name: spectator.name,
-                    bindCode: spectator.bindCode,
-                    message: '旁观者登录成功。',
-                });
-                broadcastState();
-                return;
-            }
-
-            const ticket = v1333ConsumeGameLoginTicket(credential);
-            if (!ticket) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, {
-                    success: false,
-                    message: '游戏内返回的码无效或已过期，请回到游戏里重新输入 !cclogin 获取新码。',
-                });
-                return;
-            }
-
-            const socketPlayer = socket.data.playerId ? session.players[socket.data.playerId] : undefined;
-            let player = socketPlayer || findPlayerBySteamId(session, ticket.steamId);
-            let membershipId = player?.membershipId;
-            if (!membershipId) {
-                try {
-                    const membership = await lobbyIdentityService.createTemporaryMembership({
-                        sessionId: session.sessionId,
-                        nickname: player?.name || ticket.name || `Steam ${ticket.steamId.slice(-6)}`,
-                        steamClaim: { steamId: ticket.steamId, personaName: ticket.name },
-                    });
-                    membershipId = membership.membershipId;
-                    if (player) applyMembershipToPlayer(player, membership);
-                } catch (error) {
-                    socket.emit(WsEvents.LOGIN_RESPONSE, {
-                        success: false,
-                        message: error instanceof Error && error.message === 'nickname_in_use'
-                            ? '该昵称已被本场另一身份使用，请先退出错误身份或联系管理员。'
-                            : '无法建立旧游戏码对应的身份记录。',
-                    });
-                    return;
-                }
-            }
-            const confirmed = await lobbyIdentityService.confirmTrustedIdentity(membershipId, ticket.steamId, ticket.name);
-            if (!confirmed.ok || !confirmed.membership || !confirmed.identity) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '旧游戏码身份确认失败，请联系管理员检查绑定冲突。' });
-                return;
-            }
-            player = player || attachMembershipToSession(session, confirmed.membership);
-            applyMembershipToPlayer(player, confirmed.membership);
-            player.role = session.phase === GamePhase.Lobby && !(session.matchOptions?.matchMode === 'duel' && session.duelTempAdminId) ? 'Player' : 'Spectator';
-            player.bindCode = player.bindCode || generateBindCode();
-            player.isOnline = true;
-            if (session.phase === GamePhase.Lobby && session.duelAdminVote) {
-                session.duelAdminVote = undefined;
-            }
-            socket.data.playerId = player.playerId;
-            socket.join(player.playerId);
+                return player;
+            })();
+            adminPlayer.isOnline = true;
+            socket.data.playerId = adminPlayer.playerId;
+            socket.join(adminPlayer.playerId);
             socket.emit(WsEvents.LOGIN_RESPONSE, {
                 success: true,
-                playerId: player.playerId,
-                player,
-                role: player.role,
-                name: player.name,
-                bindCode: ticket.code,
-                loginCode: ticket.code,
-                message: `欢迎，${player.name}！已进入草人杯大厅。`,
+                playerId: adminPlayer.playerId,
+                player: adminPlayer,
+                role: adminPlayer.role,
+                name: adminPlayer.name,
+                bindCode: adminPlayer.bindCode,
+                message: '管理员登录成功。',
             });
-            const socketAddress = String(socket.handshake?.address || '');
-            const trustedLoopbackProxy = process.env.TRUST_PROXY === 'loopback' &&
-                (socketAddress === '127.0.0.1' || socketAddress === '::1' || socketAddress === '::ffff:127.0.0.1');
-            const secureForEnrollment = process.env.NODE_ENV !== 'production' ||
-                socket.handshake?.secure === true ||
-                (trustedLoopbackProxy && lastForwardedValue(socket.handshake?.headers?.['x-forwarded-proto'])?.toLowerCase() === 'https');
-            if (secureForEnrollment) {
-                const enrollment = deviceEnrollmentTickets.issue({ identityId: confirmed.identity.identityId }, 10 * 60 * 1000);
-                socket.emit(WsEvents.DEVICE_ENROLLMENT_READY, { enrollmentCode: enrollment.ticket, expiresAt: enrollment.expiresAt });
-            } else {
-                socket.emit(WsEvents.NOTIFICATION, { message: '长期身份已建立；生产自动登录需先配置 HTTPS。' });
-            }
-            // 私有数据
-            const privateSocket = io.sockets.sockets.get(socket.id);
-            if (privateSocket) {
-                const reveal = !!session.rolesReleased;
-                privateSocket.emit(WsEvents.PRIVATE_DATA, {
-                    bindCode: player.bindCode,
-                    taskGrid: reveal ? player.taskGrid : undefined,
-                    gameRole: reveal ? player.gameRole : undefined,
-                    undercoverTaskAckStage: player.undercoverTaskAckStage,
-                });
-            }
-            broadcastState();
+            socket.emit(WsEvents.PRIVATE_DATA, {
+                bindCode: adminPlayer.bindCode,
+                taskGrid: undefined,
+                gameRole: undefined,
+                undercoverTaskAckStage: undefined,
+            });
+            deps.broadcastState();
         });
     });
 }

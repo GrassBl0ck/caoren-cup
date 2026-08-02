@@ -1,20 +1,18 @@
 import crypto from 'node:crypto';
+import { generateRandomInitialPassword, generateRandomLoginName, validateLoginName } from './account-foundation';
 import { IdentityStore } from './identity-store';
-import { hashFixedMemberPassword, verifyFixedMemberPassword } from './password-auth';
+import { hashAccountPassword, verifyAccountPassword } from './password-auth';
 import {
     DeviceTokenRecord,
     IdentityRecord,
+    LoginAccountRecord,
     LobbyMembershipRecord,
-    PluginConfirmationChallenge,
-    SteamAccountClaim,
 } from './identity-types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const CHALLENGE_TTL_MS = 10 * 60 * 1000;
-const TOKEN_IDLE_MS = 90 * DAY_MS;
-const TOKEN_ABSOLUTE_MS = 365 * DAY_MS;
+const TOKEN_IDLE_MS = 30 * DAY_MS;
+const TOKEN_ABSOLUTE_MS = 180 * DAY_MS;
 const TOKEN_ROTATE_MS = 30 * DAY_MS;
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 type RandomBytes = (size: number) => Buffer;
 
@@ -23,30 +21,35 @@ interface ServiceOptions {
     randomBytes?: RandomBytes;
 }
 
-interface TemporaryMembershipInput {
-    sessionId: string;
-    nickname: string;
-    steamClaim?: SteamAccountClaim;
+interface LoginAccountAuthenticationInput {
+    loginName: unknown;
+    password: unknown;
 }
 
-interface DeviceAuthenticationInput {
-    sessionId: string;
-    steamClaim?: SteamAccountClaim;
+interface AccountRecoveryStartInput {
+    steamId: unknown;
+    steamNickname: unknown;
 }
 
-interface FixedAccountInput {
-    steamId: string;
-    nickname: string;
-    password: string;
-    sessionId?: string;
-    nicknameInUse?: (nickname: string, identityId: string) => boolean;
+interface AccountRecoveryCompleteInput {
+    identityId: string;
+    newPassword: unknown;
 }
 
-interface FixedAccountAuthenticationInput {
-    sessionId: string;
-    steamId: string;
-    password: string;
-    nicknameInUse?: (nickname: string, identityId: string) => boolean;
+interface LoginNameChangeInput {
+    identityId: string;
+    currentPassword: unknown;
+    newLoginName: unknown;
+    currentSessionId: string;
+    currentDeviceTokenId?: string;
+}
+
+interface AccountPasswordChangeInput {
+    identityId: string;
+    currentPassword: unknown;
+    newPassword: unknown;
+    currentSessionId: string;
+    currentDeviceTokenId?: string;
 }
 
 const normalizeSteamId = (value: unknown): string => String(value || '').replace(/\D/g, '');
@@ -60,12 +63,6 @@ const strictSteamId = (value: unknown): string | undefined => {
     return /^7656119\d{10}$/.test(steamId) ? steamId : undefined;
 };
 
-const validNickname = (value: unknown): string => {
-    const nickname = String(value || '').trim();
-    if (!nickname || nickname.length > 32 || /[<>&"'`\\\x00-\x1f\x7f]/.test(nickname)) throw new Error('nickname_invalid');
-    return nickname;
-};
-
 const tokenHash = (secret: string): string => crypto.createHash('sha256').update(secret, 'utf8').digest('hex');
 
 export class LobbyIdentityService {
@@ -77,141 +74,57 @@ export class LobbyIdentityService {
         this.randomBytes = options.randomBytes || crypto.randomBytes;
     }
 
-    async createOrUpdateFixedAccount(input: FixedAccountInput): Promise<{ identity: IdentityRecord; created: boolean }> {
-        const steamId = strictSteamId(input.steamId);
-        if (!steamId) throw new Error('steam_id_invalid');
-        const nickname = validNickname(input.nickname);
-        const password = await hashFixedMemberPassword(input.password, { now: this.now, randomBytes: this.randomBytes });
+    async joinPlayerCenterMatch(identityId: string, sessionId: string) {
         const now = this.now();
         return this.store.mutate((data) => {
-            const matching = Object.values(data.identities).filter((identity) => identity.steamId === steamId);
-            if (matching.length > 1) throw new Error('steam_id_conflict');
-            let identity = matching[0];
-            const created = !identity;
-            if (!identity) {
-                const identityId = this.makeId(16);
-                identity = {
-                    identityId,
-                    displayName: nickname,
-                    steamId,
-                    createdAt: now,
-                    updatedAt: now,
-                };
-                data.identities[identityId] = identity;
-            }
-            if (input.nicknameInUse?.(nickname, identity.identityId)) throw new Error('nickname_in_use');
-            if (input.sessionId) this.assertNicknameAvailable(data, input.sessionId, nickname, identity.identityId);
-            const enabled = identity.fixedAccount?.enabled ?? true;
-            identity.displayName = nickname;
-            identity.fixedAccount = { enabled, password };
-            identity.updatedAt = now;
-            if (input.sessionId) {
-                for (const membership of Object.values(data.memberships)) {
-                    if (membership.sessionId === input.sessionId && membership.identityId === identity.identityId && !membership.leftAt) {
-                        membership.nickname = nickname;
-                        membership.updatedAt = now;
-                    }
-                }
-            }
-            return { identity, created };
-        });
-    }
-
-    async authenticateFixedAccount(input: FixedAccountAuthenticationInput) {
-        const steamId = strictSteamId(input.steamId);
-        if (!steamId) return { ok: false as const, reason: 'account_not_found' as const };
-        const snapshot = this.store.snapshot();
-        const identity = Object.values(snapshot.identities).find((candidate) => candidate.steamId === steamId);
-        if (!identity?.fixedAccount) return { ok: false as const, reason: 'account_not_found' as const };
-        if (!identity.fixedAccount.enabled) return { ok: false as const, reason: 'account_disabled' as const };
-        if (!await verifyFixedMemberPassword(input.password, identity.fixedAccount.password)) {
-            return { ok: false as const, reason: 'password_incorrect' as const };
-        }
-        if (input.nicknameInUse?.(identity.displayName, identity.identityId)) {
-            return { ok: false as const, reason: 'nickname_in_use' as const };
-        }
-        const verifiedHash = identity.fixedAccount.password.hash;
-        const now = this.now();
-        return this.store.mutate((data) => {
-            const currentIdentity = data.identities[identity.identityId];
-            if (!currentIdentity?.fixedAccount || currentIdentity.steamId !== steamId) {
-                return { ok: false as const, reason: 'account_not_found' as const };
-            }
-            if (!currentIdentity.fixedAccount.enabled) return { ok: false as const, reason: 'account_disabled' as const };
-            if (currentIdentity.fixedAccount.password.hash !== verifiedHash) {
-                return { ok: false as const, reason: 'password_incorrect' as const };
+            const identity = data.identities[identityId];
+            const account = data.accounts[identityId];
+            if (!identity || !account || !account.enabled || account.passwordState !== 'active' || !account.password) {
+                return { ok: false as const, reason: 'account_unavailable' as const };
             }
             const memberships = Object.values(data.memberships).filter((membership) =>
-                membership.sessionId === input.sessionId && membership.identityId === currentIdentity.identityId,
+                membership.sessionId === sessionId && membership.identityId === identityId,
             );
             if (memberships.some((membership) => !!membership.blockedAt)) {
                 return { ok: false as const, reason: 'blocked_for_session' as const };
             }
-            let membership = memberships.find((candidate) => !candidate.leftAt);
-            if (membership) return { ok: true as const, identity: currentIdentity, membership };
-            const nicknameInUse = Object.values(data.memberships).some((candidate) =>
-                candidate.sessionId === input.sessionId &&
-                candidate.identityId !== currentIdentity.identityId &&
-                !candidate.leftAt &&
-                candidate.nickname === currentIdentity.displayName,
+            const active = memberships.find((membership) => !membership.leftAt);
+            if (active) return { ok: true as const, membership: active };
+
+            const nickname = identity.steamNickname || identity.displayName;
+            const nicknameInUse = Object.values(data.memberships).some((membership) =>
+                membership.sessionId === sessionId && membership.identityId !== identityId &&
+                !membership.leftAt && membership.nickname === nickname,
             );
             if (nicknameInUse) return { ok: false as const, reason: 'nickname_in_use' as const };
+
             const membershipId = this.makeId(16);
-            membership = {
+            const membership: LobbyMembershipRecord = {
                 membershipId,
-                sessionId: input.sessionId,
-                identityId: currentIdentity.identityId,
-                nickname: currentIdentity.displayName,
+                sessionId,
+                identityId,
+                nickname,
                 identityLevel: 'longTerm',
-                confirmationState: 'pending',
-                claimedSteamId: steamId,
+                confirmationState: identity.steamId ? 'confirmed' : 'unavailable',
+                confirmationReason: identity.steamId ? undefined : 'steam_not_available',
+                trustedSteamId: identity.steamId,
+                confirmedAt: identity.steamId ? now : undefined,
                 joinedAt: now,
                 updatedAt: now,
             };
             data.memberships[membershipId] = membership;
-            return { ok: true as const, identity: currentIdentity, membership };
+            return { ok: true as const, membership };
         });
     }
 
-    async renameFixedAccount(identityId: string, nicknameRaw: unknown, sessionId?: string): Promise<IdentityRecord | undefined> {
-        const nickname = validNickname(nicknameRaw);
+    async setLoginAccountEnabled(identityId: string, enabled: boolean, sessionId?: string) {
         const now = this.now();
         return this.store.mutate((data) => {
             const identity = data.identities[identityId];
-            if (!identity?.fixedAccount) return undefined;
-            if (sessionId) this.assertNicknameAvailable(data, sessionId, nickname, identityId);
-            identity.displayName = nickname;
-            identity.updatedAt = now;
-            if (sessionId) {
-                for (const membership of Object.values(data.memberships)) {
-                    if (membership.sessionId === sessionId && membership.identityId === identityId && !membership.leftAt) {
-                        membership.nickname = nickname;
-                        membership.updatedAt = now;
-                    }
-                }
-            }
-            return identity;
-        });
-    }
-
-    async resetFixedAccountPassword(identityId: string, rawPassword: unknown): Promise<IdentityRecord | undefined> {
-        const password = await hashFixedMemberPassword(rawPassword, { now: this.now, randomBytes: this.randomBytes });
-        const now = this.now();
-        return this.store.mutate((data) => {
-            const identity = data.identities[identityId];
-            if (!identity?.fixedAccount) return undefined;
-            identity.fixedAccount.password = password;
-            identity.updatedAt = now;
-            return identity;
-        });
-    }
-
-    async setFixedAccountEnabled(identityId: string, enabled: boolean, sessionId?: string) {
-        const now = this.now();
-        return this.store.mutate((data) => {
-            const identity = data.identities[identityId];
-            if (!identity?.fixedAccount) return undefined;
-            identity.fixedAccount.enabled = enabled;
+            const account = data.accounts[identityId];
+            if (!identity || !account) return undefined;
+            account.enabled = enabled;
+            account.updatedAt = now;
             identity.updatedAt = now;
             let membership: LobbyMembershipRecord | undefined;
             if (!enabled && sessionId) {
@@ -227,26 +140,224 @@ export class LobbyIdentityService {
         });
     }
 
-    listFixedAccounts(sessionId?: string) {
-        const data = this.store.snapshot();
-        return Object.values(data.identities)
-            .filter((identity) => !!identity.steamId && !!identity.fixedAccount)
-            .map((identity) => {
-                const membership = sessionId
-                    ? Object.values(data.memberships).find((candidate) =>
-                        candidate.sessionId === sessionId && candidate.identityId === identity.identityId && !candidate.leftAt,
-                    )
-                    : undefined;
+    getLoginAccount(identityId: string) {
+        return this.store.snapshot().accounts[identityId];
+    }
+
+    getIdentity(identityId: string) {
+        return this.store.snapshot().identities[identityId];
+    }
+
+    findAccountByLoginName(loginNameRaw: unknown): LoginAccountRecord | undefined {
+        let loginName: string;
+        try {
+            loginName = validateLoginName(loginNameRaw);
+        } catch {
+            return undefined;
+        }
+        return Object.values(this.store.snapshot().accounts).find((account) => account.loginName === loginName);
+    }
+
+    async authenticateLoginAccount(input: LoginAccountAuthenticationInput) {
+        const account = this.findAccountByLoginName(input.loginName);
+        if (!account || account.passwordState !== 'active' || !account.password) {
+            return { ok: false as const, reason: 'invalid_credentials' as const };
+        }
+        if (!await verifyAccountPassword(input.password, account.password)) {
+            return { ok: false as const, reason: 'invalid_credentials' as const };
+        }
+        const identity = this.store.snapshot().identities[account.identityId];
+        if (!identity) return { ok: false as const, reason: 'invalid_credentials' as const };
+        if (!account.enabled) return { ok: false as const, reason: 'account_disabled' as const };
+        return { ok: true as const, identity, account };
+    }
+
+    async openOrBeginAccountRecovery(input: AccountRecoveryStartInput) {
+        const steamId = strictSteamId(input.steamId);
+        if (!steamId) throw new Error('steam_id_invalid');
+        const steamNickname = String(input.steamNickname || '').trim().slice(0, 128) || `Steam ${steamId.slice(-6)}`;
+        const snapshot = this.store.snapshot();
+        const snapshotIdentity = Object.values(snapshot.identities).find((candidate) => candidate.steamId === steamId);
+        if (snapshotIdentity && snapshot.accounts[snapshotIdentity.identityId]) {
+            const now = this.now();
+            return this.store.mutate((data) => {
+                const identity = Object.values(data.identities).find((candidate) => candidate.steamId === steamId);
+                const account = identity ? data.accounts[identity.identityId] : undefined;
+                if (!identity || !account) throw new Error('account_state_changed');
+                identity.steamNickname = steamNickname;
+                identity.updatedAt = now;
+                return account.enabled
+                    ? { kind: 'recovery_required' as const, identityId: identity.identityId, loginName: account.loginName }
+                    : { kind: 'account_disabled' as const, identityId: identity.identityId };
+            });
+        }
+        const initialPassword = generateRandomInitialPassword(this.randomBytes);
+        const password = await hashAccountPassword(initialPassword, { now: this.now, randomBytes: this.randomBytes });
+        const now = this.now();
+        return this.store.mutate((data) => {
+            let identity = Object.values(data.identities).find((candidate) => candidate.steamId === steamId);
+            if (identity && data.accounts[identity.identityId]) {
+                identity.steamNickname = steamNickname;
+                identity.updatedAt = now;
+                if (!data.accounts[identity.identityId].enabled) {
+                    return {
+                        kind: 'account_disabled' as const,
+                        identityId: identity.identityId,
+                    };
+                }
                 return {
+                    kind: 'recovery_required' as const,
                     identityId: identity.identityId,
-                    steamId: identity.steamId!,
-                    nickname: identity.displayName,
-                    enabled: identity.fixedAccount!.enabled,
-                    passwordUpdatedAt: identity.fixedAccount!.password.updatedAt,
-                    membership,
+                    loginName: data.accounts[identity.identityId].loginName,
                 };
-            })
-            .sort((left, right) => left.nickname.localeCompare(right.nickname, 'zh-CN'));
+            }
+            if (!identity) {
+                const identityId = this.makeId(16);
+                identity = {
+                    identityId,
+                    displayName: steamNickname,
+                    steamId,
+                    steamNickname,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                data.identities[identityId] = identity;
+            } else {
+                identity.steamNickname = steamNickname;
+                identity.updatedAt = now;
+            }
+            const loginName = generateRandomLoginName(
+                new Set(Object.values(data.accounts).map((account) => account.loginName)),
+                this.randomBytes,
+            );
+            data.accounts[identity.identityId] = {
+                identityId: identity.identityId,
+                loginName,
+                enabled: true,
+                passwordState: 'active',
+                password,
+                createdAt: now,
+                updatedAt: now,
+            };
+            return {
+                kind: 'created' as const,
+                identityId: identity.identityId,
+                loginName,
+                initialPassword,
+            };
+        });
+    }
+
+    async completeAccountRecovery(input: AccountRecoveryCompleteInput) {
+        const password = await hashAccountPassword(input.newPassword, { now: this.now, randomBytes: this.randomBytes });
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const identity = data.identities[input.identityId];
+            const account = data.accounts[input.identityId];
+            if (!identity || !account) throw new Error('account_not_found');
+            if (!account.enabled) throw new Error('account_disabled');
+            account.password = password;
+            account.passwordState = 'active';
+            account.updatedAt = now;
+            identity.updatedAt = now;
+            const revokedDeviceTokenIds: string[] = [];
+            for (const token of Object.values(data.deviceTokens)) {
+                if (token.identityId !== input.identityId || token.status === 'revoked') continue;
+                token.status = 'revoked';
+                token.revokedAt = now;
+                revokedDeviceTokenIds.push(token.tokenId);
+            }
+            return {
+                account: { identityId: account.identityId, loginName: account.loginName },
+                revocation: {
+                    identityId: input.identityId,
+                    preserveSessionId: undefined,
+                    revokeOtherPlayerCenterSessions: true as const,
+                    revokedDeviceTokenIds,
+                },
+            };
+        });
+    }
+
+    async changeLoginName(input: LoginNameChangeInput) {
+        const newLoginName = validateLoginName(input.newLoginName);
+        const snapshot = this.store.snapshot();
+        const currentAccount = snapshot.accounts[input.identityId];
+        if (!currentAccount || currentAccount.passwordState !== 'active' || !currentAccount.password ||
+            !await verifyAccountPassword(input.currentPassword, currentAccount.password)) {
+            throw new Error('current_password_incorrect');
+        }
+        const verifiedHash = currentAccount.password.hash;
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const account = data.accounts[input.identityId];
+            if (!account || account.passwordState !== 'active' || !account.password || account.password.hash !== verifiedHash) {
+                throw new Error('current_password_incorrect');
+            }
+            if (Object.values(data.accounts).some((candidate) =>
+                candidate.identityId !== input.identityId && candidate.loginName === newLoginName,
+            )) {
+                throw new Error('login_name_in_use');
+            }
+            account.loginName = newLoginName;
+            account.updatedAt = now;
+            const revokedDeviceTokenIds: string[] = [];
+            for (const token of Object.values(data.deviceTokens)) {
+                if (token.identityId !== input.identityId || token.status === 'revoked' ||
+                    token.tokenId === input.currentDeviceTokenId) continue;
+                token.status = 'revoked';
+                token.revokedAt = now;
+                revokedDeviceTokenIds.push(token.tokenId);
+            }
+            return {
+                account: { identityId: account.identityId, loginName: account.loginName },
+                revocation: {
+                    identityId: input.identityId,
+                    preserveSessionId: input.currentSessionId,
+                    revokeOtherPlayerCenterSessions: true as const,
+                    revokedDeviceTokenIds,
+                },
+            };
+        });
+    }
+
+    async changeAccountPassword(input: AccountPasswordChangeInput) {
+        const snapshot = this.store.snapshot();
+        const currentAccount = snapshot.accounts[input.identityId];
+        if (!currentAccount || currentAccount.passwordState !== 'active' || !currentAccount.password ||
+            !await verifyAccountPassword(input.currentPassword, currentAccount.password)) {
+            throw new Error('current_password_incorrect');
+        }
+        const verifiedHash = currentAccount.password.hash;
+        const password = await hashAccountPassword(input.newPassword, { now: this.now, randomBytes: this.randomBytes });
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const account = data.accounts[input.identityId];
+            if (!account || account.passwordState !== 'active' || !account.password || account.password.hash !== verifiedHash) {
+                throw new Error('current_password_incorrect');
+            }
+            account.password = password;
+            account.updatedAt = now;
+            const identity = data.identities[input.identityId];
+            if (identity) identity.updatedAt = now;
+            const revokedDeviceTokenIds: string[] = [];
+            for (const token of Object.values(data.deviceTokens)) {
+                if (token.identityId !== input.identityId || token.status === 'revoked' ||
+                    token.tokenId === input.currentDeviceTokenId) continue;
+                token.status = 'revoked';
+                token.revokedAt = now;
+                revokedDeviceTokenIds.push(token.tokenId);
+            }
+            return {
+                account: { identityId: account.identityId, loginName: account.loginName },
+                revocation: {
+                    identityId: input.identityId,
+                    preserveSessionId: input.currentSessionId,
+                    revokeOtherPlayerCenterSessions: true as const,
+                    revokedDeviceTokenIds,
+                },
+            };
+        });
     }
 
     listLobbySteamIds(sessionId: string): string[] {
@@ -257,171 +368,6 @@ export class LobbyIdentityService {
                 .filter((steamId): steamId is string => !!steamId),
         );
         return [...ids].sort();
-    }
-
-    async createTemporaryMembership(input: TemporaryMembershipInput): Promise<LobbyMembershipRecord> {
-        const now = this.now();
-        const nickname = validNickname(input.nickname);
-        const claimedSteamId = input.steamClaim ? validSteamId(input.steamClaim.steamId) : undefined;
-        if (input.steamClaim?.steamId && !claimedSteamId) throw new Error('steam_id_invalid');
-
-        return this.store.mutate((data) => {
-            const duplicateName = Object.values(data.memberships).some((membership) =>
-                membership.sessionId === input.sessionId && !membership.leftAt && membership.nickname === nickname,
-            );
-            if (duplicateName) throw new Error('nickname_in_use');
-
-            const identityId = this.makeId(16);
-            const membershipId = this.makeId(16);
-            data.identities[identityId] = {
-                identityId,
-                displayName: nickname,
-                createdAt: now,
-                updatedAt: now,
-            };
-            const claimInUse = claimedSteamId && Object.values(data.memberships).some((membership) =>
-                membership.sessionId === input.sessionId && !membership.leftAt && membership.claimedSteamId === claimedSteamId,
-            );
-            const membership: LobbyMembershipRecord = {
-                membershipId,
-                sessionId: input.sessionId,
-                identityId,
-                nickname,
-                identityLevel: 'temporary',
-                confirmationState: claimedSteamId && !claimInUse ? 'pending' : 'unavailable',
-                confirmationReason: claimInUse ? 'claim_in_use' : (claimedSteamId ? undefined : 'steam_not_available'),
-                claimedSteamId: claimInUse ? undefined : claimedSteamId,
-                claimPersonaName: claimInUse ? undefined : String(input.steamClaim?.personaName || '').trim() || undefined,
-                joinedAt: now,
-                updatedAt: now,
-            };
-            data.memberships[membershipId] = membership;
-            return membership;
-        });
-    }
-
-    async getConfirmationChallenges(
-        sessionId: string,
-        trustedPlayers: Array<{ steamId: unknown; name?: unknown }>,
-    ): Promise<PluginConfirmationChallenge[]> {
-        const now = this.now();
-        const onlineSteamIds = new Set(trustedPlayers.map((player) => validSteamId(player.steamId)).filter(Boolean));
-        const snapshotMemberships = Object.values(this.store.snapshot().memberships).filter((membership) =>
-            membership.sessionId === sessionId &&
-            membership.identityLevel === 'temporary' &&
-            membership.confirmationState === 'pending' &&
-            !membership.leftAt &&
-            !membership.blockedAt &&
-            !!membership.claimedSteamId &&
-            onlineSteamIds.has(membership.claimedSteamId),
-        );
-        const needsNewChallenge = snapshotMemberships.some((membership) =>
-            !membership.challenge || membership.challenge.expiresAt <= now || membership.challenge.failedAttempts >= 5,
-        );
-        if (!needsNewChallenge) {
-            return snapshotMemberships.map((membership) => ({
-                challengeId: membership.challenge!.challengeId,
-                membershipId: membership.membershipId,
-                steamId: membership.claimedSteamId!,
-                code: membership.challenge!.code,
-                expiresAt: membership.challenge!.expiresAt,
-            }));
-        }
-        return this.store.mutate((data) => {
-            const challenges: PluginConfirmationChallenge[] = [];
-            for (const membership of Object.values(data.memberships)) {
-                if (membership.sessionId !== sessionId ||
-                    membership.identityLevel !== 'temporary' ||
-                    membership.confirmationState !== 'pending' ||
-                    membership.leftAt ||
-                    membership.blockedAt ||
-                    !membership.claimedSteamId) continue;
-                if (!onlineSteamIds.has(membership.claimedSteamId)) continue;
-                if (!membership.challenge || membership.challenge.expiresAt <= now || membership.challenge.failedAttempts >= 5) {
-                    membership.challenge = {
-                        challengeId: this.makeId(12),
-                        code: this.makeCode(6),
-                        expiresAt: now + CHALLENGE_TTL_MS,
-                        failedAttempts: 0,
-                    };
-                    membership.updatedAt = now;
-                }
-                challenges.push({
-                    challengeId: membership.challenge.challengeId,
-                    membershipId: membership.membershipId,
-                    steamId: membership.claimedSteamId,
-                    code: membership.challenge.code,
-                    expiresAt: membership.challenge.expiresAt,
-                });
-            }
-            return challenges;
-        });
-    }
-
-    async confirmChallenge(membershipId: string, rawCode: unknown, trustedSteamIdRaw: unknown) {
-        const now = this.now();
-        const code = String(rawCode || '').trim().toUpperCase();
-        const trustedSteamId = validSteamId(trustedSteamIdRaw);
-        return this.store.mutate((data) => {
-            const membership = data.memberships[membershipId];
-            if (!membership || !membership.challenge) return { ok: false as const, reason: 'challenge_not_found' };
-            if (membership.challenge.expiresAt <= now) return { ok: false as const, reason: 'challenge_expired' };
-            if (membership.challenge.code !== code) {
-                membership.challenge.failedAttempts += 1;
-                membership.updatedAt = now;
-                if (membership.challenge.failedAttempts >= 5) membership.challenge.expiresAt = now;
-                return { ok: false as const, reason: 'challenge_invalid' };
-            }
-            if (!trustedSteamId || membership.claimedSteamId !== trustedSteamId) {
-                membership.confirmationState = 'mismatch';
-                membership.confirmationReason = 'steam_mismatch';
-                membership.updatedAt = now;
-                return { ok: false as const, reason: 'steam_mismatch' };
-            }
-            return this.promoteDraft(data, membership, trustedSteamId, membership.claimPersonaName || membership.nickname, now);
-        });
-    }
-
-    async confirmTrustedIdentity(membershipId: string, steamIdRaw: unknown, trustedNameRaw: unknown) {
-        const steamId = validSteamId(steamIdRaw);
-        if (!steamId) return { ok: false as const, reason: 'steam_id_invalid' };
-        const now = this.now();
-        return this.store.mutate((data) => {
-            const membership = data.memberships[membershipId];
-            if (!membership) return { ok: false as const, reason: 'membership_not_found' };
-            const currentIdentity = data.identities[membership.identityId];
-            if (currentIdentity?.steamId && currentIdentity.steamId !== steamId) {
-                membership.confirmationState = 'mismatch';
-                membership.confirmationReason = 'steam_mismatch';
-                membership.claimedSteamId = steamId;
-                membership.trustedSteamId = undefined;
-                membership.updatedAt = now;
-                membership.challenge = undefined;
-                return { ok: false as const, reason: 'steam_mismatch' };
-            }
-            const existing = Object.values(data.identities).find((identity) => identity.steamId === steamId);
-            if (existing && existing.identityId !== membership.identityId) {
-                const replacedIdentityId = membership.identityId;
-                for (const linkedMembership of Object.values(data.memberships)) {
-                    if (linkedMembership.identityId === replacedIdentityId) linkedMembership.identityId = existing.identityId;
-                }
-                for (const token of Object.values(data.deviceTokens)) {
-                    if (token.identityId === replacedIdentityId) token.identityId = existing.identityId;
-                }
-                delete data.identities[replacedIdentityId];
-                membership.identityId = existing.identityId;
-                membership.identityLevel = 'longTerm';
-                membership.confirmationState = 'confirmed';
-                membership.confirmationReason = undefined;
-                membership.claimedSteamId = steamId;
-                membership.trustedSteamId = steamId;
-                membership.confirmedAt = now;
-                membership.updatedAt = now;
-                membership.challenge = undefined;
-                return { ok: true as const, identity: existing, membership };
-            }
-            return this.promoteDraft(data, membership, steamId, String(trustedNameRaw || '').trim() || membership.nickname, now);
-        });
     }
 
     async issueDeviceToken(identityId: string, deviceId: string) {
@@ -450,7 +396,7 @@ export class LobbyIdentityService {
         return { rawToken, tokenId, idleExpiresAt: now + TOKEN_IDLE_MS, absoluteExpiresAt: now + TOKEN_ABSOLUTE_MS };
     }
 
-    async authenticateDeviceToken(rawToken: unknown, input: DeviceAuthenticationInput) {
+    async authenticatePlayerCenterDeviceToken(rawToken: unknown) {
         const parsed = this.parseToken(rawToken);
         if (!parsed) return { ok: false as const, reason: 'invalid' };
         const now = this.now();
@@ -458,9 +404,17 @@ export class LobbyIdentityService {
             const token = data.deviceTokens[parsed.tokenId];
             if (!token || !this.tokenMatches(token, parsed.secret)) return { ok: false as const, reason: 'invalid' };
             if (token.status === 'revoked') return { ok: false as const, reason: 'revoked' };
-            if (now >= token.idleExpiresAt || now >= token.absoluteExpiresAt) return { ok: false as const, reason: 'expired' };
+            const idleExpiresAt = Math.min(token.idleExpiresAt, token.lastUsedAt + TOKEN_IDLE_MS);
+            const absoluteExpiresAt = Math.min(token.absoluteExpiresAt, token.createdAt + TOKEN_ABSOLUTE_MS);
+            if (now >= idleExpiresAt || now >= absoluteExpiresAt) return { ok: false as const, reason: 'expired' };
             const identity = data.identities[token.identityId];
             if (!identity?.steamId) return { ok: false as const, reason: 'identity_not_confirmed' };
+            const account = data.accounts[token.identityId];
+            if (!account) return { ok: false as const, reason: 'account_unavailable' };
+            if (!account.enabled) return { ok: false as const, reason: 'account_disabled' };
+            if (account.passwordState !== 'active' || !account.password) {
+                return { ok: false as const, reason: 'password_state_invalid' };
+            }
 
             if (token.status === 'pending_rotation') {
                 token.status = 'active';
@@ -472,47 +426,10 @@ export class LobbyIdentityService {
                     }
                 }
             }
-
             token.lastUsedAt = now;
-            token.idleExpiresAt = Math.min(now + TOKEN_IDLE_MS, token.absoluteExpiresAt);
-            const claim = input.steamClaim ? validSteamId(input.steamClaim.steamId) : undefined;
-            let membership = Object.values(data.memberships).find((candidate) =>
-                candidate.sessionId === input.sessionId && candidate.identityId === identity.identityId && !candidate.leftAt,
-            );
-            if (!membership) {
-                const membershipId = this.makeId(16);
-                membership = {
-                    membershipId,
-                    sessionId: input.sessionId,
-                    identityId: identity.identityId,
-                    nickname: identity.displayName,
-                    identityLevel: 'longTerm',
-                    confirmationState: !claim ? 'unavailable' : (claim === identity.steamId ? 'pending' : 'mismatch'),
-                    confirmationReason: !claim ? 'steam_not_available' : (claim === identity.steamId ? undefined : 'steam_mismatch'),
-                    claimedSteamId: claim,
-                    claimPersonaName: String(input.steamClaim?.personaName || '').trim() || undefined,
-                    joinedAt: now,
-                    updatedAt: now,
-                };
-                data.memberships[membershipId] = membership;
-            } else if (claim && claim !== identity.steamId) {
-                membership.claimedSteamId = claim;
-                membership.claimPersonaName = String(input.steamClaim?.personaName || '').trim() || undefined;
-                membership.confirmationState = 'mismatch';
-                membership.confirmationReason = 'steam_mismatch';
-                membership.trustedSteamId = undefined;
-                membership.confirmedAt = undefined;
-                membership.updatedAt = now;
-            } else if (membership.confirmationState !== 'confirmed') {
-                membership.claimedSteamId = claim;
-                membership.claimPersonaName = String(input.steamClaim?.personaName || '').trim() || undefined;
-                membership.confirmationState = claim ? 'pending' : 'unavailable';
-                membership.confirmationReason = claim ? undefined : 'steam_not_available';
-                membership.trustedSteamId = undefined;
-                membership.confirmedAt = undefined;
-                membership.updatedAt = now;
-            }
-            return { ok: true as const, identity, membership, needsRotation: now >= token.rotateAfter };
+            token.absoluteExpiresAt = absoluteExpiresAt;
+            token.idleExpiresAt = Math.min(now + TOKEN_IDLE_MS, absoluteExpiresAt);
+            return { ok: true as const, identity, account, tokenId: token.tokenId };
         });
     }
 
@@ -541,7 +458,9 @@ export class LobbyIdentityService {
             if (!previous || !this.tokenMatches(previous, parsed.secret) || previous.status === 'revoked') {
                 return { ok: false as const, reason: 'invalid' };
             }
-            if (now >= previous.idleExpiresAt || now >= previous.absoluteExpiresAt) {
+            const idleExpiresAt = Math.min(previous.idleExpiresAt, previous.lastUsedAt + TOKEN_IDLE_MS);
+            const absoluteExpiresAt = Math.min(previous.absoluteExpiresAt, previous.createdAt + TOKEN_ABSOLUTE_MS);
+            if (now >= idleExpiresAt || now >= absoluteExpiresAt) {
                 return { ok: false as const, reason: 'expired' };
             }
             data.deviceTokens[newTokenId] = {
@@ -553,8 +472,8 @@ export class LobbyIdentityService {
                 status: 'pending_rotation',
                 createdAt: now,
                 lastUsedAt: now,
-                idleExpiresAt: Math.min(now + TOKEN_IDLE_MS, previous.absoluteExpiresAt),
-                absoluteExpiresAt: previous.absoluteExpiresAt,
+                idleExpiresAt: Math.min(now + TOKEN_IDLE_MS, absoluteExpiresAt),
+                absoluteExpiresAt,
                 rotateAfter: now + TOKEN_ROTATE_MS,
                 rotatedFromTokenId: previous.tokenId,
             };
@@ -620,26 +539,43 @@ export class LobbyIdentityService {
         });
     }
 
-    async confirmLongTermPresence(sessionId: string, steamIdsRaw: unknown[]): Promise<LobbyMembershipRecord[]> {
+    async confirmLongTermPresence(
+        sessionId: string,
+        trustedPlayersRaw: Array<unknown | { steamId: unknown; name?: unknown }>,
+    ): Promise<LobbyMembershipRecord[]> {
         const now = this.now();
-        const trustedSteamIds = new Set(steamIdsRaw.map(validSteamId).filter(Boolean));
+        const trustedPlayers = new Map<string, string | undefined>();
+        for (const rawPlayer of trustedPlayersRaw) {
+            const structured = !!rawPlayer && typeof rawPlayer === 'object' && 'steamId' in rawPlayer;
+            const player = structured ? rawPlayer as { steamId: unknown; name?: unknown } : undefined;
+            const steamId = validSteamId(player ? player.steamId : rawPlayer);
+            if (!steamId) continue;
+            const nickname = player ? String(player.name || '').trim().slice(0, 128) || undefined : undefined;
+            trustedPlayers.set(steamId, nickname);
+        }
         const snapshot = this.store.snapshot();
-        const needsConfirmation = Object.values(snapshot.memberships).some((membership) => {
+        const needsUpdate = Object.values(snapshot.memberships).some((membership) => {
             if (membership.sessionId !== sessionId || membership.identityLevel !== 'longTerm' || membership.blockedAt) return false;
             const identity = snapshot.identities[membership.identityId];
             return !!identity?.steamId &&
                 (!membership.claimedSteamId || membership.claimedSteamId === identity.steamId) &&
-                trustedSteamIds.has(identity.steamId) &&
-                (membership.confirmationState !== 'confirmed' || membership.trustedSteamId !== identity.steamId);
+                trustedPlayers.has(identity.steamId) &&
+                (membership.confirmationState !== 'confirmed' || membership.trustedSteamId !== identity.steamId ||
+                    (!!trustedPlayers.get(identity.steamId) && identity.steamNickname !== trustedPlayers.get(identity.steamId)));
         });
-        if (!needsConfirmation) return [];
+        if (!needsUpdate) return [];
         return this.store.mutate((data) => {
             const updated: LobbyMembershipRecord[] = [];
             for (const membership of Object.values(data.memberships)) {
                 if (membership.sessionId !== sessionId || membership.identityLevel !== 'longTerm' || membership.blockedAt) continue;
                 const identity = data.identities[membership.identityId];
-                if (!identity?.steamId || !trustedSteamIds.has(identity.steamId)) continue;
+                if (!identity?.steamId || !trustedPlayers.has(identity.steamId)) continue;
                 if (membership.claimedSteamId && membership.claimedSteamId !== identity.steamId) continue;
+                const trustedNickname = trustedPlayers.get(identity.steamId);
+                if (trustedNickname && identity.steamNickname !== trustedNickname) {
+                    identity.steamNickname = trustedNickname;
+                    identity.updatedAt = now;
+                }
                 if (membership.confirmationState === 'confirmed' && membership.trustedSteamId === identity.steamId) continue;
                 membership.confirmationState = 'confirmed';
                 membership.confirmationReason = undefined;
@@ -674,76 +610,17 @@ export class LobbyIdentityService {
         });
     }
 
-    async clearMembershipClaim(membershipId: string): Promise<LobbyMembershipRecord | undefined> {
+    async leaveSessionMemberships(sessionId: string): Promise<number> {
         const now = this.now();
         return this.store.mutate((data) => {
-            const membership = data.memberships[membershipId];
-            if (!membership || membership.identityLevel === 'longTerm') return undefined;
-            membership.claimedSteamId = undefined;
-            membership.claimPersonaName = undefined;
-            membership.trustedSteamId = undefined;
-            membership.confirmationState = 'unavailable';
-            membership.confirmationReason = 'claim_cleared_by_admin';
-            membership.challenge = undefined;
-            membership.updatedAt = now;
-            return membership;
-        });
-    }
-
-    async carryMembershipToSession(membershipId: string, newSessionId: string): Promise<LobbyMembershipRecord | undefined> {
-        const now = this.now();
-        return this.store.mutate((data) => {
-            const oldMembership = data.memberships[membershipId];
-            if (!oldMembership) return undefined;
-            const existing = Object.values(data.memberships).find((membership) =>
-                membership.sessionId === newSessionId && membership.identityId === oldMembership.identityId && !membership.leftAt,
-            );
-            if (existing) return existing;
-            const identity = data.identities[oldMembership.identityId];
-            const newMembershipId = this.makeId(16);
-            const claimedSteamId = oldMembership.identityLevel === 'longTerm'
-                ? identity?.steamId
-                : oldMembership.claimedSteamId;
-            const membership: LobbyMembershipRecord = {
-                membershipId: newMembershipId,
-                sessionId: newSessionId,
-                identityId: oldMembership.identityId,
-                nickname: oldMembership.nickname,
-                identityLevel: oldMembership.identityLevel,
-                confirmationState: claimedSteamId ? 'pending' : 'unavailable',
-                confirmationReason: claimedSteamId ? undefined : 'steam_not_available',
-                claimedSteamId,
-                claimPersonaName: oldMembership.claimPersonaName,
-                joinedAt: now,
-                updatedAt: now,
-            };
-            data.memberships[newMembershipId] = membership;
-            return membership;
-        });
-    }
-
-    async pruneTemporaryRecords(retentionMs = 30 * DAY_MS): Promise<{ memberships: number; identities: number }> {
-        const cutoff = this.now() - retentionMs;
-        return this.store.mutate((data) => {
-            let memberships = 0;
-            let identities = 0;
-            const candidateIdentityIds = new Set<string>();
-            for (const [membershipId, membership] of Object.entries(data.memberships)) {
-                if (membership.identityLevel !== 'temporary' || membership.updatedAt > cutoff) continue;
-                candidateIdentityIds.add(membership.identityId);
-                delete data.memberships[membershipId];
-                memberships += 1;
+            let count = 0;
+            for (const membership of Object.values(data.memberships)) {
+                if (membership.sessionId !== sessionId || membership.leftAt) continue;
+                membership.leftAt = now;
+                membership.updatedAt = now;
+                count += 1;
             }
-            for (const identityId of candidateIdentityIds) {
-                const identity = data.identities[identityId];
-                const stillReferenced = Object.values(data.memberships).some((membership) => membership.identityId === identityId);
-                const hasTokens = Object.values(data.deviceTokens).some((token) => token.identityId === identityId);
-                if (!identity?.steamId && !stillReferenced && !hasTokens) {
-                    delete data.identities[identityId];
-                    identities += 1;
-                }
-            }
-            return { memberships, identities };
+            return count;
         });
     }
 
@@ -761,58 +638,26 @@ export class LobbyIdentityService {
         return Object.values(this.store.snapshot().memberships).filter((membership) => membership.sessionId === sessionId && !membership.leftAt);
     }
 
-    private promoteDraft(data: ReturnType<IdentityStore['snapshot']>, membership: LobbyMembershipRecord, steamId: string, trustedName: string, now: number) {
-        const collision = Object.values(data.identities).find((identity) => identity.steamId === steamId && identity.identityId !== membership.identityId);
-        if (collision) return { ok: false as const, reason: 'steam_already_bound' };
-        const identity = data.identities[membership.identityId];
-        if (!identity) return { ok: false as const, reason: 'identity_not_found' };
-        if (identity.steamId && identity.steamId !== steamId) {
-            membership.confirmationState = 'mismatch';
-            membership.confirmationReason = 'steam_mismatch';
-            membership.claimedSteamId = steamId;
-            membership.trustedSteamId = undefined;
-            membership.updatedAt = now;
-            membership.challenge = undefined;
-            return { ok: false as const, reason: 'steam_mismatch' };
-        }
-        identity.steamId = steamId;
-        identity.updatedAt = now;
-        if (!identity.displayName) identity.displayName = trustedName;
-        membership.identityLevel = 'longTerm';
-        membership.confirmationState = 'confirmed';
-        membership.confirmationReason = undefined;
-        membership.claimedSteamId = steamId;
-        membership.trustedSteamId = steamId;
-        membership.confirmedAt = now;
-        membership.updatedAt = now;
-        membership.challenge = undefined;
-        return { ok: true as const, identity, membership };
-    }
-
-    private assertNicknameAvailable(
+    private createRecoveryAccount(
         data: ReturnType<IdentityStore['snapshot']>,
-        sessionId: string,
-        nickname: string,
         identityId: string,
-    ): void {
-        const collision = Object.values(data.memberships).some((membership) =>
-            membership.sessionId === sessionId &&
-            membership.identityId !== identityId &&
-            !membership.leftAt &&
-            membership.nickname === nickname,
-        );
-        if (collision) throw new Error('nickname_in_use');
+        now: number,
+    ): LoginAccountRecord {
+        const loginNames = new Set(Object.values(data.accounts).map((account) => account.loginName));
+        const account: LoginAccountRecord = {
+            identityId,
+            loginName: generateRandomLoginName(loginNames, this.randomBytes),
+            enabled: true,
+            passwordState: 'recovery_required' as const,
+            createdAt: now,
+            updatedAt: now,
+        };
+        data.accounts[identityId] = account;
+        return account;
     }
 
     private makeId(size: number): string {
         return this.randomBytes(size).toString('hex');
-    }
-
-    private makeCode(length: number): string {
-        const bytes = this.randomBytes(length);
-        let code = '';
-        for (let index = 0; index < length; index++) code += CODE_ALPHABET[bytes[index] % CODE_ALPHABET.length];
-        return code;
     }
 
     private parseToken(rawToken: unknown): { tokenId: string; secret: string } | undefined {

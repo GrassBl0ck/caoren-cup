@@ -21,7 +21,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     public override string ModuleName => "CaorenCup Command Center Bridge";
     public override string ModuleVersion => "0.3.12";
     public override string ModuleAuthor => "CaorenCup";
-    public override string ModuleDescription => "Bridge CS2 score, player binding and match stats to the CaorenCup web command center.";
+    public override string ModuleDescription => "Bridge trusted CS2 identity, score and match stats to the CaorenCup web command center.";
 
     private readonly HttpClient _http = new();
     private readonly DuelGameSession _duelSession = new();
@@ -56,7 +56,6 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly HashSet<string> _lobbySteamIds = new(StringComparer.Ordinal);
     private readonly object _webStateLock = new();
     private readonly List<WebPlayerState> _lastNoticeMissingTargets = new();
-    private readonly ConcurrentDictionary<string, long> _shownIdentityChallenges = new(StringComparer.Ordinal);
     private bool _teamLockEnabled;
     private int _teamAssignmentsValidFromRound;
     private int _teamAssignmentsValidUntilRound;
@@ -189,9 +188,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _http.DefaultRequestHeaders.Remove("x-caoren-plugin-token");
         _http.DefaultRequestHeaders.Add("x-caoren-plugin-token", _config.PluginToken);
 
-        AddCommand("css_ccbind", "绑定草人杯网页身份。用法：!ccbind 1234", OnBindCommand);
         AddCommand("css_cclogin", "获取草人杯网页登录码。用法：!cclogin", OnGameLoginCommand);
-        AddCommand("css_cccode", "获取草人杯网页登录码。用法：!cccode", OnGameLoginCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
@@ -305,27 +302,6 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         var text = File.ReadAllText(path);
         _config = JsonSerializer.Deserialize<CaorenConfig>(text, _jsonOptions) ?? new CaorenConfig();
-    }
-
-    private void OnBindCommand(CCSPlayerController? player, CommandInfo command)
-    {
-        if (!IsRealPlayer(player))
-        {
-            command.ReplyToCommand("该命令只能由玩家在游戏内执行。");
-            return;
-        }
-
-        var bindCode = command.ArgByIndex(1)?.Trim();
-        if (string.IsNullOrWhiteSpace(bindCode))
-        {
-            player!.PrintToChat("[草人杯] 用法：!ccbind 你的网页绑定码，例如 !ccbind 1234");
-            return;
-        }
-
-        var steamId = player!.SteamID.ToString();
-        var name = SafePlayerName(player);
-        ReplyToPlayer(player, "[草人杯] 已收到绑定请求，正在连接网页指挥台...");
-        _ = BindAsync(player, bindCode, steamId, name);
     }
 
     private void OnGameLoginCommand(CCSPlayerController? player, CommandInfo command)
@@ -1699,37 +1675,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
     }
 
-    private async Task BindAsync(CCSPlayerController player, string bindCode, string steamId, string name)
-    {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        try
-        {
-            var response = await _http.PostAsJsonAsync("api/plugin/bind", new { bindCode, steamId, name }, _jsonOptions);
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            var body = await response.Content.ReadAsStringAsync();
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            if (response.IsSuccessStatusCode)
-            {
-                var result = JsonSerializer.Deserialize<PluginBindResponse>(body, _jsonOptions);
-                var webName = string.IsNullOrWhiteSpace(result?.Name) ? name : result!.Name;
-                ReplyToPlayer(player, $"[草人杯] 绑定成功：{webName} / {steamId}");
-                LogDebug("Bind success: {Body}", body);
-            }
-            else
-            {
-                var error = ExtractErrorMessage(body);
-                ReplyToPlayer(player, $"[草人杯] 绑定失败：{error}");
-                Logger.LogWarning("Bind failed: {Body}", body);
-            }
-        }
-        catch (Exception ex)
-        {
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            ReplyToPlayer(player, "[草人杯] 绑定失败：无法连接网页指挥台，请联系管理员检查插件配置。");
-            Logger.LogError(ex, "Bind failed: cannot connect to command center");
-        }
-    }
-
     private async Task SendHeartbeatAsync(CCSPlayerController? replyTo = null)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return;
@@ -1886,7 +1831,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (response.IsSuccessStatusCode)
             {
-                ProcessIdentityConfirmationChallenges(text);
                 LogDebug("Snapshot OK: {Text}", text);
             }
             else
@@ -2023,7 +1967,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 now,
                 LobbyStateMaxAge,
                 lobbySteamIds)) continue;
-            ReplyToPlayer(player, "[草人杯] 请先打开草人杯客户端，使用 SteamID64 + 密码或邀请码进入大厅。");
+            ReplyToPlayer(player, "[草人杯] 请先打开草人杯客户端，登录玩家中心并明确加入本场比赛。");
         }
     }
 
@@ -2276,7 +2220,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (response.IsSuccessStatusCode)
             {
-                ProcessIdentityConfirmationChallenges(text);
                 LogDebug("Snapshot seq={Sequence} OK: {Text}", sequence, text);
             }
             else
@@ -2302,63 +2245,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (now - _lastPlayerHurtWarningUtc < TimeSpan.FromSeconds(10)) return false;
         _lastPlayerHurtWarningUtc = now;
         return true;
-    }
-
-    private void ProcessIdentityConfirmationChallenges(string responseText)
-    {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        PluginSnapshotResponse? snapshot;
-        try
-        {
-            snapshot = JsonSerializer.Deserialize<PluginSnapshotResponse>(responseText, _jsonOptions);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Failed to parse identity confirmation challenges");
-            return;
-        }
-
-        var challenges = snapshot?.ConfirmationChallenges?.ToArray() ?? [];
-        if (challenges.Length == 0) return;
-        Server.NextFrame(() =>
-        {
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            ShowIdentityConfirmationChallenges(challenges);
-        });
-    }
-
-    private void ShowIdentityConfirmationChallenges(IReadOnlyList<PluginIdentityConfirmationChallenge> challenges)
-    {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        foreach (var expiredId in _shownIdentityChallenges.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray())
-        {
-            _shownIdentityChallenges.TryRemove(expiredId, out _);
-        }
-
-        foreach (var challenge in challenges)
-        {
-            if (string.IsNullOrWhiteSpace(challenge.ChallengeId) ||
-                string.IsNullOrWhiteSpace(challenge.SteamId) ||
-                string.IsNullOrWhiteSpace(challenge.Code) ||
-                challenge.ExpiresAt <= now ||
-                _shownIdentityChallenges.ContainsKey(challenge.ChallengeId))
-            {
-                continue;
-            }
-
-            var player = Utilities.GetPlayers().FirstOrDefault(candidate =>
-                IsRealPlayer(candidate) && string.Equals(candidate.SteamID.ToString(), challenge.SteamId, StringComparison.Ordinal));
-            if (player == null) continue;
-
-            if (!_shownIdentityChallenges.TryAdd(challenge.ChallengeId, challenge.ExpiresAt)) continue;
-            var code = challenge.Code.Trim().ToUpperInvariant();
-            ReplyToPlayer(player, "[草人杯] =================================");
-            ReplyToPlayer(player, $"[草人杯]  本场 Steam 确认码： {code}");
-            ReplyToPlayer(player, "[草人杯]  请回到草人杯客户端输入，只需首次绑定时确认一次");
-            ReplyToPlayer(player, "[草人杯]  10 分钟内有效；不要把确认码告诉其他人");
-            ReplyToPlayer(player, "[草人杯] =================================");
-            ReplyToPlayerCenter(player, $"Steam 确认码：{code}\n请回草人杯客户端输入");
-        }
     }
 
     private async Task<PluginCommandExecutionResult> TryApplyAndAckPluginCommandAsync(
@@ -3582,7 +3468,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (string.IsNullOrWhiteSpace(body)) return "服务器没有返回错误信息";
         try
         {
-            var result = JsonSerializer.Deserialize<PluginBindResponse>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var result = JsonSerializer.Deserialize<PluginApiResponse>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             if (!string.IsNullOrWhiteSpace(result?.Error)) return result.Error!;
         }
         catch { }
@@ -3612,7 +3498,7 @@ public sealed class LocalPlayerStats
     public int Damage { get; set; }
 }
 
-public sealed class PluginBindResponse
+public sealed class PluginApiResponse
 {
     [JsonPropertyName("success")]
     public bool Success { get; set; }
@@ -3722,27 +3608,6 @@ public sealed class PluginGameLoginCodeResponse
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }
-}
-
-public sealed class PluginSnapshotResponse
-{
-    [JsonPropertyName("confirmationChallenges")]
-    public List<PluginIdentityConfirmationChallenge> ConfirmationChallenges { get; set; } = [];
-}
-
-public sealed class PluginIdentityConfirmationChallenge
-{
-    [JsonPropertyName("challengeId")]
-    public string ChallengeId { get; set; } = string.Empty;
-
-    [JsonPropertyName("steamId")]
-    public string SteamId { get; set; } = string.Empty;
-
-    [JsonPropertyName("code")]
-    public string Code { get; set; } = string.Empty;
-
-    [JsonPropertyName("expiresAt")]
-    public long ExpiresAt { get; set; }
 }
 
 public sealed class PluginCommand

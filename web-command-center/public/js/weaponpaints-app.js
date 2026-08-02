@@ -47,7 +47,10 @@
         });
     }
 
-    const action = async (payload) => (await emit(WEAPONPAINTS_ACTION, { ...payload, targetSteamId: state.targetSteamId })).data;
+    const action = async (payload) => {
+        const request = state.status?.isAdmin ? { ...payload, targetSteamId: state.targetSteamId } : { ...payload };
+        return (await emit(WEAPONPAINTS_ACTION, request)).data;
+    };
 
     function renderHealth() {
         const host = el('weaponpaints-health');
@@ -610,7 +613,7 @@
     }
 
     async function loadTarget() {
-        if (!state.targetSteamId) throw new Error('请选择一名已验证玩家。');
+        if (state.status?.isAdmin && !state.targetSteamId) throw new Error('请选择一名已验证玩家。');
         state.loadout = await action({ action: 'load' });
         if (state.selectedWeapon) state.selectedWeapon = weaponFromLoadout(state.selectedWeapon.weaponDefIndex);
         renderEditor();
@@ -637,8 +640,8 @@
         try {
             state.status = await emit(WEAPONPAINTS_STATUS);
             renderHealth();
-            if (!state.status.canUse) throw new Error('请先完成本人 SteamID 的游戏服务器验证。');
-            state.targetSteamId = state.status.isAdmin ? (state.status.targets?.[0]?.steamId || '') : state.status.selfSteamId;
+            if (!state.status.canUse) throw new Error('请先使用有效玩家中心账号登录。');
+            state.targetSteamId = state.status.isAdmin ? (state.status.targets?.[0]?.steamId || '') : '';
             renderAdminBar(); renderTeams(); renderCategories();
             await loadTarget();
             await loadCatalog(false);

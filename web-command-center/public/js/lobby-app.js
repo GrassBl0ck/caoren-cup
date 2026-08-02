@@ -184,10 +184,6 @@ window.__caorenCupLobbySocket = ws;
             document.getElementById('login-area').style.display = 'block';
             myPlayerId = null;
             window._currentPlayer = null;
-            document.getElementById('name-input').value = '';
-            document.getElementById('extra-input').value = '';
-            const gameLoginInput = document.getElementById('v1333-game-login-code-input');
-            if (gameLoginInput) gameLoginInput.value = '';
             if (message) alert(message);
         }
 
@@ -342,7 +338,7 @@ window.__caorenCupLobbySocket = ws;
         }
 
         function getAdminPasswordForRequest() {
-            return document.getElementById('extra-input')?.value || prompt('请输入管理员密码：') || '';
+            return prompt('请输入管理员密码：') || '';
         }
 
         function renderLobbyAnnouncement(announcement) {
@@ -914,8 +910,7 @@ if (window._caorenModifiersEnabled !== true) {
                 document.getElementById('login-area').style.display = 'none';
                 document.getElementById('lobby-area').style.display = 'block';
                 const displayName = data.name || data.player?.name || (data.message || '').split('，')[0].replace('欢迎，', '').replace('！已恢复你的房间身份。', '').replace('！你的绑定码是:', '').trim();
-                document.getElementById('my-name').textContent = displayName || document.getElementById('name-input').value.trim() || '未命名玩家';
-                document.getElementById('my-bindcode').textContent = data.loginCode || data.bindCode || '未分配';
+                document.getElementById('my-name').textContent = displayName || '未命名玩家';
             } else {
                 if (data.resetClient || data.message === '你已退出游戏' || String(data.message || '').includes('终止')) {
                     resetToLogin(data.message || '你已退出房间，请重新进入');
@@ -2646,13 +2641,6 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         // ===== 全局交互函数 =====
-        function login() {
-            const name = document.getElementById('name-input').value.trim();
-            const extra = document.getElementById('extra-input').value.trim();
-            if (!name && !extra) return alert('请输入昵称，或输入绑定码恢复身份');
-            ws.emit('LOGIN', { name, extraParam: extra || undefined });
-        }
-        function resume() { login(); }
         function advancePhase() {
             const isDuelMode = window._currentGameState?.matchOptions?.matchMode === 'duel';
             if ((window._currentGamePhase === 'Lobby' || window._currentGamePhase === 'PreGameSetup') && isDuelMode) {
@@ -2741,8 +2729,6 @@ if (window._caorenModifiersEnabled !== true) {
         }
         function duelApproveTerminate(ok) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: ok ? 'DUEL_APPROVE_TERMINATE' : 'DUEL_REJECT_TERMINATE' }); }
         Object.assign(window, {
-            login,
-            resume,
             advancePhase,
             undoFlowAction,
             terminateGame,

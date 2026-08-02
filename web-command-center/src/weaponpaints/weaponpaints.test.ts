@@ -110,18 +110,12 @@ test('发布版优先读取网页包内目录，开发环境回退到仓库目�
     }
 });
 
-test('玩家只能编辑已确认的本人 SteamID，管理员可代管已验证玩家', () => {
-    const player = {
-        playerId: 'player-1',
-        role: 'Player',
-        steamId: '76561198000000001',
-        identityLevel: 'longTerm',
-        confirmationState: 'confirmed',
-    } as const;
+test('玩家中心身份只能编辑本人 SteamID，管理员可代管已验证玩家', () => {
+    const player = { identityId: 'identity-player-1', steamId: '76561198000000001' } as const;
     const admin = { playerId: 'admin-1', role: 'Admin' } as const;
 
     assert.deepEqual(resolveSkinActor(player, undefined, new Set()), {
-        actorPlayerId: 'player-1',
+        actorPlayerId: 'identity:identity-player-1',
         actorRole: 'Player',
         targetSteamId: '76561198000000001',
     });
@@ -137,6 +131,29 @@ test('玩家只能编辑已确认的本人 SteamID，管理员可代管已验证
     assert.throws(
         () => resolveSkinActor(admin, '76561198000000003', new Set(['76561198000000002'])),
         /尚未验证/,
+    );
+});
+
+test('未加入比赛的玩家中心身份可以使用身份库 SteamID，且旧 playerId 权限不能绕过', () => {
+    const playerCenterIdentity = {
+        identityId: 'identity-player-center',
+        steamId: '76561198000000001',
+    };
+
+    assert.deepEqual(resolveSkinActor(playerCenterIdentity as any, undefined, new Set()), {
+        actorPlayerId: 'identity:identity-player-center',
+        actorRole: 'Player',
+        targetSteamId: '76561198000000001',
+    });
+    assert.throws(
+        () => resolveSkinActor({
+            playerId: 'legacy-player',
+            role: 'Player',
+            steamId: '76561198000000001',
+            identityLevel: 'longTerm',
+            confirmationState: 'confirmed',
+        } as any, undefined, new Set()),
+        /玩家中心/,
     );
 });
 
@@ -300,8 +317,7 @@ test('Socket 操作以服务器认证身份为准，不接受前端冒充玩家'
     const service = new WeaponPaintsService(catalog, repository, () => undefined);
     const verifiedSteamIds = new Set(['76561198000000001']);
     const player = {
-        playerId: 'server-authenticated-player', role: 'Player', steamId: '76561198000000001',
-        identityLevel: 'longTerm', confirmationState: 'confirmed',
+        identityId: 'server-authenticated-identity', steamId: '76561198000000001',
     };
 
     await executeWeaponPaintsAction(service, player, verifiedSteamIds, { action: 'load', playerId: 'forged-player' });

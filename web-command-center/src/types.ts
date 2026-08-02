@@ -248,11 +248,6 @@ export interface GameSession {
     sessionId: string;
     phase: GamePhase;
     matchId: string;
-    lobbyAccess: {
-        inviteCode: string;
-        inviteCreatedAt: number;
-        inviteExpiresAt: number;
-    };
     matchOptions: MatchOptions;
     players: Record<string, Player>;
     playerOrder: string[];
@@ -314,11 +309,7 @@ export enum WsEvents {
     SUBMIT_QUESTION = 'SUBMIT_QUESTION',
     UNDERCOVER_TASK_ACK = 'UNDERCOVER_TASK_ACK',
     LOGIN_RESPONSE = 'LOGIN_RESPONSE',
-    LOBBY_INVITE_LOGIN = 'LOBBY_INVITE_LOGIN',
-    DEVICE_SOCKET_LOGIN = 'DEVICE_SOCKET_LOGIN',
-    FIXED_MEMBER_SOCKET_LOGIN = 'FIXED_MEMBER_SOCKET_LOGIN',
-    STEAM_CONFIRM_CODE = 'STEAM_CONFIRM_CODE',
-    DEVICE_ENROLLMENT_READY = 'DEVICE_ENROLLMENT_READY',
+    PLAYER_CENTER_MATCH_LOGIN = 'PLAYER_CENTER_MATCH_LOGIN',
     IDENTITY_ADMIN_ACTION = 'IDENTITY_ADMIN_ACTION',
     GAME_STATE = 'GAME_STATE',
     PRIVATE_DATA = 'PRIVATE_DATA',

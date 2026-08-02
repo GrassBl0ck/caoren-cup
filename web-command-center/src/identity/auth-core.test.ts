@@ -4,7 +4,6 @@ import {
     EphemeralTicketService,
     isDeviceAuthTransportAllowed,
     lastForwardedValue,
-    socketLoginTicketMatchesSession,
 } from './auth-core';
 
 test('ephemeral ticket is single-use and expires after its TTL', () => {
@@ -23,19 +22,13 @@ test('ephemeral ticket is single-use and expires after its TTL', () => {
     assert.equal(tickets.consume(expired.ticket), undefined);
 });
 
-test('device auth allows development HTTP but requires production HTTPS', () => {
+test('device auth explicitly allows production HTTP for the accepted deployment risk', () => {
     assert.equal(isDeviceAuthTransportAllowed({ production: false, secure: false, hostname: '127.0.0.1' }), true);
-    assert.equal(isDeviceAuthTransportAllowed({ production: true, secure: false, hostname: '203.0.113.10' }), false);
+    assert.equal(isDeviceAuthTransportAllowed({ production: true, secure: false, hostname: '203.0.113.10' }), true);
     assert.equal(isDeviceAuthTransportAllowed({ production: true, secure: true, hostname: 'cup.example.com' }), true);
 });
 
 test('trusted proxy parsing uses the address nearest to the server', () => {
     assert.equal(lastForwardedValue('198.51.100.8, 203.0.113.24'), '203.0.113.24');
     assert.equal(lastForwardedValue(''), undefined);
-});
-
-test('socket login ticket must belong to the active session', () => {
-    const ticket = { membershipId: 'member-1', sessionId: 'session-old' };
-    assert.equal(socketLoginTicketMatchesSession(ticket, 'session-old'), true);
-    assert.equal(socketLoginTicketMatchesSession(ticket, 'session-new'), false);
 });

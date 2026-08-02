@@ -14,7 +14,7 @@ assert.match(html, /id="weaponpaints-panel"/);
 assert.match(html, /weaponpaints-app\.js/);
 assert.match(html, /weaponpaints\.css/);
 assert.match(html, /weaponpaints\.css\?v=1\.9-weaponpaints-advanced-decoration/);
-assert.match(html, /weaponpaints-app\.js\?v=1\.9-weaponpaints-advanced-decoration/);
+assert.match(html, /weaponpaints-app\.js\?v=1\.9\.1/);
 for (const category of ['gun', 'knife', 'glove', 'agent', 'music', 'pin', 'keychain']) {
     assert.match(js, new RegExp(`['"]${category}['"]`), `缺少分类 ${category}`);
 }
@@ -28,6 +28,8 @@ assert.match(js, /weaponpaints-card-status/, '目录卡片必须显示当前使�
 assert.match(js, /currentSelectionItem/, '当前使用卡片必须按已保存涂装解析，不能被待保存预览覆盖');
 assert.match(js, /finishItemStatus/, '涂装弹层必须区分当前使用和待保存涂装');
 assert.match(js, /WEAPONPAINTS_ACTION/);
+assert.match(js, /state\.status\?\.isAdmin[\s\S]*targetSteamId/, '仅管理员代管请求可携带目标 SteamID');
+assert.doesNotMatch(js, /selfSteamId/, '普通玩家不应从服务端接收或编辑 SteamID');
 assert.match(js, /copyTeam/);
 assert.match(js, /grouped/);
 assert.match(js, /weaponpaints-finish-flyout/, '选择涂装应打开侧向弹层');

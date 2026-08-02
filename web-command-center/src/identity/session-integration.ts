@@ -51,3 +51,20 @@ export const removeIdentityFromSession = (session: GameSession, identityId: stri
     delete session.accusations[playerId];
     return player;
 };
+
+export const detachMatchMembershipsForScoreboard = (session: GameSession): string[] => {
+    const detachedPlayerIds: string[] = [];
+    for (const player of Object.values(session.players)) {
+        if (player.role === 'Admin' || (!player.identityId && !player.membershipId)) continue;
+        detachedPlayerIds.push(player.playerId);
+        delete player.identityId;
+        delete player.membershipId;
+        delete player.identityLevel;
+        delete player.confirmationState;
+        delete player.confirmationReason;
+        delete player.sessionCode;
+        delete player.bindCode;
+        player.isOnline = false;
+    }
+    return detachedPlayerIds;
+};
