@@ -4,7 +4,7 @@
     const mutationStateApi = window.CaorenUpdateAnnouncementAdminMutationState;
 
     function adminSocketRequest(event, payload) {
-        const socket = window.__caorenCupSocket;
+        const socket = window.__caorenCupLobbySocket || window.__caorenCupSocket;
         if (!socket || !socket.connected) {
             return Promise.reject(new Error('管理员会话已失效，请重新登录'));
         }

@@ -160,7 +160,7 @@ CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
 支持同步：
 
 - 心跳
-- 玩家绑定
+- 玩家可信 Steam 身份与本场在线状态
 - 回合开始
 - 回合结束
 - 玩家死亡
@@ -168,22 +168,17 @@ CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
 - 当前比分
 - 玩家战绩
 
-管理员可以预设固定成员的 SteamID64、昵称和独立密码。固定成员使用 SteamID64 和密码直接进入当前大厅，桥接插件检测到相同的服务器可信 SteamID 后自动完成本场确认，不会重新绑定或合并身份。
+玩家统一使用草人杯账号和密码登录玩家中心。SteamID64 不再作为登录方式；账号中的 SteamID64 来自 CS2 插件可信上报，继续用于本场身份确认和换肤权限。
 
-临时玩家可以使用本场邀请码、昵称和 SteamID64 先进入大厅。首次连接 CS2 后，桥接插件会按可信 SteamID 向该玩家显示一次性确认码；只有确认码、客户端声明和服务器 SteamID 三者一致时，后端才建立长期绑定。
-
-桌面页面只接收候选账号的公开昵称、最近使用时间、掩码 SteamID 和临时引用；最终选择的完整 SteamID 由 Electron 主进程换取 30 秒单次声明票据，不会暴露给远程 renderer。
-
-原有绑定命令继续作为恢复入口：
+没有账号或忘记账号、密码时，在 CS2 服务器使用唯一开户/恢复命令：
 
 ```text
-!ccbind 1234
+!cclogin
 ```
 
-`!cclogin` 和 `!cccode` 也继续保留，用于首次升级、换电脑、Steam 账号不一致和故障恢复。
-玩家游戏码成功验证后立即失效，不能重复用于建立设备登录凭据。
+游戏码成功验证后立即失效。登录玩家中心不会自动参赛；玩家需要明确点击“加入本场比赛”。管理员密码登录是独立流程，也不会自动参赛。
 
-长期身份与单场比赛 Session 分离，默认保存在忽略的 `web-command-center/runtime/identity-store.json`。固定成员密码使用 Node.js scrypt 和随机盐保存，管理员不能查看原密码。设备令牌仅保存安全哈希；生产自动登录必须使用 HTTPS/WSS，固定密码登录不会签发设备令牌。
+长期身份与单场比赛 Session 分离，默认保存在忽略的 `web-command-center/runtime/identity-store.json`。账号密码使用 Node.js scrypt 和随机盐保存，管理员不能查看原密码。设备令牌仅保存安全哈希；桌面端使用 `safeStorage` 保存令牌，成功自动登录时轮换令牌，并通过短时单次票据建立玩家中心 Cookie。
 
 连接 CS2 但尚未进入当前网页大厅的真实玩家会收到聊天提醒。桥接插件只在网页状态成功同步且缓存有效时提示，Bot、HLTV 和无效玩家不会收到提醒。
 
@@ -1280,6 +1275,8 @@ CaorenCup 项目中的部分功能参考、改写或使用了以下第三方项�
 - Notes: Some ESP/glow implementation ideas or related logic were adapted for CaorenCup with permission from the original author.
 
 If any attribution is incomplete or inaccurate, please contact the maintainer and it will be corrected as soon as possible.
+
+> 以下 v1.3.x 小节是历史版本记录，不代表当前登录方式。当前玩家入口以本文前面的“账号密码 + `!cclogin` 开户/恢复 + 明确加入比赛”为准。
 
 ## v1.3.3 game-code-login
 

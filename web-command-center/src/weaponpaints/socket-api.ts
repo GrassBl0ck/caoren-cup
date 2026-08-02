@@ -1,6 +1,9 @@
 import type { Socket } from 'socket.io';
 
 import { V1333_PLUGIN_ONLINE_TTL_MS } from '../game-constants';
+import type { LobbyIdentityService } from '../identity/identity-service';
+import type { PlayerCenterSessionStore } from '../identity/player-center-session-store';
+import { lobbyIdentityService, playerCenterSessionStore } from '../identity/identity-runtime';
 import { cancelPluginCommands } from '../plugin-command-queue';
 import { getSession } from '../session-manager';
 import { findPlayerById } from '../player-utils';
@@ -30,6 +33,66 @@ export const executeWeaponPaintsAdminAction = async (
     return { enabled: payload.enabled, canceledRefreshCommands };
 };
 
+export const resolvePlayerCenterSkinActor = async (input: {
+    socketData: Record<string, any>;
+    sessionStore: PlayerCenterSessionStore;
+    service: LobbyIdentityService;
+    requestedSteamId: unknown;
+}) => {
+    const identityId = String(input.socketData.identityId || '');
+    const session = await input.sessionStore.useBoundSession(
+        input.socketData.playerCenterSessionId,
+        identityId,
+    );
+    const account = session ? input.service.getLoginAccount(identityId) : undefined;
+    const identity = session ? input.service.getIdentity(identityId) : undefined;
+    if (!session || !account || !identity || !account.enabled || account.passwordState !== 'active' ||
+        !account.password || account.updatedAt !== session.accountUpdatedAt) {
+        delete input.socketData.identityId;
+        delete input.socketData.playerCenterSessionId;
+        throw new Error('玩家中心会话已失效，请重新登录。');
+    }
+    return resolveSkinActor({ identityId, steamId: identity.steamId }, input.requestedSteamId, new Set());
+};
+
+export const authorizeWeaponPaintsSocketActor = async (input: {
+    socketData: Record<string, any>;
+    players: Record<string, Player>;
+    sessionStore: PlayerCenterSessionStore;
+    identityService: LobbyIdentityService;
+    requestedSteamId: unknown;
+}) => {
+    const playerId = String(input.socketData.playerId || '');
+    const player = playerId ? input.players[playerId] : undefined;
+    if (player?.role === 'Admin') {
+        return resolveSkinActor(player, input.requestedSteamId, verifiedSteamIdsFrom(input.players));
+    }
+    return resolvePlayerCenterSkinActor({
+        socketData: input.socketData,
+        sessionStore: input.sessionStore,
+        service: input.identityService,
+        requestedSteamId: input.requestedSteamId,
+    });
+};
+
+export const resolveWeaponPaintsSocketStatus = async (input: {
+    socketData: Record<string, any>;
+    players: Record<string, Player>;
+    sessionStore: PlayerCenterSessionStore;
+    identityService: LobbyIdentityService;
+}) => {
+    const playerId = String(input.socketData.playerId || '');
+    const player = playerId ? input.players[playerId] : undefined;
+    if (player?.role === 'Admin') return { isAdmin: true as const };
+    const actor = await resolvePlayerCenterSkinActor({
+        socketData: input.socketData,
+        sessionStore: input.sessionStore,
+        service: input.identityService,
+        requestedSteamId: undefined,
+    });
+    return { isAdmin: false as const, actor };
+};
+
 const verifiedSteamIdsFrom = (players: Record<string, Player>) => new Set(
     Object.values(players)
         .filter((player) => player.identityLevel === 'longTerm' && player.confirmationState === 'confirmed' && /^7656119\d{10}$/.test(String(player.steamId || '')))
@@ -43,6 +106,14 @@ export const executeWeaponPaintsAction = async (
     payload: Record<string, any>,
 ) => {
     const actor = resolveSkinActor(player, payload.targetSteamId, verifiedSteamIds);
+    return executeResolvedWeaponPaintsAction(service, actor, payload);
+};
+
+const executeResolvedWeaponPaintsAction = async (
+    service: WeaponPaintsService,
+    actor: ReturnType<typeof resolveSkinActor>,
+    payload: Record<string, any>,
+) => {
     switch (String(payload.action || '')) {
         case 'load': return service.load(actor);
         case 'saveWeapon': return service.saveWeapon(actor, payload.weapon || {});
@@ -58,7 +129,6 @@ export const registerWeaponPaintsSocketHandlers = (socket: Socket) => {
     socket.on(WEAPONPAINTS_STATUS, async (callback?: (response: unknown) => void) => {
         const respond = typeof callback === 'function' ? callback : () => undefined;
         const session = getSession();
-        const player = socket.data.playerId ? findPlayerById(session, socket.data.playerId) : undefined;
         const verified = Object.values(session.players)
             .filter((candidate) => candidate.identityLevel === 'longTerm' && candidate.confirmationState === 'confirmed' && /^7656119\d{10}$/.test(String(candidate.steamId || '')))
             .map((candidate) => ({ steamId: candidate.steamId, name: candidate.name }));
@@ -67,13 +137,25 @@ export const registerWeaponPaintsSocketHandlers = (socket: Socket) => {
             Date.now(),
             V1333_PLUGIN_ONLINE_TTL_MS,
         ));
+        let statusAccess: Awaited<ReturnType<typeof resolveWeaponPaintsSocketStatus>> | undefined;
+        const hadPlayerCenterSession = !!socket.data.identityId || !!socket.data.playerCenterSessionId;
+        try {
+            statusAccess = await resolveWeaponPaintsSocketStatus({
+                socketData: socket.data,
+                players: session.players,
+                sessionStore: playerCenterSessionStore,
+                identityService: lobbyIdentityService,
+            });
+        } catch {
+            if (hadPlayerCenterSession && !socket.data.identityId) socket.emit('PLAYER_CENTER_SESSION_INVALID');
+        }
+        const isAdmin = statusAccess?.isAdmin === true;
         respond({
             success: true,
             health,
-            isAdmin: player?.role === 'Admin',
-            canUse: health.settings.enabled && (player?.role === 'Admin' || (player?.identityLevel === 'longTerm' && player?.confirmationState === 'confirmed' && !!player?.steamId)),
-            selfSteamId: player?.role === 'Admin' ? undefined : player?.steamId,
-            targets: player?.role === 'Admin' ? verified : undefined,
+            isAdmin,
+            canUse: health.settings.enabled && !!statusAccess,
+            targets: isAdmin ? verified : undefined,
         });
     });
 
@@ -95,17 +177,24 @@ export const registerWeaponPaintsSocketHandlers = (socket: Socket) => {
 
     socket.on(WEAPONPAINTS_ACTION, async (payload: Record<string, any>, callback?: (response: unknown) => void) => {
         const respond = typeof callback === 'function' ? callback : () => undefined;
+        const hadPlayerCenterSession = !!socket.data.identityId || !!socket.data.playerCenterSessionId;
         try {
             const session = getSession();
-            const player = socket.data.playerId ? findPlayerById(session, socket.data.playerId) : undefined;
-            const data = await executeWeaponPaintsAction(
+            const actor = await authorizeWeaponPaintsSocketActor({
+                socketData: socket.data,
+                players: session.players,
+                sessionStore: playerCenterSessionStore,
+                identityService: lobbyIdentityService,
+                requestedSteamId: payload?.targetSteamId,
+            });
+            const data = await executeResolvedWeaponPaintsAction(
                 weaponPaintsRuntime.requireService(),
-                player,
-                verifiedSteamIdsFrom(session.players),
+                actor,
                 payload || {},
             );
             respond({ success: true, data });
         } catch (error) {
+            if (hadPlayerCenterSession && !socket.data.identityId) socket.emit('PLAYER_CENTER_SESSION_INVALID');
             respond({ success: false, error: error instanceof Error ? error.message : '换肤操作失败。' });
         }
     });

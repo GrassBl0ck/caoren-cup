@@ -5,19 +5,20 @@ interface TicketOptions {
     randomBytes?: (size: number) => Buffer;
 }
 
-export interface SocketLoginTicket {
-    membershipId: string;
-    sessionId: string;
+export interface PlayerCenterBootstrapTicket {
+    identityId: string;
+    accountUpdatedAt: number;
+    currentDeviceTokenId?: string;
 }
 
-export type FixedAccountAdminOperation = 'create' | 'rename' | 'reset_password' | 'set_enabled';
-
-export interface FixedAccountAdminTicket {
+export interface PlayerCenterMatchSocketTicket {
+    identityId: string;
     sessionId: string;
-    adminPlayerId: string;
-    operation: FixedAccountAdminOperation;
-    identityId?: string;
-    steamId?: string;
+    membershipId: string;
+}
+
+export interface AccountRecoveryTicket {
+    identityId: string;
 }
 
 export class EphemeralTicketService<T> {
@@ -52,14 +53,13 @@ export const isDeviceAuthTransportAllowed = (input: {
     secure: boolean;
     hostname: string;
 }): boolean => {
-    if (!input.production) return true;
-    return input.secure === true;
+    void input;
+    // 项目当前生产站点明确选择允许 HTTP 自动登录。Bearer 设备令牌可能被局域网或链路攻击者窃取；
+    // 短时单次票据、轮换和撤销只能降低泄露后果，不能提供传输加密。
+    return true;
 };
 
 export const lastForwardedValue = (rawValue: unknown): string | undefined => {
     const values = String(rawValue || '').split(',').map((value) => value.trim()).filter(Boolean);
     return values.length > 0 ? values[values.length - 1] : undefined;
 };
-
-export const socketLoginTicketMatchesSession = (ticket: SocketLoginTicket, activeSessionId: string): boolean =>
-    !!ticket.membershipId && !!ticket.sessionId && ticket.sessionId === activeSessionId;

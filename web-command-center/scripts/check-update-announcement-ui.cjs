@@ -92,6 +92,10 @@ assert.doesNotMatch(
 assert.doesNotMatch(adminJs, /prompt\('请输入管理员密码：'\)/, '管理员控制器不得再弹出管理员密码输入框');
 assert.doesNotMatch(adminJs, /adminPassword\s*:/, '管理员控制器不得发送管理员密码');
 assert.doesNotMatch(adminJs, /\bfetch\(/, '管理员控制器必须通过大厅 Socket 发起管理请求');
+assert.ok(
+    adminJs.includes('window.__caorenCupLobbySocket || window.__caorenCupSocket'),
+    '管理员控制器必须优先使用已登录的大厅 Socket',
+);
 for (const event of [
     'UPDATE_ANNOUNCEMENT_ADMIN_LIST',
     'UPDATE_ANNOUNCEMENT_ADMIN_SAVE',

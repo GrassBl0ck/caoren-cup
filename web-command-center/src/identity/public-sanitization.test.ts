@@ -1,27 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { sanitizeForPublic } from '../player-utils';
+import { sanitizeForPublic, sanitizeGameStateForViewer } from '../player-utils';
 import { createInitialSession } from '../session-manager';
 import { GamePhase } from '../types';
-
-test('lobby invite is visible only to an authenticated admin', () => {
-    const session = createInitialSession();
-    session.lobbyAccess = { inviteCode: 'SECRET88', inviteCreatedAt: 1, inviteExpiresAt: 2 };
-    session.players.admin = { playerId: 'admin', name: 'Admin', role: 'Admin', isReady: true };
-    session.players.player = {
-        playerId: 'player',
-        name: 'Player',
-        role: 'Player',
-        isReady: false,
-        identityLevel: 'temporary',
-        confirmationState: 'mismatch',
-        confirmationReason: 'steam_mismatch',
-    };
-
-    assert.equal(sanitizeForPublic(session, 'admin').lobbyAccess.inviteCode, 'SECRET88');
-    assert.equal(sanitizeForPublic(session, 'player').lobbyAccess.inviteCode, undefined);
-    assert.equal(sanitizeForPublic(session, null).lobbyAccess.inviteCode, undefined);
-});
 
 test('identity confirmation reason is private to the player and admin', () => {
     const session = createInitialSession();
@@ -61,4 +42,19 @@ test('full SteamID is private before scoreboard but remains available for postma
 
     session.phase = GamePhase.Scoreboard;
     assert.equal(sanitizeForPublic(session, 'other').players.player.steamId, '76561198000000041');
+});
+
+test('a socket without current match membership receives only the simple match status', () => {
+    const session = createInitialSession();
+    session.players.player = { playerId: 'player', name: 'Private Player', role: 'Player', isReady: false };
+    session.liveGameData = {
+        scoreCT: 1, scoreT: 2, scoreA: 3, scoreB: 4, currentRound: 5, pluginConnected: true,
+        winnerTeam: null, matchFinished: false, winTarget: 13, lastScoredRound: 4,
+    };
+
+    assert.deepEqual(sanitizeGameStateForViewer(session, null), { matchStatus: 'waiting' });
+    session.phase = GamePhase.LiveGame;
+    assert.deepEqual(sanitizeGameStateForViewer(session, null), { matchStatus: 'started' });
+    session.phase = GamePhase.Scoreboard;
+    assert.deepEqual(sanitizeGameStateForViewer(session, null), { matchStatus: 'ended' });
 });

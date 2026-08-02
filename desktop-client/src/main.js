@@ -1,12 +1,9 @@
 const { app, BrowserWindow, dialog, shell, ipcMain, safeStorage } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFile } = require('node:child_process');
-const { randomUUID } = require('node:crypto');
 const { COMMAND_CENTER_URL } = require('./client-config');
 const { DeviceCredentialStore } = require('./device-credentials');
 const { DesktopAuthClient } = require('./desktop-auth-client');
-const { discoverSteamAccounts, selectSteamAccount, toRendererSteamAccount } = require('./steam-accounts');
 
 const PLACEHOLDER_URL = 'https://your-caoren-command-center.example.com';
 const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/1.0';
@@ -15,8 +12,6 @@ const commandCenterUrl = normalizeCommandCenterUrl(process.env.CAOREN_COMMAND_CE
 let mainWindow = null;
 let deviceCredentialStore = null;
 let desktopAuthClient = null;
-let steamAccounts = [];
-let selectedSteamAccount = null;
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
@@ -62,57 +57,18 @@ function requireTrustedIpc(event) {
   if (!isTrustedIpcEvent(event)) throw new Error('IPC_SOURCE_NOT_ALLOWED');
 }
 
-async function listSteamAccounts() {
-  const remembered = deviceCredentialStore.load();
-  const discovery = await discoverSteamAccounts({ fs, execFile, env: process.env });
-  if (!discovery.ok) {
-    steamAccounts = [];
-    selectedSteamAccount = null;
-    return discovery;
-  }
-  steamAccounts = discovery.accounts.map((account) => ({ ...account, accountRef: randomUUID() }));
-  const selection = selectSteamAccount(steamAccounts, remembered.ok ? remembered.credential.selectedSteamId : undefined);
-  selectedSteamAccount = selection.selected || null;
-  return {
-    ok: true,
-    accounts: steamAccounts.map(toRendererSteamAccount),
-    selected: selectedSteamAccount ? toRendererSteamAccount(selectedSteamAccount) : null,
-    requiresSelection: selection.requiresSelection,
-    reason: selection.reason,
-  };
-}
-
-function selectAccount(accountRef) {
-  const selected = steamAccounts.find((account) => account.accountRef === String(accountRef || ''));
-  if (!selected) return { ok: false, reason: 'steam_account_not_found' };
-  selectedSteamAccount = selected;
-  return { ok: true, selected: toRendererSteamAccount(selected) };
-}
-
 function registerDesktopIpc() {
-  ipcMain.handle('caoren:steam:list', async (event) => {
+  ipcMain.handle('caoren:player-center:auto-login', async (event) => {
     requireTrustedIpc(event);
-    return listSteamAccounts();
+    return desktopAuthClient.authenticateDevice();
   });
-  ipcMain.handle('caoren:steam:select', (event, payload) => {
+  ipcMain.handle('caoren:player-center:account-login', async (event, payload) => {
     requireTrustedIpc(event);
-    return selectAccount(payload?.accountRef);
+    return desktopAuthClient.loginAccount(payload?.loginName, payload?.password, payload?.rememberDevice === true);
   });
-  ipcMain.handle('caoren:auth:login', async (event, payload) => {
+  ipcMain.handle('caoren:player-center:clear-rejected-device', (event) => {
     requireTrustedIpc(event);
-    if (payload?.accountRef) {
-      const selected = selectAccount(payload.accountRef);
-      if (!selected.ok) return selected;
-    }
-    const claim = selectedSteamAccount
-      ? { steamId: selectedSteamAccount.steamId, personaName: selectedSteamAccount.personaName }
-      : undefined;
-    if (payload?.purpose === 'steamClaim') return desktopAuthClient.createSteamClaimTicket(claim);
-    return desktopAuthClient.authenticateDevice(claim);
-  });
-  ipcMain.handle('caoren:auth:enroll', async (event, payload) => {
-    requireTrustedIpc(event);
-    return desktopAuthClient.enrollDevice(payload?.enrollmentCode, selectedSteamAccount?.steamId);
+    return desktopAuthClient.clearRejectedDeviceCredential();
   });
   ipcMain.handle('caoren:auth:logout', async (event) => {
     requireTrustedIpc(event);

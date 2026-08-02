@@ -354,38 +354,12 @@ export function registerPluginRoutes(app: express.Express, deps: {
         res.json({ success: true, commandId: queued.id, queuedAt: queued.createdAt });
     });
 
-    app.post('/api/plugin/bind', requirePluginAuth, async (req, res) => {
-        const bindCode = String(req.body?.bindCode || '').trim();
-        const steamId = normalizeSteamId(req.body?.steamId);
-        const inGameName = String(req.body?.name || '').trim();
-        if (!bindCode || !steamId) return res.status(400).json({ success: false, error: 'bindCode 和 steamId 必填' });
-        const session = getSession();
-        const player = getGamePlayers(session).find(p => p.bindCode === bindCode);
-        if (!player) return res.status(404).json({ success: false, error: '绑定码无效或已过期' });
-        let membershipId = player.membershipId;
-        if (!membershipId) {
-            const membership = await lobbyIdentityService.createTemporaryMembership({
-                sessionId: session.sessionId,
-                nickname: player.name || inGameName || `Steam ${steamId.slice(-6)}`,
-            });
-            membershipId = membership.membershipId;
-        }
-        const confirmed = await lobbyIdentityService.confirmTrustedIdentity(membershipId, steamId, inGameName);
-        if (!confirmed.ok || !confirmed.membership) {
-            return res.status(409).json({ success: false, error: confirmed.reason || '身份确认失败' });
-        }
-        applyMembershipToPlayer(player, confirmed.membership);
-        broadcastState();
-        res.json({ success: true, playerId: player.playerId, name: player.name, steamId: player.steamId });
-    });
-
     app.post('/api/plugin/snapshot', requirePluginAuth, async (req, res) => {
         const session = getSession();
         const players = Array.isArray(req.body?.players) ? req.body.players : [];
-        const confirmationChallenges = await lobbyIdentityService.getConfirmationChallenges(session.sessionId, players);
         const confirmedMemberships = await lobbyIdentityService.confirmLongTermPresence(
             session.sessionId,
-            players.map((player: any) => player?.steamId),
+            players,
         );
         for (const membership of confirmedMemberships) {
             const sessionPlayer = Object.values(session.players).find((player) => player.membershipId === membership.membershipId);
@@ -397,7 +371,6 @@ export function registerPluginRoutes(app: express.Express, deps: {
                 success: true,
                 ignored: true,
                 reason: `当前阶段 ${session.phase} 不接收实时战绩`,
-                confirmationChallenges,
             });
         }
         if (req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
@@ -417,7 +390,6 @@ export function registerPluginRoutes(app: express.Express, deps: {
         res.json({
             success: true,
             matchedPlayers: getGamePlayers(session).filter(p => p.steamId && p.stats).length,
-            confirmationChallenges,
         });
     });
 

@@ -1,9 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('caorenDesktop', Object.freeze({
-  listSteamAccounts: () => ipcRenderer.invoke('caoren:steam:list'),
-  selectSteamAccount: (accountRef) => ipcRenderer.invoke('caoren:steam:select', { accountRef }),
-  authenticateDevice: (accountRef, purpose) => ipcRenderer.invoke('caoren:auth:login', { accountRef, purpose }),
-  enrollDevice: (enrollmentCode) => ipcRenderer.invoke('caoren:auth:enroll', { enrollmentCode }),
+  authenticatePlayerCenter: () => ipcRenderer.invoke('caoren:player-center:auto-login'),
+  loginPlayerCenter: (loginName, password, rememberDevice) => ipcRenderer.invoke('caoren:player-center:account-login', {
+    loginName, password, rememberDevice: rememberDevice === true,
+  }),
+  clearRejectedDeviceCredential: () => ipcRenderer.invoke('caoren:player-center:clear-rejected-device'),
   logoutDevice: () => ipcRenderer.invoke('caoren:auth:logout'),
 }));

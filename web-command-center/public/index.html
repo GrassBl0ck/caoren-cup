@@ -60,18 +60,47 @@
         </div>
     </header>
     <div id="login-area">
-        <div id="v1333-game-code-login-panel" class="panel login-panel">
+        <section id="player-center-entry" class="panel player-center-entry" aria-labelledby="player-center-entry-title">
             <div class="login-panel-header">
                 <div>
-                    <span class="section-eyebrow">大厅入口</span>
-                    <h2>进入草人杯大厅</h2>
+                    <span class="section-eyebrow">草人杯 1.9.1</span>
+                    <h2 id="player-center-entry-title">玩家中心</h2>
+                    <p>账号登录只进入玩家中心，不会自动加入比赛。</p>
                 </div>
+                <span class="status-chip">账号密码登录</span>
+            </div>
+            <div id="player-center-login" class="player-center-auth-panel">
+                <label>登录账号<input id="player-center-login-name" type="text" maxlength="32" autocomplete="username" placeholder="例如 cc_Abc234xy"></label>
+                <label>密码<input id="player-center-login-password" type="password" maxlength="128" autocomplete="current-password"></label>
+                <label id="player-center-remember-device-row" hidden><input id="player-center-remember-device" type="checkbox"> 记住此设备（仅桌面客户端）</label>
+                <button id="player-center-login-btn" class="primary-btn" type="button">登录玩家中心</button>
+                <button id="player-center-game-code-toggle" class="header-text-link" type="button">使用 <code>!cclogin</code> 游戏码</button>
+            </div>
+            <div id="player-center-game-code-panel" class="player-center-auth-panel" hidden>
+                <p>在 CS2 输入 <code>!cclogin</code>，将一次性游戏码填到这里。首次使用会创建账号；已有账号会进入密码恢复。</p>
+                <label>一次性游戏码<input id="player-center-game-code" type="text" maxlength="16" autocomplete="one-time-code"></label>
+                <button id="player-center-game-code-btn" class="primary-btn" type="button">验证游戏码</button>
+            </div>
+            <div id="player-center-created" class="player-center-auth-panel player-center-credential-card" hidden>
+                <h3>账号已创建，请立即保存</h3>
+                <p>以下随机密码只显示这一次。保存后才能进入玩家中心。</p>
+                <div><span>登录账号</span><strong id="player-center-created-login-name"></strong><button id="player-center-copy-login-name" type="button">复制账号</button></div>
+                <div><span>随机密码</span><strong id="player-center-created-password"></strong><button id="player-center-copy-password" type="button">复制密码</button></div>
+                <button id="player-center-credentials-saved" class="primary-btn" type="button">确认已保存</button>
+            </div>
+            <div id="player-center-recovery" class="player-center-auth-panel" hidden>
+                <h3>恢复账号</h3>
+                <p>现有账号：<strong id="player-center-recovery-login-name"></strong></p>
+                <label>新密码<input id="player-center-recovery-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                <label>再次输入新密码<input id="player-center-recovery-confirm-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                <button id="player-center-recovery-btn" class="primary-btn" type="button">设置新密码并进入</button>
+            </div>
+            <div id="player-center-entry-error" class="player-center-message" aria-live="polite"></div>
+            <div class="login-utility-row">
                 <div class="server-status-line" aria-live="polite">
                     <span id="v1333-server-dot" class="server-status-dot" aria-hidden="true"></span>
                     <strong id="v1333-server-status">正在读取服务器状态...</strong>
                 </div>
-            </div>
-            <div class="login-utility-row">
                 <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草人杯服务器</button>
                 <details class="download-menu">
                     <summary>客户端下载</summary>
@@ -81,90 +110,65 @@
                     </div>
                 </details>
             </div>
-
-            <div class="login-workspace">
-                <aside id="login-choice-guide" class="login-choice-guide" aria-labelledby="login-choice-guide-title">
-                    <strong id="login-choice-guide-title">不确定该选哪一种？</strong>
-                    <div class="login-choice-guide-options">
-                        <p><span>收到成员密码</span>管理员给了你草人杯成员密码，请选择“成员账号登录”。</p>
-                        <p><span>收到本场邀请码</span>管理员给了你本场邀请码，请选择“使用邀请码加入”。</p>
-                    </div>
-                </aside>
-
-                <div class="login-mode-switch" role="tablist" aria-label="选择登录方式">
-                    <button id="login-mode-fixed" class="login-mode-btn active" type="button" role="tab" aria-selected="true" aria-controls="login-panel-fixed" onclick="setLoginMode('fixed')">成员账号登录</button>
-                    <button id="login-mode-temporary" class="login-mode-btn" type="button" role="tab" aria-selected="false" aria-controls="login-panel-temporary" onclick="setLoginMode('temporary')">使用邀请码加入</button>
+            <details id="admin-login-entry" class="admin-login-entry">
+                <summary>管理员登录</summary>
+                <p>管理员认证是独立流程；登录管理员不会创建玩家账号，也不会自动参赛。</p>
+                <div class="admin-login-row">
+                    <input id="admin-login-password" type="password" maxlength="128" autocomplete="current-password" placeholder="管理员密码">
+                    <button id="admin-login-btn" type="button">登录管理台</button>
                 </div>
-
-                <section id="login-panel-fixed" class="login-mode-panel active" data-login-panel="fixed" role="tabpanel" aria-labelledby="login-mode-fixed">
-                    <div class="login-mode-heading">
-                        <h3 id="fixed-member-title">成员账号登录</h3>
-                        <p>使用管理员登记的 SteamID64 和草人杯独立密码。不需要邀请码，也不需要填写昵称；大厅昵称由管理员预设。连接 CS2 后，游戏 SteamID 一致时会自动完成本场确认。</p>
-                    </div>
-                    <div class="fixed-member-form">
-                        <label>SteamID64<input id="fixed-member-steamid-input" type="text" inputmode="numeric" maxlength="17" autocomplete="username" placeholder="7656119 开头的 17 位数字"></label>
-                        <label>密码<input id="fixed-member-password-input" type="password" maxlength="128" autocomplete="current-password" placeholder="草人杯成员密码"></label>
-                        <button id="fixed-member-login-btn" class="primary-btn" type="button">登录并进入大厅</button>
-                    </div>
-                    <div id="fixed-member-login-error" class="fixed-member-login-error" aria-live="polite"></div>
-                </section>
-
-                <section id="login-panel-temporary" class="login-mode-panel" data-login-panel="temporary" role="tabpanel" aria-labelledby="login-mode-temporary" hidden>
-                    <div class="login-mode-heading">
-                        <h3>使用邀请码加入</h3>
-                        <p>使用管理员发放的本场邀请码，并填写本场昵称和 SteamID64。连接 CS2 后，按网页提示完成本场确认。</p>
-                    </div>
-                    <div class="lobby-invite-form">
-                        <label>本场邀请码<input id="lobby-invite-code-input" type="text" maxlength="8" autocomplete="one-time-code" placeholder="8 位邀请码"></label>
-                        <label>昵称<input id="lobby-nickname-input" type="text" maxlength="32" autocomplete="nickname" placeholder="本场显示昵称"></label>
-                        <label>SteamID64<input id="lobby-steamid-input" type="text" inputmode="numeric" maxlength="17" autocomplete="username" placeholder="7656119 开头的 17 位数字"></label>
-                        <button id="lobby-invite-enter-btn" class="primary-btn" type="button">使用邀请码进入大厅</button>
-                    </div>
-                </section>
-            </div>
-
-            <div class="login-context-row">
-                <div id="desktop-auth-status" class="identity-login-status" aria-live="polite">正在检查设备登录状态...</div>
-                <div id="steam-account-section" class="steam-account-section">
-                    <div>
-                        <strong>本机 Steam 账号</strong>
-                        <div id="steam-account-status" class="muted-line">等待桌面客户端读取</div>
-                    </div>
-                    <select id="steam-account-select" style="display:none;min-width:260px;"></select>
-                    <button id="steam-account-refresh-btn" type="button" title="重新读取本机 Steam 账号">重新检测</button>
-                </div>
-            </div>
-            <details class="legacy-login-details">
-                <summary>其他登录方式</summary>
-                <div class="legacy-login-row">
-                    <input id="v1333-game-login-code-input" type="text" placeholder="6 位游戏码或管理员密码" autocomplete="one-time-code" />
-                    <button id="v1335-enter-lobby-btn" type="button">验证并进入</button>
-                </div>
-                <p>首次识别失败、换电脑或 Steam 账号不一致时，可在 CS2 输入 <code>!cclogin</code> 或 <code>!cccode</code> 获取游戏码。</p>
+                <div id="admin-login-error" class="player-center-message" aria-live="polite"></div>
             </details>
-            <section id="lobby-announcement-public" class="lobby-announcement" style="display:none;" aria-live="polite">
-                <div class="lobby-announcement-header">
-                    <span class="status-chip">大厅公告</span>
-                    <h3 id="lobby-announcement-title">大厅公告</h3>
-                </div>
-                <div id="lobby-announcement-body" class="lobby-announcement-body"></div>
-            </section>
-        </div>
-        <input id="name-input" type="hidden" />
-        <input id="extra-input" type="hidden" />
+        </section>
+
+        <section id="player-center-home" class="panel player-center-home" hidden aria-labelledby="player-center-home-title">
+            <div class="login-panel-header">
+                <div><span class="section-eyebrow">账号会话</span><h2 id="player-center-home-title">玩家中心</h2></div>
+                <button id="player-center-logout-btn" type="button">退出</button>
+            </div>
+            <div class="player-center-profile-grid">
+                <div><span>Steam 昵称</span><strong id="player-center-steam-nickname">—</strong></div>
+                <div><span>登录账号</span><strong id="player-center-account-name">—</strong></div>
+                <div><span>比赛状态</span><strong id="player-center-match-status">等待中</strong></div>
+            </div>
+            <div class="player-center-actions">
+                <button id="player-center-join-btn" type="button">加入本场比赛</button>
+                <button id="player-center-announcements-btn" type="button">更新公告</button>
+                <button id="player-center-weaponpaints-btn" type="button">换肤工坊</button>
+                <button id="player-center-forget-device-btn" type="button" hidden>退出账号并忘记此设备</button>
+            </div>
+            <div class="player-center-settings-grid">
+                <form id="player-center-login-name-form">
+                    <h3>修改登录账号</h3>
+                    <label>当前密码<input id="player-center-change-login-current-password" type="password" maxlength="128" autocomplete="current-password"></label>
+                    <label>新登录账号<input id="player-center-change-login-name" type="text" maxlength="32" autocomplete="username"></label>
+                    <button id="player-center-change-login-btn" type="submit">保存新账号</button>
+                </form>
+                <form id="player-center-password-form">
+                    <h3>修改密码</h3>
+                    <label>当前密码<input id="player-center-change-password-current" type="password" maxlength="128" autocomplete="current-password"></label>
+                    <label>新密码<input id="player-center-change-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                    <label>再次输入新密码<input id="player-center-change-password-confirm" type="password" maxlength="128" autocomplete="new-password"></label>
+                    <button id="player-center-change-password-btn" type="submit">保存新密码</button>
+                </form>
+            </div>
+            <div id="player-center-home-message" class="player-center-message" aria-live="polite"></div>
+            <p class="muted-line">等待中 / 已开始 / 已结束仅为公开简单状态；未加入比赛时不会显示名单、比分或比赛私密数据。</p>
+        </section>
+
+        <section id="lobby-announcement-public" class="lobby-announcement" style="display:none;" aria-live="polite">
+            <div class="lobby-announcement-header">
+                <span class="status-chip">大厅公告</span>
+                <h3 id="lobby-announcement-title">大厅公告</h3>
+            </div>
+            <div id="lobby-announcement-body" class="lobby-announcement-body"></div>
+        </section>
     </div>
     <div id="lobby-area" style="display:none;">
         <div class="toolbar-row panel identity-toolbar">
             <div id="player-summary" class="player-session-summary">
                 <div class="status-chip">当前身份</div>
                 <p class="identity-welcome">欢迎，<span id="my-name"></span></p>
-                <div class="identity-badges"><span id="my-identity-level" class="tag tag-gray">身份读取中</span><span id="my-confirmation-state" class="tag tag-gray">确认状态读取中</span></div>
-                <div id="my-confirmation-reason" class="identity-reason" style="display:none;"></div>
-                <div id="steam-confirm-panel" class="steam-confirm-panel" style="display:none;">
-                    <input id="steam-confirm-code-input" type="text" maxlength="6" placeholder="输入 CS2 显示的确认码" autocomplete="one-time-code">
-                    <button id="steam-confirm-code-btn" type="button">确认 Steam 身份</button>
-                </div>
-                <p class="legacy-bind-line">故障恢复码：<strong id="my-bindcode"></strong></p>
             </div>
             <div id="admin-summary" class="admin-session-summary" hidden>
                 <div class="status-chip">管理员会话</div>
@@ -265,19 +269,8 @@
 
                     <div class="player-list admin-view-panel public-roster-panel" id="player-list" data-admin-view-panel="access"></div>
                     <section id="admin-access" class="identity-admin-panel admin-view-panel" data-admin-view-panel="access" aria-labelledby="admin-access-title">
-                <div class="identity-admin-header"><div><span class="section-eyebrow">玩家准入</span><h2 id="admin-access-title">身份与固定成员</h2><div id="admin-lobby-invite" class="muted-line">邀请码读取中</div></div><div><button type="button" onclick="refreshIdentityAdmin()">刷新</button><button type="button" onclick="rotateIdentityInvite()">更换邀请码</button></div></div>
+                <div class="identity-admin-header"><div><span class="section-eyebrow">玩家准入</span><h2 id="admin-access-title">已加入玩家与设备</h2></div><div><button type="button" onclick="refreshIdentityAdmin()">刷新</button></div></div>
                 <div id="identity-admin-list" class="muted-line">身份状态读取中</div>
-                <div class="fixed-account-admin-section">
-                    <h4>固定成员账户</h4>
-                    <div class="fixed-account-create-form">
-                        <label>SteamID64<input id="fixed-account-steamid-input" type="text" inputmode="numeric" maxlength="17" placeholder="7656119 开头的 17 位数字"></label>
-                        <label>昵称<input id="fixed-account-nickname-input" type="text" maxlength="32" placeholder="固定成员昵称"></label>
-                        <label>初始密码<input id="fixed-account-password-input" type="password" maxlength="128" autocomplete="new-password" placeholder="8 到 128 个字符"></label>
-                        <button id="fixed-account-create-btn" type="button">新增或设置密码</button>
-                    </div>
-                    <div id="fixed-account-admin-status" class="muted-line" aria-live="polite"></div>
-                    <div id="fixed-account-admin-list" class="fixed-account-admin-list muted-line">固定成员账户读取中</div>
-                </div>
                     </section>
 
             <div id="admin-tab-announcement" class="admin-view-panel" data-admin-view-panel="announcement" role="tabpanel">
@@ -764,7 +757,8 @@
 <!-- PHASE2_SAFE_ADMIN_VISIBILITY_V3_END -->
 
 
-<script src="/js/game-code-login.js?v=desktop-refresh-20260603"></script>
-<script src="/js/weaponpaints-app.js?v=1.9-weaponpaints-advanced-decoration"></script>
+<script src="/js/access-admin.js?v=1.9.1"></script>
+<script src="/js/player-center.js?v=1.9.1"></script>
+<script src="/js/weaponpaints-app.js?v=1.9.1"></script>
 </body>
 </html>

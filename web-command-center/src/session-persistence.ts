@@ -38,7 +38,6 @@ export const buildSessionSnapshotPayload = (session: GameSession): SessionSnapsh
         sessionId: session.sessionId,
         phase: session.phase,
         matchId: session.matchId,
-        lobbyAccess: session.lobbyAccess,
         players: sanitizePlayersForSnapshot(session.players),
         playerOrder: session.playerOrder,
         teams: session.teams,
@@ -104,9 +103,10 @@ const normalizeRestoredSession = (raw: any): GameSession => {
         ...base.matchOptions,
         ...(restored.matchOptions || {}),
     };
-    restored.lobbyAccess = restored.lobbyAccess?.inviteCode
-        ? restored.lobbyAccess
-        : base.lobbyAccess;
+    // Step7: older snapshots may contain lobbyAccess invitation data. It is intentionally
+    // ignored in memory and omitted from all new snapshots; the source snapshot file is
+    // never migrated or deleted during startup.
+    delete (restored as any).lobbyAccess;
     restored.matchOptions.matchMode = restored.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
     restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
     restored.accusations = restored.accusations || {};

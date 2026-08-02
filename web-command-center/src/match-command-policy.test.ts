@@ -10,11 +10,6 @@ const baseSession = (overrides: Partial<GameSession> = {}): GameSession => ({
   sessionId: 'test-session',
   phase: GamePhase.PreGameSetup,
   matchId: 'test-match',
-  lobbyAccess: {
-    inviteCode: 'TESTCODE',
-    inviteCreatedAt: 0,
-    inviteExpiresAt: Number.MAX_SAFE_INTEGER,
-  },
   matchOptions: {
     matchMode: 'competitive',
     matchController: 'matchzy',
