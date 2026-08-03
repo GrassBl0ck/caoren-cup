@@ -76,6 +76,8 @@ test('枪械目录按阵营隐藏不可用的专属武器', async () => {
     assert.equal(ctDefIndexes.has(7), false, 'CT 不应显示 AK-47');
     assert.equal(ctDefIndexes.has(16), true, 'CT 应显示 M4A4');
     assert.equal(ctDefIndexes.has(60), true, 'CT 应显示 M4A1-S');
+    assert.equal(catalog.searchGroups('skin', '传承', { kind: 'gun', team: 3 }).total, 0);
+    assert.equal(catalog.searchGroups('skin', '传承', { kind: 'gun', team: 2 }).groups[0]?.representative.id, 1171);
 });
 
 test('分组目录只接受有界的已保存涂装映射', () => {
@@ -246,28 +248,35 @@ test('保存武器时校验本地目录、记录审计并请求安全刷新', as
     );
 });
 
-test('只有管理员可以重置和立即强刷', async () => {
+test('玩家只能清空自己的指定阵营，管理员可以重置全部配置和立即强刷', async () => {
     const catalog = await WeaponPaintsCatalog.load(dataRoot);
     const commands: string[] = [];
+    const resets: Array<{ steamId: string; team: 2 | 3 | undefined }> = [];
     const repository: LoadoutRepository = {
         health: async () => ({ ok: true }),
         load: async (steamId) => ({ steamId, weapons: [], cosmetics: [] }),
         saveWeapon: async () => undefined,
         saveCosmetic: async () => undefined,
-        reset: async () => undefined,
+        reset: async (steamId, team) => { resets.push({ steamId, team }); },
         audit: async () => undefined,
     };
     const service = new WeaponPaintsService(catalog, repository, (command) => commands.push(command));
     const player = { actorPlayerId: 'player-1', actorRole: 'Player' as const, targetSteamId: '76561198000000001' };
     const admin = { actorPlayerId: 'admin-1', actorRole: 'Admin' as const, targetSteamId: '76561198000000001' };
 
-    await assert.rejects(service.reset(player), /管理员/);
+    await assert.rejects(service.reset(player), /当前阵营/);
+    await service.reset(player, 3);
     await assert.rejects(service.forceRefresh(player), /管理员/);
     await service.reset(admin);
     await service.forceRefresh(admin);
     assert.deepEqual(commands, [
         'wp_refresh 76561198000000001 safe',
+        'wp_refresh 76561198000000001 safe',
         'wp_refresh 76561198000000001',
+    ]);
+    assert.deepEqual(resets, [
+        { steamId: '76561198000000001', team: 3 },
+        { steamId: '76561198000000001', team: undefined },
     ]);
 });
 

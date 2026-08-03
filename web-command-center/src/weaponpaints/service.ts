@@ -75,8 +75,10 @@ export class WeaponPaintsService {
     }
 
     async reset(actor: ResolvedSkinActor, teamRaw?: unknown) {
-        this.requireAdmin(actor);
         const team = teamRaw === undefined || teamRaw === null || teamRaw === '' ? undefined : validateTeam(teamRaw);
+        if (actor.actorRole !== 'Admin' && team === undefined) {
+            throw new Error('玩家只能清空自己的当前阵营配置。');
+        }
         await this.repository.reset(actor.targetSteamId, team, auditFor(actor, 'reset', { team: team || 'all' }));
         this.requestSafeRefresh(actor.targetSteamId);
     }

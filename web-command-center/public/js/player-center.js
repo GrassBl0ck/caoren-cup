@@ -80,6 +80,7 @@
     if (matchButton) {
       matchButton.textContent = currentMatchState.joined ? '退出本场比赛' : '加入本场比赛';
       matchButton.disabled = currentMatchState.joined ? !currentMatchState.leaveAvailable : !currentMatchState.joinAvailable;
+      matchButton.classList.toggle('joined', currentMatchState.joined);
     }
     if (byId('player-center-entry')) byId('player-center-entry').hidden = true;
     if (byId('player-center-home')) byId('player-center-home').hidden = false;

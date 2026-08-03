@@ -17,9 +17,9 @@
         open: false, status: null, targetSteamId: '', team: 3, category: 'gun',
         query: '', offset: 0, total: 0, items: [], groups: [], loadout: null,
         selectedWeapon: null, selectedWeaponKind: '', selectedKnifeKey: '', selectedGloveKey: '',
-        selectedPreviewName: '', selectedKnifeDefault: false, stickerSlot: 0,
+        selectedPreviewName: '', selectedWeaponName: '', selectedPaintName: '', selectedKnifeDefault: false, stickerSlot: 0,
         selectedCosmeticKey: '', selectedCosmeticKind: '', selectedCosmeticName: '', selectedCosmeticImage: '',
-        finishesByGroup: new Map(), draftBaseline: '', pendingNavigation: null,
+        finishesByGroup: new Map(), draftBaseline: '', pendingNavigation: null, emptyCatalogMessage: '',
         noticeTimer: null, lastSaveError: ''
     };
 
@@ -27,6 +27,9 @@
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     const socket = () => window.__caorenCupLobbySocket || window.__caorenCupSocket;
     const fingerprintWeaponDraft = (weapon) => window.WeaponPaintsDraft.fingerprintWeaponDraft(weapon);
+    const isDraftFingerprintDirty = (baseline, current) => window.WeaponPaintsDraft.isDraftFingerprintDirty(baseline, current);
+    const formatUnsavedWeaponMessage = (weaponName, paintName) => window.WeaponPaintsDraft.formatUnsavedWeaponMessage(weaponName, paintName);
+    const oppositeTeam = (team) => window.WeaponPaintsDraft.oppositeTeam(team);
 
     function notice(message, tone) {
         const host = el('weaponpaints-notice');
@@ -93,6 +96,8 @@
         document.querySelectorAll('[data-wp-team]').forEach((button) => {
             button.classList.toggle('active', Number(button.dataset.wpTeam) === state.team);
         });
+        const resetButton = el('weaponpaints-reset-team-btn');
+        if (resetButton) resetButton.textContent = `清空当前 ${state.team === 3 ? 'CT' : 'T'} 配置`;
     }
 
     function renderCategories() {
@@ -128,7 +133,7 @@
         } else if (categoryConfig(categoryId)?.kind) {
             pending = state.selectedCosmeticKind === categoryConfig(categoryId).kind && key === state.selectedCosmeticKey;
         }
-        return { current, pending };
+        return { current, pending: pending && hasUnsavedDraft(false) };
     }
 
     function renderCardStatuses(item, categoryId = state.category) {
@@ -188,7 +193,7 @@
         if (isGroupedCategory()) {
             grid.innerHTML = state.groups.length
                 ? state.groups.map(renderGroupCard).join('')
-                : '<p class="muted-line">没有找到符合条件的本地物品。</p>';
+                : `<p class="muted-line">${escapeHtml(state.emptyCatalogMessage || '没有找到符合条件的本地物品。')}</p>`;
             el('weaponpaints-more-btn').hidden = state.groups.length >= state.total;
             return;
         }
@@ -247,7 +252,7 @@
         flyout.style.top = `${Math.max(14, Math.min(cardRect.top, window.innerHeight - height - 14))}px`;
     }
 
-    async function openGroupFinishes(groupIndex) {
+    async function showGroupFinishes(groupIndex) {
         const flyout = document.querySelector(`[data-wp-finish-flyout="${groupIndex}"]`);
         if (!flyout) return;
         closeFinishFlyouts(groupIndex);
@@ -255,6 +260,17 @@
         positionFinishFlyout(groupIndex);
         await loadGroupFinishes(groupIndex);
         positionFinishFlyout(groupIndex);
+    }
+
+    function openGroupFinishes(groupIndex) {
+        const group = state.groups[groupIndex];
+        const changesWeapon = Boolean(
+            state.selectedWeapon
+            && group?.defIndex
+            && state.selectedWeapon.weaponDefIndex !== group.defIndex
+        );
+        if (changesWeapon) return guardUnsavedChange(() => showGroupFinishes(groupIndex));
+        return showGroupFinishes(groupIndex);
     }
 
     function applyGroupFinish(groupIndex, itemIndex) {
@@ -271,6 +287,8 @@
         if (flyout) flyout.hidden = true;
 
         state.selectedPreviewName = item.name || item.englishName || group.name;
+        state.selectedWeaponName = group.name || group.englishName || group.key || '武器';
+        state.selectedPaintName = finishName(item);
         state.selectedKnifeDefault = false;
         if (state.category === 'glove') {
             state.draftBaseline = `glove:${savedCosmeticKey('glove')}`;
@@ -316,9 +334,9 @@
         return '';
     }
 
-    function hasUnsavedDraft() {
-        const current = currentDraftFingerprint();
-        return Boolean(current && state.draftBaseline && current !== state.draftBaseline);
+    function hasUnsavedDraft(collect = true) {
+        const current = currentDraftFingerprint(collect);
+        return isDraftFingerprintDirty(state.draftBaseline, current);
     }
 
     function clearDraftSelection() {
@@ -328,6 +346,8 @@
         state.selectedGloveKey = '';
         state.selectedKnifeDefault = false;
         state.selectedPreviewName = '';
+        state.selectedWeaponName = '';
+        state.selectedPaintName = '';
         state.selectedCosmeticKey = '';
         state.selectedCosmeticKind = '';
         state.selectedCosmeticName = '';
@@ -347,6 +367,9 @@
         }
         state.pendingNavigation = navigate;
         el('weaponpaints-unsaved-error').textContent = '';
+        el('weaponpaints-unsaved-description').textContent = state.selectedWeapon
+            ? formatUnsavedWeaponMessage(state.selectedWeaponName, state.selectedPaintName)
+            : '继续操作会丢失当前装饰配置的修改。';
         el('weaponpaints-unsaved-dialog').hidden = false;
         el('weaponpaints-unsaved-save').focus();
         return false;
@@ -384,10 +407,11 @@
 
     function finishItemStatus(item) {
         const savedWeapon = state.loadout?.weapons?.find((weapon) => weapon.team === state.team && weapon.weaponDefIndex === item.defIndex);
+        const draftIsDirty = hasUnsavedDraft(false);
         if (state.category === 'gun') {
             return {
                 current: savedWeapon?.paintId === item.id,
-                pending: state.selectedWeaponKind === 'gun' && state.selectedWeapon?.weaponDefIndex === item.defIndex && state.selectedWeapon?.paintId === item.id
+                pending: draftIsDirty && state.selectedWeaponKind === 'gun' && state.selectedWeapon?.weaponDefIndex === item.defIndex && state.selectedWeapon?.paintId === item.id
             };
         }
         const current = currentSelectionItem();
@@ -395,7 +419,7 @@
         const pendingMatches = state.category === 'knife'
             ? state.selectedKnifeKey === itemSelectionKey(item, 'knife') && state.selectedWeapon?.paintId === item.id
             : state.selectedGloveKey === itemSelectionKey(item, 'glove');
-        return { current: currentMatches, pending: pendingMatches };
+        return { current: currentMatches, pending: draftIsDirty && pendingMatches };
     }
 
     function renderFinishStatuses(status) {
@@ -498,7 +522,7 @@
                 <button id="wp-browse-keychains" type="button">浏览挂件目录</button>
             </details>` : '';
         const knifeSelection = state.selectedWeaponKind === 'knife'
-            ? `${currentSelectionHtml('knife')}${pendingSelectionHtml(catalogItemForKey(state.selectedKnifeKey, 'knife') || { name: state.selectedPreviewName }, state.selectedKnifeKey)}`
+            ? `${currentSelectionHtml('knife')}${hasUnsavedDraft(false) ? pendingSelectionHtml(catalogItemForKey(state.selectedKnifeKey, 'knife') || { name: state.selectedPreviewName }, state.selectedKnifeKey) : ''}`
             : '';
         host.innerHTML = `
             <h3>武器高级参数</h3>
@@ -558,8 +582,9 @@
             if (state.selectedKnifeKey) await action({ action: 'saveCosmetic', cosmetic: { team: state.team, kind: 'Knife', itemKey: state.selectedKnifeKey } });
             await action({ action: 'saveWeapon', weapon });
             await loadTarget();
-            await loadCatalog(false);
             state.draftBaseline = currentDraftFingerprint(false);
+            await loadCatalog(false);
+            renderEditor();
             notice('配置已保存。正式回合存活时将在下次出生应用。', 'success');
             return true;
         } catch (error) { state.lastSaveError = error.message; notice(error.message, 'error'); return false; }
@@ -636,6 +661,8 @@
                 state.selectedWeapon.paintId = item.id;
                 state.selectedWeaponKind = state.category;
                 state.selectedKnifeKey = state.category === 'knife' ? item.weaponKey : '';
+                state.selectedWeaponName = String(item.name || item.englishName || item.weaponKey || '武器').split('|')[0].trim();
+                state.selectedPaintName = finishName(item);
                 renderEditor();
                 notice('已选中，调整参数后点击“保存此武器”。');
                 return;
@@ -685,7 +712,8 @@
     async function loadCatalog(append) {
         const category = CATEGORIES.find((candidate) => candidate.id === state.category);
         if (!category) return;
-        if (!append) { state.offset = 0; state.items = []; state.groups = []; state.finishesByGroup.clear(); }
+        if (state.selectedWeapon && el('wp-edit-wear')) collectEditor();
+        if (!append) { state.offset = 0; state.items = []; state.groups = []; state.emptyCatalogMessage = ''; state.finishesByGroup.clear(); }
         const params = new URLSearchParams({ category: category.api, query: state.query, offset: String(state.offset), limit: '60' });
         if (state.category === 'gun' || state.category === 'knife') params.set('kind', state.category);
         if (state.category === 'gun' || state.category === 'agent') params.set('team', String(state.team));
@@ -706,6 +734,22 @@
         if (!result.success) throw new Error(result.error || '物品目录加载失败。');
         if (isGroupedCategory()) {
             const groups = result.groups || [];
+            if (!append && state.category === 'gun' && state.query && groups.length === 0) {
+                try {
+                    const otherTeam = oppositeTeam(state.team);
+                    const otherParams = new URLSearchParams(params);
+                    otherParams.set('team', String(otherTeam));
+                    otherParams.set('offset', '0');
+                    otherParams.set('limit', '1');
+                    const otherResponse = await fetch('/api/weaponpaints/catalog?' + otherParams.toString(), { cache: 'no-store' });
+                    const otherResult = await otherResponse.json();
+                    if (otherResult.success && (otherResult.total || 0) > 0) {
+                        state.emptyCatalogMessage = `“${state.query}”属于${otherTeam === 3 ? ' CT' : ' T'}阵营可用武器，请切换到${otherTeam === 3 ? ' CT' : ' T'}配置查看。`;
+                    }
+                } catch (_) {
+                    state.emptyCatalogMessage = '';
+                }
+            }
             state.groups = append ? state.groups.concat(groups) : groups;
             if (!append && state.category === 'knife') {
                 state.groups.unshift({ key: '__default__', name: '恢复默认', defIndex: 0, isDefault: true, representative: { key: '', id: 0, name: '恢复默认' } });
@@ -782,6 +826,40 @@
             renderEditor();
             notice('玩家换肤配置已重置。', 'success');
         } catch (error) { notice(error.message, 'error'); }
+    }
+
+    function closeResetTeamDialog() {
+        el('weaponpaints-reset-team-dialog').hidden = true;
+        el('weaponpaints-reset-team-error').textContent = '';
+    }
+
+    function openResetTeamDialog() {
+        const teamLabel = state.team === 3 ? 'CT' : 'T';
+        el('weaponpaints-reset-team-title').textContent = `确认清空当前 ${teamLabel} 配置？`;
+        el('weaponpaints-reset-team-description').textContent = state.status?.isAdmin
+            ? `将清空当前代管玩家的全部 ${teamLabel} 换肤配置。`
+            : `将清空你的全部 ${teamLabel} 换肤配置。`;
+        el('weaponpaints-reset-team-error').textContent = '';
+        el('weaponpaints-reset-team-dialog').hidden = false;
+        el('weaponpaints-reset-team-confirm').focus();
+    }
+
+    async function resetCurrentTeam() {
+        const button = el('weaponpaints-reset-team-confirm');
+        button.disabled = true;
+        try {
+            await action({ action: 'reset', team: state.team });
+            clearDraftSelection();
+            await loadTarget();
+            await loadCatalog(false);
+            renderEditor();
+            closeResetTeamDialog();
+            notice(`${state.team === 3 ? 'CT' : 'T'} 配置已全部恢复默认。`, 'success');
+        } catch (error) {
+            el('weaponpaints-reset-team-error').textContent = error.message;
+        } finally {
+            button.disabled = false;
+        }
     }
 
     async function forceRefresh() {
@@ -865,6 +943,9 @@
         el('weaponpaints-search')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); el('weaponpaints-search-btn').click(); } });
         el('weaponpaints-more-btn')?.addEventListener('click', async () => { try { await loadCatalog(true); } catch (error) { notice(error.message, 'error'); } });
         el('weaponpaints-reset-btn')?.addEventListener('click', () => guardUnsavedChange(resetTarget));
+        el('weaponpaints-reset-team-btn')?.addEventListener('click', () => guardUnsavedChange(openResetTeamDialog));
+        el('weaponpaints-reset-team-confirm')?.addEventListener('click', resetCurrentTeam);
+        el('weaponpaints-reset-team-cancel')?.addEventListener('click', closeResetTeamDialog);
         el('weaponpaints-force-btn')?.addEventListener('click', forceRefresh);
         el('weaponpaints-notice')?.addEventListener('click', (event) => {
             if (event.target.closest('[data-wp-notice-close]')) notice('');

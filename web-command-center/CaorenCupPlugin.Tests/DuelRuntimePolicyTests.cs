@@ -77,6 +77,23 @@ public sealed class DuelRuntimePolicyTests
         Assert.DoesNotContain("weapon_awp", rule.AllowedFirearms);
     }
 
+    [Fact]
+    public void BuildSteamBoundLoadoutPlans_preserves_each_players_weapons_independent_of_order()
+    {
+        var inputs = new[]
+        {
+            new DuelPlayerLoadoutInput("76561198000000002", "weapon_m4a1", "weapon_deagle"),
+            new DuelPlayerLoadoutInput("76561198000000001", "weapon_ak47", "weapon_usp_silencer"),
+        };
+
+        var plans = DuelRuntimePolicy.BuildSteamBoundLoadoutPlans(DuelStage.Rifle, inputs.Reverse());
+
+        Assert.Equal("weapon_ak47", plans["76561198000000001"].Primary);
+        Assert.Equal("weapon_usp_silencer", plans["76561198000000001"].Secondary);
+        Assert.Equal("weapon_m4a1", plans["76561198000000002"].Primary);
+        Assert.Equal("weapon_deagle", plans["76561198000000002"].Secondary);
+    }
+
     [Theory]
     [InlineData(true, false, true)]
     [InlineData(false, true, true)]

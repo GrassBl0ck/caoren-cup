@@ -13,6 +13,14 @@ internal sealed record DuelLoadoutRule(
     string PreferredWeapon,
     DuelPreferredWeaponSlot PreferredSlot);
 
+internal sealed record DuelPlayerLoadoutInput(string SteamId, string Primary, string Secondary);
+
+internal sealed record DuelSteamBoundLoadoutPlan(
+    string SteamId,
+    string Primary,
+    string Secondary,
+    DuelLoadoutRule Rule);
+
 internal sealed record DuelCvarSetting(string Name, string Value, string Fallback);
 
 internal static class DuelRuntimePolicy
@@ -58,6 +66,33 @@ internal static class DuelRuntimePolicy
             stage == DuelStage.Pistol
                 ? DuelPreferredWeaponSlot.Secondary
                 : DuelPreferredWeaponSlot.Primary);
+    }
+
+    public static IReadOnlyDictionary<string, DuelSteamBoundLoadoutPlan> BuildSteamBoundLoadoutPlans(
+        DuelStage stage,
+        IEnumerable<DuelPlayerLoadoutInput> inputs)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        var plans = new Dictionary<string, DuelSteamBoundLoadoutPlan>(StringComparer.Ordinal);
+        foreach (var input in inputs)
+        {
+            if (string.IsNullOrWhiteSpace(input.SteamId))
+            {
+                throw new ArgumentException("Duel loadout SteamID cannot be empty.", nameof(inputs));
+            }
+
+            var plan = new DuelSteamBoundLoadoutPlan(
+                input.SteamId,
+                input.Primary,
+                input.Secondary,
+                BuildLoadoutRule(stage, input.Primary, input.Secondary));
+            if (!plans.TryAdd(input.SteamId, plan))
+            {
+                throw new ArgumentException($"Duplicate duel loadout SteamID: {input.SteamId}", nameof(inputs));
+            }
+        }
+
+        return plans;
     }
 
     public static bool IsFirearm(string? designerName)

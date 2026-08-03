@@ -25,8 +25,8 @@ assert.doesNotMatch(
 );
 assert.match(html, /weaponpaints-app\.js/);
 assert.match(html, /weaponpaints\.css/);
-assert.match(html, /weaponpaints\.css\?v=1\.9\.2-qol/);
-assert.match(html, /weaponpaints-app\.js\?v=1\.9\.2/);
+assert.match(html, /weaponpaints\.css\?v=1\.9\.2-qol2/);
+assert.match(html, /weaponpaints-app\.js\?v=1\.9\.2-qol2/);
 for (const category of ['gun', 'knife', 'glove', 'agent', 'music', 'pin', 'keychain']) {
     assert.match(js, new RegExp(`['"]${category}['"]`), `缺少分类 ${category}`);
 }
@@ -51,10 +51,20 @@ assert.doesNotMatch(mysqlRepository, /copyTeam|buildTeamCopyStatements|TeamCopyR
 assert.match(js, /label:\s*['"]探员['"]/, '角色分类应统一称为探员');
 assert.doesNotMatch(js, /label:\s*['"]人物['"]/, '换肤分类不应继续显示人物');
 assert.match(html, /id="weaponpaints-unsaved-dialog"/, '必须使用自定义未保存提示对话框');
+assert.match(html, /id="weaponpaints-unsaved-description"/, '未保存提示必须能显示具体武器和涂装');
 assert.match(html, /保存并继续/);
 assert.match(html, /放弃更改/);
 assert.match(html, /返回编辑/);
 assert.match(js, /guardUnsavedChange/, '所有会丢弃草稿的跳转应经过统一保护');
+assert.match(js, /formatUnsavedWeaponMessage/, '未保存提示必须包含上一把武器和涂装名称');
+assert.match(js, /openGroupFinishes[\s\S]*guardUnsavedChange/, '打开另一把武器的涂装列表前必须检查未保存草稿');
+assert.match(js, /async function loadCatalog[\s\S]{0,300}collectEditor\(\)/, '搜索或加载更多前必须收集当前高级参数，避免目录重绘丢失修改');
+assert.match(html, /id="weaponpaints-reset-team-btn"/, '必须提供清空当前阵营配置按钮');
+assert.match(html, /id="weaponpaints-reset-team-dialog"/, '清空当前阵营必须使用自定义确认对话框');
+assert.match(js, /action\(\{\s*action:\s*['"]reset['"],\s*team:\s*state\.team\s*\}\)/, '清空操作只能提交当前阵营');
+assert.match(html, /搜索当前阵营的武器、涂装名称或 ID/, '搜索范围必须明确为当前阵营武器和涂装');
+assert.match(js, /oppositeTeam/, '当前阵营无结果时必须检查另一阵营');
+assert.match(js, /属于[\s\S]*阵营可用武器/, '另一阵营存在结果时必须给出明确提示');
 assert.match(html, /weaponpaints-draft\.js/, '页面必须加载可测试的草稿比较模块');
 assert.match(css, /\.weaponpaints-toast[^}]*position\s*:\s*fixed/s, '保存反馈应固定在可视区域');
 assert.match(css, /\.weaponpaints-unsaved-dialog/, '未保存提示必须使用项目自定义样式');

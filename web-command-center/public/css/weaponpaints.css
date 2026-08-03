@@ -15,6 +15,7 @@
 .weaponpaints-admin-bar[hidden] { display:none !important; }
 .weaponpaints-admin-bar label { display:grid; gap:5px; min-width:280px; }
 .weaponpaints-team-bar button.active { background:#2563eb; color:#fff; }
+.weaponpaints-reset-team-btn { margin-left:auto; }
 .weaponpaints-layout { display:grid; grid-template-columns:150px minmax(0,1fr) 310px; min-height:560px; }
 .weaponpaints-categories { padding:14px; border-right:1px solid var(--border); display:flex; flex-direction:column; gap:7px; }
 .weaponpaints-categories button { text-align:left; }
@@ -86,5 +87,5 @@ body[data-theme="dark"] .weaponpaints-health.error,body[data-theme="dark"] .weap
 body[data-theme="dark"] .weaponpaints-card-status.current { color:#6ee7b7; background:#064e3b; }
 body[data-theme="dark"] .weaponpaints-card-status.pending { color:#bfdbfe; background:#1e3a8a; }
 @media (max-width:1050px) { .weaponpaints-layout { grid-template-columns:130px minmax(0,1fr); } .weaponpaints-editor { grid-column:1/-1; border-left:0; border-top:1px solid var(--border); } }
-@media (max-width:650px) { .weaponpaints-header { padding:16px; } .weaponpaints-layout { display:block; } .weaponpaints-categories { border-right:0; border-bottom:1px solid var(--border); flex-direction:row; overflow-x:auto; } .weaponpaints-categories button { flex:0 0 auto; } .weaponpaints-grid { grid-template-columns:1fr 1fr; } .weaponpaints-card { min-height:180px; } .weaponpaints-card-image { height:100px; } .weaponpaints-admin-bar label { min-width:100%; } .weaponpaints-editor-grid { grid-template-columns:1fr; } .weaponpaints-toast { top:10px; right:10px; width:calc(100vw - 20px); } .weaponpaints-dialog-actions > button { flex:1 1 100%; } }
+@media (max-width:650px) { .weaponpaints-header { padding:16px; } .weaponpaints-layout { display:block; } .weaponpaints-categories { border-right:0; border-bottom:1px solid var(--border); flex-direction:row; overflow-x:auto; } .weaponpaints-categories button { flex:0 0 auto; } .weaponpaints-grid { grid-template-columns:1fr 1fr; } .weaponpaints-card { min-height:180px; } .weaponpaints-card-image { height:100px; } .weaponpaints-admin-bar label { min-width:100%; } .weaponpaints-reset-team-btn { flex:1 1 100%; margin-left:0; } .weaponpaints-editor-grid { grid-template-columns:1fr; } .weaponpaints-toast { top:10px; right:10px; width:calc(100vw - 20px); } .weaponpaints-dialog-actions > button { flex:1 1 100%; } }
 @media (max-width:420px) { .weaponpaints-grid { grid-template-columns:1fr; } }

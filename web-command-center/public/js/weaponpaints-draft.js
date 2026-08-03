@@ -44,5 +44,21 @@
         fingerprintWeaponDraft(baseline) !== fingerprintWeaponDraft(current)
     );
 
-    return { fingerprintWeaponDraft, isWeaponDraftDirty };
+    const isDraftFingerprintDirty = (baseline, current) => (
+        Boolean(baseline && current && baseline !== current)
+    );
+
+    const formatUnsavedWeaponMessage = (weaponName, paintName) => (
+        `你对上一把「${String(weaponName || '武器')}」的「${String(paintName || '当前')}」涂装修改尚未保存。`
+    );
+
+    const oppositeTeam = (team) => Number(team) === 3 ? 2 : 3;
+
+    return {
+        fingerprintWeaponDraft,
+        isWeaponDraftDirty,
+        isDraftFingerprintDirty,
+        formatUnsavedWeaponMessage,
+        oppositeTeam,
+    };
 });
