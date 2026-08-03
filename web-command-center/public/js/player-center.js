@@ -80,6 +80,7 @@
     if (matchButton) {
       matchButton.textContent = currentMatchState.joined ? '退出本场比赛' : '加入本场比赛';
       matchButton.disabled = currentMatchState.joined ? !currentMatchState.leaveAvailable : !currentMatchState.joinAvailable;
+      matchButton.classList.toggle('joined', currentMatchState.joined);
     }
     if (byId('player-center-entry')) byId('player-center-entry').hidden = true;
     if (byId('player-center-home')) byId('player-center-home').hidden = false;
@@ -87,7 +88,7 @@
   }
 
   function consumeMatchSocketTicket(ticket) {
-    var loginSocket = window.__caorenCupSocket || window.socket;
+    var loginSocket = window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket;
     if (!ticket || !loginSocket || typeof loginSocket.emit !== 'function') return false;
     if (loginSocket.connected === false) {
       pendingMatchSocketTicket = ticket;
@@ -162,7 +163,7 @@
       return false;
     }
     renderHome(result.data);
-    var loginSocket = window.__caorenCupSocket || window.socket;
+    var loginSocket = window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket;
     if (loginSocket && typeof loginSocket.disconnect === 'function' && typeof loginSocket.connect === 'function') {
       loginSocket.disconnect().connect();
     }
@@ -334,7 +335,7 @@
   }
 
   function bindSocketInvalidation() {
-    var socket = window.__caorenCupSocket || window.socket;
+    var socket = window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket;
     if (!socket || typeof socket.on !== 'function') return;
     socket.on('PLAYER_CENTER_SESSION_INVALID', function () {
       showEntry('账号状态或会话已失效，请重新登录。');

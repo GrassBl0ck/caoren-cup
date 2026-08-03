@@ -294,6 +294,7 @@ export interface GameSession {
     rollTimeout?: any;
     createdAt: number;
     autoClearMinutes: number;
+    lastActivityAt?: number;
     [key: string]: any;
 }
 

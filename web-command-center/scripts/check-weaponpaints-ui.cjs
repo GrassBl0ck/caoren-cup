@@ -8,13 +8,25 @@ const js = fs.readFileSync(path.join(root, 'public', 'js', 'weaponpaints-app.js'
 const lobbyJs = fs.readFileSync(path.join(root, 'public', 'js', 'lobby-app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'weaponpaints.css'), 'utf8');
 const webPackageScript = fs.readFileSync(path.join(root, '..', 'scripts', 'package-caoren-web.ps1'), 'utf8');
+const socketApi = fs.readFileSync(path.join(root, 'src', 'weaponpaints', 'socket-api.ts'), 'utf8');
+const service = fs.readFileSync(path.join(root, 'src', 'weaponpaints', 'service.ts'), 'utf8');
+const repository = fs.readFileSync(path.join(root, 'src', 'weaponpaints', 'repository.ts'), 'utf8');
+const mysqlRepository = fs.readFileSync(path.join(root, 'src', 'weaponpaints', 'mysql-repository.ts'), 'utf8');
 
 assert.match(html, /id="weaponpaints-open-btn"/);
 assert.match(html, /id="weaponpaints-panel"/);
+const lobbyAreaStart = html.indexOf('<div id="lobby-area"');
+const postLobbyMarker = html.indexOf('<!-- 须知模态框 -->', lobbyAreaStart);
+assert.ok(lobbyAreaStart >= 0 && postLobbyMarker > lobbyAreaStart, '必须能定位大厅容器边界');
+assert.doesNotMatch(
+    html.slice(lobbyAreaStart, postLobbyMarker),
+    /id="weaponpaints-panel"/,
+    '换肤面板必须位于隐藏大厅容器之外，确保未参赛玩家也能打开',
+);
 assert.match(html, /weaponpaints-app\.js/);
 assert.match(html, /weaponpaints\.css/);
-assert.match(html, /weaponpaints\.css\?v=1\.9-weaponpaints-advanced-decoration/);
-assert.match(html, /weaponpaints-app\.js\?v=1\.9\.1/);
+assert.match(html, /weaponpaints\.css\?v=1\.9\.2-qol2/);
+assert.match(html, /weaponpaints-app\.js\?v=1\.9\.2-qol2/);
 for (const category of ['gun', 'knife', 'glove', 'agent', 'music', 'pin', 'keychain']) {
     assert.match(js, new RegExp(`['"]${category}['"]`), `缺少分类 ${category}`);
 }
@@ -23,14 +35,40 @@ assert.match(js, /id:\s*['"]keychain['"][^\n]*showInNav:\s*false/, '挂件不应
 assert.match(js, /selectedCosmeticKey/, '单选装备必须保留待保存状态');
 assert.match(js, /当前使用/, '右侧必须显示数据库中当前使用的单选装备');
 assert.match(js, /待保存/, '右侧必须区分尚未保存的预览');
-assert.match(js, /wp-save-cosmetic/, '人物、音乐盒和徽章必须通过明确的保存按钮生效');
+assert.match(js, /wp-save-cosmetic/, '探员、音乐盒和徽章必须通过明确的保存按钮生效');
 assert.match(js, /weaponpaints-card-status/, '目录卡片必须显示当前使用或待保存状态');
 assert.match(js, /currentSelectionItem/, '当前使用卡片必须按已保存涂装解析，不能被待保存预览覆盖');
 assert.match(js, /finishItemStatus/, '涂装弹层必须区分当前使用和待保存涂装');
 assert.match(js, /WEAPONPAINTS_ACTION/);
 assert.match(js, /state\.status\?\.isAdmin[\s\S]*targetSteamId/, '仅管理员代管请求可携带目标 SteamID');
 assert.doesNotMatch(js, /selfSteamId/, '普通玩家不应从服务端接收或编辑 SteamID');
-assert.match(js, /copyTeam/);
+assert.doesNotMatch(html, /weaponpaints-copy-btn/, '阵营配置覆盖按钮应完全移除');
+assert.doesNotMatch(js, /copyTeam|action:\s*['"]copyTeam['"]/, '前端阵营配置覆盖逻辑应完全移除');
+assert.doesNotMatch(socketApi, /copyTeam/, 'Socket 不应继续接受阵营配置覆盖操作');
+assert.doesNotMatch(service, /copyTeam/, '服务层不应保留阵营配置覆盖逻辑');
+assert.doesNotMatch(repository, /copyTeam|copy_team|TeamCopyRules/, '仓储接口不应保留阵营配置覆盖能力');
+assert.doesNotMatch(mysqlRepository, /copyTeam|buildTeamCopyStatements|TeamCopyRules/, 'MySQL 仓储不应保留阵营复制 SQL');
+assert.match(js, /label:\s*['"]探员['"]/, '角色分类应统一称为探员');
+assert.doesNotMatch(js, /label:\s*['"]人物['"]/, '换肤分类不应继续显示人物');
+assert.match(html, /id="weaponpaints-unsaved-dialog"/, '必须使用自定义未保存提示对话框');
+assert.match(html, /id="weaponpaints-unsaved-description"/, '未保存提示必须能显示具体武器和涂装');
+assert.match(html, /保存并继续/);
+assert.match(html, /放弃更改/);
+assert.match(html, /返回编辑/);
+assert.match(js, /guardUnsavedChange/, '所有会丢弃草稿的跳转应经过统一保护');
+assert.match(js, /formatUnsavedWeaponMessage/, '未保存提示必须包含上一把武器和涂装名称');
+assert.match(js, /openGroupFinishes[\s\S]*guardUnsavedChange/, '打开另一把武器的涂装列表前必须检查未保存草稿');
+assert.match(js, /async function loadCatalog[\s\S]{0,300}collectEditor\(\)/, '搜索或加载更多前必须收集当前高级参数，避免目录重绘丢失修改');
+assert.match(html, /id="weaponpaints-reset-team-btn"/, '必须提供清空当前阵营配置按钮');
+assert.match(html, /id="weaponpaints-reset-team-dialog"/, '清空当前阵营必须使用自定义确认对话框');
+assert.match(js, /action\(\{\s*action:\s*['"]reset['"],\s*team:\s*state\.team\s*\}\)/, '清空操作只能提交当前阵营');
+assert.match(html, /搜索当前阵营的武器、涂装名称或 ID/, '搜索范围必须明确为当前阵营武器和涂装');
+assert.match(js, /oppositeTeam/, '当前阵营无结果时必须检查另一阵营');
+assert.match(js, /属于[\s\S]*阵营可用武器/, '另一阵营存在结果时必须给出明确提示');
+assert.match(html, /weaponpaints-draft\.js/, '页面必须加载可测试的草稿比较模块');
+assert.match(css, /\.weaponpaints-toast[^}]*position\s*:\s*fixed/s, '保存反馈应固定在可视区域');
+assert.match(css, /\.weaponpaints-unsaved-dialog/, '未保存提示必须使用项目自定义样式');
+assert.match(js, /weaponpaints-rarity-/, '皮肤名称应携带稀有度颜色类');
 assert.match(js, /grouped/);
 assert.match(js, /weaponpaints-finish-flyout/, '选择涂装应打开侧向弹层');
 assert.match(js, /weaponpaints-finish-grid/, '涂装弹层应使用缩略图网格');
@@ -51,9 +89,7 @@ assert.match(js, /rotation:\s*Number\(/, '保存时必须收集印花旋转');
 assert.doesNotMatch(js, /scale:\s*Number\([^\n]+\|\|\s*1/, '非法的印花缩放值不能被静默改写为 1');
 assert.match(js, /offsetZ:\s*Number\(/, '保存时必须收集挂件 Z 偏移');
 assert.match(js, /保存此手套/);
-assert.match(js, /用当前.*配置覆盖/);
-assert.match(js, /copyButton\.title\s*=/, '复制按钮必须提供悬停说明');
-assert.match(js, /weaponpaints-target[^\n]*loadTarget\(\)[^\n]*loadCatalog\(false\)/, '管理员切换玩家后必须同步刷新分组预览');
+assert.match(js, /weaponpaints-target[\s\S]{0,1200}loadTarget\(\);\s*await loadCatalog\(false\)/, '管理员切换玩家后必须同步刷新分组预览');
 assert.match(js, /forceRefresh/);
 assert.match(js, /stattrak/i);
 assert.match(js, /stickers/);
@@ -69,7 +105,7 @@ assert.match(css, /\.weaponpaints-finish-grid\s*\{[^}]*grid-template-columns\s*:
 assert.match(css, /\.weaponpaints-finish-flyout\.left/, '靠近屏幕右侧时弹层必须支持向左展开');
 assert.match(css, /\.weaponpaints-card-status\.current/, '当前使用状态必须有独立样式');
 assert.match(css, /\.weaponpaints-card-status\.pending/, '待保存状态必须有独立样式');
-assert.match(css, /#weaponpaints-copy-btn\s*\{[^}]*cursor\s*:\s*help/s, '复制按钮必须使用带问号的帮助指针');
+assert.doesNotMatch(css, /#weaponpaints-copy-btn/, '不应残留已删除按钮的样式');
 assert.match(css, /@media\s*\(max-width:/);
 assert.doesNotMatch(js, /https?:\/\//i, '换肤 UI 不应依赖远程图片或接口');
 assert.match(webPackageScript, /public[\\\\/]weaponpaints/, '网页主包必须排除独立发布的 WeaponPaints 图片目录');

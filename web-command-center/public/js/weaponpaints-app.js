@@ -7,7 +7,7 @@
         { id: 'gun', label: '枪械', api: 'skin' },
         { id: 'knife', label: '刀具', api: 'skin' },
         { id: 'glove', label: '手套', api: 'glove', kind: 'Glove' },
-        { id: 'agent', label: '人物', api: 'agent', kind: 'Agent' },
+        { id: 'agent', label: '探员', api: 'agent', kind: 'Agent' },
         { id: 'music', label: '音乐盒', api: 'music', kind: 'MusicKit' },
         { id: 'pin', label: '徽章', api: 'pin', kind: 'Pin' },
         { id: 'sticker', label: '印花', api: 'sticker', showInNav: false },
@@ -17,20 +17,35 @@
         open: false, status: null, targetSteamId: '', team: 3, category: 'gun',
         query: '', offset: 0, total: 0, items: [], groups: [], loadout: null,
         selectedWeapon: null, selectedWeaponKind: '', selectedKnifeKey: '', selectedGloveKey: '',
-        selectedPreviewName: '', selectedKnifeDefault: false, stickerSlot: 0,
+        selectedPreviewName: '', selectedWeaponName: '', selectedPaintName: '', selectedKnifeDefault: false, stickerSlot: 0,
         selectedCosmeticKey: '', selectedCosmeticKind: '', selectedCosmeticName: '', selectedCosmeticImage: '',
-        finishesByGroup: new Map()
+        finishesByGroup: new Map(), draftBaseline: '', pendingNavigation: null, emptyCatalogMessage: '',
+        noticeTimer: null, lastSaveError: ''
     };
 
     const el = (id) => document.getElementById(id);
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     const socket = () => window.__caorenCupLobbySocket || window.__caorenCupSocket;
+    const fingerprintWeaponDraft = (weapon) => window.WeaponPaintsDraft.fingerprintWeaponDraft(weapon);
+    const isDraftFingerprintDirty = (baseline, current) => window.WeaponPaintsDraft.isDraftFingerprintDirty(baseline, current);
+    const formatUnsavedWeaponMessage = (weaponName, paintName) => window.WeaponPaintsDraft.formatUnsavedWeaponMessage(weaponName, paintName);
+    const oppositeTeam = (team) => window.WeaponPaintsDraft.oppositeTeam(team);
 
     function notice(message, tone) {
         const host = el('weaponpaints-notice');
         if (!host) return;
-        host.textContent = message || '';
-        host.className = 'weaponpaints-notice' + (tone ? ' ' + tone : '');
+        if (state.noticeTimer) clearTimeout(state.noticeTimer);
+        state.noticeTimer = null;
+        host.innerHTML = message
+            ? `<span>${escapeHtml(message)}</span>${tone === 'error' ? '<button type="button" data-wp-notice-close aria-label="关闭提示">×</button>' : ''}`
+            : '';
+        host.className = 'weaponpaints-toast' + (tone ? ' ' + tone : '');
+        if (message && tone !== 'error') {
+            state.noticeTimer = setTimeout(() => {
+                host.innerHTML = '';
+                state.noticeTimer = null;
+            }, tone === 'success' ? 4000 : 5000);
+        }
     }
 
     function emit(event, payload) {
@@ -81,11 +96,8 @@
         document.querySelectorAll('[data-wp-team]').forEach((button) => {
             button.classList.toggle('active', Number(button.dataset.wpTeam) === state.team);
         });
-        const from = state.team === 3 ? 'CT' : 'T';
-        const to = state.team === 3 ? 'T' : 'CT';
-        const copyButton = el('weaponpaints-copy-btn');
-        copyButton.textContent = `用当前 ${from} 配置覆盖 ${to}`;
-        copyButton.title = `清空 ${to} 现有配置后，复制 ${from} 的通用枪械、刀具、手套等配置。阵营专属枪械和探员不会复制。`;
+        const resetButton = el('weaponpaints-reset-team-btn');
+        if (resetButton) resetButton.textContent = `清空当前 ${state.team === 3 ? 'CT' : 'T'} 配置`;
     }
 
     function renderCategories() {
@@ -121,7 +133,7 @@
         } else if (categoryConfig(categoryId)?.kind) {
             pending = state.selectedCosmeticKind === categoryConfig(categoryId).kind && key === state.selectedCosmeticKey;
         }
-        return { current, pending };
+        return { current, pending: pending && hasUnsavedDraft(false) };
     }
 
     function renderCardStatuses(item, categoryId = state.category) {
@@ -132,6 +144,25 @@
     function finishName(item) {
         const parts = String(item.name || item.englishName || item.key).split('|');
         return (parts.length > 1 ? parts.slice(1).join('|') : parts[0]).trim() || '默认';
+    }
+
+    function rarityClass(item) {
+        const classes = {
+            rarity_common_weapon: 'weaponpaints-rarity-consumer',
+            rarity_uncommon_weapon: 'weaponpaints-rarity-industrial',
+            rarity_rare_weapon: 'weaponpaints-rarity-milspec',
+            rarity_mythical_weapon: 'weaponpaints-rarity-restricted',
+            rarity_legendary_weapon: 'weaponpaints-rarity-classified',
+            rarity_ancient_weapon: 'weaponpaints-rarity-covert',
+            rarity_contraband_weapon: 'weaponpaints-rarity-contraband',
+            rarity_contraband: 'weaponpaints-rarity-contraband'
+        };
+        return classes[item?.rarity?.id] || '';
+    }
+
+    function rarityNameHtml(item, name) {
+        const className = rarityClass(item);
+        return `<span${className ? ` class="${className}"` : ''}>${escapeHtml(name)}</span>`;
     }
 
     function renderGroupCard(group, index) {
@@ -147,7 +178,7 @@
             ${state.category === 'knife' || state.category === 'glove' ? renderCardStatuses(item) : ''}
             <img class="weaponpaints-card-image" data-wp-group-image="${index}" src="${escapeHtml(imageUrl)}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/weaponpaints-placeholder.svg'">
             <strong>${escapeHtml(group.name || group.englishName || group.key)}</strong>
-            <small data-wp-group-subtitle="${index}">${escapeHtml(finishName(item))} · Paint ${item.id}</small>
+            <small data-wp-group-subtitle="${index}">${rarityNameHtml(item, finishName(item))} · Paint ${item.id}</small>
             <button type="button" data-wp-finish-trigger="${index}">选择涂装 ▸</button>
             <section class="weaponpaints-finish-flyout" data-wp-finish-flyout="${index}" hidden>
                 <div class="weaponpaints-finish-header"><div><strong>${escapeHtml(group.name)} 涂装</strong><small>点击后只更新预览</small></div><button type="button" data-wp-finish-close="${index}">关闭</button></div>
@@ -162,7 +193,7 @@
         if (isGroupedCategory()) {
             grid.innerHTML = state.groups.length
                 ? state.groups.map(renderGroupCard).join('')
-                : '<p class="muted-line">没有找到符合条件的本地物品。</p>';
+                : `<p class="muted-line">${escapeHtml(state.emptyCatalogMessage || '没有找到符合条件的本地物品。')}</p>`;
             el('weaponpaints-more-btn').hidden = state.groups.length >= state.total;
             return;
         }
@@ -194,7 +225,7 @@
         if (!host) return;
         host.innerHTML = items.map((item, itemIndex) => {
             const status = finishItemStatus(item);
-            return `<button type="button" class="weaponpaints-finish-option${status.pending ? ' selected' : ''}" data-wp-finish-group="${groupIndex}" data-wp-finish-item="${itemIndex}">${renderFinishStatuses(status)}<img class="weaponpaints-finish-image" src="${escapeHtml(item.imageUrl || '/assets/weaponpaints-placeholder.svg')}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/weaponpaints-placeholder.svg'"><span>${escapeHtml(finishName(item))}</span><small>Paint ${item.id}</small></button>`;
+            return `<button type="button" class="weaponpaints-finish-option${status.pending ? ' selected' : ''}" data-wp-finish-group="${groupIndex}" data-wp-finish-item="${itemIndex}">${renderFinishStatuses(status)}<img class="weaponpaints-finish-image" src="${escapeHtml(item.imageUrl || '/assets/weaponpaints-placeholder.svg')}" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/assets/weaponpaints-placeholder.svg'">${rarityNameHtml(item, finishName(item))}<small>Paint ${item.id}</small></button>`;
         }).join('');
     }
 
@@ -221,7 +252,7 @@
         flyout.style.top = `${Math.max(14, Math.min(cardRect.top, window.innerHeight - height - 14))}px`;
     }
 
-    async function openGroupFinishes(groupIndex) {
+    async function showGroupFinishes(groupIndex) {
         const flyout = document.querySelector(`[data-wp-finish-flyout="${groupIndex}"]`);
         if (!flyout) return;
         closeFinishFlyouts(groupIndex);
@@ -231,7 +262,18 @@
         positionFinishFlyout(groupIndex);
     }
 
-    function selectGroupFinish(groupIndex, itemIndex) {
+    function openGroupFinishes(groupIndex) {
+        const group = state.groups[groupIndex];
+        const changesWeapon = Boolean(
+            state.selectedWeapon
+            && group?.defIndex
+            && state.selectedWeapon.weaponDefIndex !== group.defIndex
+        );
+        if (changesWeapon) return guardUnsavedChange(() => showGroupFinishes(groupIndex));
+        return showGroupFinishes(groupIndex);
+    }
+
+    function applyGroupFinish(groupIndex, itemIndex) {
         const group = state.groups[groupIndex];
         const items = state.finishesByGroup.get(`${state.category}:${group?.key}`) || [];
         const item = items[itemIndex];
@@ -240,18 +282,24 @@
         const image = document.querySelector(`[data-wp-group-image="${groupIndex}"]`);
         const subtitle = document.querySelector(`[data-wp-group-subtitle="${groupIndex}"]`);
         if (image) image.src = item.imageUrl || '/assets/weaponpaints-placeholder.svg';
-        if (subtitle) subtitle.textContent = `${finishName(item)} · Paint ${item.id}`;
+        if (subtitle) subtitle.innerHTML = `${rarityNameHtml(item, finishName(item))} · Paint ${item.id}`;
         const flyout = document.querySelector(`[data-wp-finish-flyout="${groupIndex}"]`);
         if (flyout) flyout.hidden = true;
 
         state.selectedPreviewName = item.name || item.englishName || group.name;
+        state.selectedWeaponName = group.name || group.englishName || group.key || '武器';
+        state.selectedPaintName = finishName(item);
         state.selectedKnifeDefault = false;
         if (state.category === 'glove') {
+            state.draftBaseline = `glove:${savedCosmeticKey('glove')}`;
             state.selectedGloveKey = item.key;
             state.selectedWeapon = null;
             state.selectedWeaponKind = '';
         } else {
-            state.selectedWeapon = weaponFromLoadout(item.defIndex);
+            const savedWeapon = weaponFromLoadout(item.defIndex);
+            const savedKnifeKey = state.category === 'knife' ? savedCosmeticKey('knife') : '';
+            state.draftBaseline = `weapon:${savedKnifeKey}:${fingerprintWeaponDraft(savedWeapon)}`;
+            state.selectedWeapon = savedWeapon;
             state.selectedWeapon.paintId = item.id;
             state.selectedWeaponKind = state.category;
             state.selectedKnifeKey = state.category === 'knife' ? item.weaponKey : '';
@@ -262,6 +310,10 @@
         notice('已更新预览，点击保存后才会生效。');
     }
 
+    function selectGroupFinish(groupIndex, itemIndex) {
+        return guardUnsavedChange(() => applyGroupFinish(groupIndex, itemIndex));
+    }
+
     function weaponFromLoadout(defIndex) {
         const found = state.loadout?.weapons?.find((weapon) => weapon.team === state.team && weapon.weaponDefIndex === defIndex);
         return found ? JSON.parse(JSON.stringify(found)) : {
@@ -269,6 +321,66 @@
             seed: 0, nameTag: '', statTrakEnabled: false, statTrakCount: 0,
             stickers: []
         };
+    }
+
+    function currentDraftFingerprint(collect = true) {
+        if (state.selectedWeapon) {
+            if (collect && el('wp-edit-wear')) collectEditor();
+            return `weapon:${state.selectedKnifeKey || ''}:${fingerprintWeaponDraft(state.selectedWeapon)}`;
+        }
+        if (state.selectedKnifeDefault) return 'knife-default';
+        if (state.selectedGloveKey) return `glove:${state.selectedGloveKey}`;
+        if (state.selectedCosmeticKey) return `cosmetic:${state.selectedCosmeticKind}:${state.selectedCosmeticKey}`;
+        return '';
+    }
+
+    function hasUnsavedDraft(collect = true) {
+        const current = currentDraftFingerprint(collect);
+        return isDraftFingerprintDirty(state.draftBaseline, current);
+    }
+
+    function clearDraftSelection() {
+        state.selectedWeapon = null;
+        state.selectedWeaponKind = '';
+        state.selectedKnifeKey = '';
+        state.selectedGloveKey = '';
+        state.selectedKnifeDefault = false;
+        state.selectedPreviewName = '';
+        state.selectedWeaponName = '';
+        state.selectedPaintName = '';
+        state.selectedCosmeticKey = '';
+        state.selectedCosmeticKind = '';
+        state.selectedCosmeticName = '';
+        state.selectedCosmeticImage = '';
+        state.draftBaseline = '';
+    }
+
+    function closeUnsavedDialog() {
+        el('weaponpaints-unsaved-dialog').hidden = true;
+        el('weaponpaints-unsaved-error').textContent = '';
+    }
+
+    async function guardUnsavedChange(navigate) {
+        if (!hasUnsavedDraft()) {
+            await navigate();
+            return true;
+        }
+        state.pendingNavigation = navigate;
+        el('weaponpaints-unsaved-error').textContent = '';
+        el('weaponpaints-unsaved-description').textContent = state.selectedWeapon
+            ? formatUnsavedWeaponMessage(state.selectedWeaponName, state.selectedPaintName)
+            : '继续操作会丢失当前装饰配置的修改。';
+        el('weaponpaints-unsaved-dialog').hidden = false;
+        el('weaponpaints-unsaved-save').focus();
+        return false;
+    }
+
+    async function runPendingNavigation(discard) {
+        const navigate = state.pendingNavigation;
+        state.pendingNavigation = null;
+        if (discard) clearDraftSelection();
+        closeUnsavedDialog();
+        if (navigate) await navigate();
     }
 
     function catalogItemForKey(key, categoryId = state.category) {
@@ -295,10 +407,11 @@
 
     function finishItemStatus(item) {
         const savedWeapon = state.loadout?.weapons?.find((weapon) => weapon.team === state.team && weapon.weaponDefIndex === item.defIndex);
+        const draftIsDirty = hasUnsavedDraft(false);
         if (state.category === 'gun') {
             return {
                 current: savedWeapon?.paintId === item.id,
-                pending: state.selectedWeaponKind === 'gun' && state.selectedWeapon?.weaponDefIndex === item.defIndex && state.selectedWeapon?.paintId === item.id
+                pending: draftIsDirty && state.selectedWeaponKind === 'gun' && state.selectedWeapon?.weaponDefIndex === item.defIndex && state.selectedWeapon?.paintId === item.id
             };
         }
         const current = currentSelectionItem();
@@ -306,7 +419,7 @@
         const pendingMatches = state.category === 'knife'
             ? state.selectedKnifeKey === itemSelectionKey(item, 'knife') && state.selectedWeapon?.paintId === item.id
             : state.selectedGloveKey === itemSelectionKey(item, 'glove');
-        return { current: currentMatches, pending: pendingMatches };
+        return { current: currentMatches, pending: draftIsDirty && pendingMatches };
     }
 
     function renderFinishStatuses(status) {
@@ -409,7 +522,7 @@
                 <button id="wp-browse-keychains" type="button">浏览挂件目录</button>
             </details>` : '';
         const knifeSelection = state.selectedWeaponKind === 'knife'
-            ? `${currentSelectionHtml('knife')}${pendingSelectionHtml(catalogItemForKey(state.selectedKnifeKey, 'knife') || { name: state.selectedPreviewName }, state.selectedKnifeKey)}`
+            ? `${currentSelectionHtml('knife')}${hasUnsavedDraft(false) ? pendingSelectionHtml(catalogItemForKey(state.selectedKnifeKey, 'knife') || { name: state.selectedPreviewName }, state.selectedKnifeKey) : ''}`
             : '';
         host.innerHTML = `
             <h3>武器高级参数</h3>
@@ -469,9 +582,12 @@
             if (state.selectedKnifeKey) await action({ action: 'saveCosmetic', cosmetic: { team: state.team, kind: 'Knife', itemKey: state.selectedKnifeKey } });
             await action({ action: 'saveWeapon', weapon });
             await loadTarget();
+            state.draftBaseline = currentDraftFingerprint(false);
             await loadCatalog(false);
+            renderEditor();
             notice('配置已保存。正式回合存活时将在下次出生应用。', 'success');
-        } catch (error) { notice(error.message, 'error'); }
+            return true;
+        } catch (error) { state.lastSaveError = error.message; notice(error.message, 'error'); return false; }
     }
 
     async function saveSelectedGlove() {
@@ -482,8 +598,10 @@
             await loadTarget();
             await loadCatalog(false);
             renderEditor();
+            state.draftBaseline = '';
             notice('手套配置已保存。', 'success');
-        } catch (error) { notice(error.message, 'error'); }
+            return true;
+        } catch (error) { state.lastSaveError = error.message; notice(error.message, 'error'); return false; }
     }
 
     async function saveDefaultKnife() {
@@ -492,8 +610,10 @@
             state.selectedKnifeDefault = false;
             await loadTarget();
             await loadCatalog(false);
+            state.draftBaseline = '';
             notice('已恢复当前阵营的默认刀具。', 'success');
-        } catch (error) { notice(error.message, 'error'); }
+            return true;
+        } catch (error) { state.lastSaveError = error.message; notice(error.message, 'error'); return false; }
     }
 
     async function saveSelectedCosmetic() {
@@ -506,11 +626,22 @@
             state.selectedCosmeticImage = '';
             await loadTarget();
             await loadCatalog(false);
+            state.draftBaseline = '';
             notice(`${category.label}配置已保存。`, 'success');
-        } catch (error) { notice(error.message, 'error'); }
+            return true;
+        } catch (error) { state.lastSaveError = error.message; notice(error.message, 'error'); return false; }
     }
 
-    async function selectItem(index) {
+    async function saveCurrentDraft() {
+        state.lastSaveError = '';
+        if (state.selectedWeapon) return saveSelectedWeapon();
+        if (state.selectedKnifeDefault) return saveDefaultKnife();
+        if (state.selectedGloveKey) return saveSelectedGlove();
+        if (state.selectedCosmeticKey) return saveSelectedCosmetic();
+        return true;
+    }
+
+    async function applySelectedItem(index) {
         const item = state.items[index];
         if (!item) return;
         try {
@@ -523,10 +654,15 @@
                 return;
             }
             if (state.category === 'gun' || state.category === 'knife') {
-                state.selectedWeapon = weaponFromLoadout(item.defIndex);
+                const savedWeapon = weaponFromLoadout(item.defIndex);
+                const savedKnifeKey = state.category === 'knife' ? savedCosmeticKey('knife') : '';
+                state.draftBaseline = `weapon:${savedKnifeKey}:${fingerprintWeaponDraft(savedWeapon)}`;
+                state.selectedWeapon = savedWeapon;
                 state.selectedWeapon.paintId = item.id;
                 state.selectedWeaponKind = state.category;
                 state.selectedKnifeKey = state.category === 'knife' ? item.weaponKey : '';
+                state.selectedWeaponName = String(item.name || item.englishName || item.weaponKey || '武器').split('|')[0].trim();
+                state.selectedPaintName = finishName(item);
                 renderEditor();
                 notice('已选中，调整参数后点击“保存此武器”。');
                 return;
@@ -557,6 +693,7 @@
                 return;
             }
             const category = CATEGORIES.find((candidate) => candidate.id === state.category);
+            state.draftBaseline = `cosmetic:${category.kind}:${savedCosmeticKey(state.category)}`;
             state.selectedCosmeticKey = item.key || '';
             state.selectedCosmeticKind = category.kind;
             state.selectedCosmeticName = item.name || item.englishName || item.key || '默认';
@@ -567,10 +704,16 @@
         } catch (error) { notice(error.message, 'error'); }
     }
 
+    function selectItem(index) {
+        if (state.category === 'sticker' || state.category === 'keychain') return applySelectedItem(index);
+        return guardUnsavedChange(() => applySelectedItem(index));
+    }
+
     async function loadCatalog(append) {
         const category = CATEGORIES.find((candidate) => candidate.id === state.category);
         if (!category) return;
-        if (!append) { state.offset = 0; state.items = []; state.groups = []; state.finishesByGroup.clear(); }
+        if (state.selectedWeapon && el('wp-edit-wear')) collectEditor();
+        if (!append) { state.offset = 0; state.items = []; state.groups = []; state.emptyCatalogMessage = ''; state.finishesByGroup.clear(); }
         const params = new URLSearchParams({ category: category.api, query: state.query, offset: String(state.offset), limit: '60' });
         if (state.category === 'gun' || state.category === 'knife') params.set('kind', state.category);
         if (state.category === 'gun' || state.category === 'agent') params.set('team', String(state.team));
@@ -591,6 +734,22 @@
         if (!result.success) throw new Error(result.error || '物品目录加载失败。');
         if (isGroupedCategory()) {
             const groups = result.groups || [];
+            if (!append && state.category === 'gun' && state.query && groups.length === 0) {
+                try {
+                    const otherTeam = oppositeTeam(state.team);
+                    const otherParams = new URLSearchParams(params);
+                    otherParams.set('team', String(otherTeam));
+                    otherParams.set('offset', '0');
+                    otherParams.set('limit', '1');
+                    const otherResponse = await fetch('/api/weaponpaints/catalog?' + otherParams.toString(), { cache: 'no-store' });
+                    const otherResult = await otherResponse.json();
+                    if (otherResult.success && (otherResult.total || 0) > 0) {
+                        state.emptyCatalogMessage = `“${state.query}”属于${otherTeam === 3 ? ' CT' : ' T'}阵营可用武器，请切换到${otherTeam === 3 ? ' CT' : ' T'}配置查看。`;
+                    }
+                } catch (_) {
+                    state.emptyCatalogMessage = '';
+                }
+            }
             state.groups = append ? state.groups.concat(groups) : groups;
             if (!append && state.category === 'knife') {
                 state.groups.unshift({ key: '__default__', name: '恢复默认', defIndex: 0, isDefault: true, representative: { key: '', id: 0, name: '恢复默认' } });
@@ -619,18 +778,26 @@
         renderEditor();
     }
 
-    async function switchCategory(category) {
+    async function applyCategory(category, preserveWeaponDraft = false) {
         state.category = category;
         state.query = '';
         el('weaponpaints-search').value = '';
-        if (!['sticker', 'keychain'].includes(category)) {
-            state.selectedWeapon = null; state.selectedWeaponKind = ''; state.selectedKnifeKey = '';
-            state.selectedGloveKey = ''; state.selectedKnifeDefault = false; state.selectedPreviewName = '';
-            state.selectedCosmeticKey = ''; state.selectedCosmeticKind = ''; state.selectedCosmeticName = ''; state.selectedCosmeticImage = '';
+        if (!['sticker', 'keychain'].includes(category) && !preserveWeaponDraft) {
+            clearDraftSelection();
             renderEditor();
         }
         renderCategories();
         try { await loadCatalog(false); } catch (error) { notice(error.message, 'error'); }
+        if (preserveWeaponDraft) renderEditor();
+    }
+
+    async function switchCategory(category) {
+        if (category === state.category) return;
+        if (['sticker', 'keychain'].includes(category)) return applyCategory(category, true);
+        if (['sticker', 'keychain'].includes(state.category) && category === 'gun' && state.selectedWeapon) {
+            return applyCategory(category, true);
+        }
+        return guardUnsavedChange(() => applyCategory(category));
     }
 
     async function openPanel() {
@@ -649,17 +816,50 @@
         panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    async function copyTeam() {
-        const toTeam = state.team === 3 ? 2 : 3;
-        const fromLabel = state.team === 3 ? 'CT' : 'T';
-        const toLabel = toTeam === 3 ? 'CT' : 'T';
-        if (!confirm(`确认用当前 ${fromLabel} 配置覆盖 ${toLabel}？\n\n${toLabel} 现有配置将先恢复默认。只复制双方通用枪械、刀具、手套等配置，阵营专属枪械和探员不会复制。`)) return;
-        try { await action({ action: 'copyTeam', fromTeam: state.team, toTeam }); notice(`已用 ${fromLabel} 的通用配置覆盖 ${toLabel}。`, 'success'); } catch (error) { notice(error.message, 'error'); }
-    }
-
     async function resetTarget() {
         if (!confirm('确认重置该玩家 CT/T 的全部换肤配置？此操作会写入审计日志。')) return;
-        try { await action({ action: 'reset' }); await loadTarget(); notice('玩家换肤配置已重置。', 'success'); } catch (error) { notice(error.message, 'error'); }
+        try {
+            await action({ action: 'reset' });
+            clearDraftSelection();
+            await loadTarget();
+            await loadCatalog(false);
+            renderEditor();
+            notice('玩家换肤配置已重置。', 'success');
+        } catch (error) { notice(error.message, 'error'); }
+    }
+
+    function closeResetTeamDialog() {
+        el('weaponpaints-reset-team-dialog').hidden = true;
+        el('weaponpaints-reset-team-error').textContent = '';
+    }
+
+    function openResetTeamDialog() {
+        const teamLabel = state.team === 3 ? 'CT' : 'T';
+        el('weaponpaints-reset-team-title').textContent = `确认清空当前 ${teamLabel} 配置？`;
+        el('weaponpaints-reset-team-description').textContent = state.status?.isAdmin
+            ? `将清空当前代管玩家的全部 ${teamLabel} 换肤配置。`
+            : `将清空你的全部 ${teamLabel} 换肤配置。`;
+        el('weaponpaints-reset-team-error').textContent = '';
+        el('weaponpaints-reset-team-dialog').hidden = false;
+        el('weaponpaints-reset-team-confirm').focus();
+    }
+
+    async function resetCurrentTeam() {
+        const button = el('weaponpaints-reset-team-confirm');
+        button.disabled = true;
+        try {
+            await action({ action: 'reset', team: state.team });
+            clearDraftSelection();
+            await loadTarget();
+            await loadCatalog(false);
+            renderEditor();
+            closeResetTeamDialog();
+            notice(`${state.team === 3 ? 'CT' : 'T'} 配置已全部恢复默认。`, 'success');
+        } catch (error) {
+            el('weaponpaints-reset-team-error').textContent = error.message;
+        } finally {
+            button.disabled = false;
+        }
     }
 
     async function forceRefresh() {
@@ -669,16 +869,34 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         el('weaponpaints-open-btn')?.addEventListener('click', openPanel);
-        el('weaponpaints-close-btn')?.addEventListener('click', () => { el('weaponpaints-panel').hidden = true; state.open = false; });
-        el('weaponpaints-target')?.addEventListener('change', async (event) => { state.targetSteamId = event.target.value; state.selectedWeapon = null; state.selectedWeaponKind = ''; state.selectedKnifeKey = ''; state.selectedGloveKey = ''; state.selectedKnifeDefault = false; state.selectedCosmeticKey = ''; state.selectedCosmeticKind = ''; renderEditor(); try { await loadTarget(); await loadCatalog(false); } catch (error) { notice(error.message, 'error'); } });
+        el('weaponpaints-close-btn')?.addEventListener('click', () => guardUnsavedChange(async () => {
+            clearDraftSelection();
+            el('weaponpaints-panel').hidden = true;
+            state.open = false;
+        }));
+        el('weaponpaints-target')?.addEventListener('change', async (event) => {
+            const select = event.target;
+            const previousSteamId = state.targetSteamId;
+            const nextSteamId = select.value;
+            select.value = previousSteamId;
+            await guardUnsavedChange(async () => {
+                state.targetSteamId = nextSteamId;
+                select.value = nextSteamId;
+                clearDraftSelection();
+                renderEditor();
+                try { await loadTarget(); await loadCatalog(false); } catch (error) { notice(error.message, 'error'); }
+            });
+        });
         document.querySelectorAll('[data-wp-team]').forEach((button) => button.addEventListener('click', async () => {
-            state.team = Number(button.dataset.wpTeam);
-            state.selectedWeapon = null; state.selectedWeaponKind = ''; state.selectedKnifeKey = '';
-            state.selectedGloveKey = ''; state.selectedKnifeDefault = false; state.selectedPreviewName = '';
-            state.selectedCosmeticKey = ''; state.selectedCosmeticKind = ''; state.selectedCosmeticName = ''; state.selectedCosmeticImage = '';
-            if (CATEGORIES.find((category) => category.id === state.category)?.showInNav === false) state.category = 'gun';
-            renderTeams(); renderCategories(); renderEditor();
-            try { await loadTarget(); await loadCatalog(false); } catch (error) { notice(error.message, 'error'); }
+            const nextTeam = Number(button.dataset.wpTeam);
+            if (nextTeam === state.team) return;
+            await guardUnsavedChange(async () => {
+                state.team = nextTeam;
+                clearDraftSelection();
+                if (CATEGORIES.find((category) => category.id === state.category)?.showInNav === false) state.category = 'gun';
+                renderTeams(); renderCategories(); renderEditor();
+                try { await loadTarget(); await loadCatalog(false); } catch (error) { notice(error.message, 'error'); }
+            });
         }));
         el('weaponpaints-categories')?.addEventListener('click', (event) => { const button = event.target.closest('[data-wp-category]'); if (button) switchCategory(button.dataset.wpCategory); });
         el('weaponpaints-grid')?.addEventListener('click', (event) => {
@@ -700,17 +918,23 @@
             if (finish) selectGroupFinish(Number(finish.dataset.wpFinishGroup), Number(finish.dataset.wpFinishItem));
             const defaultKnife = event.target.closest('[data-wp-default-knife]');
             if (defaultKnife) {
-                state.selectedWeapon = null; state.selectedWeaponKind = 'knife'; state.selectedKnifeKey = '';
-                state.selectedGloveKey = ''; state.selectedKnifeDefault = true; state.selectedPreviewName = '恢复默认';
-                renderGrid(); renderEditor(); notice('已更新预览，点击保存后才会生效。');
+                guardUnsavedChange(async () => {
+                    clearDraftSelection();
+                    state.draftBaseline = savedCosmeticKey('knife') ? `knife:${savedCosmeticKey('knife')}` : 'knife-default';
+                    state.selectedWeaponKind = 'knife'; state.selectedKnifeDefault = true; state.selectedPreviewName = '恢复默认';
+                    renderGrid(); renderEditor(); notice('已更新预览，点击保存后才会生效。');
+                });
             }
             const defaultGlove = event.target.closest('[data-wp-default-glove]');
             if (defaultGlove) {
-                const group = state.groups[Number(defaultGlove.dataset.wpDefaultGlove)];
-                state.selectedGloveKey = group?.representative?.key || '0:0';
-                state.selectedPreviewName = group?.name || '默认手套';
-                state.selectedWeapon = null; state.selectedWeaponKind = ''; state.selectedKnifeDefault = false;
-                renderGrid(); renderEditor(); notice('已更新预览，点击保存后才会生效。');
+                guardUnsavedChange(async () => {
+                    const group = state.groups[Number(defaultGlove.dataset.wpDefaultGlove)];
+                    clearDraftSelection();
+                    state.draftBaseline = `glove:${savedCosmeticKey('glove') || '0:0'}`;
+                    state.selectedGloveKey = group?.representative?.key || '0:0';
+                    state.selectedPreviewName = group?.name || '默认手套';
+                    renderGrid(); renderEditor(); notice('已更新预览，点击保存后才会生效。');
+                });
             }
             const button = event.target.closest('[data-wp-item]');
             if (button) selectItem(Number(button.dataset.wpItem));
@@ -718,9 +942,27 @@
         el('weaponpaints-search-btn')?.addEventListener('click', async () => { state.query = el('weaponpaints-search').value.trim(); try { await loadCatalog(false); } catch (error) { notice(error.message, 'error'); } });
         el('weaponpaints-search')?.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); el('weaponpaints-search-btn').click(); } });
         el('weaponpaints-more-btn')?.addEventListener('click', async () => { try { await loadCatalog(true); } catch (error) { notice(error.message, 'error'); } });
-        el('weaponpaints-copy-btn')?.addEventListener('click', copyTeam);
-        el('weaponpaints-reset-btn')?.addEventListener('click', resetTarget);
+        el('weaponpaints-reset-btn')?.addEventListener('click', () => guardUnsavedChange(resetTarget));
+        el('weaponpaints-reset-team-btn')?.addEventListener('click', () => guardUnsavedChange(openResetTeamDialog));
+        el('weaponpaints-reset-team-confirm')?.addEventListener('click', resetCurrentTeam);
+        el('weaponpaints-reset-team-cancel')?.addEventListener('click', closeResetTeamDialog);
         el('weaponpaints-force-btn')?.addEventListener('click', forceRefresh);
+        el('weaponpaints-notice')?.addEventListener('click', (event) => {
+            if (event.target.closest('[data-wp-notice-close]')) notice('');
+        });
+        el('weaponpaints-unsaved-save')?.addEventListener('click', async () => {
+            const saveButton = el('weaponpaints-unsaved-save');
+            saveButton.disabled = true;
+            const saved = await saveCurrentDraft();
+            saveButton.disabled = false;
+            if (saved) await runPendingNavigation(false);
+            else el('weaponpaints-unsaved-error').textContent = state.lastSaveError || '保存失败，请重试。';
+        });
+        el('weaponpaints-unsaved-discard')?.addEventListener('click', () => runPendingNavigation(true));
+        el('weaponpaints-unsaved-cancel')?.addEventListener('click', () => {
+            state.pendingNavigation = null;
+            closeUnsavedDialog();
+        });
         window.addEventListener('resize', () => {
             const openFlyout = document.querySelector('[data-wp-finish-flyout]:not([hidden])');
             if (openFlyout) positionFinishFlyout(Number(openFlyout.dataset.wpFinishFlyout));

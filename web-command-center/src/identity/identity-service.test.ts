@@ -83,6 +83,7 @@ test('trusted Steam identity survives reload and plugin presence refreshes expli
     assert.equal(joined.ok, true);
     if (!joined.ok) throw new Error('join should succeed');
     assert.equal(joined.membership.confirmationState, 'confirmed');
+    assert.deepEqual(service.listLobbySteamIds('match-session'), ['76561198000000904']);
     await service.confirmLongTermPresence('match-session', [
         { steamId: '76561198000000904', name: 'Latest Trusted Player' },
     ]);

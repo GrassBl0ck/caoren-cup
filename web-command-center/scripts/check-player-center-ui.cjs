@@ -4,7 +4,12 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'player-center.js'), 'utf8');
+const audioJs = fs.readFileSync(path.join(root, 'public', 'js', 'caoren-audio-controller.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
+
+if (!html.includes('/js/player-center.js?v=1.9.2-qol2')) {
+  throw new Error('player-center cache version must change with the QoL update');
+}
 
 for (const id of [
   'player-center-entry', 'player-center-login-name', 'player-center-login-password',
@@ -25,6 +30,18 @@ for (const id of [
 
 for (const text of ['玩家中心', '账号密码登录', '!cclogin', '加入本场比赛', '管理员登录']) {
   if (!html.includes(text)) throw new Error(`missing player-center copy: ${text}`);
+}
+if (!/<details id="player-center-security"[^>]*>[\s\S]*<summary>账号与安全<\/summary>/.test(html)) {
+  throw new Error('account settings must be collapsed under account security');
+}
+if (!/id="player-center-join-btn"[^>]*class="[^"]*player-center-match-action/.test(html)) {
+  throw new Error('join match must be the prominent player-center action');
+}
+if (!js.includes("classList.toggle('joined', currentMatchState.joined)")) {
+  throw new Error('join action styling must become less prominent after joining');
+}
+if (!css.includes('.player-center-match-action')) {
+  throw new Error('missing prominent join-match styles');
 }
 
 for (const token of [
@@ -55,6 +72,12 @@ for (const field of ['steamId', 'passwordHash', 'tokenHash', 'sessionId', 'membe
 }
 for (const token of ['.player-center-entry', '.player-center-home', '.player-center-settings-grid']) {
   if (!css.includes(token)) throw new Error(`missing player-center styles: ${token}`);
+}
+if (!js.includes('window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket')) {
+  throw new Error('player-center must send match tickets through the lobby socket');
+}
+if (!audioJs.includes('window.__caorenCupLobbySocket || window.__caorenCupSocket || window.io()')) {
+  throw new Error('audio controller must reuse the lobby socket instead of replacing it');
 }
 
 console.log('Player-center UI contract checks passed.');

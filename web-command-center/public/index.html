@@ -40,7 +40,7 @@
     <link rel="stylesheet" href="/css/update-announcements.css">
     <link rel="stylesheet" href="/css/caoren-mod-panel.css">
     <link rel="stylesheet" href="/css/caoren-motion.css">
-    <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9-weaponpaints-advanced-decoration">
+    <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9.2-qol2">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
 <body class="caoren-modifiers-disabled">
@@ -63,7 +63,7 @@
         <section id="player-center-entry" class="panel player-center-entry" aria-labelledby="player-center-entry-title">
             <div class="login-panel-header">
                 <div>
-                    <span class="section-eyebrow">草人杯 1.9.1</span>
+                    <span class="section-eyebrow">草人杯 1.9.2</span>
                     <h2 id="player-center-entry-title">玩家中心</h2>
                     <p>账号登录只进入玩家中心，不会自动加入比赛。</p>
                 </div>
@@ -132,26 +132,29 @@
                 <div><span>比赛状态</span><strong id="player-center-match-status">等待中</strong></div>
             </div>
             <div class="player-center-actions">
-                <button id="player-center-join-btn" type="button">加入本场比赛</button>
+                <button id="player-center-join-btn" class="player-center-match-action primary-btn" type="button">加入本场比赛</button>
                 <button id="player-center-announcements-btn" type="button">更新公告</button>
                 <button id="player-center-weaponpaints-btn" type="button">换肤工坊</button>
                 <button id="player-center-forget-device-btn" type="button" hidden>退出账号并忘记此设备</button>
             </div>
-            <div class="player-center-settings-grid">
-                <form id="player-center-login-name-form">
-                    <h3>修改登录账号</h3>
-                    <label>当前密码<input id="player-center-change-login-current-password" type="password" maxlength="128" autocomplete="current-password"></label>
-                    <label>新登录账号<input id="player-center-change-login-name" type="text" maxlength="32" autocomplete="username"></label>
-                    <button id="player-center-change-login-btn" type="submit">保存新账号</button>
-                </form>
-                <form id="player-center-password-form">
-                    <h3>修改密码</h3>
-                    <label>当前密码<input id="player-center-change-password-current" type="password" maxlength="128" autocomplete="current-password"></label>
-                    <label>新密码<input id="player-center-change-password" type="password" maxlength="128" autocomplete="new-password"></label>
-                    <label>再次输入新密码<input id="player-center-change-password-confirm" type="password" maxlength="128" autocomplete="new-password"></label>
-                    <button id="player-center-change-password-btn" type="submit">保存新密码</button>
-                </form>
-            </div>
+            <details id="player-center-security" class="player-center-security">
+                <summary>账号与安全</summary>
+                <div class="player-center-settings-grid">
+                    <form id="player-center-login-name-form">
+                        <h3>修改登录账号</h3>
+                        <label>当前密码<input id="player-center-change-login-current-password" type="password" maxlength="128" autocomplete="current-password"></label>
+                        <label>新登录账号<input id="player-center-change-login-name" type="text" maxlength="32" autocomplete="username"></label>
+                        <button id="player-center-change-login-btn" type="submit">保存新账号</button>
+                    </form>
+                    <form id="player-center-password-form">
+                        <h3>修改密码</h3>
+                        <label>当前密码<input id="player-center-change-password-current" type="password" maxlength="128" autocomplete="current-password"></label>
+                        <label>新密码<input id="player-center-change-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                        <label>再次输入新密码<input id="player-center-change-password-confirm" type="password" maxlength="128" autocomplete="new-password"></label>
+                        <button id="player-center-change-password-btn" type="submit">保存新密码</button>
+                    </form>
+                </div>
+            </details>
             <div id="player-center-home-message" class="player-center-message" aria-live="polite"></div>
             <p class="muted-line">等待中 / 已开始 / 已结束仅为公开简单状态；未加入比赛时不会显示名单、比分或比赛私密数据。</p>
         </section>
@@ -184,33 +187,6 @@
             </div>
         </div>
         <p id="my-identity" class="my-identity-line"></p>
-        <section id="weaponpaints-panel" class="weaponpaints-panel panel" hidden aria-labelledby="weaponpaints-title">
-            <header class="weaponpaints-header">
-                <div><span class="section-eyebrow">Caoren Cup v1.9</span><h2 id="weaponpaints-title">换肤工坊</h2><p>网页与桌面客户端共用；保存后会按回合安全规则应用。</p></div>
-                <button id="weaponpaints-close-btn" type="button" aria-label="关闭换肤工坊">关闭</button>
-            </header>
-            <div id="weaponpaints-health" class="weaponpaints-health" aria-live="polite">正在检查换肤服务...</div>
-            <div id="weaponpaints-admin-bar" class="weaponpaints-admin-bar" hidden>
-                <label>代管玩家<select id="weaponpaints-target"></select></label>
-                <button id="weaponpaints-reset-btn" type="button" class="danger-btn">重置当前玩家</button>
-                <button id="weaponpaints-force-btn" type="button">管理员强刷</button>
-            </div>
-            <div class="weaponpaints-team-bar" role="tablist" aria-label="阵营配置">
-                <button type="button" class="active" data-wp-team="3">CT 配置</button>
-                <button type="button" data-wp-team="2">T 配置</button>
-                <button id="weaponpaints-copy-btn" type="button">复制到 T</button>
-            </div>
-            <div class="weaponpaints-layout">
-                <nav id="weaponpaints-categories" class="weaponpaints-categories" aria-label="换肤分类"></nav>
-                <main class="weaponpaints-browser">
-                    <div class="weaponpaints-search-row"><input id="weaponpaints-search" type="search" placeholder="搜索中文名、英文名或 ID"><button id="weaponpaints-search-btn" type="button">搜索</button></div>
-                    <div id="weaponpaints-grid" class="weaponpaints-grid" aria-live="polite"></div>
-                    <button id="weaponpaints-more-btn" type="button" hidden>加载更多</button>
-                </main>
-                <aside id="weaponpaints-editor" class="weaponpaints-editor"><p class="muted-line">选择枪皮或刀皮后，可在这里调整高级参数。</p></aside>
-            </div>
-            <div id="weaponpaints-notice" class="weaponpaints-notice" aria-live="polite"></div>
-        </section>
         <div id="admin-controls" class="lobby-workspace" style="display:none;">
             <section id="flow-undo-safety-bar" class="flow-undo-safety-bar" aria-live="polite" hidden>
                 <div class="flow-undo-summary">
@@ -727,6 +703,58 @@
         </div>
     </div>
 
+    <section id="weaponpaints-panel" class="weaponpaints-panel panel" hidden aria-labelledby="weaponpaints-title">
+        <header class="weaponpaints-header">
+            <div><span class="section-eyebrow">Caoren Cup v1.9</span><h2 id="weaponpaints-title">换肤工坊</h2><p>网页与桌面客户端共用；保存后会按回合安全规则应用。</p></div>
+            <button id="weaponpaints-close-btn" type="button" aria-label="关闭换肤工坊">关闭</button>
+        </header>
+        <div id="weaponpaints-health" class="weaponpaints-health" aria-live="polite">正在检查换肤服务...</div>
+        <div id="weaponpaints-admin-bar" class="weaponpaints-admin-bar" hidden>
+            <label>代管玩家<select id="weaponpaints-target"></select></label>
+            <button id="weaponpaints-reset-btn" type="button" class="danger-btn">重置当前玩家</button>
+            <button id="weaponpaints-force-btn" type="button">管理员强刷</button>
+        </div>
+        <div class="weaponpaints-team-bar" role="tablist" aria-label="阵营配置">
+            <button type="button" class="active" data-wp-team="3">CT 配置</button>
+            <button type="button" data-wp-team="2">T 配置</button>
+            <button id="weaponpaints-reset-team-btn" class="danger-btn weaponpaints-reset-team-btn" type="button">清空当前 CT 配置</button>
+        </div>
+        <div class="weaponpaints-layout">
+            <nav id="weaponpaints-categories" class="weaponpaints-categories" aria-label="换肤分类"></nav>
+            <main class="weaponpaints-browser">
+                <div class="weaponpaints-search-row"><input id="weaponpaints-search" type="search" placeholder="搜索当前阵营的武器、涂装名称或 ID"><button id="weaponpaints-search-btn" type="button">搜索</button></div>
+                <div id="weaponpaints-grid" class="weaponpaints-grid" aria-live="polite"></div>
+                <button id="weaponpaints-more-btn" type="button" hidden>加载更多</button>
+            </main>
+            <aside id="weaponpaints-editor" class="weaponpaints-editor"><p class="muted-line">选择枪皮或刀皮后，可在这里调整高级参数。</p></aside>
+        </div>
+        <div id="weaponpaints-notice" class="weaponpaints-toast" aria-live="polite"></div>
+        <div id="weaponpaints-unsaved-dialog" class="weaponpaints-unsaved-dialog" hidden>
+            <section role="dialog" aria-modal="true" aria-labelledby="weaponpaints-unsaved-title">
+                <h3 id="weaponpaints-unsaved-title">当前修改尚未保存</h3>
+                <p id="weaponpaints-unsaved-description">继续操作会丢失当前武器或装饰配置的修改。</p>
+                <p id="weaponpaints-unsaved-error" class="weaponpaints-dialog-error" aria-live="polite"></p>
+                <div class="weaponpaints-dialog-actions">
+                    <button id="weaponpaints-unsaved-save" class="primary-btn" type="button">保存并继续</button>
+                    <button id="weaponpaints-unsaved-discard" type="button">放弃更改</button>
+                    <button id="weaponpaints-unsaved-cancel" type="button">返回编辑</button>
+                </div>
+            </section>
+        </div>
+        <div id="weaponpaints-reset-team-dialog" class="weaponpaints-unsaved-dialog" hidden>
+            <section role="dialog" aria-modal="true" aria-labelledby="weaponpaints-reset-team-title">
+                <h3 id="weaponpaints-reset-team-title">确认清空当前阵营配置？</h3>
+                <p id="weaponpaints-reset-team-description"></p>
+                <p>枪皮、刀具、手套、探员、音乐盒、徽章、印花和挂件都会恢复默认；另一阵营不受影响。</p>
+                <p id="weaponpaints-reset-team-error" class="weaponpaints-dialog-error" aria-live="polite"></p>
+                <div class="weaponpaints-dialog-actions">
+                    <button id="weaponpaints-reset-team-confirm" class="danger-btn" type="button">确认清空</button>
+                    <button id="weaponpaints-reset-team-cancel" type="button">取消</button>
+                </div>
+            </section>
+        </div>
+    </section>
+
     <div id="update-announcement-backdrop" class="update-announcement-backdrop" hidden></div>
     <aside id="update-announcement-drawer" class="update-announcement-drawer" role="dialog" aria-modal="true" aria-labelledby="update-announcement-drawer-title" hidden>
         <div class="update-announcement-drawer-header">
@@ -757,8 +785,9 @@
 <!-- PHASE2_SAFE_ADMIN_VISIBILITY_V3_END -->
 
 
-<script src="/js/access-admin.js?v=1.9.1"></script>
-<script src="/js/player-center.js?v=1.9.1"></script>
-<script src="/js/weaponpaints-app.js?v=1.9.1"></script>
+<script src="/js/access-admin.js?v=1.9.2"></script>
+<script src="/js/player-center.js?v=1.9.2-qol2"></script>
+<script src="/js/weaponpaints-draft.js?v=1.9.2-qol2"></script>
+<script src="/js/weaponpaints-app.js?v=1.9.2-qol2"></script>
 </body>
 </html>

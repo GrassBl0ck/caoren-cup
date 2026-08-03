@@ -3530,6 +3530,36 @@ body[data-theme="dark"] .danger-btn {
     margin-top: 16px;
 }
 
+.player-center-match-action {
+    flex: 1 1 100%;
+    min-height: 48px;
+    font-size: 1.02rem;
+    font-weight: 700;
+}
+
+.player-center-match-action.joined {
+    border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+    background: transparent;
+    color: var(--danger);
+}
+
+.player-center-security {
+    margin-top: 18px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface-muted);
+}
+
+.player-center-security > summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.player-center-security .player-center-settings-grid {
+    margin-top: 16px;
+}
+
 @media (max-width: 720px) {
     .player-center-profile-grid,
     .player-center-settings-grid {

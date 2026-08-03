@@ -74,6 +74,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, string> _duelCurrentPrimary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _duelCurrentSecondary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingAwpRequest> _duelAwpRequests = new(StringComparer.Ordinal);
+    private int _duelLoadoutGeneration;
     private readonly HashSet<string> _gameManagedDuelAcceptedMissingSteamIds = new(StringComparer.Ordinal);
     private bool _gameManagedDuelRuntimeActive;
     private bool _gameManagedDuelReconnectReadyAnnounced;
@@ -1588,6 +1589,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ClearDuelEquipmentState()
     {
+        _duelLoadoutGeneration++;
         _duelPendingPrimary.Clear();
         _duelPendingSecondary.Clear();
         _duelCurrentPrimary.Clear();
@@ -2850,48 +2852,80 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         if (!_duelModeEnabled) return;
         var stage = GetDuelStage();
-        Server.NextFrame(() =>
-        {
-            foreach (var player in Utilities.GetPlayers().Where(IsRealPlayer))
+        var inputs = Utilities.GetPlayers()
+            .Where(IsRealPlayer)
+            .Where(player => player.Team == CsTeam.Terrorist || player.Team == CsTeam.CounterTerrorist)
+            .Select(player =>
             {
-                if (player.Team != CsTeam.Terrorist && player.Team != CsTeam.CounterTerrorist) continue;
-                ApplyDuelLoadout(player, stage);
+                var steamId = player.SteamID.ToString();
+                var primary = stage switch
+                {
+                    DuelStage.Pistol => string.Empty,
+                    DuelStage.Rifle => GetPendingOrCurrent(_duelPendingPrimary, _duelCurrentPrimary, steamId, "weapon_ak47"),
+                    DuelStage.Sniper => GetPendingOrCurrentSniper(steamId),
+                    _ => string.Empty
+                };
+                var secondary = stage switch
+                {
+                    DuelStage.Sniper => string.Empty,
+                    _ => GetPendingOrCurrent(_duelPendingSecondary, _duelCurrentSecondary, steamId, "weapon_usp_silencer")
+                };
+                return new DuelPlayerLoadoutInput(steamId, primary, secondary);
+            })
+            .ToList();
+        var plans = DuelRuntimePolicy.BuildSteamBoundLoadoutPlans(stage, inputs);
+        var generation = ++_duelLoadoutGeneration;
+
+        AddTimer(0.2f, () =>
+        {
+            if (_isUnloading || !_duelModeEnabled || generation != _duelLoadoutGeneration) return;
+            foreach (var plan in plans.Values)
+            {
+                ApplyDuelLoadout(plan, stage, generation);
             }
-        });
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
-    private void ApplyDuelLoadout(CCSPlayerController player, DuelStage stage)
+    private void ApplyDuelLoadout(DuelSteamBoundLoadoutPlan plan, DuelStage stage, int generation)
     {
-        var steamId = player.SteamID.ToString();
-        var primary = stage switch
-        {
-            DuelStage.Pistol => string.Empty,
-            DuelStage.Rifle => GetPendingOrCurrent(_duelPendingPrimary, _duelCurrentPrimary, steamId, "weapon_ak47"),
-            DuelStage.Sniper => GetPendingOrCurrentSniper(steamId),
-            _ => string.Empty
-        };
-        var secondary = stage switch
-        {
-            DuelStage.Sniper => string.Empty,
-            _ => GetPendingOrCurrent(_duelPendingSecondary, _duelCurrentSecondary, steamId, "weapon_usp_silencer")
-        };
-        var rule = DuelRuntimePolicy.BuildLoadoutRule(stage, primary, secondary);
+        var player = FindDuelPlayer(plan.SteamId);
+        if (player == null || !player.PawnIsAlive) return;
 
         try
         {
             player.RemoveWeapons();
             player.GiveNamedItem("weapon_knife");
-            if (!string.IsNullOrWhiteSpace(primary)) player.GiveNamedItem(primary);
-            if (!string.IsNullOrWhiteSpace(secondary)) player.GiveNamedItem(secondary);
+            if (!string.IsNullOrWhiteSpace(plan.Primary)) player.GiveNamedItem(plan.Primary);
+            if (!string.IsNullOrWhiteSpace(plan.Secondary)) player.GiveNamedItem(plan.Secondary);
             if (stage == DuelStage.Pistol) GivePlayerKevlar(player);
             else player.GiveNamedItem("item_assaultsuit");
             GiveDuelUtilities(player);
-            QueuePreferredDuelWeapon(player, rule);
+            QueuePreferredDuelWeapon(player, plan.Rule);
+            AddTimer(0.05f, () => LogAppliedDuelLoadout(plan, generation), TimerFlags.STOP_ON_MAPCHANGE);
         }
         catch (Exception ex)
         {
-            Logger.LogDebug(ex, "Failed to apply duel loadout for {SteamId}", steamId);
+            Logger.LogDebug(ex, "Failed to apply duel loadout for {SteamId}", plan.SteamId);
         }
+    }
+
+    private CCSPlayerController? FindDuelPlayer(string steamId) => Utilities.GetPlayers()
+        .Where(IsRealPlayer)
+        .FirstOrDefault(player =>
+            player.SteamID.ToString() == steamId
+            && (player.Team == CsTeam.Terrorist || player.Team == CsTeam.CounterTerrorist));
+
+    private void LogAppliedDuelLoadout(DuelSteamBoundLoadoutPlan plan, int generation)
+    {
+        if (_isUnloading || !_duelModeEnabled || generation != _duelLoadoutGeneration) return;
+        var player = FindDuelPlayer(plan.SteamId);
+        if (player == null) return;
+        Logger.LogDebug(
+            "Duel loadout bound by SteamID {SteamId}: expected primary={Primary} secondary={Secondary}; actual={Actual}",
+            plan.SteamId,
+            plan.Primary,
+            plan.Secondary,
+            string.Join(",", PlayerEquipment(player).Weapons));
     }
 
     private void QueuePreferredDuelWeapon(CCSPlayerController player, DuelLoadoutRule rule)

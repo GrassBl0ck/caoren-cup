@@ -364,7 +364,7 @@ export class LobbyIdentityService {
         const ids = new Set(
             Object.values(this.store.snapshot().memberships)
                 .filter((membership) => membership.sessionId === sessionId && !membership.leftAt && !membership.blockedAt)
-                .map((membership) => strictSteamId(membership.claimedSteamId))
+                .map((membership) => strictSteamId(membership.trustedSteamId || membership.claimedSteamId))
                 .filter((steamId): steamId is string => !!steamId),
         );
         return [...ids].sort();

@@ -1205,7 +1205,9 @@ public sealed class FinalReviewFixTests
         Assert.Contains("AddCommandListener(\"drop\", OnDuelDropCommand, HookMode.Pre)", source);
         Assert.DoesNotContain("RemoveUnexpectedDuelFirearms", source);
         Assert.DoesNotContain("weapon.Remove()", source);
-        Assert.Contains("QueuePreferredDuelWeapon(player, rule)", source);
+        Assert.Contains("QueuePreferredDuelWeapon(player, plan.Rule)", source);
+        Assert.Contains("AddTimer(0.2f", source);
+        Assert.Contains("FindDuelPlayer(plan.SteamId)", source);
         Assert.Contains("AddTimer(0.1f", source);
         Assert.Contains("allowRetry: false", source);
     }
