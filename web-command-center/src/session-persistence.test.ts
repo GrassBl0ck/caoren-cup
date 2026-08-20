@@ -57,6 +57,7 @@ test('schema v2 persists complete pregame flow without undo history or login sec
         session: {
             ...payload.session,
             lobbyAccess: { inviteCode: 'OLD-INVITE', inviteCreatedAt: 1, inviteExpiresAt: 2 },
+            obsoleteDelegatedAuthority: { playerId: 'legacy-player' },
         },
     };
     setSession(createInitialSession());
@@ -66,6 +67,7 @@ test('schema v2 persists complete pregame flow without undo history or login sec
     assert.deepEqual(getSession().bannedMaps, ['Dust II']);
     assert.equal(getSession().mapVote?.votes.admin, 'Inferno');
     assert.equal(Object.prototype.hasOwnProperty.call(getSession(), 'lobbyAccess'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(getSession(), 'obsoleteDelegatedAuthority'), false);
     assert.equal(exportFlowUndoState().entries.length, 0);
 });
 

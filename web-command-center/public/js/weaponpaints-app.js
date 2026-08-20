@@ -800,10 +800,16 @@
         return guardUnsavedChange(() => applyCategory(category));
     }
 
+    function setPromoVisibility(visible) {
+        const promo = el('weaponpaints-open-btn');
+        if (promo) promo.hidden = !visible;
+    }
+
     async function openPanel() {
         const panel = el('weaponpaints-panel');
         panel.hidden = false;
         state.open = true;
+        setPromoVisibility(false);
         try {
             state.status = await emit(WEAPONPAINTS_STATUS);
             renderHealth();
@@ -873,6 +879,7 @@
             clearDraftSelection();
             el('weaponpaints-panel').hidden = true;
             state.open = false;
+            setPromoVisibility(true);
         }));
         el('weaponpaints-target')?.addEventListener('change', async (event) => {
             const select = event.target;

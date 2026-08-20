@@ -7,7 +7,6 @@ import {
     findPlayerById,
     generateBindCode,
     getGamePlayers,
-    getDuelParticipants,
 } from './player-utils';
 import { calculateScores } from './scoring';
 import {
@@ -77,14 +76,12 @@ const isDuelWaitingForPlayers = () => {
         session.liveGameData?.duelWaitingForPlayers === true;
 };
 
-const enableDuelModeForTempAdmin = () => {
+const enableDuelMode = () => {
     const session = getSession();
     session.matchOptions.matchMode = 'duel';
     session.matchOptions.undercoverModeEnabled = false;
     clearUndercoverModeState();
 };
-
-const isAdminOnline = () => Object.values(getSession().players).some(p => p.role === 'Admin' && p.isOnline);
 
 const getReadinessBlockers = () => {
     const session = getSession();
@@ -146,76 +143,6 @@ const appendTaskActionLog = (player: Player, cell: TaskCell, cellId: string, act
     });
 };
 
-const clearDuelTransientState = () => {
-    const session = getSession();
-    session.duelAdminVote = undefined;
-    session.duelAdminRequest = undefined;
-    session.duelTerminateRequest = undefined;
-};
-
-const clearDuelTempAdmin = () => {
-    const session = getSession();
-    session.duelTempAdminId = null;
-    clearDuelTransientState();
-};
-
-const isDuelTempAdmin = (playerId: string | undefined | null): boolean => {
-    const session = getSession();
-    return !!playerId && !!session.duelTempAdminId && session.duelTempAdminId === playerId;
-};
-
-const getEffectiveDuelManager = (): Player | undefined => {
-    const session = getSession();
-    if (session.duelTempAdminId) return findPlayerById(session, session.duelTempAdminId);
-    return Object.values(session.players).find(p => p.role === 'Admin');
-};
-
-const canOperateDuel = (player: Player | undefined): boolean => {
-    if (!player) return false;
-    const session = getSession();
-    if (session.duelTempAdminId) return player.playerId === session.duelTempAdminId;
-    return player.role === 'Admin';
-};
-
-const setDuelTempAdmin = (playerId: string) => {
-    const session = getSession();
-    const player = findPlayerById(session, playerId);
-    if (!player || player.role === 'Admin' || player.role === 'Spectator') return false;
-    session.duelTempAdminId = playerId;
-    session.duelAdminVote = undefined;
-    session.duelAdminRequest = undefined;
-    return true;
-};
-
-const getDuelAdminElectors = (session: ReturnType<typeof getSession>) => {
-    const participants = getDuelParticipants(session);
-    if (participants.length > 0) return participants;
-    return getGamePlayers(session).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
-};
-
-const finishDuelAdminVoteIfPassed = () => {
-    const session = getSession();
-    const vote = session.duelAdminVote;
-    if (!vote) return;
-    const participants = getDuelAdminElectors(session);
-    if (participants.length === 0) return;
-    const allPassed = participants.every(p => vote.votes[p.playerId] === true);
-    if (allPassed) setDuelTempAdmin(vote.candidateId);
-    return allPassed;
-};
-
-const duelManagedActions = new Set([
-    'ADVANCE_PHASE',
-    'ASSIGN_ROSTER_TEAM',
-    'UNASSIGN_ROSTER_TEAM',
-    'SET_ROSTER_LIVE_SIDES',
-    'UPDATE_LIVE_DATA',
-    'RESET_FORMAL_MATCH_COUNTERS',
-    'DUEL_SET_MAP',
-    'DUEL_SET_ROUNDS',
-    'UNDO_FLOW_ACTION',
-]);
-
 export function registerSocketHandlers(io: SocketIOServer, deps: {
     broadcastState: () => void;
     notifyMessage: (msg: string) => void;
@@ -275,7 +202,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
         const oldSession = getSession();
         await lobbyIdentityService.leaveSessionMemberships(oldSession.sessionId);
         clearMatchSocketPermissions(oldSession, reason, true);
-        clearDuelTempAdmin();
         resetSessionWithAdmins();
         notifyMessage(reason);
         broadcastState();
@@ -288,7 +214,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
         const oldSession = getSession();
         await lobbyIdentityService.leaveSessionMemberships(oldSession.sessionId);
         clearMatchSocketPermissions(oldSession, reason);
-        clearDuelTempAdmin();
         terminateAndClear();
         notifyMessage(reason);
         broadcastState();
@@ -421,21 +346,15 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const session = getSession();
             if (!isAuthenticatedActor(data.playerId)) return;
             const admin = findPlayerById(session, data.playerId);
-            const allowDuelManager = duelManagedActions.has(data.action) && canOperateDuel(admin);
-            if (!admin || (admin.role !== 'Admin' && !allowDuelManager)) {
+            if (!admin || admin.role !== 'Admin') {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有管理员才能执行此操作' });
-                return;
-            }
-            if (session.duelTempAdminId && admin.role === 'Admin' && duelManagedActions.has(data.action) && data.action !== 'UNDO_FLOW_ACTION') {
-                socket.emit(WsEvents.NOTIFICATION, { message: '当前已有单挑临时管理员，管理员不能直接操作单挑相关设置。' });
                 return;
             }
 
             if (data.action === 'ADVANCE_PHASE') {
-                const enablesDuelForTempAdmin = !!session.duelTempAdminId && admin.playerId === session.duelTempAdminId;
                 const current = session.phase;
                 let nextPhase: GamePhase | null = null;
-                const duelMode = enablesDuelForTempAdmin || isDuelMode();
+                const duelMode = isDuelMode();
                 switch (current) {
                     case GamePhase.Lobby: nextPhase = duelMode ? GamePhase.PreGameSetup : GamePhase.CaptainSelection; break;
                     case GamePhase.CaptainSelection: nextPhase = GamePhase.Roll; break;
@@ -494,35 +413,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (nextPhase === GamePhase.Scoreboard) {
                     try { calculateScores(session); } catch (err) { console.error('[ADVANCE_PHASE] calculateScores failed:', err); }
                 }
-                const reversibleAdvance = [
-                    GamePhase.Lobby,
-                    GamePhase.CaptainSelection,
-                    GamePhase.Roll,
-                    GamePhase.PlayerDraft,
-                    GamePhase.MapBan,
-                    GamePhase.SidePick,
-                ].includes(current) && nextPhase !== GamePhase.LiveGame;
-                const checkpoint = reversibleAdvance && enablesDuelForTempAdmin
-                    ? pushFlowUndoCheckpoint(session, {
-                        actionType: 'ADVANCE_PHASE',
-                        actorId: admin.playerId,
-                        actorName: admin.name,
-                        summary: `推进阶段：${current} → ${nextPhase}`,
-                    })
-                    : undefined;
-                if (enablesDuelForTempAdmin) enableDuelModeForTempAdmin();
-                const wasScoreboard = String(current) === GamePhase.Scoreboard;
-                const advanced = advancePhase(current, nextPhase, admin.name, admin.playerId, !checkpoint);
+                const advanced = advancePhase(current, nextPhase, admin.name, admin.playerId);
                 if (!advanced) {
-                    if (checkpoint && enablesDuelForTempAdmin) {
-                        const status = getFlowUndoStatus(session, admin);
-                        undoLatestFlowAction(session, admin, {
-                            expectedPhase: session.phase,
-                            expectedHistoryDepth: status.historyDepth,
-                            expectedEntryId: status.latest?.id || '',
-                        });
-                    }
-                    else if (checkpoint) discardFlowUndoCheckpoint(checkpoint.id);
                     socket.emit(WsEvents.NOTIFICATION, { message: '阶段推进未生效，未创建撤销记录。' });
                     return;
                 }
@@ -530,7 +422,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame && !isDuelMode()) {
                     socket.emit(WsEvents.NOTIFICATION, { message: '网页流程已完成。请管理员在游戏内使用 MatchZy .start 开始比赛，网页不会直接重启或开赛。' });
                 }
-                if (wasScoreboard) clearDuelTempAdmin();
                 return;
             }
 
@@ -836,8 +727,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     broadcastState();
                 }
             } else if (data.action === 'DUEL_SET_MAP') {
-                if (!canOperateDuel(admin)) return;
-                enableDuelModeForTempAdmin();
+                enableDuelMode();
                 if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
                 const map = resolveDuelMapConfig(data.payload?.map, data.payload?.workshopId);
                 session.matchOptions.duelMap = map.name;
@@ -847,8 +737,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 notifyMessage(`单挑地图已设置为 ${map.name}`);
                 broadcastState();
             } else if (data.action === 'DUEL_SET_ROUNDS') {
-                if (!canOperateDuel(admin)) return;
-                enableDuelModeForTempAdmin();
+                enableDuelMode();
                 if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
                 const rounds = normalizeDuelRounds(data.payload?.rounds);
                 session.matchOptions.duelRounds = rounds;
@@ -856,8 +745,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 notifyMessage(`单挑回合分配已更新：手枪 ${rounds.pistol} / 步枪 ${rounds.rifle} / 狙击 ${rounds.sniper}`);
                 broadcastState();
             } else if (data.action === 'DUEL_SET_UTILITY_MODE') {
-                if (!canOperateDuel(admin)) return;
-                enableDuelModeForTempAdmin();
+                enableDuelMode();
                 if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
                 const utilityMode = normalizeDuelUtilityMode(data.payload?.utilityMode);
                 session.matchOptions.duelUtilityMode = utilityMode;
@@ -867,32 +755,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                         ? '每回合 4 道具'
                         : `每回合随机 ${utilityMode.replace('random', '')} 道具`;
                 notifyMessage(`单挑道具模式已更新：${label}`);
-                broadcastState();
-            } else if (data.action === 'DUEL_REVOKE_TEMP_ADMIN') {
-                if (admin.role !== 'Admin') return;
-                clearDuelTempAdmin();
-                notifyMessage('管理员已收回单挑临时管理员。');
-                broadcastState();
-            } else if (data.action === 'DUEL_APPROVE_TEMP_ADMIN') {
-                if (admin.role !== 'Admin' || !session.duelAdminRequest) return;
-                if (setDuelTempAdmin(session.duelAdminRequest.candidateId)) {
-                    enableDuelModeForTempAdmin();
-                    const temp = findPlayerById(session, session.duelTempAdminId || '');
-                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
-                    broadcastState();
-                }
-            } else if (data.action === 'DUEL_REJECT_TEMP_ADMIN') {
-                if (admin.role !== 'Admin') return;
-                session.duelAdminRequest = undefined;
-                notifyMessage('管理员已拒绝单挑临时管理员申请。');
-                broadcastState();
-            } else if (data.action === 'DUEL_APPROVE_TERMINATE') {
-                if (admin.role !== 'Admin' || !session.duelTerminateRequest) return;
-                await terminateCurrentGameAndKickAll('管理员同意后强制终止单挑游戏');
-            } else if (data.action === 'DUEL_REJECT_TERMINATE') {
-                if (admin.role !== 'Admin') return;
-                session.duelTerminateRequest = undefined;
-                notifyMessage('管理员已拒绝终止单挑游戏。');
                 broadcastState();
             }
         });
@@ -974,82 +836,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             if (data.side !== 'CT' && data.side !== 'T') return;
             session.sideVote.votes[data.playerId] = data.side;
             broadcastState();
-        });
-
-        socket.on(WsEvents.DUEL_ACTION, async (data: { playerId: string; action: string; payload?: any }) => {
-            const session = getSession();
-            if (!isAuthenticatedActor(data.playerId)) return;
-            const player = findPlayerById(session, data.playerId);
-            if (!player || player.role === 'Admin' || player.role === 'Spectator') return;
-
-            if (data.action === 'REQUEST_TEMP_ADMIN') {
-                if (session.phase !== GamePhase.Lobby) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '只能在大厅阶段申请单挑临时管理员。' });
-                    return;
-                }
-                if (session.duelTempAdminId) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '当前已经有单挑临时管理员。' });
-                    return;
-                }
-                if (isAdminOnline()) {
-                    session.duelAdminRequest = { candidateId: player.playerId, requestedAt: Date.now() };
-                    notifyMessage(`${player.name} 申请成为单挑临时管理员，等待管理员同意。`);
-                    broadcastState();
-                    return;
-                }
-
-                const participants = getDuelAdminElectors(session);
-                if (participants.length === 0) {
-                    const gamePlayers = getGamePlayers(session).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
-                    if (gamePlayers.length > 0 && gamePlayers.every(p => p.playerId === player.playerId)) {
-                        enableDuelModeForTempAdmin();
-                        setDuelTempAdmin(player.playerId);
-                        notifyMessage(`${player.name} 已成为单挑模式临时管理员。`);
-                        broadcastState();
-                        return;
-                    }
-                }
-                if (!participants.some(p => p.playerId === player.playerId)) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '只有当前参赛玩家可以发起单挑临时管理员投票。' });
-                    return;
-                }
-                const timeoutAt = Date.now() + 30000;
-                session.duelAdminVote = {
-                    candidateId: player.playerId,
-                    votes: { [player.playerId]: true },
-                    startedAt: Date.now(),
-                    timeoutAt,
-                };
-                notifyMessage(`${player.name} 发起单挑临时管理员投票，30 秒内需要所有参赛玩家同意。`);
-                setTimeout(() => {
-                    const current = getSession();
-                    if (current.duelAdminVote?.candidateId !== player.playerId || current.duelAdminVote.timeoutAt !== timeoutAt) return;
-                    current.duelAdminVote = undefined;
-                    notifyMessage('单挑临时管理员投票超时，未通过。');
-                    broadcastState();
-                }, 30000);
-                if (finishDuelAdminVoteIfPassed()) {
-                    enableDuelModeForTempAdmin();
-                    const temp = findPlayerById(session, session.duelTempAdminId || '');
-                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
-                }
-                broadcastState();
-            } else if (data.action === 'VOTE_TEMP_ADMIN') {
-                const vote = session.duelAdminVote;
-                if (!vote) return;
-                if (!getDuelAdminElectors(session).some(p => p.playerId === player.playerId)) return;
-                vote.votes[player.playerId] = data.payload?.agree !== false;
-                if (finishDuelAdminVoteIfPassed()) {
-                    enableDuelModeForTempAdmin();
-                    const temp = findPlayerById(session, session.duelTempAdminId || '');
-                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
-                }
-                broadcastState();
-            } else if (data.action === 'REQUEST_TERMINATE') {
-                if (!isDuelMode()) return;
-                if (!isDuelTempAdmin(player.playerId)) return;
-                await terminateCurrentGameAndKickAll('单挑临时管理员强制终止本局游戏');
-            }
         });
 
         socket.on('PLAYER_READY', (data: { playerId: string }) => {
@@ -1208,14 +994,11 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             }
         });
 
-        socket.on('PLAYER_QUIT', async (data: { playerId: string; confirmName: string }) => {
+        socket.on('PLAYER_QUIT', async (data: { playerId: string }) => {
             const session = getSession();
             if (!isAuthenticatedActor(data.playerId)) return;
             const player = findPlayerById(session, data.playerId);
-            if (!player || player.name !== data.confirmName) {
-                socket.emit(WsEvents.NOTIFICATION, { message: '名字不匹配，无法退出' });
-                return;
-            }
+            if (!player) return;
             if (session.phase !== GamePhase.Lobby) {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有在大厅阶段才能退出' });
                 return;

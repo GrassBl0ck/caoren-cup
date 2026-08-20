@@ -7,7 +7,7 @@ import { GamePhase, Player } from './types';
 
 test.afterEach(() => clearFlowUndoHistory());
 
-test('only official or duel temporary administrators receive sanitized undo status', () => {
+test('only official administrators receive sanitized undo status', () => {
     const session = createInitialSession();
     session.phase = GamePhase.PlayerDraft;
     const admin: Player = { playerId: 'admin', name: 'Admin', role: 'Admin', isReady: false };
@@ -15,7 +15,6 @@ test('only official or duel temporary administrators receive sanitized undo stat
     const player: Player = { playerId: 'player', name: 'Player', role: 'Player', isReady: false };
     session.players = { admin, temporary, player };
     session.playerOrder = ['admin', 'temporary', 'player'];
-    session.duelTempAdminId = temporary.playerId;
     pushFlowUndoCheckpoint(session, {
         actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: '安全摘要',
     });
@@ -27,9 +26,8 @@ test('only official or duel temporary administrators receive sanitized undo stat
     assert.equal(publicState.flowUndoStatus, undefined);
     assert.equal(JSON.stringify(publicState).includes('安全摘要'), false);
     assert.equal(adminState.flowUndoStatus.latest.summary, '安全摘要');
-    assert.equal(temporaryState.flowUndoStatus.latest.summary, '安全摘要');
+    assert.equal(temporaryState.flowUndoStatus, undefined);
     assert.equal(adminState.flowUndoStatus.historyDepth, 1);
     assert.equal(adminState.flowUndoStatus.targetPhase, GamePhase.PlayerDraft);
-    assert.equal(temporaryState.flowUndoStatus.canUndo, false);
     assert.equal(JSON.stringify(adminState.flowUndoStatus).includes('snapshot'), false);
 });
