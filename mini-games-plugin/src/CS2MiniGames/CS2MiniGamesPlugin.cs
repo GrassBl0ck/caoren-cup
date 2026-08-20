@@ -14,16 +14,33 @@ namespace CS2MiniGames;
 public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConfig>
 {
     private const string TetrisGameName = "tetris";
+    internal const string MiniGamesListMessage =
+        "[小游戏] 当前可用：俄罗斯方块（/tetris）；贪吃蛇（/snake）。俄罗斯方块帮助：/tetrishelp；排行榜：/toptetris。";
+    internal static readonly TimeSpan ActiveSessionMinimumFrameInterval =
+        TimeSpan.FromMilliseconds(100);
+    internal static readonly TimeSpan ActiveSessionCenterHtmlSendInterval =
+        TimeSpan.FromMilliseconds(31.25);
+
+    internal static FrameSendPolicy CreateActiveSessionFrameSendPolicy() =>
+        new(ActiveSessionMinimumFrameInterval);
+
+    internal static SnakeStyleCenterHtmlPump CreateActiveSessionCenterHtmlPump() =>
+        new(ActiveSessionMinimumFrameInterval);
+
+    internal static FixedRateCenterHtmlGate CreateActiveSessionCenterHtmlSendGate() =>
+        new(ActiveSessionCenterHtmlSendInterval);
 
     private readonly Dictionary<int, RuntimeBinding> _runtimeBindings = [];
     private readonly Stopwatch _clock = new();
+    private readonly IWarmupStateSource _warmupStateSource =
+        new CounterStrikeSharpWarmupStateSource();
     private MiniGameManager? _manager;
     private LeaderboardRepository? _repository;
     private TimeSpan _lastTick;
 
     public override string ModuleName => "CS2 Mini Games";
 
-    public override string ModuleVersion => "0.1.0";
+    public override string ModuleVersion => "0.1.7";
 
     public override string ModuleAuthor => "GrassBl0ck";
 
@@ -85,6 +102,13 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
             return;
         }
 
+        var warmupRejection = TetrisWarmupPolicy.GetStartRejection(ReadWarmupState());
+        if (warmupRejection is not null)
+        {
+            command.ReplyToCommand(warmupRejection);
+            return;
+        }
+
         var steamId = SteamIdentityResolver.ResolveStableSteamId(
             player!.AuthorizedSteamID?.SteamId64,
             player.SteamID);
@@ -116,7 +140,8 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
             new PlayerInputTracker(
                 Config.HorizontalRepeatDelayMs,
                 Config.HorizontalRepeatIntervalMs),
-            new FrameSendPolicy(TimeSpan.FromMilliseconds(750)));
+            CreateActiveSessionCenterHtmlPump(),
+            CreateActiveSessionCenterHtmlSendGate());
         var committed = TetrisStartupCoordinator.TryCommit(
             commit: () =>
             {
@@ -197,8 +222,11 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
 
     [ConsoleCommand("css_minigames", "查看小游戏列表")]
     public void OnMiniGamesCommand(CCSPlayerController? player, CommandInfo command) =>
-        command.ReplyToCommand(
-            "[小游戏] 当前可用：俄罗斯方块（css_tetris）。帮助：css_tetrishelp；排行榜：css_toptetris。");
+        command.ReplyToCommand(MiniGamesListMessage);
+
+    [ConsoleCommand("css_mini", "查看小游戏列表（简短别名）")]
+    public void OnMiniCommand(CCSPlayerController? player, CommandInfo command) =>
+        OnMiniGamesCommand(player, command);
 
     private TetrisGameOptions CreateGameOptions() =>
         new(
@@ -234,6 +262,32 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
             return;
         }
 
+        var warmupState = ReadWarmupState();
+        var slotsToClose = TetrisWarmupPolicy.GetSlotsToClose(
+            warmupState,
+            _runtimeBindings.Keys);
+        PlayerSessionCleanup.CloseEach(
+            slotsToClose,
+            beforeClose: slot =>
+            {
+                if (_runtimeBindings.TryGetValue(slot, out var binding) &&
+                    binding.Controller.IsValid)
+                {
+                    binding.Controller.PrintToChat(TetrisWarmupPolicy.Interrupted);
+                }
+            },
+            close: slot => _manager.Close(slot),
+            reportWarning: (slot, error) =>
+                Logger.LogWarning(
+                    error,
+                    "关闭玩家槽位 {Slot} 的暖身中断会话时发生错误。",
+                    slot));
+
+        if (slotsToClose.Count > 0)
+        {
+            return;
+        }
+
         var now = _clock.Elapsed;
         var elapsed = now - _lastTick;
         _lastTick = now;
@@ -255,6 +309,26 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
                     continue;
                 }
 
+                if (binding.CenterHtmlSendGate.ShouldSend(now))
+                {
+                    var frame = binding.CenterHtmlPump.Tick(
+                        session.Revision,
+                        now,
+                        session.Render,
+                        session.CenterHtmlDurationSeconds);
+                    CenterHtmlFrameScheduler.Queue(
+                        scheduleNextFrame: Server.NextFrame,
+                        send: () =>
+                        {
+                            if (!session.IsClosed && player.IsValid)
+                            {
+                                player.PrintToCenterHtml(
+                                    frame.Html,
+                                    frame.DurationSeconds);
+                            }
+                        });
+                }
+
                 var buttons = PlayerButtonSource.Read(player, () => player.Buttons);
                 var actions = binding.Input.Read(buttons, now);
                 if (actions.Contains(MiniGameAction.Exit))
@@ -265,10 +339,6 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
 
                 session.HandleActions(actions);
                 session.Update(elapsed);
-                if (binding.FrameSender.ShouldSend(session.Revision, now))
-                {
-                    player.PrintToCenterHtml(session.Render(), duration: 1);
-                }
             }
             catch (Exception error)
             {
@@ -319,19 +389,30 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
                 DateTimeOffset.UtcNow));
     }
 
-    private void ClosePlayerBinding(int slot)
+    private WarmupState ReadWarmupState()
     {
-        _runtimeBindings.Remove(slot);
-
         try
         {
-            var currentPlayer = Utilities.GetPlayers().FirstOrDefault(player => player.Slot == slot);
-            PlayerMovementGuard.Restore(currentPlayer);
+            return _warmupStateSource.Read();
         }
         catch (Exception error)
         {
-            Logger.LogWarning(error, "恢复玩家槽位 {Slot} 的移动状态时发生错误。", slot);
+            Logger.LogWarning(error, "读取服务器暖身状态时发生错误，将按不可用处理。");
+            return WarmupState.Unavailable;
         }
+    }
+
+    private void ClosePlayerBinding(int slot)
+    {
+        PlayerSessionCleanup.RunOwned(
+            detachOwner: () =>
+                _runtimeBindings.Remove(slot, out var binding)
+                    ? binding.Controller
+                    : null,
+            clearHud: player => player.PrintToCenterHtml(" ", duration: 1),
+            restoreMovement: PlayerMovementGuard.Restore,
+            reportWarning: error =>
+                Logger.LogWarning(error, "清理玩家槽位 {Slot} 的小游戏状态时发生错误。", slot));
     }
 
     private static void PrintControls(CCSPlayerController player)
@@ -344,5 +425,6 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
     private sealed record RuntimeBinding(
         CCSPlayerController Controller,
         PlayerInputTracker Input,
-        FrameSendPolicy FrameSender);
+        SnakeStyleCenterHtmlPump CenterHtmlPump,
+        FixedRateCenterHtmlGate CenterHtmlSendGate);
 }

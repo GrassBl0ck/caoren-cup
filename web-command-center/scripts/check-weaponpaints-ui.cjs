@@ -53,8 +53,8 @@ assert.doesNotMatch(
 );
 assert.match(html, /weaponpaints-app\.js/);
 assert.match(html, /weaponpaints\.css/);
-assert.match(html, /weaponpaints\.css\?v=1\.9\.2-skinpromo1/);
-assert.match(html, /weaponpaints-app\.js\?v=1\.9\.2-skinpromo1/);
+assert.match(html, /weaponpaints\.css\?v=1\.9\.3-skinpromo1/);
+assert.match(html, /weaponpaints-app\.js\?v=1\.9\.3-skinpromo1/);
 for (const category of ['gun', 'knife', 'glove', 'agent', 'music', 'pin', 'keychain']) {
     assert.match(js, new RegExp(`['"]${category}['"]`), `缺少分类 ${category}`);
 }

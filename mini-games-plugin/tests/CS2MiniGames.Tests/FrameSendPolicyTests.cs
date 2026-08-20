@@ -5,23 +5,36 @@ namespace CS2MiniGames.Tests;
 public sealed class FrameSendPolicyTests
 {
     [Fact]
-    public void SendsFirstFrameChangesAndKeepalivesButNotUnchangedTicks()
+    public void UnchangedRevisionNeverResends()
     {
-        var policy = new FrameSendPolicy(TimeSpan.FromMilliseconds(750));
+        var policy = new FrameSendPolicy(TimeSpan.FromMilliseconds(100));
 
-        Assert.True(policy.ShouldSend(revision: 1, TimeSpan.Zero));
-        Assert.False(policy.ShouldSend(revision: 1, TimeSpan.FromMilliseconds(749)));
-        Assert.True(policy.ShouldSend(revision: 1, TimeSpan.FromMilliseconds(750)));
-        Assert.True(policy.ShouldSend(revision: 2, TimeSpan.FromMilliseconds(751)));
-        Assert.False(policy.ShouldSend(revision: 2, TimeSpan.FromMilliseconds(1_500)));
-        Assert.True(policy.ShouldSend(revision: 2, TimeSpan.FromMilliseconds(1_501)));
+        Assert.True(policy.ShouldSend(1, TimeSpan.Zero));
+        Assert.False(policy.ShouldSend(1, TimeSpan.FromMilliseconds(100)));
+        Assert.False(policy.ShouldSend(1, TimeSpan.FromSeconds(30)));
+    }
+
+    [Fact]
+    public void ChangedRevisionsCoalesceUntilTheMinimumInterval()
+    {
+        Assert.Equal(
+            TimeSpan.FromMilliseconds(100),
+            CS2MiniGamesPlugin.ActiveSessionMinimumFrameInterval);
+        var policy = CS2MiniGamesPlugin.CreateActiveSessionFrameSendPolicy();
+
+        Assert.True(policy.ShouldSend(1, TimeSpan.Zero));
+        Assert.False(policy.ShouldSend(2, TimeSpan.FromMilliseconds(40)));
+        Assert.False(policy.ShouldSend(3, TimeSpan.FromMilliseconds(99)));
+        Assert.True(policy.ShouldSend(3, TimeSpan.FromMilliseconds(100)));
+        Assert.False(policy.ShouldSend(3, TimeSpan.FromSeconds(5)));
+        Assert.True(policy.ShouldSend(4, TimeSpan.FromSeconds(5)));
     }
 
     [Fact]
     public void InstancesKeepIndependentSendState()
     {
-        var first = new FrameSendPolicy(TimeSpan.FromMilliseconds(750));
-        var second = new FrameSendPolicy(TimeSpan.FromMilliseconds(750));
+        var first = new FrameSendPolicy(TimeSpan.FromMilliseconds(100));
+        var second = new FrameSendPolicy(TimeSpan.FromMilliseconds(100));
 
         Assert.True(first.ShouldSend(1, TimeSpan.Zero));
         Assert.False(first.ShouldSend(1, TimeSpan.FromMilliseconds(100)));

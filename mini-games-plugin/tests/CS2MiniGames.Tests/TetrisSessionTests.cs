@@ -116,6 +116,21 @@ public sealed class TetrisSessionTests
     }
 
     [Fact]
+    public void UsesSixSecondsDuringPlayAndThirtySecondsAfterGameOver()
+    {
+        var game = CreateGame();
+        var session = CreateSession(game);
+
+        Assert.Equal(6, session.CenterHtmlDurationSeconds);
+
+        MakeNextSpawnGameOver(game);
+        session.Update(TimeSpan.FromMilliseconds(500));
+
+        Assert.True(game.IsGameOver);
+        Assert.Equal(30, session.CenterHtmlDurationSeconds);
+    }
+
+    [Fact]
     public void CrossingIntoGameOverSavesExactlyOnce()
     {
         var game = CreateGame();

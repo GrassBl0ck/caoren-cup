@@ -2,33 +2,42 @@ namespace CS2MiniGames.Framework;
 
 public sealed class FrameSendPolicy
 {
-    private readonly TimeSpan _keepaliveInterval;
+    private readonly TimeSpan _minimumInterval;
     private bool _hasSent;
-    private long _lastRevision;
+    private long _lastSentRevision;
     private TimeSpan _lastSentAt;
 
-    public FrameSendPolicy(TimeSpan keepaliveInterval)
+    public FrameSendPolicy(TimeSpan minimumInterval)
     {
-        if (keepaliveInterval <= TimeSpan.Zero)
+        if (minimumInterval <= TimeSpan.Zero)
         {
-            throw new ArgumentOutOfRangeException(nameof(keepaliveInterval));
+            throw new ArgumentOutOfRangeException(nameof(minimumInterval));
         }
 
-        _keepaliveInterval = keepaliveInterval;
+        _minimumInterval = minimumInterval;
     }
 
     public bool ShouldSend(long revision, TimeSpan now)
     {
-        if (_hasSent &&
-            revision == _lastRevision &&
-            now - _lastSentAt < _keepaliveInterval)
+        if (!_hasSent)
+        {
+            RecordSend(revision, now);
+            return true;
+        }
+
+        if (revision == _lastSentRevision || now - _lastSentAt < _minimumInterval)
         {
             return false;
         }
 
-        _hasSent = true;
-        _lastRevision = revision;
-        _lastSentAt = now;
+        RecordSend(revision, now);
         return true;
+    }
+
+    private void RecordSend(long revision, TimeSpan now)
+    {
+        _hasSent = true;
+        _lastSentRevision = revision;
+        _lastSentAt = now;
     }
 }

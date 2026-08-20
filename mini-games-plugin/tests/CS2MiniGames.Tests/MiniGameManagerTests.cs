@@ -116,6 +116,8 @@ public sealed class MiniGameManagerTests
 
         public long Revision => UpdateCount;
 
+        public int CenterHtmlDurationSeconds => 1;
+
         public int CloseCount { get; private set; }
 
         public int UpdateCount { get; private set; }

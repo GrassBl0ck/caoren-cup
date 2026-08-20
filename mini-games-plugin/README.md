@@ -57,7 +57,10 @@ game/csgo/addons/counterstrikesharp/configs/plugins/CS2MiniGames/CS2MiniGames.js
 | `!tetris` | `css_tetris` | 开始俄罗斯方块 |
 | `!toptetris` | `css_toptetris` | 查看全服 Top 10 和个人最佳成绩 |
 | `!tetrishelp` | `css_tetrishelp` | 查看操作说明 |
-| `!minigames` | `css_minigames` | 查看可用小游戏 |
+| `!minigames` | `css_minigames` | 查看可用小游戏（俄罗斯方块与独立的贪吃蛇插件） |
+| `!mini` | `css_mini` | `!minigames` 的简短别名 |
+
+贪吃蛇继续由独立的 `CS2Snake` 插件提供，使用 `!snake` 启动；`CS2MiniGames` 只在统一列表中显示该入口，不迁移或打包贪吃蛇实现。
 
 ## 俄罗斯方块按键
 
@@ -72,6 +75,10 @@ game/csgo/addons/counterstrikesharp/configs/plugins/CS2MiniGames/CS2MiniGames.js
 | W | Hold（每个方块锁定前只能使用一次） |
 | Tab | 退出小游戏 |
 
-所有真人玩家都可以各自开始游戏，棋盘、速度和方块序列互不影响。玩家游玩期间会被冻结，无法正常移动；退出小游戏后才恢复移动。
+## 显示兼容性
 
-为避免玩家被留在冻结状态，插件会在玩家出生、新回合开始、玩家断开连接、地图结束以及插件卸载或热重载时自动结束相关游戏并清理状态；仍然有效的玩家会恢复移动。
+俄罗斯方块使用标准 10×20 逻辑棋盘，在 CenterHtml 中折叠为左右两个 10×10 区域：左侧是上半区，右侧是下半区。棋盘使用约 12px 的双宽色块，确保两边都能完整显示 10 列；状态栏会提示“左:上 右:下”。
+
+插件最多每 100ms 根据最新游戏状态重新生成画面，并以 32Hz 向活动玩家持续发送缓存画面，避免 CenterHtml 在静止时消失。
+
+只有明确确认服务器不在暖身阶段时才能开始或继续俄罗斯方块。暖身期间输入 `!tetris` 会收到聊天提示，不会冻结玩家；游玩期间若暖身开始或暖身状态无法读取，小游戏会结束并恢复玩家移动。插件不会自动结束或修改服务器暖身。

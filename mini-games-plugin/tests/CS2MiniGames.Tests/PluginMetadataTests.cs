@@ -19,7 +19,7 @@ public sealed class PluginMetadataTests
             .GetValue(plugin);
 
         Assert.Equal("CS2 Mini Games", moduleName);
-        Assert.Equal("0.1.0", moduleVersion);
+        Assert.Equal("0.1.7", moduleVersion);
 
         var commandNames = pluginType
             .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
@@ -35,10 +35,13 @@ public sealed class PluginMetadataTests
             "css_tetris",
             "css_toptetris",
             "css_tetrishelp",
-            "css_minigames"
+            "css_minigames",
+            "css_mini"
         };
 
-        Assert.Equal(4, commandNames.Length);
+        Assert.Equal(5, commandNames.Length);
         Assert.True(commandNames.ToHashSet(StringComparer.Ordinal).SetEquals(expectedCommands));
+        Assert.Contains("/tetris", CS2MiniGamesPlugin.MiniGamesListMessage, StringComparison.Ordinal);
+        Assert.Contains("/snake", CS2MiniGamesPlugin.MiniGamesListMessage, StringComparison.Ordinal);
     }
 }

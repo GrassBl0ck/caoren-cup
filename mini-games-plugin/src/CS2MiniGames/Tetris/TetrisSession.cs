@@ -36,6 +36,8 @@ public sealed class TetrisSession : IMiniGameSession
 
     public long Revision => _game.Revision;
 
+    public int CenterHtmlDurationSeconds => _game.IsGameOver ? 30 : 6;
+
     public void HandleActions(IReadOnlyCollection<MiniGameAction> actions)
     {
         ArgumentNullException.ThrowIfNull(actions);

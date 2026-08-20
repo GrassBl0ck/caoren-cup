@@ -8,6 +8,8 @@ public interface IMiniGameSession
 
     long Revision { get; }
 
+    int CenterHtmlDurationSeconds { get; }
+
     void HandleActions(IReadOnlyCollection<MiniGameAction> actions);
 
     void Update(TimeSpan elapsed);

@@ -9,14 +9,61 @@ public sealed class TetrisRendererTests
     private readonly TetrisRenderer _renderer = new();
 
     [Fact]
-    public void RendersExactlyTwentyVisibleRowsWithTenLargeCellsPerRow()
+    public void RendersTenFoldedRowsWithTwoCompleteTenCellHalvesAtSmallSize()
     {
         var game = CreateGame(TetrominoType.I, TetrominoType.O);
 
-        var rows = _renderer.RenderBoardRows(game);
+        var rows = TetrisRenderer.BuildFoldedRows(game);
+        var htmlRows = _renderer.RenderBoardRows(game);
 
-        Assert.Equal(20, rows.Count);
-        Assert.All(rows, row => Assert.Equal(10, Regex.Matches(row, "<font class='fontSize-l'").Count));
+        Assert.Equal(10, rows.Count);
+        Assert.All(rows, row => Assert.Equal(20, row.Length));
+        Assert.Equal(10, htmlRows.Count);
+        Assert.All(htmlRows, row => Assert.Contains("fontSize-s", row));
+        Assert.All(htmlRows, row => Assert.Contains("│", row));
+    }
+
+    [Fact]
+    public void FoldMapsVisibleRowsZeroAndTenOntoSeparateHalves()
+    {
+        var game = CreateGame(TetrominoType.I, TetrominoType.O);
+        game.Board.Lock(new ActivePiece(TetrominoType.J, RotationState.Spawn, 0, 2));
+        game.Board.Lock(new ActivePiece(TetrominoType.L, RotationState.Spawn, 0, 12));
+
+        var rows = TetrisRenderer.BuildFoldedRows(game);
+
+        Assert.Contains(rows[0].Take(10), cell => cell.Color == "DodgerBlue");
+        Assert.DoesNotContain(rows[0].Take(10), cell => cell.Color == "Orange");
+        Assert.Contains(rows[0].Skip(10), cell => cell.Color == "Orange");
+        Assert.DoesNotContain(rows[0].Skip(10), cell => cell.Color == "DodgerBlue");
+    }
+
+    [Fact]
+    public void BlockCrossingFoldBoundaryAppearsAtLeftBottomAndRightTop()
+    {
+        var game = CreateGame(TetrominoType.I, TetrominoType.O);
+        game.Board.Lock(new ActivePiece(TetrominoType.O, RotationState.Spawn, 3, 11));
+
+        var rows = TetrisRenderer.BuildFoldedRows(game);
+
+        Assert.Contains(rows[9].Take(10), cell => cell.Color == "Gold");
+        Assert.Contains(rows[0].Skip(10), cell => cell.Color == "Gold");
+    }
+
+    [Fact]
+    public void ConsecutiveIdenticalCellsShareOneFontTag()
+    {
+        var cells = new[]
+        {
+            new TetrisRenderer.RenderedCell("DimGray", "██"),
+            new TetrisRenderer.RenderedCell("DimGray", "██"),
+            new TetrisRenderer.RenderedCell("Red", "██")
+        };
+
+        var html = TetrisRenderer.RenderRuns(cells);
+
+        Assert.Equal(2, Regex.Matches(html, "<font ").Count);
+        Assert.Contains("████", html);
     }
 
     [Fact]
@@ -76,7 +123,7 @@ public sealed class TetrisRendererTests
         game.SoftDrop();
         game.Board.Lock(new ActivePiece(TetrominoType.T, RotationState.Spawn, 3, 2));
 
-        var rows = _renderer.RenderBoardRows(game);
+        var rows = TetrisRenderer.BuildFoldedRows(game);
 
         Assert.Equal("Gold", GetCellColor(rows, visibleY: 0, x: 4));
         Assert.Equal("Gold", GetCellColor(rows, visibleY: 1, x: 4));
@@ -89,7 +136,7 @@ public sealed class TetrisRendererTests
         var game = CreateGame(TetrominoType.I, TetrominoType.T);
         game.Board.Lock(new ActivePiece(TetrominoType.O, RotationState.Spawn, 3, 20));
 
-        var rows = _renderer.RenderBoardRows(game);
+        var rows = TetrisRenderer.BuildFoldedRows(game);
 
         Assert.Equal("Gold", GetCellColor(rows, visibleY: 18, x: 4));
         Assert.Equal("Gold", GetCellColor(rows, visibleY: 19, x: 5));
@@ -116,24 +163,34 @@ public sealed class TetrisRendererTests
     }
 
     [Fact]
-    public void RenderIncludesTitleStatusAndSmallHoldAndNextPreviews()
+    public void RenderUsesOneCompactStatusLineWithColoredHoldAndNextLabels()
     {
         var game = CreateGame(TetrominoType.T, TetrominoType.I, TetrominoType.O);
         game.Hold();
 
         var html = _renderer.Render(game);
 
-        Assert.Contains("TETRIS", html);
-        Assert.Contains("Score: 0", html);
-        Assert.Contains("Level: 1", html);
-        Assert.Contains("Lines: 0", html);
-        Assert.Contains("Hold:　Next:", html);
-        Assert.Contains("<font class='fontSize-s' color='MediumPurple'>", html);
-        Assert.Contains("<font class='fontSize-s' color='Gold'>", html);
+        Assert.Contains("<b>TETRIS</b> | S:0 | Lv:1 | L:0", html);
+        Assert.Contains("H:<font color='MediumPurple'>T</font>", html);
+        Assert.Contains("N:<font color='Gold'>O</font>", html);
+        Assert.Contains("左:上 右:下", html);
+        Assert.Equal(10, Regex.Matches(html, "<br>").Count);
+        Assert.DoesNotContain("Hold:　Next:", html);
     }
 
     [Fact]
-    public void GameOverRenderIncludesRestartAndExitHints()
+    public void RenderShowsDashBeforeTheFirstHold()
+    {
+        var game = CreateGame(TetrominoType.I, TetrominoType.O);
+
+        var html = _renderer.Render(game);
+
+        Assert.Contains("H:-", html);
+        Assert.Contains("N:<font color='Gold'>O</font>", html);
+    }
+
+    [Fact]
+    public void GameOverReplacesRatherThanAppendsTheNormalStatus()
     {
         var game = CreateGame(TetrominoType.I, TetrominoType.O, TetrominoType.T);
         SoftDropToFloor(game);
@@ -142,16 +199,19 @@ public sealed class TetrisRendererTests
 
         var html = _renderer.Render(game);
 
-        Assert.True(game.IsGameOver);
-        Assert.Contains("Game Over", html);
-        Assert.Contains("[R]", html);
-        Assert.Contains("[Tab]", html);
+        Assert.Contains("GAME OVER", html);
+        Assert.Contains("S:", html);
+        Assert.DoesNotContain("<b>TETRIS</b>", html);
+        Assert.Equal(10, Regex.Matches(html, "<br>").Count);
     }
 
-    private static string GetCellColor(IReadOnlyList<string> rows, int visibleY, int x)
+    private static string GetCellColor(
+        IReadOnlyList<TetrisRenderer.RenderedCell[]> rows,
+        int visibleY,
+        int x)
     {
-        var matches = Regex.Matches(rows[visibleY], "color='([^']+)'");
-        return matches[x].Groups[1].Value;
+        var foldedX = x + (visibleY >= 10 ? TetrisBoard.Width : 0);
+        return rows[visibleY % 10][foldedX].Color;
     }
 
     private static TetrisGameState CreateGame(params TetrominoType[] pieces) =>
