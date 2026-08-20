@@ -40,7 +40,7 @@
     <link rel="stylesheet" href="/css/update-announcements.css">
     <link rel="stylesheet" href="/css/caoren-mod-panel.css">
     <link rel="stylesheet" href="/css/caoren-motion.css">
-    <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9.2-qol2">
+    <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9.2-skinpromo1">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
 <body class="caoren-modifiers-disabled">
@@ -124,7 +124,7 @@
         <section id="player-center-home" class="panel player-center-home" hidden aria-labelledby="player-center-home-title">
             <div class="login-panel-header">
                 <div><span class="section-eyebrow">账号会话</span><h2 id="player-center-home-title">玩家中心</h2></div>
-                <button id="player-center-logout-btn" type="button">退出</button>
+                <button id="player-center-logout-btn" type="button">退出账号</button>
             </div>
             <div class="player-center-profile-grid">
                 <div><span>Steam 昵称</span><strong id="player-center-steam-nickname">—</strong></div>
@@ -133,8 +133,6 @@
             </div>
             <div class="player-center-actions">
                 <button id="player-center-join-btn" class="player-center-match-action primary-btn" type="button">加入本场比赛</button>
-                <button id="player-center-announcements-btn" type="button">更新公告</button>
-                <button id="player-center-weaponpaints-btn" type="button">换肤工坊</button>
                 <button id="player-center-forget-device-btn" type="button" hidden>退出账号并忘记此设备</button>
             </div>
             <details id="player-center-security" class="player-center-security">
@@ -168,6 +166,16 @@
         </section>
     </div>
     <div id="lobby-area" style="display:none;">
+        <button id="weaponpaints-open-btn" class="weaponpaints-promo" type="button" aria-label="打开换肤中心" aria-controls="weaponpaints-panel">
+            <span class="weaponpaints-promo-slides" aria-hidden="true">
+                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_knife_butterfly-38.png" alt="" decoding="async">
+                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_awp-344.png" alt="" decoding="async">
+                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_ak47-180.png" alt="" decoding="async">
+                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_m4a1-309.png" alt="" decoding="async">
+                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_knife_karambit-415.png" alt="" decoding="async">
+            </span>
+            <span class="weaponpaints-promo-label">换肤中心</span>
+        </button>
         <div class="toolbar-row panel identity-toolbar">
             <div id="player-summary" class="player-session-summary">
                 <div class="status-chip">当前身份</div>
@@ -182,7 +190,6 @@
                 <div id="lobby-phase-summary" class="lobby-phase-summary">当前阶段读取中</div>
                 <button id="v1333-lobby-connect-server-btn" type="button" disabled>连接 CS2</button>
                 <button id="device-logout-btn" type="button" style="display:none;">退出设备登录</button>
-                <button id="weaponpaints-open-btn" type="button">我的换肤</button>
                 <div id="timer-display"></div><div id="lobby-notification-display" style="display:none;"></div>
             </div>
         </div>
@@ -695,10 +702,8 @@
     <!-- 退出确认弹窗 -->
     <div id="quit-modal" class="modal">
         <div class="modal-content" style="max-width:400px;">
-            <p>确定要退出游戏吗？请输入你的昵称确认：</p>
-            <input id="quit-name-input" type="text" placeholder="你的昵称" style="width:80%;" />
-            <br><br>
-            <button onclick="doQuit()" style="background:#f44336; color:#fff;">确认退出</button>
+            <p>确定要取消本场参赛吗？账号仍保持登录。</p>
+            <button onclick="doQuit()" style="background:#f44336; color:#fff;">确认取消参赛</button>
             <button onclick="closeQuit()">取消</button>
         </div>
     </div>
@@ -766,7 +771,7 @@
     </aside>
 
     <script src="/js/update-announcement-read-state.js"></script>
-    <script src="/js/lobby-app.js?v=ui-cleanup-20260603"></script>
+    <script src="/js/lobby-app.js?v=1.9.2-quitconfirm1"></script>
     <script src="/js/update-announcement-public.js"></script>
     <script src="/js/update-announcement-admin-mutation-state.js"></script>
     <script src="/js/update-announcement-admin.js"></script>
@@ -785,9 +790,9 @@
 <!-- PHASE2_SAFE_ADMIN_VISIBILITY_V3_END -->
 
 
-<script src="/js/access-admin.js?v=1.9.2"></script>
-<script src="/js/player-center.js?v=1.9.2-qol2"></script>
+<script src="/js/access-admin.js?v=1.9.2-lobbyconnect1"></script>
+<script src="/js/player-center.js?v=1.9.2-exitcopy1"></script>
 <script src="/js/weaponpaints-draft.js?v=1.9.2-qol2"></script>
-<script src="/js/weaponpaints-app.js?v=1.9.2-qol2"></script>
+<script src="/js/weaponpaints-app.js?v=1.9.2-skinpromo1"></script>
 </body>
 </html>

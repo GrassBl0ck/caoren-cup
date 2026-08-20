@@ -30,7 +30,7 @@ for (const token of [
   '撤销：${status.latest.summary}',
   '当前阶段之后产生的流程操作将被丢弃',
   '进入正式比赛后将无法撤销赛前流程',
-  'data-flow-undo-action="duel"',
+  "document.querySelectorAll('[data-flow-undo-action]')",
 ]) {
   if (!js.includes(token)) throw new Error(`missing flow undo browser behavior: ${token}`);
 }

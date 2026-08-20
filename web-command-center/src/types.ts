@@ -184,18 +184,6 @@ export interface DuelMapConfig {
     command: string;
 }
 
-export interface DuelAdminVoteState {
-    candidateId: string;
-    votes: Record<string, boolean>;
-    startedAt: number;
-    timeoutAt: number;
-}
-
-export interface DuelAdminRequestState {
-    candidateId: string;
-    requestedAt: number;
-}
-
 export interface PluginLivePlayer {
     steamId: string;
     name: string;
@@ -286,10 +274,6 @@ export interface GameSession {
     timerEndAt: number | null;
     timerPhase: GamePhase | null;
     adminLock: AdminLock;
-    duelTempAdminId?: string | null;
-    duelAdminVote?: DuelAdminVoteState;
-    duelAdminRequest?: DuelAdminRequestState;
-    duelTerminateRequest?: DuelAdminRequestState;
     liveGameData?: LiveGameData;
     rollTimeout?: any;
     createdAt: number;
@@ -305,7 +289,6 @@ export enum WsEvents {
     VOTE = 'VOTE',
     DRAFT_PICK = 'DRAFT_PICK',
     SIDE_PICK = 'SIDE_PICK',
-    DUEL_ACTION = 'DUEL_ACTION',
     TASK_ACTION = 'TASK_ACTION',
     SUBMIT_QUESTION = 'SUBMIT_QUESTION',
     UNDERCOVER_TASK_ACK = 'UNDERCOVER_TASK_ACK',

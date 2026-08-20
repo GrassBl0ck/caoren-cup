@@ -119,7 +119,7 @@ export const sanitizeGameStateForViewer = (session: GameSession, viewerId?: stri
         };
     }
     const state = sanitizeForPublic(session, viewerId);
-    if (viewer && (viewer.role === 'Admin' || session.duelTempAdminId === viewer.playerId)) {
+    if (viewer?.role === 'Admin') {
         state.flowUndoStatus = getFlowUndoStatus(session, viewer);
     }
     return state;

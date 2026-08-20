@@ -22,19 +22,23 @@
   async function refreshServerStatus() {
     var status = byId('v1333-server-status');
     var dot = byId('v1333-server-dot');
-    var button = byId('v1333-connect-server-btn');
+    var buttons = [byId('v1333-connect-server-btn'), byId('v1333-lobby-connect-server-btn')];
     try {
       var response = await fetch('/api/public/server-status', { credentials: 'same-origin' });
       latestServerStatus = await response.json();
       if (!response.ok || !latestServerStatus.success) throw new Error('status_unavailable');
       if (status) status.textContent = latestServerStatus.pluginReady ? '服务器在线' : '服务器暂未就绪';
       if (dot) dot.classList.toggle('is-online', latestServerStatus.pluginReady === true);
-      if (button) button.disabled = !latestServerStatus.joinAllowed;
+      buttons.forEach(function (button) {
+        if (button) button.disabled = !latestServerStatus.joinAllowed;
+      });
     } catch (_error) {
       latestServerStatus = null;
       if (status) status.textContent = '服务器状态读取失败';
       if (dot) dot.classList.remove('is-online');
-      if (button) button.disabled = true;
+      buttons.forEach(function (button) {
+        if (button) button.disabled = true;
+      });
     }
   }
 
@@ -87,7 +91,9 @@
   Object.assign(window, { refreshIdentityAdmin, revokeIdentityDevice, revokeIdentityTokens });
 
   function boot() {
-    byId('v1333-connect-server-btn')?.addEventListener('click', connectServer);
+    [byId('v1333-connect-server-btn'), byId('v1333-lobby-connect-server-btn')].forEach(function (button) {
+      button?.addEventListener('click', connectServer);
+    });
     byId('admin-login-btn')?.addEventListener('click', loginAdmin);
     byId('admin-login-password')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') loginAdmin(); });
     var loginSocket = socket();

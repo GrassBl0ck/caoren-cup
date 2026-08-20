@@ -4,11 +4,20 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'player-center.js'), 'utf8');
+const lobbyJs = fs.readFileSync(path.join(root, 'public', 'js', 'lobby-app.js'), 'utf8');
+const socketHandlers = fs.readFileSync(path.join(root, 'src', 'socket-handlers.ts'), 'utf8');
+const accessAdminJs = fs.readFileSync(path.join(root, 'public', 'js', 'access-admin.js'), 'utf8');
 const audioJs = fs.readFileSync(path.join(root, 'public', 'js', 'caoren-audio-controller.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 
-if (!html.includes('/js/player-center.js?v=1.9.2-qol2')) {
-  throw new Error('player-center cache version must change with the QoL update');
+if (!html.includes('/js/player-center.js?v=1.9.2-exitcopy1')) {
+  throw new Error('player-center cache version must change with the exit-label update');
+}
+if (!html.includes('/js/lobby-app.js?v=1.9.2-quitconfirm1')) {
+  throw new Error('lobby script cache version must change with the quit-confirmation update');
+}
+if (!html.includes('/js/access-admin.js?v=1.9.2-lobbyconnect1')) {
+  throw new Error('connect-server script cache version must change with the lobby button fix');
 }
 
 for (const id of [
@@ -22,10 +31,41 @@ for (const id of [
   'player-center-steam-nickname', 'player-center-account-name', 'player-center-match-status',
   'player-center-join-btn', 'player-center-change-login-name', 'player-center-change-login-btn',
   'player-center-change-password', 'player-center-change-password-confirm',
-  'player-center-change-password-btn', 'player-center-logout-btn', 'player-center-weaponpaints-btn',
+  'player-center-change-password-btn', 'player-center-logout-btn',
   'player-center-forget-device-btn', 'admin-login-password', 'admin-login-btn',
 ]) {
   if (!html.includes(`id="${id}"`)) throw new Error(`missing player-center UI id: ${id}`);
+}
+
+if (html.includes('id="player-center-weaponpaints-btn"')) {
+  throw new Error('player-center legacy weaponpaints button should be removed');
+}
+if (html.includes('id="player-center-announcements-btn"') || js.includes("byId('player-center-announcements-btn')")) {
+  throw new Error('player-center duplicate update-announcement entry should be removed');
+}
+if (!/id="player-center-logout-btn"[^>]*>退出账号<\/button>/.test(html)) {
+  throw new Error('player-center account logout must be labeled explicitly');
+}
+if (!js.includes("currentMatchState.joined ? '取消本场参赛' : '加入本场比赛'")) {
+  throw new Error('player-center match leave action must be distinguished from account logout');
+}
+for (const text of ['正在取消本场参赛...', '已取消本场参赛，玩家中心账号仍保持登录。']) {
+  if (!js.includes(text)) throw new Error(`missing clarified match-leave feedback: ${text}`);
+}
+if (html.includes('id="quit-name-input"') || html.includes('请输入你的昵称确认')) {
+  throw new Error('match-leave confirmation must not require nickname input');
+}
+for (const text of ['确定要取消本场参赛吗？', '账号仍保持登录。', '确认取消参赛']) {
+  if (!html.includes(text)) throw new Error(`missing simplified match-leave confirmation copy: ${text}`);
+}
+if (!lobbyJs.includes("ws.emit('PLAYER_QUIT', { playerId: myPlayerId });") || lobbyJs.includes('confirmName')) {
+  throw new Error('lobby match-leave request must rely on the authenticated player without a nickname');
+}
+const quitHandlerStart = socketHandlers.indexOf("socket.on('PLAYER_QUIT'");
+const quitHandlerEnd = socketHandlers.indexOf("socket.on('ADMIN_ACTION'", quitHandlerStart);
+const quitHandler = socketHandlers.slice(quitHandlerStart, quitHandlerEnd);
+if (quitHandlerStart < 0 || quitHandler.includes('confirmName') || quitHandler.includes('名字不匹配')) {
+  throw new Error('server match-leave handler must not require a nickname confirmation');
 }
 
 for (const text of ['玩家中心', '账号密码登录', '!cclogin', '加入本场比赛', '管理员登录']) {
@@ -78,6 +118,12 @@ if (!js.includes('window.__caorenCupLobbySocket || window.__caorenCupSocket || w
 }
 if (!audioJs.includes('window.__caorenCupLobbySocket || window.__caorenCupSocket || window.io()')) {
   throw new Error('audio controller must reuse the lobby socket instead of replacing it');
+}
+for (const id of ['v1333-connect-server-btn', 'v1333-lobby-connect-server-btn']) {
+  const referenceCount = accessAdminJs.split(`byId('${id}')`).length - 1;
+  if (referenceCount < 2) {
+    throw new Error(`connect-server status and click binding must both cover button: ${id}`);
+  }
 }
 
 console.log('Player-center UI contract checks passed.');
