@@ -199,6 +199,8 @@ window.__caorenCupLobbySocket = ws;
                 PlayerDraft: '队长选人',
                 MapBan: '地图 Ban/Pick',
                 SidePick: '选边',
+                AbilityBan: '异能禁用',
+                AbilityDraft: '异能选角',
                 PreGameSetup: '赛前配置',
                 LiveGame: '比赛中',
                 MidGameQA: '侦探问答',
@@ -305,6 +307,11 @@ window.__caorenCupLobbySocket = ws;
             if (player?.role === 'Admin' || player?.role === 'Spectator') return '<span class="tag tag-gray">-</span>';
             if (state?.phase === 'LiveGame') return '<span class="tag tag-green">比赛中</span>';
             return '<span class="tag tag-orange">等待 .start</span>';
+        }
+
+        function renderAbilityPluginSyncTag(player) {
+            if (player?.role === 'Admin' || player?.role === 'Spectator') return '<span class="tag tag-gray">-</span>';
+            return '<span class="tag tag-orange">插件未同步</span>';
         }
 
         function renderUndercoverAckControl(player) {
@@ -486,6 +493,115 @@ window.__caorenCupLobbySocket = ws;
             }, delayMs);
         }
 
+        function calculateLobbyAbilityBanSafeLimit(state) {
+            const players = Object.values(state?.players || window._currentGameState?.players || {}).filter(player => player.role !== 'Admin' && player.role !== 'Spectator');
+            const catalog = Array.isArray(state?.abilityCatalog)
+                ? state.abilityCatalog
+                : (Array.isArray(window._currentGameState?.abilityCatalog) ? window._currentGameState.abilityCatalog : []);
+            const abilityCount = catalog.length;
+            if (abilityCount === 0) return 0;
+            const normalAbilityCount = catalog.filter(ability => ability.globalUnique !== true).length;
+            const teamSizeA = Math.ceil(players.length / 2);
+            const teamSizeB = Math.floor(players.length / 2);
+            if (teamSizeA === 0) return abilityCount;
+            if (teamSizeB === 0) return Math.max(0, abilityCount - teamSizeA);
+            return Math.max(0, Math.floor((normalAbilityCount - teamSizeA) / 2));
+        }
+
+        function shouldShowAbilityPluginSyncWarning(state) {
+            const options = state?.matchOptions || {};
+            if (state?.phase !== 'PreGameSetup' || options.matchMode === 'duel' || options.abilityModeEnabled !== true) return false;
+            const matchPlayers = Object.values(state?.players || {})
+                .filter(player => player.role !== 'Admin' && player.role !== 'Spectator' && (player.rosterTeam === 'A' || player.rosterTeam === 'B'));
+            if (matchPlayers.length === 0) return false;
+            const assignments = Array.isArray(state?.abilityAssignments) ? state.abilityAssignments : [];
+            return matchPlayers.every(player => assignments.some(assignment => (
+                assignment?.playerId === player.playerId
+                && assignment?.team === player.rosterTeam
+                && typeof assignment?.abilityId === 'string'
+                && assignment.abilityId.trim().length > 0
+            )));
+        }
+
+        function resolveAbilityPreGameRenderDecision(state) {
+            const formalMatchStartBlocked = state?.abilityPhaseOnePolicy?.formalMatchStartBlocked;
+            const showPluginSyncWarning = typeof formalMatchStartBlocked === 'boolean'
+                ? formalMatchStartBlocked
+                : shouldShowAbilityPluginSyncWarning(state);
+            return {
+                showPluginSyncWarning,
+                showMatchStartGuidance: !showPluginSyncWarning,
+                formalMatchStartBlocked: showPluginSyncWarning,
+                formalMatchStartMessage: state?.abilityPhaseOnePolicy?.formalMatchStartMessage
+                    || '职业配置仅在网页完成，游戏插件尚未同步，阶段 1 不能正式开赛。请先终止本局，或返回大厅关闭异能模式后重新开始。',
+            };
+        }
+
+        function ensureAbilityModeConfigControls(panel) {
+            let abilityPanel = document.getElementById('ability-mode-config-panel');
+            if (abilityPanel) return abilityPanel;
+            abilityPanel = document.createElement('div');
+            abilityPanel.id = 'ability-mode-config-panel';
+            abilityPanel.style.cssText = 'margin-top:14px;padding-top:14px;border-top:1px solid #dbe3ec;';
+            abilityPanel.innerHTML = `
+                <h4 style="margin:0 0 8px;">异能 BP 设置</h4>
+                <div id="ability-ban-safe-limit" class="match-options-status">正在计算当前安全上限……</div>
+                <label class="match-options-row">
+                    <input type="checkbox" id="match-option-ability-enabled">
+                    <div><div class="match-options-title">启用异能模式</div><div class="match-options-desc">关闭时按普通比赛流程跳过异能 Ban 与选角；单挑模式固定跳过。</div></div>
+                </label>
+                <div class="match-options-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;">
+                    <label>每队 Ban 数<input id="match-option-ability-ban-count" type="number" min="0" step="1"></label>
+                    <label>Ban 倒计时（秒）<input id="match-option-ability-ban-seconds" type="number" min="1" step="1"></label>
+                    <label>每批选角倒计时（秒）<input id="match-option-ability-draft-seconds" type="number" min="1" step="1"></label>
+                </div>
+                <div class="match-options-actions"><button type="button" class="primary-btn" onclick="saveAbilityModeConfig()">保存异能设置</button></div>
+                <div id="ability-mode-config-lock-note" class="match-options-warning"></div>`;
+            const actions = Array.from(panel.children).find(child => child.classList.contains('match-options-actions'));
+            panel.insertBefore(abilityPanel, actions || null);
+            return abilityPanel;
+        }
+
+        function syncAbilityModeConfigPanel(state, editable, duelEnabled) {
+            const parent = document.getElementById('match-options-panel');
+            if (!parent) return;
+            ensureAbilityModeConfigControls(parent);
+            const options = state?.matchOptions || {};
+            const safeLimit = calculateLobbyAbilityBanSafeLimit(state);
+            const participantCount = Object.values(state?.players || window._currentGameState?.players || {}).filter(player => player.role !== 'Admin' && player.role !== 'Spectator').length;
+            const enabledInput = document.getElementById('match-option-ability-enabled');
+            const banCountInput = document.getElementById('match-option-ability-ban-count');
+            const banSecondsInput = document.getElementById('match-option-ability-ban-seconds');
+            const draftSecondsInput = document.getElementById('match-option-ability-draft-seconds');
+            const safeLimitText = document.getElementById('ability-ban-safe-limit');
+            const lockNote = document.getElementById('ability-mode-config-lock-note');
+            const canEdit = editable && !duelEnabled;
+
+            if (enabledInput) {
+                enabledInput.checked = !duelEnabled && options.abilityModeEnabled === true;
+                enabledInput.disabled = !canEdit;
+            }
+            if (banCountInput) {
+                banCountInput.value = Number.isSafeInteger(options.abilityBanCountPerTeam) ? options.abilityBanCountPerTeam : 1;
+                banCountInput.max = String(safeLimit);
+                banCountInput.disabled = !canEdit;
+            }
+            if (banSecondsInput) {
+                banSecondsInput.value = Number.isSafeInteger(options.abilityBanSeconds) ? options.abilityBanSeconds : 45;
+                banSecondsInput.disabled = !canEdit;
+            }
+            if (draftSecondsInput) {
+                draftSecondsInput.value = Number.isSafeInteger(options.abilityDraftBatchSeconds) ? options.abilityDraftBatchSeconds : 30;
+                draftSecondsInput.disabled = !canEdit;
+            }
+            if (safeLimitText) safeLimitText.textContent = `当前 ${participantCount} 名参赛玩家，按最不利平衡分队计算：每队当前最多可 Ban ${safeLimit} 个。人数变化后会自动更新。`;
+            if (lockNote) {
+                lockNote.textContent = duelEnabled
+                    ? '当前是单挑模式：本局固定跳过异能 BP。'
+                    : (editable ? '仅管理员可在大厅修改；进入后续阶段即锁定。' : '本局异能规则已锁定。如需修改，请回到大厅后重新设置。');
+            }
+        }
+
 
 
 
@@ -618,6 +734,7 @@ window.__caorenCupLobbySocket = ws;
                 };
             }
             if (saveBtn) saveBtn.disabled = !editable;
+            syncAbilityModeConfigPanel(state, editable, duelEnabled);
             syncCaorenModPanel(state, isAdmin, caorenEnabled);
         }
 
@@ -944,9 +1061,12 @@ if (window._caorenModifiersEnabled !== true) {
             if (state.taskTemplate) window._currentTaskTemplate = state.taskTemplate;
             window._allPlayers = state.players;
 
-            if (state.timerEndAt !== currentTimerEndAt) {
+            const phaseTimerEndAt = state.phase === 'AbilityBan'
+                ? state.abilityBanState?.timeoutAt
+                : (state.phase === 'AbilityDraft' ? state.abilityDraftState?.timeoutAt : state.timerEndAt);
+            if (phaseTimerEndAt !== currentTimerEndAt) {
                 if (countdownInterval) clearInterval(countdownInterval);
-                currentTimerEndAt = state.timerEndAt;
+                currentTimerEndAt = phaseTimerEndAt;
                 if (currentTimerEndAt) {
                     updateTimerDisplay();
                     countdownInterval = setInterval(updateTimerDisplay, 1000);
@@ -1003,6 +1123,7 @@ if (window._caorenModifiersEnabled !== true) {
                 .sort((a, b) => (teamSortWeight(a) - teamSortWeight(b)) || String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
             let playerTable = renderPublicDuelWorkshopNotice(state, currentPlayer);
             playerTable += '<h3 style="margin-top:0;">当前房间玩家</h3>';
+            const formalMatchStartBlocked = state?.abilityPhaseOnePolicy?.formalMatchStartBlocked === true;
             const useMatchZyStartStatus = isCompetitiveMatchzyState(state);
             const readyHeader = useMatchZyStartStatus ? '开赛状态' : '准备';
             playerTable += '<div class="cc-table-wrap"><table class="cc-table"><thead><tr>' +
@@ -1016,10 +1137,13 @@ if (window._caorenModifiersEnabled !== true) {
                 const expectedSide = renderExpectedSideTag(p, state);
                 const bind = p.steamIdBound ? '<span class="tag tag-green">已绑定</span>' : '<span class="tag tag-red">未绑定</span>';
                 const roleText = p.role === 'Admin' ? '<span class="tag tag-purple">管理员</span>' : (p.gameRole ? `<span class="tag tag-gray">${p.gameRole}</span>` : '<span class="tag tag-gray">未分配</span>');
-                const ready = useMatchZyStartStatus ? renderMatchStartTag(p, state) : renderReadyTag(p);
+                const ready = formalMatchStartBlocked
+                    ? renderAbilityPluginSyncTag(p)
+                    : (useMatchZyStartStatus ? renderMatchStartTag(p, state) : renderReadyTag(p));
                 const canDuelAssign = isDuel && isAdmin && p.role !== 'Admin' && p.role !== 'Spectator' && ['PreGameSetup', 'LiveGame'].includes(state.phase) && (state.phase !== 'LiveGame' || live?.duelWaitingForPlayers);
                 const duelAssignOps = canDuelAssign ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;"><button onclick="adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;padding:4px 9px;">分到A</button><button onclick="adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;padding:4px 9px;">分到B</button>${p.rosterTeam ? `<button onclick="adminUnassignTeam('${p.playerId}')" style="background:#64748b;color:#fff;padding:4px 9px;">撤销分队</button>` : ''}</div>` : '';
-                const kickOp = isAdmin && p.role !== 'Admin' ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
+                const isProtectedAbilityRosterPlayer = p.role !== 'Admin' && p.role !== 'Spectator' && (p.rosterTeam === 'A' || p.rosterTeam === 'B');
+                const kickOp = isAdmin && p.role !== 'Admin' && !(state?.abilityPhaseOnePolicy?.rosterMutationBlocked === true && isProtectedAbilityRosterPlayer) ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
                 const adminOps = (isAdmin || duelAssignOps) ? `<td>${duelAssignOps}${kickOp || '-'}</td>` : '';
                 const sideCells = isDuel ? '' : `<td>${side}</td><td>${expectedSide}</td>`;
                 playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${p.name}</b></td><td>${roster}</td>${sideCells}<td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
@@ -1029,7 +1153,15 @@ if (window._caorenModifiersEnabled !== true) {
 
             if (isAdmin) {
                 const btn = document.getElementById('advance-phase-btn');
-                if (btn) btn.textContent = '推进阶段 (当前: ' + state.phase + ')';
+                if (btn) {
+                    btn.textContent = formalMatchStartBlocked
+                        ? '异能插件未同步，不能推进开赛'
+                        : '推进阶段 (当前: ' + state.phase + ')';
+                    btn.disabled = formalMatchStartBlocked;
+                    btn.title = formalMatchStartBlocked
+                        ? (state.abilityPhaseOnePolicy?.formalMatchStartMessage || '异能插件尚未同步，当前不能正式开赛。')
+                        : '';
+                }
                 const templateBtn = document.getElementById('template-config-btn');
                 if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
                 const taskTemplateBtn = document.getElementById('task-template-config-btn');
@@ -1315,26 +1447,55 @@ if (window._caorenModifiersEnabled !== true) {
                 extraDiv.innerHTML = html;
             }
 
+            if (state.phase === 'AbilityBan') {
+                const abilityUi = window.CaorenAbilityBpUi;
+                extraDiv.innerHTML = abilityUi?.renderAbilityBan({
+                    catalog: state.abilityCatalog,
+                    banState: state.abilityBanState,
+                    players: state.players,
+                    currentPlayerId: myPlayerId,
+                    now: syncedNow(),
+                }) || '<div class="soft-block">异能禁用界面加载失败，请刷新页面。</div>';
+            }
+
+            if (state.phase === 'AbilityDraft') {
+                const abilityUi = window.CaorenAbilityBpUi;
+                extraDiv.innerHTML = abilityUi?.renderAbilityDraft({
+                    catalog: state.abilityCatalog,
+                    draftState: state.abilityDraftState,
+                    players: state.players,
+                    currentPlayerId: myPlayerId,
+                    now: syncedNow(),
+                }) || '<div class="soft-block">异能选角界面加载失败，请刷新页面。</div>';
+            }
+
             if (state.phase === 'PreGameSetup') {
                 const role = currentPlayer?.gameRole;
                 let html = renderDuelControlPanel(state, currentPlayer);
+                const abilityPreGameDecision = resolveAbilityPreGameRenderDecision(state);
+
+                if (abilityPreGameDecision.showPluginSyncWarning) {
+                    html += '<div class="match-options-warning" style="margin-bottom:14px;">' + htmlEscape(abilityPreGameDecision.formalMatchStartMessage) + '</div>';
+                }
 
                 if (!undercoverEnabled) {
-                    if (isAdmin) {
-                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">标准竞技不再要求网页准备；请确认玩家已绑定、分队无误，然后由管理员在游戏内输入 MatchZy <code>.start</code> 开始比赛。</p></div><hr>';
-                    }
+                    if (abilityPreGameDecision.showMatchStartGuidance) {
+                        if (isAdmin) {
+                            html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">标准竞技不再要求网页准备；请确认玩家已绑定、分队无误，然后由管理员在游戏内输入 MatchZy <code>.start</code> 开始比赛。</p></div><hr>';
+                        }
 
-                    html += '<h3 style="text-align:center; color:#2e7d32;">本局为普通比赛模式</h3>';
-                    html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；玩家绑定并站到对应队伍后，等待管理员在游戏内使用 MatchZy <code>.start</code> 开赛。</p>';
+                        html += '<h3 style="text-align:center; color:#2e7d32;">本局为普通比赛模式</h3>';
+                        html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；玩家绑定并站到对应队伍后，等待管理员在游戏内使用 MatchZy <code>.start</code> 开赛。</p>';
 
-                    html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
-                    if (currentPlayer?.role !== 'Admin' && currentPlayer?.role !== 'Spectator') {
-                        html += '<h3 style="color:#1565c0;">请回到游戏内等待管理员开赛</h3>';
-                        html += '<p style="color:#64748b;">不需要输入 <code>.r</code>，也不需要点击网页准备。</p>';
-                    } else {
-                        html += '<h3 style="color:#4caf50;">确认无误后，在游戏内输入 <code>.start</code></h3>';
+                        html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
+                        if (currentPlayer?.role !== 'Admin' && currentPlayer?.role !== 'Spectator') {
+                            html += '<h3 style="color:#1565c0;">请回到游戏内等待管理员开赛</h3>';
+                            html += '<p style="color:#64748b;">不需要输入 <code>.r</code>，也不需要点击网页准备。</p>';
+                        } else {
+                            html += '<h3 style="color:#4caf50;">确认无误后，在游戏内输入 <code>.start</code></h3>';
+                        }
+                        html += '<p style="color:#888; font-size:14px; margin-top:15px;">比赛开始后，网页会自动进入正式比赛阶段。</p></div>';
                     }
-                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">比赛开始后，网页会自动进入正式比赛阶段。</p></div>';
                     extraDiv.innerHTML = html;
                 } else {
                     if (isAdmin) {
@@ -2604,6 +2765,11 @@ if (window._caorenModifiersEnabled !== true) {
 
         // ===== 全局交互函数 =====
         function advancePhase() {
+            const phaseOnePolicy = window._currentGameState?.abilityPhaseOnePolicy;
+            if (phaseOnePolicy?.formalMatchStartBlocked === true) {
+                alert(phaseOnePolicy.formalMatchStartMessage || '异能插件尚未同步，当前不能正式开赛。');
+                return;
+            }
             const isDuelMode = window._currentGameState?.matchOptions?.matchMode === 'duel';
             if ((window._currentGamePhase === 'Lobby' || window._currentGamePhase === 'PreGameSetup') && isDuelMode) {
                 const select = document.getElementById('duel-live-map') || document.getElementById('match-option-duel-map');
@@ -2654,6 +2820,31 @@ if (window._caorenModifiersEnabled !== true) {
             if (text !== 'TERMINATE') return;
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
         }
+        function saveAbilityModeConfig() {
+            const state = window._currentGameState;
+            if (window._currentPlayer?.role !== 'Admin') return showLobbyNotice('只有管理员可以修改异能设置。', 'error');
+            if ((window._currentGamePhase || state?.phase) !== 'Lobby') return showLobbyNotice('只能在大厅阶段修改异能设置。', 'error');
+            if (state?.matchOptions?.matchMode === 'duel') return showLobbyNotice('单挑模式固定跳过异能 BP。', 'error');
+            const abilityBanCountPerTeam = Number(document.getElementById('match-option-ability-ban-count')?.value);
+            const abilityBanSeconds = Number(document.getElementById('match-option-ability-ban-seconds')?.value);
+            const abilityDraftBatchSeconds = Number(document.getElementById('match-option-ability-draft-seconds')?.value);
+            const safeLimit = calculateLobbyAbilityBanSafeLimit(state);
+            if (!Number.isSafeInteger(abilityBanCountPerTeam) || abilityBanCountPerTeam < 0 || abilityBanCountPerTeam > safeLimit) {
+                return showLobbyNotice(`Ban 数必须是 0 到 ${safeLimit} 的整数；当前最多可 Ban ${safeLimit} 个。`, 'error');
+            }
+            if (!Number.isSafeInteger(abilityBanSeconds) || abilityBanSeconds <= 0) return showLobbyNotice('Ban 倒计时必须是正整数。', 'error');
+            if (!Number.isSafeInteger(abilityDraftBatchSeconds) || abilityDraftBatchSeconds <= 0) return showLobbyNotice('选角批次倒计时必须是正整数。', 'error');
+            ws.emit('ADMIN_ACTION', {
+                playerId: myPlayerId,
+                action: 'SET_ABILITY_MODE_CONFIG',
+                payload: {
+                    abilityModeEnabled: document.getElementById('match-option-ability-enabled')?.checked === true,
+                    abilityBanCountPerTeam,
+                    abilityBanSeconds,
+                    abilityDraftBatchSeconds
+                }
+            });
+        }
         function duelSetMap() {
             const select = document.getElementById('duel-live-map');
             const map = select?.value || DUEL_DEFAULT_MAP;
@@ -2684,6 +2875,7 @@ if (window._caorenModifiersEnabled !== true) {
             advancePhase,
             undoFlowAction,
             terminateGame,
+            saveAbilityModeConfig,
             duelSetMap,
             syncDuelLiveMapNotice,
             duelSetRounds,
@@ -2703,6 +2895,20 @@ if (window._caorenModifiersEnabled !== true) {
         function voteMap(map) { ws.emit('VOTE', { playerId: myPlayerId, map }); }
         function adminBanMap(map) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADMIN_BAN_MAP', payload: { map } }); }
         function selectSide(side) { ws.emit('SIDE_PICK', { playerId: myPlayerId, side }); }
+        function toggleAbilityBanChoice(abilityId) {
+            const state = window._currentGameState;
+            const banState = state?.abilityBanState;
+            const valid = (state?.abilityCatalog || []).some(ability => ability.id === abilityId);
+            if (!banState || !valid || banState.confirmedPlayerIds?.includes(myPlayerId)) return;
+            const selectedAbilityIds = [...(banState.selections?.[myPlayerId] || [])];
+            const index = selectedAbilityIds.indexOf(abilityId);
+            if (index >= 0) selectedAbilityIds.splice(index, 1);
+            else if (selectedAbilityIds.length < Number(banState.banCountPerTeam || 0)) selectedAbilityIds.push(abilityId);
+            ws.emit('ABILITY_BAN_UPDATE', { playerId: myPlayerId, selectedAbilityIds });
+        }
+        function confirmAbilityBanChoice() { ws.emit('ABILITY_BAN_CONFIRM', { playerId: myPlayerId }); }
+        function chooseAbilityDraft(abilityId) { ws.emit('ABILITY_PICK_UPDATE', { playerId: myPlayerId, abilityId }); }
+        function confirmAbilityDraftChoice() { ws.emit('ABILITY_PICK_CONFIRM', { playerId: myPlayerId }); }
         function readyPlayer() { ws.emit('PLAYER_READY', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
         function ackUndercoverTask() { ws.emit('UNDERCOVER_TASK_ACK', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
         function updateRoleCounts() { const u = parseInt(document.getElementById('undercover-count').value) || 0; const d = parseInt(document.getElementById('detective-count').value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_ROLES_COUNT', payload: { undercoverCount: u, detectiveCount: d } }); }
@@ -2756,6 +2962,10 @@ if (window._caorenModifiersEnabled !== true) {
             voteMap,
             adminBanMap,
             selectSide,
+            toggleAbilityBanChoice,
+            confirmAbilityBanChoice,
+            chooseAbilityDraft,
+            confirmAbilityDraftChoice,
             readyPlayer,
             ackUndercoverTask,
             updateRoleCounts,

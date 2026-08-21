@@ -1,6 +1,16 @@
 // player-utils.ts
-import { GameSession, Player, Team, RosterTeam } from './types';
+import {
+    AbilityBanState,
+    AbilityDraftState,
+    GamePhase,
+    GameSession,
+    Player,
+    Team,
+    RosterTeam,
+} from './types';
 import { getFlowUndoStatus } from './flow-undo-manager';
+import { getAbilityCatalog } from './ability-catalog';
+import { getAbilityPhaseOnePublicPolicy } from './ability-phase-one-policy';
 
 // ========== Player utilities ==========
 export const findPlayerById = (session: GameSession, id: string): Player | undefined =>
@@ -78,11 +88,102 @@ export const shouldRevealTaskActionLogToViewer = (viewer: Player | undefined, ta
     return false;
 };
 
+const viewerRosterTeam = (viewer: Player | undefined): RosterTeam | undefined => (
+    viewer?.role === 'Player' && (viewer.rosterTeam === 'A' || viewer.rosterTeam === 'B')
+        ? viewer.rosterTeam
+        : undefined
+);
+
+const sanitizeAbilityBanState = (
+    session: GameSession,
+    viewer: Player | undefined,
+): AbilityBanState | undefined => {
+    const state = session.abilityBanState;
+    if (!state || session.phase !== GamePhase.AbilityBan) return undefined;
+
+    const isAdmin = viewer?.role === 'Admin';
+    const team = viewerRosterTeam(viewer);
+    const visiblePlayerIds = team ? new Set(state.orderedPlayers[team]) : new Set<string>();
+    const selections: AbilityBanState['selections'] = {};
+    for (const [playerId, abilityIds] of Object.entries(state.selections)) {
+        if (isAdmin || visiblePlayerIds.has(playerId)) selections[playerId] = [...abilityIds];
+    }
+
+    return {
+        orderedPlayers: {
+            A: [...state.orderedPlayers.A],
+            B: [...state.orderedPlayers.B],
+        },
+        banCountPerTeam: state.banCountPerTeam,
+        selections,
+        confirmedPlayerIds: state.confirmedPlayerIds.filter((playerId) => (
+            isAdmin || visiblePlayerIds.has(playerId)
+        )),
+        timeoutAt: state.timeoutAt,
+    };
+};
+
+const sanitizeAbilityDraftState = (
+    state: AbilityDraftState | undefined,
+    viewer: Player | undefined,
+): AbilityDraftState | undefined => {
+    if (!state) return undefined;
+
+    const isAdmin = viewer?.role === 'Admin';
+    const team = viewerRosterTeam(viewer);
+    const batchIndexByPlayerId = new Map<string, number>();
+    state.batches.forEach((batch, batchIndex) => {
+        batch.playerIds.forEach((playerId) => batchIndexByPlayerId.set(playerId, batchIndex));
+    });
+    const canSeePlayerChoice = (playerId: string): boolean => {
+        if (isAdmin || viewer?.playerId === playerId) return true;
+        const batchIndex = batchIndexByPlayerId.get(playerId);
+        if (batchIndex === undefined) return false;
+        if (batchIndex < state.currentBatchIndex) return true;
+        return batchIndex === state.currentBatchIndex && state.batches[batchIndex]?.team === team;
+    };
+
+    const choices: AbilityDraftState['choices'] = {};
+    for (const [playerId, abilityId] of Object.entries(state.choices)) {
+        if (canSeePlayerChoice(playerId)) choices[playerId] = abilityId;
+    }
+
+    return {
+        batches: state.batches.map((batch) => ({
+            team: batch.team,
+            playerIds: [...batch.playerIds],
+        })),
+        currentBatchIndex: state.currentBatchIndex,
+        bannedAbilityIds: [...state.bannedAbilityIds],
+        choices,
+        confirmedPlayerIds: state.confirmedPlayerIds.filter(canSeePlayerChoice),
+        assignments: state.assignments
+            .filter((assignment) => canSeePlayerChoice(assignment.playerId))
+            .map((assignment) => ({
+                playerId: assignment.playerId,
+                team: assignment.team,
+                abilityId: assignment.abilityId,
+            })),
+        timeoutAt: state.timeoutAt,
+        failure: state.failure ? { ...state.failure } : undefined,
+    };
+};
+
 export const sanitizeForPublic = (session: GameSession, viewerId?: string | null): any => {
     const viewer = viewerId ? session.players[viewerId] : undefined;
     const revealAllPostgame = session.phase === 'Scoreboard';
     const s: any = { ...session };
     s.serverNow = Date.now();
+    s.abilityCatalog = getAbilityCatalog().map((ability) => ({
+        id: ability.id,
+        name: ability.name,
+        passiveDescription: ability.passiveDescription,
+        activeDescription: ability.activeDescription,
+        chargeModel: ability.chargeModel,
+        catalogVersion: ability.catalogVersion,
+        ...(ability.globalUnique ? { globalUnique: true } : {}),
+    }));
+    s.abilityPhaseOnePolicy = getAbilityPhaseOnePublicPolicy(session);
     s.players = {};
     for (const [id, p] of Object.entries(session.players)) {
         const revealRole = revealAllPostgame || shouldRevealRoleToViewer(viewer, p, session.rolesReleased);
@@ -105,6 +206,15 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
             taskGrid: revealTaskGrid ? p.taskGrid : undefined,
             taskActionLog: revealTaskActionLog ? p.taskActionLog : undefined,
         };
+    }
+    s.abilityBanState = sanitizeAbilityBanState(session, viewer);
+    s.abilityDraftState = sanitizeAbilityDraftState(session.abilityDraftState, viewer);
+    if (session.abilityAssignments) {
+        s.abilityAssignments = session.abilityAssignments.map((assignment) => ({
+            playerId: assignment.playerId,
+            team: assignment.team,
+            abilityId: assignment.abilityId,
+        }));
     }
     s.duelAdminOnline = Object.values(session.players).some(p => p.role === 'Admin' && p.isOnline);
     delete s.rollTimeout;

@@ -26,7 +26,8 @@
     "test:flow-undo-ui": "node scripts/check-flow-undo-ui.cjs",
     "test:flow-undo": "tsx --test src/flow-undo-manager.test.ts src/session-persistence.test.ts src/flow-runtime.test.ts src/flow-undo-integration.test.ts src/flow-undo-visibility.test.ts",
     "test:phase-rollback": "npm run test:flow-undo && npm run test:flow-undo-ui",
-    "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts"
+    "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts",
+    "test:ability-mode": "node scripts/check-ability-bp-ui.cjs && tsx --test src/ability-*.test.ts src/identity/public-sanitization.test.ts src/session-persistence.test.ts"
   },
   "dependencies": {
     "express": "^4.18.3",

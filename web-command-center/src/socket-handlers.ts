@@ -1,7 +1,7 @@
 ﻿// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { CellStatus, GamePhase, LiveGameData, Player, RosterTeam, TaskCell, WsEvents } from './types';
+import { AbilityId, CellStatus, GamePhase, LiveGameData, Player, RosterTeam, RuleResult, TaskCell, WsEvents } from './types';
 import { getSession, resetSessionWithAdmins, terminateAndClear } from './session-manager';
 import {
     findPlayerById,
@@ -29,6 +29,9 @@ import {
     syncPendingDraftOrderWithRoster,
     setRosterLiveSides,
     resumeRestoredPregameFlow,
+    getLobbyAbilityBanSafeLimit,
+    finishAbilityBan,
+    finishAbilityDraftBatch,
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
 import { ADMIN_PASSWORD } from './game-constants';
@@ -47,6 +50,25 @@ import {
     pushFlowUndoCheckpoint,
     undoLatestFlowAction,
 } from './flow-undo-manager';
+import {
+    confirmAbilityBan,
+    confirmAbilityChoice,
+    updateAbilityBanSelection,
+    updateAbilityChoice,
+} from './ability-draft-service';
+import {
+    AbilitySocketAction,
+    authorizeAbilitySocketAction,
+    getOnlineAbilityBanPlayerIds,
+    shouldFinishAbilityBanEarly,
+    shouldFinishAbilityDraftBatchEarly,
+} from './ability-socket-policy';
+import {
+    ABILITY_PHASE_ONE_START_BLOCK_MESSAGE,
+    ABILITY_ROSTER_LOCK_MESSAGE,
+    isAbilityPhaseOneFormalStartBlocked,
+    isProtectedAbilityRosterPlayer,
+} from './ability-phase-one-policy';
 
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0,
@@ -147,8 +169,11 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
     broadcastState: () => void;
     notifyMessage: (msg: string) => void;
     persistSessionNow?: () => void;
+    blockMembership?: (membershipId: string) => Promise<unknown>;
 }) {
     const { broadcastState, notifyMessage, persistSessionNow } = deps;
+    const blockMembership = deps.blockMembership
+        ?? ((membershipId: string) => lobbyIdentityService.blockMembership(membershipId));
 
     const sendPrivateData = (socketId: string, playerId: string) => {
         const session = getSession();
@@ -230,6 +255,39 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             if (authenticatedPlayerId && authenticatedPlayerId === claimed) return true;
             socket.emit(WsEvents.NOTIFICATION, { message: '当前连接无权代替该玩家执行操作，请重新登录。' });
             return false;
+        };
+        const emitAbilityRuleFailure = (result: RuleResult) => {
+            socket.emit(WsEvents.NOTIFICATION, {
+                message: result.message || '异能 BP 操作失败，请刷新页面后重试。',
+            });
+        };
+        const authorizeAbilityAction = (event: AbilitySocketAction, payload: unknown): boolean => {
+            const session = getSession();
+            const authenticatedPlayerId = String(socket.data.playerId || '');
+            const actor = authenticatedPlayerId
+                ? findPlayerById(session, authenticatedPlayerId)
+                : undefined;
+            const result = authorizeAbilitySocketAction({
+                event,
+                actor,
+                phase: session.phase,
+                banState: session.abilityBanState,
+                draftState: session.abilityDraftState,
+                payload,
+            });
+            if (!result.allowed) {
+                emitAbilityRuleFailure({ ok: false, code: result.code, message: result.message });
+                return false;
+            }
+            return true;
+        };
+        const finishAbilityBanIfOnlinePlayersReady = (): boolean => {
+            const session = getSession();
+            const state = session.abilityBanState;
+            if (session.phase !== GamePhase.AbilityBan || !state) return false;
+            const onlinePlayerIds = getOnlineAbilityBanPlayerIds(state, session.players);
+            if (!shouldFinishAbilityBanEarly(state, onlinePlayerIds)) return false;
+            return finishAbilityBan('confirmed');
         };
 
         socket.on(WsEvents.PLAYER_CENTER_MATCH_LOGIN, (data: { ticket?: string }) => {
@@ -380,6 +438,10 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 }
 
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame) {
+                    if (isAbilityPhaseOneFormalStartBlocked(session)) {
+                        socket.emit(WsEvents.NOTIFICATION, { message: ABILITY_PHASE_ONE_START_BLOCK_MESSAGE });
+                        return;
+                    }
                     if (isDuelMode()) {
                         clearUndercoverModeState();
                         session.rolesReleased = true;
@@ -457,6 +519,47 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const cue = typeof data.payload?.cue === 'string' ? data.payload.cue : 'adminPrompt';
                 io.emit('AUDIO_CUE', { cue, source: 'admin', adminName: admin.name });
                 socket.emit(WsEvents.NOTIFICATION, { message: '已向所有网页玩家发送提示音。' });
+            } else if (data.action === 'SET_ABILITY_MODE_CONFIG') {
+                if (session.phase !== GamePhase.Lobby) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '只能在大厅阶段修改异能模式设置。进入异能 Ban 后配置已锁定。' });
+                    return;
+                }
+                const payload = data.payload;
+                if (!payload || typeof payload.abilityModeEnabled !== 'boolean') {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '异能模式开关格式无效。' });
+                    return;
+                }
+                const safeLimit = getLobbyAbilityBanSafeLimit();
+                const banCount = payload.abilityBanCountPerTeam;
+                if (!Number.isSafeInteger(banCount) || banCount < 0 || banCount > safeLimit) {
+                    socket.emit(WsEvents.NOTIFICATION, {
+                        message: `Ban 数必须是 0 到 ${safeLimit} 的安全整数；当前最多可 Ban ${safeLimit} 个。`,
+                    });
+                    return;
+                }
+                const banSeconds = payload.abilityBanSeconds;
+                const draftBatchSeconds = payload.abilityDraftBatchSeconds;
+                if (!Number.isSafeInteger(banSeconds) || banSeconds <= 0) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: 'Ban 倒计时必须是正整数。' });
+                    return;
+                }
+                if (!Number.isSafeInteger(draftBatchSeconds) || draftBatchSeconds <= 0) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '选角批次倒计时必须是正整数。' });
+                    return;
+                }
+
+                session.matchOptions.abilityModeEnabled = session.matchOptions.matchMode === 'duel'
+                    ? false
+                    : payload.abilityModeEnabled;
+                session.matchOptions.abilityBanCountPerTeam = banCount;
+                session.matchOptions.abilityBanSeconds = banSeconds;
+                session.matchOptions.abilityDraftBatchSeconds = draftBatchSeconds;
+                broadcastState();
+                socket.emit(WsEvents.NOTIFICATION, {
+                    message: session.matchOptions.matchMode === 'duel'
+                        ? '单挑模式固定跳过异能 BP；其余异能设置已保存。'
+                        : '异能模式设置已保存。',
+                });
             } else if (data.action === 'TERMINATE_GAME') {
                 await terminateCurrentGameAndKickAll('管理员强制终止本局游戏');
             } else if (data.action === 'FORCE_READY') {
@@ -667,7 +770,11 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const targetId = String(data.payload?.playerId || '');
                 const target = findPlayerById(session, targetId);
                 if (!target || target.role === 'Admin') return;
-                if (target.membershipId) await lobbyIdentityService.blockMembership(target.membershipId);
+                if (isProtectedAbilityRosterPlayer(session, target)) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: ABILITY_ROSTER_LOCK_MESSAGE });
+                    return;
+                }
+                const membershipId = target.membershipId;
                 removePlayerFromRosterTeams(targetId);
                 if (session.captains.A === targetId) session.captains.A = null;
                 if (session.captains.B === targetId) session.captains.B = null;
@@ -677,6 +784,15 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 io.to(targetId).emit(WsEvents.LOGIN_RESPONSE, { success: false, resetClient: true, message: '你已被管理员移出房间。' });
                 notifyMessage(`管理员已踢出玩家：${target.name}`);
                 broadcastState();
+                if (membershipId) {
+                    try {
+                        await blockMembership(membershipId);
+                    } catch {
+                        socket.emit(WsEvents.NOTIFICATION, {
+                            message: '玩家已从本局阵容移除，但身份封禁写入失败；请在玩家与准入页面重试禁用该身份。',
+                        });
+                    }
+                }
             } else if (data.action === 'RESET_FORMAL_MATCH_COUNTERS') {
                 if (session.phase !== GamePhase.LiveGame) return;
                 const rawPluginRound = resetFormalMatchCounters();
@@ -838,6 +954,58 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             broadcastState();
         });
 
+        socket.on(WsEvents.ABILITY_BAN_UPDATE, (data: unknown) => {
+            if (!authorizeAbilityAction('ABILITY_BAN_UPDATE', data)) return;
+            const payload = data as { playerId: string; selectedAbilityIds: AbilityId[] };
+            const state = getSession().abilityBanState!;
+            const result = updateAbilityBanSelection(state, payload.playerId, payload.selectedAbilityIds);
+            if (!result.ok) {
+                emitAbilityRuleFailure(result);
+                return;
+            }
+            broadcastState();
+        });
+
+        socket.on(WsEvents.ABILITY_BAN_CONFIRM, (data: unknown) => {
+            if (!authorizeAbilityAction('ABILITY_BAN_CONFIRM', data)) return;
+            const payload = data as { playerId: string };
+            const session = getSession();
+            const state = session.abilityBanState!;
+            const result = confirmAbilityBan(state, payload.playerId);
+            if (!result.ok) {
+                emitAbilityRuleFailure(result);
+                return;
+            }
+            broadcastState();
+            finishAbilityBanIfOnlinePlayersReady();
+        });
+
+        socket.on(WsEvents.ABILITY_PICK_UPDATE, (data: unknown) => {
+            if (!authorizeAbilityAction('ABILITY_PICK_UPDATE', data)) return;
+            const payload = data as { playerId: string; abilityId: AbilityId };
+            const state = getSession().abilityDraftState!;
+            const result = updateAbilityChoice(state, payload.playerId, payload.abilityId);
+            if (!result.ok) {
+                emitAbilityRuleFailure(result);
+                return;
+            }
+            broadcastState();
+        });
+
+        socket.on(WsEvents.ABILITY_PICK_CONFIRM, (data: unknown) => {
+            if (!authorizeAbilityAction('ABILITY_PICK_CONFIRM', data)) return;
+            const payload = data as { playerId: string };
+            const state = getSession().abilityDraftState!;
+            const result = confirmAbilityChoice(state, payload.playerId);
+            if (!result.ok) {
+                emitAbilityRuleFailure(result);
+                return;
+            }
+            broadcastState();
+            if (shouldFinishAbilityDraftBatchEarly(state)) {
+                finishAbilityDraftBatch('manual');
+            }
+        });
         socket.on('PLAYER_READY', (data: { playerId: string }) => {
             const session = getSession();
             if (!isAuthenticatedActor(data.playerId)) return;
@@ -1021,6 +1189,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     candidate.id !== socket.id && candidate.data?.playerId === playerId,
                 );
             }
+            finishAbilityBanIfOnlinePlayersReady();
             console.log(`客户端断开: ${socket.id}`);
             broadcastState();
         });

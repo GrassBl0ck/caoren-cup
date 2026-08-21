@@ -13,7 +13,7 @@ const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8')
 if (!html.includes('/js/player-center.js?v=1.9.2-exitcopy1')) {
   throw new Error('player-center cache version must change with the exit-label update');
 }
-if (!html.includes('/js/lobby-app.js?v=1.9.2-quitconfirm1')) {
+if (!html.includes('/js/lobby-app.js?v=1.9.3-ability-bp-integration1')) {
   throw new Error('lobby script cache version must change with the quit-confirmation update');
 }
 if (!html.includes('/js/access-admin.js?v=1.9.2-lobbyconnect1')) {

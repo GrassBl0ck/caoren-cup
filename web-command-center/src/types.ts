@@ -5,6 +5,8 @@ export enum GamePhase {
     PlayerDraft = 'PlayerDraft',
     MapBan = 'MapBan',
     SidePick = 'SidePick',
+    AbilityBan = 'AbilityBan',
+    AbilityDraft = 'AbilityDraft',
     PreGameSetup = 'PreGameSetup',
     LiveGame = 'LiveGame',
     MidGameQA = 'MidGameQA',
@@ -18,6 +20,67 @@ export type Team = 'CT' | 'T' | 'Unassigned';
 export type RosterTeam = 'A' | 'B';
 export type MatchMode = 'competitive' | 'duel';
 export type MatchController = 'matchzy' | 'caoren';
+export type AbilityId =
+    | 'medic'
+    | 'berserker'
+    | 'assassin'
+    | 'tank'
+    | 'istaru'
+    | 'capitalist'
+    | 'balance'
+    | 'glass_cannon'
+    | 'utility_specialist'
+    | 'commander'
+    | 'sky_courier'
+    | 'snow_golem'
+    | 'witch';
+export interface AbilityBanState {
+    orderedPlayers: Record<RosterTeam, string[]>;
+    banCountPerTeam: number;
+    selections: Record<string, AbilityId[]>;
+    confirmedPlayerIds: string[];
+    timeoutAt: number;
+}
+export interface AbilityDraftBatch {
+    team: RosterTeam;
+    playerIds: string[];
+}
+export interface AbilityAssignment {
+    playerId: string;
+    team: RosterTeam;
+    abilityId: AbilityId;
+}
+export interface AbilityDraftState {
+    batches: AbilityDraftBatch[];
+    currentBatchIndex: number;
+    bannedAbilityIds: AbilityId[];
+    choices: Record<string, AbilityId>;
+    confirmedPlayerIds: string[];
+    assignments: AbilityAssignment[];
+    timeoutAt: number;
+    failure?: {
+        code: string;
+        message: string;
+        failedAt: number;
+    };
+}
+export interface AbilityBanResolution {
+    teamBans: Record<RosterTeam, AbilityId[]>;
+    bannedAbilityIds: AbilityId[];
+    votes: Record<RosterTeam, Partial<Record<AbilityId, number>>>;
+}
+export interface AbilityPhaseOnePublicPolicy {
+    formalMatchStartBlocked: boolean;
+    rosterMutationBlocked: boolean;
+    formalMatchStartMessage: string;
+    rosterMutationMessage: string;
+}
+export interface RuleResult {
+    ok: boolean;
+    code?: string;
+    message?: string;
+}
+export type ChargeModel = 'A' | 'B' | 'C';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
 export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
 export type IdentityLevel = 'temporary' | 'longTerm';
@@ -223,6 +286,10 @@ export interface LiveGameData {
 export interface MatchOptions {
     matchMode?: MatchMode;
     matchController?: MatchController;
+    abilityModeEnabled?: boolean;
+    abilityBanCountPerTeam?: number;
+    abilityBanSeconds?: number;
+    abilityDraftBatchSeconds?: number;
     undercoverModeEnabled: boolean;
     caorenModifiersEnabled: boolean;
     duelMap?: string;
@@ -262,6 +329,10 @@ export interface GameSession {
     sidePickTeam: RosterTeam | null;
     sideVote?: SideVoteState;
     selectedSide: 'CT' | 'T' | null;
+    abilityBanState?: AbilityBanState;
+    abilityDraftState?: AbilityDraftState;
+    abilityAssignments?: AbilityAssignment[];
+    abilityPhaseOnePolicy?: AbilityPhaseOnePublicPolicy;
     undercoverCount: number;
     detectiveCount: number;
     rolesReleased?: boolean;
@@ -289,6 +360,10 @@ export enum WsEvents {
     VOTE = 'VOTE',
     DRAFT_PICK = 'DRAFT_PICK',
     SIDE_PICK = 'SIDE_PICK',
+    ABILITY_BAN_UPDATE = 'ABILITY_BAN_UPDATE',
+    ABILITY_BAN_CONFIRM = 'ABILITY_BAN_CONFIRM',
+    ABILITY_PICK_UPDATE = 'ABILITY_PICK_UPDATE',
+    ABILITY_PICK_CONFIRM = 'ABILITY_PICK_CONFIRM',
     TASK_ACTION = 'TASK_ACTION',
     SUBMIT_QUESTION = 'SUBMIT_QUESTION',
     UNDERCOVER_TASK_ACK = 'UNDERCOVER_TASK_ACK',

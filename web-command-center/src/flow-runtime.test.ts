@@ -7,7 +7,7 @@ import {
     finishSideVote,
     resumeRestoredPregameFlow,
 } from './game-flow-manager';
-import { clearFlowUndoHistory, exportFlowUndoState } from './flow-undo-manager';
+import { clearFlowUndoHistory, exportFlowUndoState, getFlowUndoStatus } from './flow-undo-manager';
 import {
     clearAllFlowTimers,
     getDraftPickTimer,
@@ -206,4 +206,65 @@ test('restored completed pregame phases stay paused without starting a timer', (
     resumeRestoredPregameFlow();
     assert.equal(getSideVoteTimer(), null);
     assert.equal(side.timerEndAt, null);
+});
+
+test('恢复异能 BP 时保留原绝对截止时间，不按普通赛前流程重置', () => {
+    const timeoutAt = Date.now() + 20_000;
+    const session = createInitialSession();
+    session.phase = GamePhase.AbilityDraft;
+    session.matchOptions.abilityModeEnabled = true;
+    session.abilityDraftState = {
+        batches: [{ team: 'A', playerIds: ['a1'] }],
+        currentBatchIndex: 0,
+        bannedAbilityIds: [],
+        choices: {},
+        confirmedPlayerIds: [],
+        assignments: [],
+        timeoutAt,
+    };
+    session.timerEndAt = timeoutAt;
+    session.timerPhase = GamePhase.AbilityDraft;
+    setSession(session);
+
+    resumeRestoredPregameFlow();
+
+    assert.equal(session.abilityDraftState.timeoutAt, timeoutAt);
+    assert.equal(session.timerEndAt, timeoutAt);
+    assert.equal(session.timerPhase, GamePhase.AbilityDraft);
+});
+
+test('异能 Ban 推进到选角会记录可撤销的完整 BP 快照', () => {
+    const session = createInitialSession();
+    const admin = { playerId: 'admin', name: 'Admin', role: 'Admin' as const, isReady: false };
+    session.phase = GamePhase.AbilityBan;
+    session.matchOptions.abilityModeEnabled = true;
+    session.players.admin = admin;
+    session.players.a1 = { playerId: 'a1', name: 'A1', role: 'Player', rosterTeam: 'A', isReady: true };
+    session.players.b1 = { playerId: 'b1', name: 'B1', role: 'Player', rosterTeam: 'B', isReady: true };
+    session.playerOrder = ['admin', 'a1', 'b1'];
+    session.teams.A.players = ['a1'];
+    session.teams.B.players = ['b1'];
+    session.captains = { A: 'a1', B: 'b1' };
+    session.abilityBanState = {
+        orderedPlayers: { A: ['a1'], B: ['b1'] },
+        banCountPerTeam: 1,
+        selections: { a1: ['medic'], b1: ['tank'] },
+        confirmedPlayerIds: ['a1', 'b1'],
+        timeoutAt: Date.now() + 20_000,
+    };
+    setSession(session);
+
+    assert.equal(advancePhase(GamePhase.AbilityBan, GamePhase.AbilityDraft), true);
+
+    const entries = exportFlowUndoState().entries;
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].restorePhase, GamePhase.AbilityBan);
+    assert.deepEqual(entries[0].snapshot.session.abilityBanState, {
+        orderedPlayers: { A: ['a1'], B: ['b1'] },
+        banCountPerTeam: 1,
+        selections: { a1: ['medic'], b1: ['tank'] },
+        confirmedPlayerIds: ['a1', 'b1'],
+        timeoutAt: session.abilityBanState?.timeoutAt,
+    });
+    assert.equal(getFlowUndoStatus(session, admin).canUndo, true);
 });

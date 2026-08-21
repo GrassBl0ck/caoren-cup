@@ -1,7 +1,7 @@
 // game-constants.ts
-// ¥” server.ts Ã·»°µƒÀ˘”–ª∑æ≥±‰¡ø≥£¡ø
+// ‰ªé server.ts ÊèêÂèñÁöÑÊâÄÊúâÁéØÂ¢ÉÂèòÈáèÂ∏∏Èáè
 
-// ---- ∏®÷˙∫Ø ˝£®‘≠±ææÕ‘⁄ server.ts ¿Ô£¨Ωˆ”√”⁄…˙≥…≥£¡ø£© ----
+// ---- ËæÖÂä©ÂáΩÊï∞ÔºàÂéüÊú¨Â∞±Âú® server.ts ÈáåÔºå‰ªÖÁî®‰∫éÁîüÊàêÂ∏∏ÈáèÔºâ ----
 
 const v1333NormalizeConnectUrl = (raw: unknown): string => {
     const value = String(raw || '').trim();
@@ -19,7 +19,7 @@ const v1333NumberEnv = (raw: unknown, fallback: number, min: number): number => 
     return Number.isFinite(value) ? Math.max(min, value) : fallback;
 };
 
-// ---- ≥£¡øµº≥ˆ ----
+// ---- Â∏∏ÈáèÂØºÂá∫ ----
 
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CHANGE_ME_ADMIN_PASSWORD';
 export const PLUGIN_TOKEN = process.env.PLUGIN_TOKEN || 'CHANGE_ME_PLUGIN_TOKEN';
@@ -30,6 +30,8 @@ export const MAP_BAN_SECOND_SECONDS = Number(process.env.MAP_BAN_SECOND_SECONDS 
 export const MAP_BAN_LATER_SECONDS = Number(process.env.MAP_BAN_LATER_SECONDS || 10);
 export const SIDE_PICK_VOTE_SECONDS = Number(process.env.SIDE_PICK_VOTE_SECONDS || 12);
 export const MAP_BAN_COUNT_PER_TURN = Math.max(1, Number(process.env.MAP_BAN_COUNT_PER_TURN || 1));
+export const ABILITY_BAN_DEFAULT_SECONDS = Math.max(1, Number(process.env.ABILITY_BAN_SECONDS || 45));
+export const ABILITY_DRAFT_BATCH_DEFAULT_SECONDS = Math.max(1, Number(process.env.ABILITY_DRAFT_BATCH_SECONDS || 30));
 
 export const V1333_GAME_SERVER_CONNECT_URL = v1333NormalizeConnectUrl(
     process.env.GAME_SERVER_CONNECT_URL || process.env.GAME_SERVER_ADDRESS || ''
