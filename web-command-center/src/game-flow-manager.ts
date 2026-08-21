@@ -54,6 +54,8 @@ import {
 } from './duel-config';
 import { buildDuelRuntimeConfigPayload } from './duel-runtime-config';
 import { enqueuePluginCommand } from './plugin-command-queue';
+import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
+import { scheduleSessionSnapshotSave } from './session-persistence';
 import {
     clearFlowUndoHistory,
     commitFlowUndoCheckpoint,
@@ -540,6 +542,7 @@ const clearAbilityFlowState = () => {
     session.abilityBanState = undefined;
     session.abilityDraftState = undefined;
     session.abilityAssignments = undefined;
+    session.abilitySyncState = undefined;
 };
 
 const scheduleAbilityBanTimer = () => {
@@ -655,6 +658,15 @@ const finishAbilityDraftBatch = (_reason: 'timeout' | 'manual' | 'admin' = 'time
         session.timerEndAt = null;
         session.timerPhase = null;
         advancePhase(GamePhase.AbilityDraft, GamePhase.PreGameSetup);
+        if (getSession().phase === GamePhase.PreGameSetup && session.matchOptions.abilityModeEnabled === true) {
+            try {
+                enqueueCurrentAbilitySync(session);
+                scheduleSessionSnapshotSave();
+                notifyMessage?.('异能职业配置已加入可靠同步队列，等待桥接和娱乐插件最终确认。');
+            } catch (err) {
+                notifyMessage?.(err instanceof Error ? err.message : '异能职业配置同步准备失败。');
+            }
+        }
         return getSession().phase === GamePhase.PreGameSetup;
     }
 

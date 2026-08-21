@@ -77,6 +77,17 @@ const createAbilityDraftSession = (timeoutAt: number) => {
         },
     };
     session.abilityAssignments = [{ playerId: 'a1', team: 'A', abilityId: 'medic' }];
+    session.abilitySyncRevision = 2;
+    session.abilitySyncState = {
+        status: 'plugin_validating',
+        syncId: 'sync-1',
+        matchId: session.matchId,
+        revision: 2,
+        catalogVersion: 'ability-catalog-v1',
+        contentDigest: 'a'.repeat(64),
+        seatCount: 1,
+        commandId: 'command-1',
+    };
     session.timerEndAt = timeoutAt;
     session.timerPhase = GamePhase.AbilityDraft;
     session.rollTimeout = setTimeout(() => undefined, 60_000);
@@ -96,6 +107,8 @@ test('Snapshot v2 保存完整异能配置与 BP 状态，但不保存凭据和 
     assert.deepEqual(snapshot.session.abilityBanState, session.abilityBanState);
     assert.deepEqual(snapshot.session.abilityDraftState, session.abilityDraftState);
     assert.deepEqual(snapshot.session.abilityAssignments, session.abilityAssignments);
+    assert.equal(snapshot.session.abilitySyncRevision, 2);
+    assert.deepEqual(snapshot.session.abilitySyncState, session.abilitySyncState);
     assert.equal('sessionCode' in snapshot.session.players.a1, false);
     assert.equal('bindCode' in snapshot.session.players.a1, false);
     assert.equal('timerEndAt' in snapshot.session, false);

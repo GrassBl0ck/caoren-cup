@@ -1,6 +1,6 @@
 import { AbilityPhaseOnePublicPolicy, GamePhase, GameSession, Player } from './types';
 
-export const ABILITY_PHASE_ONE_START_BLOCK_MESSAGE = '异能职业配置仅在网页完成，游戏插件尚未同步，阶段 1 不能正式开赛。请先终止本局，或返回大厅关闭异能模式后重新开始。';
+export const ABILITY_PHASE_ONE_START_BLOCK_MESSAGE = '异能职业配置尚未收到当前比赛的娱乐插件最终确认，当前不能正式开赛。请重试同步，或明确关闭本局异能模式后按普通比赛继续。';
 export const ABILITY_ROSTER_LOCK_MESSAGE = '异能 BP 已锁定本局参赛阵容，当前不能踢出、禁用或移除参赛者。请先终止本局，或返回大厅后再调整阵容。';
 
 const matchRosterPlayers = (session: GameSession): Player[] => Object.values(session.players || {})
@@ -24,8 +24,26 @@ export const isAbilityPhaseOneFormalStartBlocked = (session: GameSession): boole
     session.phase === GamePhase.PreGameSetup
     && session.matchOptions?.abilityModeEnabled === true
     && session.matchOptions?.matchMode !== 'duel'
-    && hasCompleteAbilityAssignments(session)
+    && !isCurrentAbilitySyncConfirmed(session)
 );
+
+export const isCurrentAbilitySyncConfirmed = (session: GameSession): boolean => {
+    const state = session.abilitySyncState;
+    return session.phase === GamePhase.PreGameSetup
+        && session.matchOptions?.abilityModeEnabled === true
+        && session.matchOptions?.matchMode !== 'duel'
+        && hasCompleteAbilityAssignments(session)
+        && state?.status === 'confirmed'
+        && state.matchId === session.matchId
+        && state.revision > 0
+        && (!session.abilitySyncRevision || state.revision === session.abilitySyncRevision)
+        && state.catalogVersion.length > 0
+        && state.contentDigest.length > 0
+        && state.seatCount === Object.values(session.players || {})
+            .filter((player) => player.role !== 'Admin'
+                && player.role !== 'Spectator'
+                && (player.rosterTeam === 'A' || player.rosterTeam === 'B')).length;
+};
 
 export const isAbilityRosterMutationBlocked = (session: GameSession): boolean => (
     session.phase === GamePhase.AbilityBan

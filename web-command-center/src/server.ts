@@ -36,6 +36,7 @@ import {
     enqueuePluginCommand,
     getPluginCommandQueueSummary,
 } from './plugin-command-queue';
+import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
 import {
     ABILITY_BAN_DEFAULT_SECONDS,
     ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
@@ -208,7 +209,20 @@ const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {
 
 injectFlowBroadcast(broadcastState);
 injectNotify(notifyMessage);
-if (restoredSessionSnapshot) resumeRestoredPregameFlow();
+if (restoredSessionSnapshot) {
+    resumeRestoredPregameFlow();
+    const restoredSession = getSession();
+    if (restoredSession.phase === GamePhase.PreGameSetup
+        && restoredSession.matchOptions.matchMode !== 'duel'
+        && restoredSession.matchOptions.abilityModeEnabled === true
+        && restoredSession.abilitySyncState?.status !== 'disabled') {
+        try {
+            enqueueCurrentAbilitySync(restoredSession);
+        } catch (error) {
+            console.error('[AbilitySync] 恢复同步队列失败：', error);
+        }
+    }
+}
 
 const ensureMatchOptions = () => {
     const session = getSession();

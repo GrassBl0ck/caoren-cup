@@ -556,13 +556,13 @@ test('阶段 1 异能配置完成后 MatchZy round_start 不能把 PreGameSetup 
 
     assert.equal(flow.markStandardMatchLiveFromMatchZy(), false);
     assert.equal(getSession().phase, GamePhase.PreGameSetup);
-    assert.match(notifications.at(-1) ?? '', /插件尚未同步.*不能正式开赛/);
+    assert.match(notifications.at(-1) ?? '', /最终确认.*不能正式开赛/);
     assert.doesNotMatch(notifications.at(-1) ?? '', /\.start/);
 
     const incomplete = createCompletedAbilityPreGameSession();
     incomplete.abilityAssignments = incomplete.abilityAssignments?.slice(0, 1);
-    assert.equal(flow.markStandardMatchLiveFromMatchZy(), true);
-    assert.equal(getSession().phase, GamePhase.LiveGame);
+    assert.equal(flow.markStandardMatchLiveFromMatchZy(), false);
+    assert.equal(getSession().phase, GamePhase.PreGameSetup);
 });
 
 test('管理员 ADVANCE_PHASE 不能绕过阶段 1 异能正式开赛门禁', async () => {
@@ -577,7 +577,7 @@ test('管理员 ADVANCE_PHASE 不能绕过阶段 1 异能正式开赛门禁', as
 
     assert.equal(getSession().phase, GamePhase.PreGameSetup);
     const notification = socket.emitted.find((item) => item.event === WsEvents.NOTIFICATION);
-    assert.match(String((notification?.payload as any)?.message || ''), /插件尚未同步.*不能正式开赛/);
+    assert.match(String((notification?.payload as any)?.message || ''), /最终确认.*不能正式开赛/);
     assert.doesNotMatch(String((notification?.payload as any)?.message || ''), /\.start/);
 });
 

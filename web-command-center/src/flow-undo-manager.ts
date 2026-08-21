@@ -34,6 +34,8 @@ const SESSION_FLOW_KEYS = [
     'abilityBanState',
     'abilityDraftState',
     'abilityAssignments',
+    'abilitySyncRevision',
+    'abilitySyncState',
     'undercoverCount',
     'detectiveCount',
     'rolesReleased',

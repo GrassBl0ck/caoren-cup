@@ -284,6 +284,6 @@ test('public session exposes the phase-one ability start and roster gates withou
 
     assert.equal(publicSession.abilityPhaseOnePolicy?.formalMatchStartBlocked, true);
     assert.equal(publicSession.abilityPhaseOnePolicy?.rosterMutationBlocked, true);
-    assert.match(publicSession.abilityPhaseOnePolicy?.formalMatchStartMessage || '', /插件尚未同步.*不能正式开赛/);
+    assert.match(publicSession.abilityPhaseOnePolicy?.formalMatchStartMessage || '', /最终确认.*不能正式开赛/);
     assert.match(publicSession.abilityPhaseOnePolicy?.rosterMutationMessage || '', /终止本局.*返回大厅/);
 });

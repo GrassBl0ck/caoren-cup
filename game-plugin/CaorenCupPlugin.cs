@@ -9,6 +9,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Encodings.Web;
+using Caoren;
 using CaorenCup.Features;
 
 namespace CaorenCup;
@@ -25,6 +26,18 @@ public class CaorenCupPlugin : BasePlugin
 
     private readonly List<ICaorenFeature> _features = new();
     private bool _allowPlayerNoclip = false;
+    private readonly Dictionary<string, PendingAbilitySyncTransaction> _pendingAbilitySyncTransactions = new(StringComparer.Ordinal);
+    private AbilitySyncApplier? _abilitySyncApplier;
+    private AbilitySyncConfig? _activeAbilitySyncConfig;
+    private string? _abilitySyncMatchId;
+    private int _abilitySyncRevision;
+    private static readonly HashSet<string> AbilityIds = new(StringComparer.Ordinal)
+    {
+        "medic", "berserker", "assassin", "tank", "istaru", "capitalist", "balance",
+        "glass_cannon", "utility_specialist", "commander", "sky_courier", "snow_golem", "witch",
+    };
+    private const string AbilityCatalogVersion = "ability-catalog-v1";
+    private string AbilitySyncRuntimePath => Path.Combine(ModuleDirectory, "runtime", "ability-sync-state.json");
 
     // 强制锁定配置文件路径：永远在 DLL 旁边
     private string ConfigFilePath => Path.Combine(ModuleDirectory, "CaorenCup.json");
@@ -41,6 +54,7 @@ public override void Load(bool hotReload)
     {
         // 1. 手动加载配置 (这是最关键的一步！)
         LoadConfig();
+        LoadAbilitySyncState();
 
         // 2. 注册所有积木
         _features.Add(new Features.BombQuizFeature());//1 炸弹解密
@@ -102,9 +116,284 @@ public override void Load(bool hotReload)
         AddCommand("info", "查看模块玩法说明: /info <模块名>", OnCommandInfo);
         AddCommand("info_cast", "向全服广播玩法说明: /info_cast <模块>", OnCommandInfoCast);
         AddCommand("sv_noclip", "控制玩家 noclip: /sv_noclip <1允许/0禁止/status>", OnCommandSvNoclip);
+        AddCommand("css_ability_sync_begin", "内部异能同步事务开始", OnAbilitySyncBeginCommand);
+        AddCommand("css_ability_sync_seat", "内部异能同步席位传递", OnAbilitySyncSeatCommand);
+        AddCommand("css_ability_sync_commit", "内部异能同步事务提交", OnAbilitySyncCommitCommand);
+        AddCommand("css_ability_sync_reset", "内部异能同步比赛切换", OnAbilitySyncResetCommand);
+        AddCommand("css_ability_sync_clear", "内部异能同步状态清除", OnAbilitySyncClearCommand);
         AddCommandListener("noclip", OnNoclipCommand, HookMode.Pre);
 
         Console.WriteLine($"[CaorenCup] 插件加载完成。配置文件路径: {ConfigFilePath}");
+    }
+
+    private void OnAbilitySyncBeginCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (info.ArgCount < 2) return;
+        try
+        {
+            var begin = AbilitySyncInternalProtocol.Decode<AbilitySyncBeginEnvelope>(info.GetArg(1));
+            if (begin.ProtocolVersion != 1 || begin.Revision <= 0 || begin.ExpectedSeatCount <= 0
+                || string.IsNullOrWhiteSpace(begin.SyncId) || string.IsNullOrWhiteSpace(begin.MatchId)
+                || !string.Equals(begin.CatalogVersion, AbilityCatalogVersion, StringComparison.Ordinal)
+                || !RegexHelpers.IsSha256(begin.ContentDigest))
+            {
+                Console.WriteLine("[CaorenCup] Rejected incomplete ability sync begin transaction.");
+                if (!string.IsNullOrWhiteSpace(begin.SyncId)
+                    && !string.IsNullOrWhiteSpace(begin.MatchId)
+                    && begin.Revision > 0
+                    && RegexHelpers.IsSha256(begin.ContentDigest))
+                {
+                    SendAbilitySyncAck(FailedAbilitySyncAck(begin, "SYNC_METADATA_REJECTED", "娱乐插件拒绝了同步元数据。"));
+                }
+                return;
+            }
+            if (_abilitySyncMatchId == begin.MatchId && begin.Revision < _abilitySyncRevision)
+            {
+                Console.WriteLine($"[CaorenCup] Rejected stale ability sync begin: {begin.SyncId}");
+                SendAbilitySyncAck(FailedAbilitySyncAck(begin, "STALE_REVISION", "同步修订号已过期。"));
+                return;
+            }
+            if (_activeAbilitySyncConfig is not null
+                && (_activeAbilitySyncConfig.MatchId != begin.MatchId
+                    || begin.Revision > _activeAbilitySyncConfig.Revision))
+            {
+                _abilitySyncApplier = null;
+            }
+
+            _abilitySyncMatchId = begin.MatchId;
+            _abilitySyncRevision = begin.Revision;
+            _pendingAbilitySyncTransactions[begin.SyncId] = new PendingAbilitySyncTransaction(begin);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CaorenCup] Invalid ability sync begin: {ex.Message}");
+        }
+    }
+
+    private void OnAbilitySyncSeatCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (info.ArgCount < 2) return;
+        try
+        {
+            var seat = AbilitySyncInternalProtocol.Decode<AbilitySyncSeatEnvelope>(info.GetArg(1));
+            if (!_pendingAbilitySyncTransactions.TryGetValue(seat.SyncId, out var transaction)) return;
+            transaction.Seats.RemoveAll(existing => existing.PlayerId == seat.PlayerId);
+            transaction.Seats.Add(seat);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CaorenCup] Invalid ability sync seat: {ex.Message}");
+        }
+    }
+
+    private void OnAbilitySyncCommitCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (info.ArgCount < 2) return;
+        AbilitySyncCommitEnvelope commit;
+        try
+        {
+            commit = AbilitySyncInternalProtocol.Decode<AbilitySyncCommitEnvelope>(info.GetArg(1));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CaorenCup] Invalid ability sync commit: {ex.Message}");
+            return;
+        }
+
+        if (!_pendingAbilitySyncTransactions.TryGetValue(commit.SyncId, out var transaction))
+        {
+            if (_activeAbilitySyncConfig is not null
+                && _activeAbilitySyncConfig.SyncId == commit.SyncId
+                && _activeAbilitySyncConfig.ContentDigest == commit.ContentDigest)
+            {
+                SendAbilitySyncAck(new AbilitySyncFinalAckEnvelope(
+                    "success",
+                    _activeAbilitySyncConfig.SyncId,
+                    _activeAbilitySyncConfig.MatchId,
+                    _activeAbilitySyncConfig.Revision,
+                    _activeAbilitySyncConfig.ContentDigest,
+                    _activeAbilitySyncConfig.Seats.Count));
+            }
+            return;
+        }
+
+        var begin = transaction.Begin;
+        if (!string.Equals(begin.ContentDigest, commit.ContentDigest, StringComparison.Ordinal))
+        {
+            SendAbilitySyncAck(FailedAbilitySyncAck(begin, "CONTENT_DIGEST_MISMATCH", "提交摘要与事务摘要不一致。"));
+            _pendingAbilitySyncTransactions.Remove(commit.SyncId);
+            return;
+        }
+
+        var config = new AbilitySyncConfig
+        {
+            ProtocolVersion = begin.ProtocolVersion,
+            SyncId = begin.SyncId,
+            MatchId = begin.MatchId,
+            Revision = begin.Revision,
+            CatalogVersion = begin.CatalogVersion,
+            AbilityModeEnabled = begin.AbilityModeEnabled,
+            BannedAbilityIds = [.. begin.BannedAbilityIds],
+            Seats = [.. transaction.Seats.Select(seat => new AbilitySyncSeat
+            {
+                PlayerId = seat.PlayerId,
+                SteamId = seat.SteamId,
+                RosterTeam = seat.RosterTeam,
+                InitialSide = seat.InitialSide,
+                AbilityId = seat.AbilityId,
+            })],
+            ContentDigest = begin.ContentDigest,
+        };
+        var context = new AbilitySyncValidationContext
+        {
+            ExpectedMatchId = begin.MatchId,
+            ExpectedRevision = begin.Revision,
+            ExpectedCatalogVersion = AbilityCatalogVersion,
+            ExpectedSeatCount = begin.ExpectedSeatCount,
+            KnownAbilityIds = new HashSet<string>(AbilityIds, StringComparer.Ordinal),
+        };
+        _abilitySyncApplier ??= new AbilitySyncApplier(context);
+
+        var validation = AbilitySyncValidator.Validate(config, context);
+        if (!validation.Ok)
+        {
+            SendAbilitySyncAck(FailedAbilitySyncAck(begin, validation.Code ?? "ABILITY_SYNC_REJECTED", validation.Message ?? "娱乐插件拒绝了整份配置。"));
+            _pendingAbilitySyncTransactions.Remove(commit.SyncId);
+            return;
+        }
+
+        try
+        {
+            var existing = _abilitySyncApplier.Current;
+            var duplicate = existing is not null
+                && (existing.SyncId == config.SyncId || existing.ContentDigest == config.ContentDigest);
+            if (!duplicate) SaveAbilitySyncState(config);
+            var result = _abilitySyncApplier.Apply(config);
+            if (!result.Ok)
+            {
+                SendAbilitySyncAck(FailedAbilitySyncAck(begin, result.Code ?? "ABILITY_SYNC_REJECTED", result.Message ?? "娱乐插件拒绝了整份配置。"));
+                _pendingAbilitySyncTransactions.Remove(commit.SyncId);
+                return;
+            }
+            _activeAbilitySyncConfig = _abilitySyncApplier.Current;
+            _pendingAbilitySyncTransactions.Remove(commit.SyncId);
+            SendAbilitySyncAck(new AbilitySyncFinalAckEnvelope(
+                "success",
+                config.SyncId,
+                config.MatchId,
+                config.Revision,
+                config.ContentDigest,
+                config.Seats.Count));
+        }
+        catch (Exception ex)
+        {
+            _pendingAbilitySyncTransactions.Remove(commit.SyncId);
+            SendAbilitySyncAck(FailedAbilitySyncAck(begin, "PERSISTENCE_FAILED", "娱乐插件保存职业配置失败。"));
+            Console.WriteLine($"[CaorenCup] Failed to persist ability sync: {ex.Message}");
+        }
+    }
+
+    private void OnAbilitySyncResetCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (info.ArgCount < 2) return;
+        try
+        {
+            var reset = AbilitySyncInternalProtocol.Decode<AbilitySyncResetEnvelope>(info.GetArg(1));
+            ResetAbilitySyncState(reset.MatchId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CaorenCup] Invalid ability sync reset: {ex.Message}");
+        }
+    }
+
+    private void OnAbilitySyncClearCommand(CCSPlayerController? player, CommandInfo info) => ResetAbilitySyncState(null);
+
+    private static AbilitySyncFinalAckEnvelope FailedAbilitySyncAck(
+        AbilitySyncBeginEnvelope begin,
+        string code,
+        string message) => new(
+            "failed",
+            begin.SyncId,
+            begin.MatchId,
+            begin.Revision,
+            begin.ContentDigest,
+            0,
+            code,
+            message);
+
+    private void SendAbilitySyncAck(AbilitySyncFinalAckEnvelope ack)
+    {
+        var encoded = AbilitySyncInternalProtocol.Encode(ack);
+        Server.ExecuteCommand($"css_ability_sync_ack {encoded}");
+    }
+
+    private void ResetAbilitySyncState(string? matchId)
+    {
+        _pendingAbilitySyncTransactions.Clear();
+        _abilitySyncApplier = null;
+        _activeAbilitySyncConfig = null;
+        _abilitySyncMatchId = matchId;
+        _abilitySyncRevision = 0;
+        try
+        {
+            if (File.Exists(AbilitySyncRuntimePath)) File.Delete(AbilitySyncRuntimePath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CaorenCup] Failed to clear ability sync runtime state: {ex.Message}");
+        }
+    }
+
+    private void SaveAbilitySyncState(AbilitySyncConfig config)
+    {
+        var directory = Path.GetDirectoryName(AbilitySyncRuntimePath)!;
+        Directory.CreateDirectory(directory);
+        var temporaryPath = $"{AbilitySyncRuntimePath}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(temporaryPath, json);
+            File.Move(temporaryPath, AbilitySyncRuntimePath, true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+        }
+    }
+
+    private void LoadAbilitySyncState()
+    {
+        try
+        {
+            if (!File.Exists(AbilitySyncRuntimePath)) return;
+            var config = JsonSerializer.Deserialize<AbilitySyncConfig>(File.ReadAllText(AbilitySyncRuntimePath));
+            if (config is null) return;
+            var context = new AbilitySyncValidationContext
+            {
+                ExpectedMatchId = config.MatchId,
+                ExpectedRevision = config.Revision,
+                ExpectedCatalogVersion = AbilityCatalogVersion,
+                ExpectedSeatCount = config.Seats.Count,
+                KnownAbilityIds = new HashSet<string>(AbilityIds, StringComparer.Ordinal),
+            };
+            _abilitySyncApplier = new AbilitySyncApplier(context);
+            var result = _abilitySyncApplier.Apply(config);
+            if (!result.Ok) return;
+            _activeAbilitySyncConfig = _abilitySyncApplier.Current;
+            _abilitySyncMatchId = config.MatchId;
+            _abilitySyncRevision = config.Revision;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CaorenCup] Failed to restore ability sync runtime state: {ex.Message}");
+        }
+    }
+
+    private sealed class PendingAbilitySyncTransaction(AbilitySyncBeginEnvelope begin)
+    {
+        public AbilitySyncBeginEnvelope Begin { get; } = begin;
+        public List<AbilitySyncSeatEnvelope> Seats { get; } = [];
     }
 
     private HookResult OnNoclipCommand(CCSPlayerController? player, CommandInfo info)

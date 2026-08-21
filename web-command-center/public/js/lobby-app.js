@@ -537,6 +537,42 @@ window.__caorenCupLobbySocket = ws;
             };
         }
 
+        function abilitySyncStatusLabel(status) {
+            const labels = {
+                not_started: '尚未发起同步',
+                waiting_bridge: '等待桥接插件',
+                bridge_received: '桥接已接收',
+                plugin_validating: '娱乐插件校验中',
+                confirmed: '娱乐插件最终确认',
+                failed: '同步失败',
+                disabled: '本局已关闭异能模式',
+            };
+            return labels[status] || labels.not_started;
+        }
+
+        function renderAbilitySyncPanel(state, isAdmin) {
+            const sync = state?.abilitySyncState || { status: 'not_started' };
+            const status = sync.status || 'not_started';
+            const statusClass = status === 'confirmed' ? 'tag-green' : (status === 'failed' ? 'tag-red' : 'tag-orange');
+            let html = '<div style="margin:14px 0;padding:14px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;">';
+            html += '<h4 style="margin:0 0 8px;">异能职业同步状态</h4>';
+            html += '<p style="margin:4px 0;">当前状态：<span class="tag ' + statusClass + '">' + htmlEscape(abilitySyncStatusLabel(status)) + '</span></p>';
+            if (sync.syncId) html += '<p style="margin:4px 0;color:#64748b;font-size:12px;">同步 ID：' + htmlEscape(sync.syncId) + ' · 修订号：' + htmlEscape(sync.revision) + ' · 席位：' + htmlEscape(sync.appliedSeatCount ?? sync.seatCount ?? '-') + ' / ' + htmlEscape(sync.seatCount ?? '-') + '</p>';
+            if (status === 'failed') {
+                html += '<p style="margin:8px 0;color:#b91c1c;">失败原因：' + htmlEscape(sync.errorMessage || sync.errorCode || '娱乐插件拒绝了整份配置。') + '</p>';
+            } else if (status !== 'confirmed' && status !== 'disabled') {
+                html += '<p style="margin:8px 0;color:#64748b;">只有收到当前比赛、当前修订号和当前内容摘要的最终成功确认后，才允许以异能模式开赛。</p>';
+            }
+            if (isAdmin && status !== 'disabled' && status !== 'confirmed') {
+                html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">';
+                html += '<button type="button" class="primary-btn" onclick="retryAbilitySync()">重试完整同步</button>';
+                html += '<button type="button" class="secondary-btn" onclick="disableAbilityModeForMatch()">关闭本局异能模式，按普通比赛继续</button>';
+                html += '</div>';
+            }
+            html += '</div>';
+            return html;
+        }
+
         function ensureAbilityModeConfigControls(panel) {
             let abilityPanel = document.getElementById('ability-mode-config-panel');
             if (abilityPanel) return abilityPanel;
@@ -1473,6 +1509,10 @@ if (window._caorenModifiersEnabled !== true) {
                 const role = currentPlayer?.gameRole;
                 let html = renderDuelControlPanel(state, currentPlayer);
                 const abilityPreGameDecision = resolveAbilityPreGameRenderDecision(state);
+
+                if (state.matchOptions?.matchMode !== 'duel' && state.matchOptions?.abilityModeEnabled === true) {
+                    html += renderAbilitySyncPanel(state, isAdmin);
+                }
 
                 if (abilityPreGameDecision.showPluginSyncWarning) {
                     html += '<div class="match-options-warning" style="margin-bottom:14px;">' + htmlEscape(abilityPreGameDecision.formalMatchStartMessage) + '</div>';
@@ -2844,6 +2884,16 @@ if (window._caorenModifiersEnabled !== true) {
                     abilityDraftBatchSeconds
                 }
             });
+        }
+        function retryAbilitySync() {
+            if (window._currentPlayer?.role !== 'Admin') return showLobbyNotice('只有管理员可以重试异能同步。', 'error');
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ABILITY_SYNC_RETRY' });
+        }
+        function disableAbilityModeForMatch() {
+            if (window._currentPlayer?.role !== 'Admin') return showLobbyNotice('只有管理员可以关闭本局异能模式。', 'error');
+            const ok = confirm('关闭后本局将按普通比赛继续，迟到的异能同步 ACK 也不会重新打开异能模式。确认继续吗？');
+            if (!ok) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ABILITY_MODE_DISABLE_FOR_MATCH' });
         }
         function duelSetMap() {
             const select = document.getElementById('duel-live-map');

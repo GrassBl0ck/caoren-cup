@@ -35,7 +35,8 @@ import {
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
 import { ADMIN_PASSWORD } from './game-constants';
-import { enqueuePluginCommand } from './plugin-command-queue';
+import { cancelPluginCommands, enqueuePluginCommand } from './plugin-command-queue';
+import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
 import { assignTaskGridToPlayer } from './task-system';
 import { normalizeDuelMap, normalizeDuelRounds, normalizeDuelUtilityMode, getDuelTotalRounds, resolveDuelMapConfig } from './duel-config';
 import {
@@ -519,6 +520,43 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const cue = typeof data.payload?.cue === 'string' ? data.payload.cue : 'adminPrompt';
                 io.emit('AUDIO_CUE', { cue, source: 'admin', adminName: admin.name });
                 socket.emit(WsEvents.NOTIFICATION, { message: '已向所有网页玩家发送提示音。' });
+            } else if (data.action === 'ABILITY_SYNC_RETRY') {
+                if (session.phase !== GamePhase.PreGameSetup
+                    || session.matchOptions.matchMode === 'duel'
+                    || session.matchOptions.abilityModeEnabled !== true) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '当前比赛不能重试异能同步。' });
+                    return;
+                }
+                try {
+                    const result = enqueueCurrentAbilitySync(session);
+                    persistSessionNow?.();
+                    notifyMessage(`异能职业配置已重新加入同步队列（${result.config.seats.length} 个席位）。`);
+                    broadcastState();
+                } catch (err) {
+                    socket.emit(WsEvents.NOTIFICATION, {
+                        message: err instanceof Error ? err.message : '异能职业配置同步准备失败。',
+                    });
+                }
+            } else if (data.action === 'ABILITY_MODE_DISABLE_FOR_MATCH') {
+                if (session.phase !== GamePhase.PreGameSetup
+                    || session.matchOptions.matchMode === 'duel'
+                    || session.matchOptions.abilityModeEnabled !== true) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '当前比赛不能关闭本局异能模式。' });
+                    return;
+                }
+                const current = session.abilitySyncState;
+                session.matchOptions.abilityModeEnabled = false;
+                cancelPluginCommands((command) => command.type === 'ABILITY_SYNC'
+                    && command.payload?.matchId === session.matchId);
+                enqueuePluginCommand('ABILITY_SYNC_CLEAR', {
+                    matchId: session.matchId,
+                    requestedAt: Date.now(),
+                    label: '关闭本局异能模式并清除待同步配置',
+                });
+                if (current) session.abilitySyncState = { ...current, status: 'disabled', updatedAt: Date.now() };
+                persistSessionNow?.();
+                notifyMessage('管理员已关闭本局异能模式，本局将按普通比赛继续；迟到 ACK 不会重新打开异能模式。');
+                broadcastState();
             } else if (data.action === 'SET_ABILITY_MODE_CONFIG') {
                 if (session.phase !== GamePhase.Lobby) {
                     socket.emit(WsEvents.NOTIFICATION, { message: '只能在大厅阶段修改异能模式设置。进入异能 Ban 后配置已锁定。' });

@@ -45,6 +45,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private Task? _outboundWorker;
     private CaorenConfig _config = new();
     private string? _currentMatchId;
+    private readonly Dictionary<string, string> _pendingAbilitySyncDigests = new(StringComparer.Ordinal);
     private int _currentRound;
     private int _scoreCt;
     private int _scoreT;
@@ -192,6 +193,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_cclogin", "获取草人杯网页登录码。用法：!cclogin", OnGameLoginCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
+        AddCommand(AbilitySyncProtocol.AckCommandName, "内部异能同步最终确认回传", OnAbilitySyncAckCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
         AddCommand("css_lobbyreminder", "控制大厅验证提醒。用法：/lobbyreminder on|off|1|0", OnLobbyReminderCommand);
         AddCommand("css_guns", "查看单挑模式可切换枪械。用法：/guns", OnDuelGunsCommand);
@@ -1797,11 +1799,13 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             _currentMatchId = heartbeatMatchId;
             _stats.Clear();
+            ResetEntertainmentAbilitySyncState(heartbeatMatchId);
         }
-        else if (heartbeatMatchId != null && heartbeatMatchId != _currentMatchId)
+        else if (heartbeatMatchId != null && _currentMatchId != null && heartbeatMatchId != _currentMatchId)
         {
             _currentMatchId = heartbeatMatchId;
             _stats.Clear();
+            ResetEntertainmentAbilitySyncState(heartbeatMatchId);
         }
 
         if (state != null && ShouldApplyWebMatchCounters(_duelSession.ControlMode))
@@ -2396,12 +2400,130 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             ConfigureDuelMode(command.Payload);
         }
+        else if (string.Equals(command.Type, AbilitySyncProtocol.WebCommandType, StringComparison.OrdinalIgnoreCase))
+        {
+            return ApplyAbilitySyncCommandAsync(heartbeatCommand);
+        }
+        else if (string.Equals(command.Type, "ABILITY_SYNC_CLEAR", StringComparison.OrdinalIgnoreCase))
+        {
+            Server.ExecuteCommand(AbilitySyncProtocol.ClearCommandName);
+        }
         else
         {
             Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
         }
 
         return Task.FromResult(true);
+    }
+
+    private async Task<bool> ApplyAbilitySyncCommandAsync(HeartbeatPluginCommand heartbeatCommand)
+    {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
+        if (!IsHeartbeatCommandSourceCurrent(heartbeatCommand)) return true;
+
+        IReadOnlyList<AbilitySyncInternalCommand> commands;
+        AbilitySyncProtocol.AbilitySyncBeginEnvelope begin;
+        try
+        {
+            commands = AbilitySyncProtocol.BuildInternalCommands(heartbeatCommand.Command);
+            begin = AbilitySyncProtocol.Decode<AbilitySyncProtocol.AbilitySyncBeginEnvelope>(commands[0].Argument);
+        }
+        catch (AbilitySyncProtocolException ex)
+        {
+            Logger.LogWarning(ex, "Rejected malformed ability sync command from web queue.");
+            return true;
+        }
+
+        _pendingAbilitySyncDigests[begin.SyncId] = begin.ContentDigest;
+        try
+        {
+            await PostAbilitySyncProgressAsync(begin);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to report ability sync validation progress; continuing internal transaction.");
+        }
+
+        foreach (var internalCommand in commands)
+        {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return false;
+            Server.ExecuteCommand($"{internalCommand.Name} {internalCommand.Argument}");
+        }
+        return true;
+    }
+
+    private void OnAbilitySyncAckCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (info.ArgCount < 2) return;
+        try
+        {
+            var ack = AbilitySyncProtocol.Decode<AbilitySyncFinalAckEnvelope>(info.GetArg(1));
+            if (!_pendingAbilitySyncDigests.TryGetValue(ack.SyncId, out var expectedDigest)
+                || !string.Equals(expectedDigest, ack.ContentDigest, StringComparison.Ordinal))
+            {
+                Logger.LogWarning("Ignored ability sync ACK with no matching bridge transaction: {SyncId}", ack.SyncId);
+                return;
+            }
+            _ = PostAbilitySyncFinalAckAsync(ack);
+        }
+        catch (AbilitySyncProtocolException ex)
+        {
+            Logger.LogWarning(ex, "Ignored malformed ability sync ACK from entertainment plugin.");
+        }
+    }
+
+    private void ResetEntertainmentAbilitySyncState(string? matchId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(matchId))
+            {
+                Server.ExecuteCommand(AbilitySyncProtocol.ClearCommandName);
+                return;
+            }
+            var reset = AbilitySyncProtocol.BuildResetCommand(matchId);
+            Server.ExecuteCommand($"{reset.Name} {reset.Argument}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to reset entertainment ability sync state for MatchId={MatchId}", matchId);
+        }
+    }
+
+    private async Task PostAbilitySyncProgressAsync(AbilitySyncProtocol.AbilitySyncBeginEnvelope begin)
+    {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        using var response = await _http.PostAsJsonAsync("api/plugin/ability-sync-progress", new
+        {
+            syncId = begin.SyncId,
+            matchId = begin.MatchId,
+            revision = begin.Revision,
+            contentDigest = begin.ContentDigest,
+        }, _jsonOptions);
+        if (!response.IsSuccessStatusCode)
+        {
+            Logger.LogWarning("Ability sync progress rejected: {Status}", response.StatusCode);
+        }
+    }
+
+    private async Task PostAbilitySyncFinalAckAsync(AbilitySyncFinalAckEnvelope ack)
+    {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        using var response = await _http.PostAsJsonAsync("api/plugin/ability-sync-ack", new
+        {
+            status = ack.Status,
+            syncId = ack.SyncId,
+            matchId = ack.MatchId,
+            revision = ack.Revision,
+            contentDigest = ack.ContentDigest,
+            appliedSeatCount = ack.AppliedSeatCount,
+            errorCode = ack.ErrorCode,
+            errorMessage = ack.ErrorMessage,
+        }, _jsonOptions);
+        if (!response.IsSuccessStatusCode)
+        {
+            Logger.LogWarning("Ability sync final ACK rejected: {Status}", response.StatusCode);
+        }
     }
 
     private void ApplyTeamAssignments(JsonElement payload)
@@ -3675,6 +3797,33 @@ public sealed class PluginHeartbeatResponse
 
     [JsonPropertyName("currentRound")]
     public int CurrentRound { get; set; }
+}
+
+public sealed class AbilitySyncFinalAckEnvelope
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("syncId")]
+    public string SyncId { get; set; } = string.Empty;
+
+    [JsonPropertyName("matchId")]
+    public string MatchId { get; set; } = string.Empty;
+
+    [JsonPropertyName("revision")]
+    public int Revision { get; set; }
+
+    [JsonPropertyName("contentDigest")]
+    public string ContentDigest { get; set; } = string.Empty;
+
+    [JsonPropertyName("appliedSeatCount")]
+    public int AppliedSeatCount { get; set; }
+
+    [JsonPropertyName("errorCode")]
+    public string? ErrorCode { get; set; }
+
+    [JsonPropertyName("errorMessage")]
+    public string? ErrorMessage { get; set; }
 }
 
 internal sealed class PlayerEquipmentSnapshot

@@ -146,6 +146,13 @@ export const ackPluginCommand = (commandId: unknown): boolean => {
   return true;
 };
 
+export const getPluginCommand = (commandId: unknown): Readonly<BridgeCommand> | undefined => {
+  prunePluginCommandQueue();
+  const id = String(commandId || '').trim();
+  if (!id) return undefined;
+  return pluginCommandQueue.find(item => item.id === id);
+};
+
 export const getPluginCommandQueueSummary = (): PluginCommandQueueSummaryItem[] => {
   prunePluginCommandQueue();
 

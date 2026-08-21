@@ -229,3 +229,36 @@ test('undo restores assigned game roles and readiness without reverting identity
     assert.equal(participant.undercoverTaskAckStage, 'read');
     assert.equal(participant.identityId, 'identity-new');
 });
+
+test('unified pregame undo invalidates sync confirmation created after the checkpoint', () => {
+    const session = createInitialSession();
+    session.phase = GamePhase.AbilityDraft;
+    const admin = makePlayer('admin', 'Admin', 'Admin');
+    const participant: Player = { ...makePlayer('participant', 'Participant'), rosterTeam: 'A' };
+    addPlayer(session, admin);
+    addPlayer(session, participant);
+    session.teams.A.players = [participant.playerId];
+    pushFlowUndoCheckpoint(session, {
+        actionType: 'ADVANCE_PHASE', actorId: admin.playerId, actorName: admin.name, summary: 'Finish ability draft',
+    });
+
+    session.phase = GamePhase.PreGameSetup;
+    session.abilityAssignments = [{ playerId: participant.playerId, team: 'A', abilityId: 'medic' }];
+    session.abilitySyncRevision = 1;
+    session.abilitySyncState = {
+        status: 'confirmed',
+        syncId: 'sync-new',
+        matchId: session.matchId,
+        revision: 1,
+        catalogVersion: 'ability-catalog-v1',
+        contentDigest: 'a'.repeat(64),
+        seatCount: 1,
+    };
+
+    const result = undoLatestFlowAction(session, admin, currentRequest(session, admin) as any);
+
+    assert.equal(result.ok, true);
+    assert.equal(session.phase, GamePhase.AbilityDraft);
+    assert.equal(session.abilitySyncState, undefined);
+    assert.equal(session.abilitySyncRevision, undefined);
+});

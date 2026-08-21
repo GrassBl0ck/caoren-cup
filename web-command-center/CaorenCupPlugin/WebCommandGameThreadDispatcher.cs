@@ -46,7 +46,9 @@ internal static class WebCommandGameThreadDispatcher
         "RESET_LIVE_MATCH_STATS",
         "APPLY_TEAM_ASSIGNMENTS",
         "CLEAR_TEAM_ASSIGNMENTS",
-        "CONFIGURE_DUEL_MODE"
+        "CONFIGURE_DUEL_MODE",
+        "ABILITY_SYNC",
+        "ABILITY_SYNC_CLEAR"
     };
 
     public static Task<bool> ScheduleAsync(

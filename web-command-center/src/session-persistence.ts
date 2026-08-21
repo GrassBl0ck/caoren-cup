@@ -68,6 +68,8 @@ export const buildSessionSnapshotPayload = (
         abilityBanState: session.abilityBanState,
         abilityDraftState: session.abilityDraftState,
         abilityAssignments: session.abilityAssignments,
+        abilitySyncRevision: session.abilitySyncRevision,
+        abilitySyncState: session.abilitySyncState,
         liveGameData: session.liveGameData,
         accusations: session.accusations,
         taskTemplate: session.taskTemplate,

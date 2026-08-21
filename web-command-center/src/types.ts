@@ -75,6 +75,28 @@ export interface AbilityPhaseOnePublicPolicy {
     formalMatchStartMessage: string;
     rosterMutationMessage: string;
 }
+export type AbilitySyncStatus =
+    | 'not_started'
+    | 'waiting_bridge'
+    | 'bridge_received'
+    | 'plugin_validating'
+    | 'confirmed'
+    | 'failed'
+    | 'disabled';
+export interface AbilitySyncState {
+    status: AbilitySyncStatus;
+    syncId: string;
+    matchId: string;
+    revision: number;
+    catalogVersion: string;
+    contentDigest: string;
+    seatCount: number;
+    commandId?: string;
+    appliedSeatCount?: number;
+    errorCode?: string;
+    errorMessage?: string;
+    updatedAt?: number;
+}
 export interface RuleResult {
     ok: boolean;
     code?: string;
@@ -332,6 +354,8 @@ export interface GameSession {
     abilityBanState?: AbilityBanState;
     abilityDraftState?: AbilityDraftState;
     abilityAssignments?: AbilityAssignment[];
+    abilitySyncRevision?: number;
+    abilitySyncState?: AbilitySyncState;
     abilityPhaseOnePolicy?: AbilityPhaseOnePublicPolicy;
     undercoverCount: number;
     detectiveCount: number;
