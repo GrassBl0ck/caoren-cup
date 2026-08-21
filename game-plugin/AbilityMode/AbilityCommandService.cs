@@ -161,7 +161,8 @@ public sealed class AbilityHudService
         AbilitySeatState seat,
         DateTimeOffset now,
         bool hasActiveHandler,
-        Func<int, string>? cModelPreview = null)
+        Func<int, string>? cModelPreview = null,
+        string? roleDetailsHtml = null)
     {
         var cap = seat.Definition.ChargeCap;
         var filled = cap == 0 ? 0 : (int)Math.Floor(seat.Charge * 10d / cap);
@@ -198,7 +199,8 @@ public sealed class AbilityHudService
             if (current.ExpiresAt > now) prompt = WebUtility.HtmlEncode(current.Text);
             else _prompts.Remove(seat.SeatId);
         }
-        return $"{WebUtility.HtmlEncode(seat.Definition.Name)} [{bar}] {seat.Charge}/{cap}<br>{status}{preview}{durations}<br>{prompt}";
+        var details = string.IsNullOrWhiteSpace(roleDetailsHtml) ? string.Empty : $"<br>{roleDetailsHtml}";
+        return $"{WebUtility.HtmlEncode(seat.Definition.Name)} [{bar}] {seat.Charge}/{cap}<br>{status}{preview}{durations}<br>{prompt}{details}";
     }
 
     private sealed record HudPrompt(string Text, DateTimeOffset ExpiresAt);

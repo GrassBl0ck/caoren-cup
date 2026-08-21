@@ -10,11 +10,16 @@ public sealed record RuntimeInitializationResult(
 public sealed class AbilityRuntimeController
 {
     private readonly RuntimePersistence _persistence;
+    private readonly AbilityRoleRegistry? _roles;
 
-    public AbilityRuntimeController(AbilityDefinitionCatalog catalog, RuntimePersistence persistence)
+    public AbilityRuntimeController(
+        AbilityDefinitionCatalog catalog,
+        RuntimePersistence persistence,
+        AbilityRoleRegistry? roles = null)
     {
         Runtime = new AbilityMatchRuntime(catalog);
         _persistence = persistence;
+        _roles = roles;
     }
 
     public AbilityMatchRuntime Runtime { get; }
@@ -30,6 +35,12 @@ public sealed class AbilityRuntimeController
             Movement.ClearAll();
             Runtime.Stop();
             return new(true, Code: "MODE_DISABLED");
+        }
+        if (_roles is not null)
+        {
+            var roleValidation = _roles.ValidateSelectedRoles(config);
+            if (!roleValidation.Ok)
+                return new(false, Code: roleValidation.Code);
         }
         var identity = new AbilityRuntimeIdentity(config.MatchId, config.Revision, config.ContentDigest);
         if (Runtime.State is null)

@@ -265,6 +265,13 @@ public override void Load(bool hotReload)
             _pendingAbilitySyncTransactions.Remove(commit.SyncId);
             return;
         }
+        var roleValidation = _abilityRuntimeAdapter?.ValidateRoleConfig(config);
+        if (roleValidation is { Ok: false })
+        {
+            SendAbilitySyncAck(FailedAbilitySyncAck(begin, roleValidation.Code, roleValidation.Message));
+            _pendingAbilitySyncTransactions.Remove(commit.SyncId);
+            return;
+        }
 
         try
         {

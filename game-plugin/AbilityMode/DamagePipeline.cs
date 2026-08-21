@@ -10,6 +10,8 @@ public sealed record DamageContext
     public string VictimAbilityId { get; init; } = string.Empty;
     public double OriginalDamage { get; init; }
     public string WeaponType { get; init; } = string.Empty;
+    public RoleDamageKind RoleDamageKind { get; init; } = RoleDamageKind.Other;
+    public double FrontAngleDegrees { get; init; } = 180;
     public int HitGroup { get; init; }
     public Vector3 Direction { get; init; }
     public bool IsAirborne { get; init; }

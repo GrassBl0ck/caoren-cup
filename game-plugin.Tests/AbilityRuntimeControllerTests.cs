@@ -1,5 +1,6 @@
 using Caoren;
 using Caoren.AbilityMode;
+using CaorenCup;
 using Xunit;
 
 namespace CaorenCup.GamePlugin.Tests;
@@ -142,4 +143,20 @@ public sealed class AbilityRuntimeControllerTests
             new() { PlayerId = "B1", SteamId = "76561198000000002", RosterTeam = "B", InitialSide = "T", AbilityId = "tank" },
         ],
     };
+
+    [Fact]
+    public async Task Production_controller_rejects_a_selected_disabled_role_before_arming()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"ability-disabled-{Guid.NewGuid():N}.json");
+        var catalog = AbilityDefinitionCatalog.CreateProduction();
+        await using var persistence = new RuntimePersistence(path, catalog);
+        var registry = AbilityRoleRegistry.Create(new AbilityRoleSettings { MedicEnabled = false });
+        var controller = new AbilityRuntimeController(catalog, persistence, registry);
+
+        var result = await controller.InitializeFromConfirmedAsync(Config());
+
+        Assert.False(result.Ok);
+        Assert.Equal("ROLE_DISABLED", result.Code);
+        Assert.Null(controller.Runtime.State);
+    }
 }

@@ -6,6 +6,9 @@ namespace CaorenCup;
 
 public class CaorenCupConfig : BasePluginConfig
 {
+    [JsonPropertyName("AbilityRoles")]
+    public AbilityRoleSettings AbilityRoles { get; set; } = new();
+
     // --- 模块 1: Bomb Quiz ---
     [JsonPropertyName("BombQuiz")]
     public BombQuizSettings BombQuiz { get; set; } = new BombQuizSettings();//bq
@@ -69,6 +72,16 @@ public class CaorenCupConfig : BasePluginConfig
 
     [JsonPropertyName("HpCap")]
     public HpCapSettings HpCap { get; set; } = new HpCapSettings();
+}
+
+public sealed class AbilityRoleSettings
+{
+    public bool MedicEnabled { get; set; } = true;
+    public bool BerserkerEnabled { get; set; } = true;
+    public bool TankEnabled { get; set; } = true;
+    public bool CapitalistEnabled { get; set; } = true;
+    public bool BalanceEnabled { get; set; } = true;
+    public bool CommanderEnabled { get; set; } = true;
 }
 
 // ==========================================
