@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Encodings.Web;
 using Caoren;
+using Caoren.AbilityMode;
 using CaorenCup.Features;
 
 namespace CaorenCup;
@@ -31,6 +32,7 @@ public class CaorenCupPlugin : BasePlugin
     private AbilitySyncConfig? _activeAbilitySyncConfig;
     private string? _abilitySyncMatchId;
     private int _abilitySyncRevision;
+    private CounterStrikeAbilityRuntimeAdapter? _abilityRuntimeAdapter;
     private static readonly HashSet<string> AbilityIds = new(StringComparer.Ordinal)
     {
         "medic", "berserker", "assassin", "tank", "istaru", "capitalist", "balance",
@@ -54,7 +56,9 @@ public override void Load(bool hotReload)
     {
         // 1. 手动加载配置 (这是最关键的一步！)
         LoadConfig();
+        _abilityRuntimeAdapter = new CounterStrikeAbilityRuntimeAdapter(this, AbilitySyncRuntimePath);
         LoadAbilitySyncState();
+        _abilityRuntimeAdapter.Register();
 
         // 2. 注册所有积木
         _features.Add(new Features.BombQuizFeature());//1 炸弹解密
@@ -276,6 +280,9 @@ public override void Load(bool hotReload)
                 return;
             }
             _activeAbilitySyncConfig = _abilitySyncApplier.Current;
+            var runtimeResult = _abilityRuntimeAdapter?.ApplyConfirmedConfig(config);
+            if (runtimeResult is { Ok: false })
+                throw new InvalidOperationException($"Ability runtime rejected confirmed config: {runtimeResult.Code}");
             _pendingAbilitySyncTransactions.Remove(commit.SyncId);
             SendAbilitySyncAck(new AbilitySyncFinalAckEnvelope(
                 "success",
@@ -337,7 +344,8 @@ public override void Load(bool hotReload)
         _abilitySyncRevision = 0;
         try
         {
-            if (File.Exists(AbilitySyncRuntimePath)) File.Delete(AbilitySyncRuntimePath);
+            if (_abilityRuntimeAdapter is not null) _abilityRuntimeAdapter.ClearRuntime();
+            else if (File.Exists(AbilitySyncRuntimePath)) File.Delete(AbilitySyncRuntimePath);
         }
         catch (Exception ex)
         {
@@ -347,6 +355,11 @@ public override void Load(bool hotReload)
 
     private void SaveAbilitySyncState(AbilitySyncConfig config)
     {
+        if (_abilityRuntimeAdapter is not null)
+        {
+            _abilityRuntimeAdapter.SaveConfirmedConfig(config);
+            return;
+        }
         var directory = Path.GetDirectoryName(AbilitySyncRuntimePath)!;
         Directory.CreateDirectory(directory);
         var temporaryPath = $"{AbilitySyncRuntimePath}.{Guid.NewGuid():N}.tmp";
@@ -366,8 +379,9 @@ public override void Load(bool hotReload)
     {
         try
         {
-            if (!File.Exists(AbilitySyncRuntimePath)) return;
-            var config = JsonSerializer.Deserialize<AbilitySyncConfig>(File.ReadAllText(AbilitySyncRuntimePath));
+            var config = _abilityRuntimeAdapter?.LoadConfirmedConfig();
+            if (config is null && File.Exists(AbilitySyncRuntimePath))
+                config = JsonSerializer.Deserialize<AbilitySyncConfig>(File.ReadAllText(AbilitySyncRuntimePath));
             if (config is null) return;
             var context = new AbilitySyncValidationContext
             {
@@ -383,6 +397,9 @@ public override void Load(bool hotReload)
             _activeAbilitySyncConfig = _abilitySyncApplier.Current;
             _abilitySyncMatchId = config.MatchId;
             _abilitySyncRevision = config.Revision;
+            var runtimeResult = _abilityRuntimeAdapter?.ApplyConfirmedConfig(config);
+            if (runtimeResult is { Ok: false })
+                throw new InvalidOperationException($"Ability runtime restore rejected confirmed config: {runtimeResult.Code}");
         }
         catch (Exception ex)
         {
@@ -761,6 +778,8 @@ public override void Load(bool hotReload)
  }
  public override void Unload(bool hotReload)
     {
+        _abilityRuntimeAdapter?.Unload(hotReload);
+        _abilityRuntimeAdapter = null;
         foreach (var feature in _features) feature.OnUnload();
         _features.Clear();
     }

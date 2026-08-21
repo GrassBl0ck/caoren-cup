@@ -55,6 +55,7 @@ import {
 import { buildDuelRuntimeConfigPayload } from './duel-runtime-config';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
+import { enqueueAbilityRuntimeStart, enqueueAbilityRuntimeStop } from './ability-runtime-orchestrator';
 import { scheduleSessionSnapshotSave } from './session-persistence';
 import {
     clearFlowUndoHistory,
@@ -1288,13 +1289,17 @@ const advancePhase = (
         broadcast?.();
     }
 
+    if (from === GamePhase.LiveGame
+        && (nextTo === GamePhase.Scoreboard || nextTo === GamePhase.PostGameAccusation)) {
+        enqueueAbilityRuntimeStop(session, 'phase_exit');
+    }
     session.phase = nextTo;
     performPhaseTransition(nextTo);
     if (checkpoint) commitFlowUndoCheckpoint(checkpoint);
     return true;
 };
 
-export const markStandardMatchLiveFromMatchZy = (): boolean => {
+export const markStandardMatchLiveFromMatchZy = (roundKey = 'round-1'): boolean => {
     const session = getSession();
     if (session.phase !== GamePhase.PreGameSetup) return false;
     if (session.matchOptions?.matchMode === 'duel') return false;
@@ -1306,6 +1311,7 @@ export const markStandardMatchLiveFromMatchZy = (): boolean => {
 
     session.phase = GamePhase.LiveGame;
     performPhaseTransition(GamePhase.LiveGame);
+    enqueueAbilityRuntimeStart(session, roundKey);
     broadcast?.();
     notifyMessage?.('MatchZy 已由管理员 .start 开赛，网页已自动进入正式比赛阶段。');
     return true;

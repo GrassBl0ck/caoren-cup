@@ -30,6 +30,7 @@ import { resolveDuelMapConfig } from './duel-config';
 import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer } from './identity/session-integration';
 import { scheduleSessionSnapshotSave } from './session-persistence';
+import { enqueueAbilityRuntimeStop } from './ability-runtime-orchestrator';
 
 type TeamAssignmentSide = 'CT' | 'T';
 
@@ -477,7 +478,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
         const promotedFromPreGame = session.phase === GamePhase.PreGameSetup &&
             type === 'round_start' &&
             session.matchOptions?.matchMode !== 'duel' &&
-            markStandardMatchLiveFromMatchZy();
+            markStandardMatchLiveFromMatchZy(`round-${Math.max(1, Math.floor(Number(payload.round || 1)))}`);
 
         if (!isPluginLivePhase(session.phase)) return res.json({ success: true, ignored: true, reason: `当前阶段 ${session.phase} 不接收实时事件` });
         if (!promotedFromPreGame && req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
@@ -1311,8 +1312,10 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
         }
         if (formalRound) markScoredRound(live, rawKey, formalRound);
     }
+    const wasFinished = live.matchFinished === true;
     updateMatchFinishState();
     if (live.matchFinished) live.statsLocked = true;
+    if (!wasFinished && live.matchFinished) enqueueAbilityRuntimeStop(session, 'match_finished');
     if (live.matchFinished && session.phase === GamePhase.LiveGame) {
         const winnerLabel = live.winnerTeam === 'A' ? 'A队' : 'B队';
         notify(`比赛结束：${winnerLabel} 获胜，比分 ${live.scoreA}:${live.scoreB}`);

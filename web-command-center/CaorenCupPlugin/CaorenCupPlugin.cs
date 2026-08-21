@@ -46,6 +46,9 @@ public sealed class CaorenCupPlugin : BasePlugin
     private CaorenConfig _config = new();
     private string? _currentMatchId;
     private readonly Dictionary<string, string> _pendingAbilitySyncDigests = new(StringComparer.Ordinal);
+    private AbilityRuntimeProtocol.AbilityRuntimeEnvelope? _confirmedAbilityRuntimeIdentity;
+    private string? _currentWebPhase;
+    private string? _lastAbilityRuntimeStartKey;
     private int _currentRound;
     private int _scoreCt;
     private int _scoreT;
@@ -194,6 +197,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
         AddCommand(AbilitySyncProtocol.AckCommandName, "内部异能同步最终确认回传", OnAbilitySyncAckCommand);
+        AddCommand(AbilityRuntimeProtocol.ReadyCommandName, "娱乐插件异能运行时就绪", OnAbilityRuntimeReadyCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
         AddCommand("css_lobbyreminder", "控制大厅验证提醒。用法：/lobbyreminder on|off|1|0", OnLobbyReminderCommand);
         AddCommand("css_guns", "查看单挑模式可切换枪械。用法：/guns", OnDuelGunsCommand);
@@ -1090,6 +1094,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         _currentRound++;
+        TryStartConfirmedAbilityRuntime();
         if (_duelSession.ControlMode == DuelControlMode.GameManaged &&
             _duelSession.Lifecycle == DuelLifecycle.Running)
         {
@@ -1795,6 +1800,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         bool replaceIsolatedState)
     {
         var heartbeatMatchId = string.IsNullOrWhiteSpace(state?.MatchId) ? null : state.MatchId.Trim();
+        _currentWebPhase = state?.Phase;
         if (replaceIsolatedState)
         {
             _currentMatchId = heartbeatMatchId;
@@ -1814,6 +1820,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             _scoreCt = Math.Max(0, state.ScoreCT);
             _scoreT = Math.Max(0, state.ScoreT);
         }
+        TryStartConfirmedAbilityRuntime();
     }
 
     private async Task SendSnapshotAsync(CCSPlayerController? replyTo = null)
@@ -2404,9 +2411,21 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             return ApplyAbilitySyncCommandAsync(heartbeatCommand);
         }
+        else if (string.Equals(command.Type, AbilityRuntimeProtocol.WebCommandType, StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var runtimeCommand = AbilityRuntimeProtocol.BuildInternalCommand(command);
+                Server.ExecuteCommand($"{runtimeCommand.Name} {runtimeCommand.Argument}");
+            }
+            catch (AbilityRuntimeProtocolException ex)
+            {
+                Logger.LogWarning(ex, "Rejected malformed ability runtime command from web queue.");
+            }
+        }
         else if (string.Equals(command.Type, "ABILITY_SYNC_CLEAR", StringComparison.OrdinalIgnoreCase))
         {
-            Server.ExecuteCommand(AbilitySyncProtocol.ClearCommandName);
+            ResetEntertainmentAbilitySyncState(null);
         }
         else
         {
@@ -2464,6 +2483,16 @@ public sealed class CaorenCupPlugin : BasePlugin
                 Logger.LogWarning("Ignored ability sync ACK with no matching bridge transaction: {SyncId}", ack.SyncId);
                 return;
             }
+            if (string.Equals(ack.Status, "success", StringComparison.OrdinalIgnoreCase))
+            {
+                _confirmedAbilityRuntimeIdentity = new AbilityRuntimeProtocol.AbilityRuntimeEnvelope(
+                    "start",
+                    ack.MatchId,
+                    ack.Revision,
+                    ack.ContentDigest,
+                    $"round-{Math.Max(1, _currentRound)}");
+                TryStartConfirmedAbilityRuntime();
+            }
             _ = PostAbilitySyncFinalAckAsync(ack);
         }
         catch (AbilitySyncProtocolException ex)
@@ -2472,8 +2501,44 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
     }
 
+    private void OnAbilityRuntimeReadyCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is not null) return;
+        TryStartConfirmedAbilityRuntime(force: true);
+    }
+
+    private void TryStartConfirmedAbilityRuntime(bool force = false)
+    {
+        var identity = _confirmedAbilityRuntimeIdentity;
+        if (identity is null
+            || !string.Equals(_currentWebPhase, "LiveGame", StringComparison.Ordinal)
+            || !string.Equals(identity.MatchId, _currentMatchId, StringComparison.Ordinal)
+            || IsServerWarmup()) return;
+        var current = identity with { RoundKey = $"round-{Math.Max(1, _currentRound)}" };
+        var key = $"{current.MatchId}|{current.Revision}|{current.ContentDigest}|{current.RoundKey}";
+        if (!force && string.Equals(key, _lastAbilityRuntimeStartKey, StringComparison.Ordinal)) return;
+        Server.ExecuteCommand($"{AbilityRuntimeProtocol.StartCommandName} {AbilitySyncProtocol.Encode(current)}");
+        _lastAbilityRuntimeStartKey = key;
+    }
+
+    private static bool IsServerWarmup()
+    {
+        try
+        {
+            var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules")
+                .FirstOrDefault()?.GameRules;
+            return rules?.WarmupPeriod ?? true;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
     private void ResetEntertainmentAbilitySyncState(string? matchId)
     {
+        _confirmedAbilityRuntimeIdentity = null;
+        _lastAbilityRuntimeStartKey = null;
         try
         {
             if (string.IsNullOrWhiteSpace(matchId))
