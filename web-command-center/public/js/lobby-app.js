@@ -25,6 +25,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
 
         // 模板编辑器状态
         window._currentTaskTemplate = null;
+        window._taskPresets = [];
         window._editingTemplate = null;
         window._editingCellId = null;
         window._taskTemplateHistory = window.CaorenTaskTemplateHistory?.TaskTemplateHistory
@@ -2036,6 +2037,10 @@ if (window._caorenModifiersEnabled !== true) {
             if (event.target?.closest?.('.task-history-shell')) return;
             document.querySelectorAll('.task-history-shell.open').forEach(item => item.classList.remove('open'));
         });
+        ws.on('TASK_PRESETS', (data) => {
+            window._taskPresets = Array.isArray(data?.presets) ? data.presets : [];
+            renderTaskPresetOptions();
+        });
 
         function renderTaskCell(cellId, cell, options = {}) {
             const clickable = options.clickable === true;
@@ -2987,6 +2992,7 @@ if (window._caorenModifiersEnabled !== true) {
             if (!canEditTaskTemplate(window._currentGameState)) return showLobbyNotice('任务模板只能在大厅或身份发放前修改。', 'error');
             window._editingTemplate = JSON.parse(JSON.stringify(window._currentTaskTemplate));
             window._taskTemplateHistory?.reset(window._editingTemplate);
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'LIST_TASK_PRESETS' });
             document.getElementById('template-json-textarea').value = JSON.stringify(window._editingTemplate, null, 4);
 
             // 默认选中 A1
@@ -2998,6 +3004,47 @@ if (window._caorenModifiersEnabled !== true) {
         function closeTemplateModal() {
             document.getElementById('template-modal').style.display = 'none';
             if (window._editingTemplate) window._taskTemplateHistory?.reset(window._editingTemplate);
+        }
+
+        function renderTaskPresetOptions() {
+            const select = document.getElementById('task-preset-select');
+            if (!select) return;
+            const current = select.value;
+            select.innerHTML = window._taskPresets.map(p => `<option value="${htmlEscape(p.id)}">${htmlEscape(p.name)}${p.system ? '（系统）' : ''}</option>`).join('');
+            if (window._taskPresets.some(p => p.id === current)) select.value = current;
+            updateTaskPresetButtonState();
+        }
+        function updateTaskPresetButtonState() {
+            const preset = window._taskPresets.find(p => p.id === selectedTaskPresetId());
+            const locked = !preset || preset.system;
+            const rename = document.getElementById('task-preset-rename-btn');
+            const remove = document.getElementById('task-preset-delete-btn');
+            if (rename) rename.disabled = locked;
+            if (remove) remove.disabled = locked;
+        }
+        async function createTaskPresetFromEditor() {
+            const name = await caorenPrompt('请输入预设名称。', { title: '另存为任务预设', confirmText: '保存' });
+            if (!name?.trim()) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'CREATE_TASK_PRESET', payload: { name: name.trim(), taskTemplate: window._editingTemplate || window._currentTaskTemplate } });
+        }
+        function selectedTaskPresetId() { return document.getElementById('task-preset-select')?.value || ''; }
+        async function applySelectedTaskPreset() {
+            const id = selectedTaskPresetId(); if (!id) return;
+            if (!await confirmTaskTemplateReplacement()) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'APPLY_TASK_PRESET', payload: { id } }); closeTemplateModal();
+        }
+        async function renameSelectedTaskPreset() {
+            const preset = window._taskPresets.find(p => p.id === selectedTaskPresetId());
+            if (!preset || preset.system) return showLobbyNotice('系统默认预设不能重命名。', 'error');
+            const name = await caorenPrompt('请输入新的预设名称。', { title: '重命名任务预设', defaultValue: preset.name, confirmText: '保存' });
+            if (!name?.trim()) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RENAME_TASK_PRESET', payload: { id: preset.id, name: name.trim() } });
+        }
+        async function deleteSelectedTaskPreset() {
+            const preset = window._taskPresets.find(p => p.id === selectedTaskPresetId());
+            if (!preset || preset.system) return showLobbyNotice('系统默认预设不能删除。', 'error');
+            if (!await caorenConfirm(`确定删除预设“${preset.name}”吗？`, { title: '删除任务预设', tone: 'danger', confirmText: '删除' })) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DELETE_TASK_PRESET', payload: { id: preset.id } });
         }
 
         function applyTaskTemplateHistorySnapshot(snapshot) {
@@ -3309,6 +3356,11 @@ if (window._caorenModifiersEnabled !== true) {
             redoTaskTemplateEdit,
             saveTemplate,
             saveTemplateFromJson,
+            renderTaskPresetOptions,
+            createTaskPresetFromEditor,
+            applySelectedTaskPreset,
+            renameSelectedTaskPreset,
+            deleteSelectedTaskPreset,
         });
 
         // 须知弹窗 (省略不重要的文案，保持原样逻辑即可)

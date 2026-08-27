@@ -34,6 +34,7 @@ import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './ga
 import { ADMIN_PASSWORD } from './game-constants';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import { assignTaskGridToPlayer } from './task-system';
+import { loadTaskPresets, createTaskPreset, renameTaskPreset, deleteTaskPreset } from './task-preset-store';
 import { normalizeDuelMap, normalizeDuelRounds, normalizeDuelUtilityMode, getDuelTotalRounds, resolveDuelMapConfig } from './duel-config';
 import {
     lobbyIdentityService,
@@ -374,6 +375,51 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const admin = findPlayerById(session, data.playerId);
             if (!admin || admin.role !== 'Admin') {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有管理员才能执行此操作' });
+                return;
+            }
+
+            const templateEditable = session.phase === GamePhase.Lobby ||
+                (session.phase === GamePhase.PreGameSetup && !session.rolesReleased);
+            const sendTaskPresets = () => socket.emit('TASK_PRESETS', { presets: loadTaskPresets().map(({ taskTemplate, ...meta }) => meta) });
+            if (data.action === 'LIST_TASK_PRESETS') {
+                sendTaskPresets();
+                return;
+            } else if (['CREATE_TASK_PRESET', 'RENAME_TASK_PRESET', 'DELETE_TASK_PRESET', 'APPLY_TASK_PRESET'].includes(data.action)) {
+                if (!templateEditable) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '任务预设只能在大厅或身份发放前管理。' });
+                    return;
+                }
+                try {
+                    if (data.action === 'CREATE_TASK_PRESET') {
+                        createTaskPreset(data.payload?.name, data.payload?.taskTemplate || session.taskTemplate!);
+                        sendTaskPresets();
+                        socket.emit(WsEvents.NOTIFICATION, { message: '任务预设已保存。' });
+                    } else if (data.action === 'RENAME_TASK_PRESET') {
+                        renameTaskPreset(String(data.payload?.id || ''), data.payload?.name);
+                        sendTaskPresets();
+                        socket.emit(WsEvents.NOTIFICATION, { message: '任务预设名称已更新。' });
+                    } else if (data.action === 'DELETE_TASK_PRESET') {
+                        deleteTaskPreset(String(data.payload?.id || ''));
+                        sendTaskPresets();
+                        socket.emit(WsEvents.NOTIFICATION, { message: '任务预设已删除。' });
+                    } else {
+                        const preset = loadTaskPresets().find(p => p.id === String(data.payload?.id || ''));
+                        if (!preset) throw new Error('预设不存在。');
+                        session.taskTemplate = JSON.parse(JSON.stringify(preset.taskTemplate));
+                        for (const player of getGamePlayers(session)) {
+                            if (player.gameRole !== 'Undercover') continue;
+                            assignTaskGridToPlayer(player, session.taskTemplate);
+                            player.isReady = false;
+                            player.undercoverTaskAckStage = 'none';
+                            player.taskActionLog = [];
+                            player.abandonCount = 0; player.replaceCount = 0; player.hintUsedCount = 0;
+                        }
+                        broadcastState();
+                        socket.emit(WsEvents.NOTIFICATION, { message: `已应用任务预设：${preset.name}。` });
+                    }
+                } catch (error: any) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: error?.message || '任务预设操作失败。' });
+                }
                 return;
             }
 

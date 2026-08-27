@@ -605,6 +605,14 @@
                 <button id="btn-tab-visual" class="template-tab-btn active" type="button" onclick="switchTemplateTab('visual')">可视化编辑</button>
                 <button id="btn-tab-json" class="template-tab-btn" type="button" onclick="switchTemplateTab('json')">JSON 导入 / 导出</button>
             </div>
+            <div id="task-preset-panel" class="task-preset-panel">
+                <label for="task-preset-select">任务预设：</label>
+                <select id="task-preset-select" style="min-width:180px;" onchange="updateTaskPresetButtonState()"></select>
+                <button type="button" onclick="applySelectedTaskPreset()">应用</button>
+                <button type="button" onclick="createTaskPresetFromEditor()">新建预设</button>
+                <button id="task-preset-rename-btn" type="button" onclick="renameSelectedTaskPreset()">重命名</button>
+                <button id="task-preset-delete-btn" type="button" onclick="deleteSelectedTaskPreset()">删除</button>
+            </div>
 
             <div id="template-visual-tab" style="display:block;">
                 <div class="tpl-editor-layout">
@@ -820,7 +828,7 @@
     <script src="/js/update-announcement-read-state.js"></script>
     <script src="/js/caoren-dialog.js?v=1.9.2-modern-dialog11"></script>
     <script src="/js/task-template-history.js?v=undercover-ui1"></script>
-    <script src="/js/lobby-app.js?v=1.9.3-readiness1"></script>
+    <script src="/js/lobby-app.js?v=1.9.3-undercover-ui1"></script>
     <script src="/js/update-announcement-public.js"></script>
     <script src="/js/update-announcement-admin-mutation-state.js"></script>
     <script src="/js/update-announcement-admin.js?v=1.9.2-modern-dialog8"></script>

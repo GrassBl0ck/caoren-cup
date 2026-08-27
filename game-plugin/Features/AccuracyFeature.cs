@@ -272,6 +272,9 @@ public class AccuracyFeature : ICaorenFeature
     }
 
     private void OnTick()
+        => _plugin.MeasurePerformance("Accuracy.OnTick", OnTickCore);
+
+    private void OnTickCore()
     {
         if (!_settings.Enabled)
             return;

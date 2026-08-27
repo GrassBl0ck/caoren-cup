@@ -10,6 +10,7 @@ import {
 } from './types';
 import { getSession } from './session-manager';
 import { restoreSessionSnapshot, saveSessionSnapshotNow, scheduleSessionSnapshotSave } from './session-persistence';
+import { loadTaskPresets } from './task-preset-store';
 import { findPlayerById, generateBindCode, sanitizeGameStateForViewer } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
@@ -81,6 +82,7 @@ app.use(express.static('public', {
 }));
 const upload = multer({ storage: multer.memoryStorage() });
 const restoredSessionSnapshot = restoreSessionSnapshot();
+loadTaskPresets();
 
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {

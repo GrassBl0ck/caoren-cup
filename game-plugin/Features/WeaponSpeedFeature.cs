@@ -187,6 +187,9 @@ public class WeaponSpeedFeature : ICaorenFeature
     }
 
     private void OnTick()
+        => _plugin.MeasurePerformance("WeaponSpeed.OnTick", OnTickCore);
+
+    private void OnTickCore()
     {
         if (!_settings.Enabled) return;
 

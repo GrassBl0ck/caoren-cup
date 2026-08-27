@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace CaorenCup.Features;
 
-public class SmokeFeature : ICaorenFeature
+public class SmokeFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRuntimeCountSource
 {
     public string FeatureName => "Smoke (高级烟雾控制)";
 
@@ -198,7 +198,10 @@ public class SmokeFeature : ICaorenFeature
     {
         StopEffectTimer();
         if (!_settings.Enabled || _settings.HealthChangePerSecond == 0) return;
-        _effectTimer = _plugin.AddTimer(1.0f, OnEffectTick, TimerFlags.REPEAT);
+        _effectTimer = _plugin.AddTimer(
+            1.0f,
+            () => _plugin.MeasurePerformance("Smoke.Timer", OnEffectTick),
+            TimerFlags.REPEAT);
     }
 
     private void StopEffectTimer()
@@ -247,6 +250,15 @@ public class SmokeFeature : ICaorenFeature
             }
         }
     }
+
+    public IReadOnlyDictionary<string, long> CapturePerformanceRuntimeCounts() =>
+        new Dictionary<string, long>
+        {
+            ["TimerActive"] = _effectTimer is null ? 0 : 1,
+            ["ActiveSmokeProjectiles"] = Utilities
+                .FindAllEntitiesByDesignerName<CSmokeGrenadeProjectile>("smokegrenade_projectile")
+                .LongCount(smoke => smoke is not null && smoke.IsValid && smoke.DidSmokeEffect)
+        };
 
     private void ApplyHealthChange(CCSPlayerController player, CCSPlayerPawn pawn, int change)
     {

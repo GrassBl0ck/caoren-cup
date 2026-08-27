@@ -10,6 +10,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Encodings.Web;
 using CaorenCup.Features;
+using CaorenCup.Features.ParticleMenu;
+using CaorenCup.Diagnostics;
 
 namespace CaorenCup;
 
@@ -25,6 +27,8 @@ public class CaorenCupPlugin : BasePlugin
 
     private readonly List<ICaorenFeature> _features = new();
     private bool _allowPlayerNoclip = false;
+    private PerformanceBlackBox? _performanceBlackBox;
+    private AsyncJsonlPerformanceRecordSink? _performanceSink;
 
     // 强制锁定配置文件路径：永远在 DLL 旁边
     private string ConfigFilePath => Path.Combine(ModuleDirectory, "CaorenCup.json");
@@ -82,6 +86,8 @@ public override void Load(bool hotReload)
         _features.Add(new ModifierFeature()); // 37 规则 buff CVar 托管
         _features.Add(new MovementRulesFeature()); // 38 全局移动规则 CVar 托管
         _features.Add(new PresetFeature()); // 39 grass 经典玩法预设
+        _features.Add(new ParticleMenuFeature()); // 40 Native Bridge 粒子测试菜单
+        _features.Add(new RandomNadeFeature()); // 41 开枪随机发射投掷物
 
         // 3. 注入配置并初始化。先给配置，再 Init，保证 Alias 等模块能按 JSON 注册指令。
         foreach (var feature in _features)
@@ -89,6 +95,9 @@ public override void Load(bool hotReload)
             feature.OnConfigParsed(Config);
             feature.Init(this);
         }
+
+        InitializePerformanceBlackBox();
+        RegisterListener<Listeners.OnTick>(OnPerformanceTick);
 
         // 4. 注册指令 (已弃用 enable/disable)
         AddCommand("helpall", "查看所有指令入口", OnCommandHelp);
@@ -105,6 +114,90 @@ public override void Load(bool hotReload)
         AddCommandListener("noclip", OnNoclipCommand, HookMode.Pre);
 
         Console.WriteLine($"[CaorenCup] 插件加载完成。配置文件路径: {ConfigFilePath}");
+    }
+
+    public void MeasurePerformance(string callbackName, Action callback)
+    {
+        if (_performanceBlackBox is null)
+        {
+            callback();
+            return;
+        }
+
+        _performanceBlackBox.Measure(callbackName, callback);
+    }
+
+    public T MeasurePerformance<T>(string callbackName, Func<T> callback) =>
+        _performanceBlackBox is null
+            ? callback()
+            : _performanceBlackBox.Measure(callbackName, callback);
+
+    private void InitializePerformanceBlackBox()
+    {
+        try
+        {
+            _performanceSink = new AsyncJsonlPerformanceRecordSink(
+                Path.Combine(ModuleDirectory, "performance-logs"),
+                reportError: message => Console.Error.WriteLine($"[CaorenCup:Performance] 日志写入已停止: {message}"));
+            _performanceBlackBox = new PerformanceBlackBox(
+                new PerformanceBlackBoxOptions(),
+                new StopwatchPerformanceClock(),
+                new DotNetRuntimeMetricsProvider(),
+                _performanceSink);
+        }
+        catch (Exception exception)
+        {
+            _performanceSink?.Dispose();
+            _performanceSink = null;
+            _performanceBlackBox = null;
+            Console.Error.WriteLine($"[CaorenCup:Performance] 性能黑匣子初始化失败，插件将继续运行: {exception.Message}");
+        }
+    }
+
+    private void OnPerformanceTick()
+    {
+        _performanceBlackBox?.Tick(CapturePerformanceContext);
+    }
+
+    private PerformanceIncidentContext CapturePerformanceContext()
+    {
+        var featureStatuses = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var feature in _features)
+        {
+            try
+            {
+                featureStatuses[feature.FeatureName] = feature.GetStatusInfo();
+            }
+            catch (Exception exception)
+            {
+                featureStatuses[feature.FeatureName] = $"状态读取失败: {exception.GetType().Name}";
+            }
+        }
+
+        var runtimeCounts = new Dictionary<string, long>(StringComparer.Ordinal)
+        {
+            ["DroppedLogRecords"] = _performanceSink?.DroppedRecords ?? 0
+        };
+        foreach (var feature in _features.OfType<IPerformanceRuntimeCountSource>())
+        {
+            try
+            {
+                foreach (var pair in feature.CapturePerformanceRuntimeCounts())
+                {
+                    runtimeCounts[$"{feature.GetType().Name}.{pair.Key}"] = pair.Value;
+                }
+            }
+            catch (Exception exception)
+            {
+                runtimeCounts[$"{feature.GetType().Name}.CaptureError"] = exception.HResult;
+            }
+        }
+
+        return new PerformanceIncidentContext(
+            Server.MapName ?? string.Empty,
+            Utilities.GetPlayers().Count(player => player.IsValid),
+            featureStatuses,
+            runtimeCounts);
     }
 
     private HookResult OnNoclipCommand(CCSPlayerController? player, CommandInfo info)
@@ -472,8 +565,12 @@ public override void Load(bool hotReload)
  }
  public override void Unload(bool hotReload)
     {
+        try { RemoveListener<Listeners.OnTick>(OnPerformanceTick); } catch { }
         foreach (var feature in _features) feature.OnUnload();
         _features.Clear();
+        _performanceBlackBox = null;
+        _performanceSink?.Dispose();
+        _performanceSink = null;
     }
 
     // --- 指令处理 ---

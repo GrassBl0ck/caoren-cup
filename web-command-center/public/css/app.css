@@ -4329,6 +4329,29 @@ body[data-theme="dark"] .admin-nav-btn.active {
     color: var(--text-default);
 }
 
+.task-preset-panel {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 12px 0;
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--surface-muted);
+    color: var(--text-default);
+}
+
+.task-preset-panel button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+body[data-theme="dark"] .task-preset-panel {
+    background: var(--panel) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
+}
+
 .template-modal-title,
 .template-edit-title,
 .template-preview-title {

@@ -26,7 +26,7 @@ using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
 namespace CaorenCup.Features;
 
-public class EspFeature : ICaorenFeature
+public class EspFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRuntimeCountSource
 {
     public string FeatureName => "ESP 透视模块";
 
@@ -114,7 +114,10 @@ public class EspFeature : ICaorenFeature
         if (_config.Esp.Enabled)
         {
             if (_glowTimer == null)
-                _glowTimer = _plugin.AddTimer(1.0f, EspTimerTick, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+                _glowTimer = _plugin.AddTimer(
+                    1.0f,
+                    () => _plugin.MeasurePerformance("Esp.Timer", EspTimerTick),
+                    TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
         }
         else
         {
@@ -223,7 +226,19 @@ public class EspFeature : ICaorenFeature
         }
     }
 
+    public IReadOnlyDictionary<string, long> CapturePerformanceRuntimeCounts() =>
+        new Dictionary<string, long>
+        {
+            ["TrackedPlayers"] = _playerData.Count,
+            ["TimerActive"] = _glowTimer is null ? 0 : 1
+        };
+
     private void OnCheckTransmit(CCheckTransmitInfoList infoList)
+        => _plugin.MeasurePerformance(
+            "Esp.CheckTransmit",
+            () => OnCheckTransmitCore(infoList));
+
+    private void OnCheckTransmitCore(CCheckTransmitInfoList infoList)
     {
         if (!_config.Esp.Enabled) return;
 

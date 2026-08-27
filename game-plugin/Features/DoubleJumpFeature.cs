@@ -183,6 +183,9 @@ namespace CaorenCup.Features
 
         // ==================== 核心逻辑 ====================
         private void OnTick()
+            => _plugin.MeasurePerformance("DoubleJump.OnTick", OnTickCore);
+
+        private void OnTickCore()
         {
             if (!_settings.Enabled || _settings.MaxJumps <= 1)
                 return;

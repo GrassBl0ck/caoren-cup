@@ -5,6 +5,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'lobby-app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
+const taskSystem = fs.readFileSync(path.join(root, 'src', 'task-system.ts'), 'utf8');
 
 for (const token of [
   'id="tpl-edit-hint"',
@@ -51,3 +52,21 @@ for (const token of [
 }
 
 console.log('undercover task UI contract checks passed');
+
+if (!html.includes('id="task-preset-delete-btn"') || !html.includes('id="task-preset-rename-btn"')) {
+  throw new Error('task preset controls must have stable ids');
+}
+if (!js.includes('updateTaskPresetButtonState')) {
+  throw new Error('task preset buttons must update disabled state');
+}
+if (!css.includes('.task-preset-panel')) {
+  throw new Error('task preset panel must use themed CSS');
+}
+if (!html.includes('>新建预设</button>')) throw new Error('task preset UI must expose a clear create button');
+for (const token of [
+  "'B2': { levelLabel: '5'",
+  "description: ''",
+  "replacementTask: { level: 4, description: ''",
+]) {
+  if (!taskSystem.includes(token)) throw new Error(`default task template missing blank layout token: ${token}`);
+}

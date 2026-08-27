@@ -162,6 +162,11 @@ public class DamageFeature : ICaorenFeature
 
     // 【第一层防线】处理倍率，并防止爆头溢出致死
     private HookResult OnPlayerTakeDamagePre(CCSPlayerPawn pawn, CTakeDamageInfo info)
+        => _plugin.MeasurePerformance(
+            "Damage.OnPlayerTakeDamagePre",
+            () => OnPlayerTakeDamagePreCore(pawn, info));
+
+    private HookResult OnPlayerTakeDamagePreCore(CCSPlayerPawn pawn, CTakeDamageInfo info)
     {
         if (!_settings.Enabled) return HookResult.Continue;
 

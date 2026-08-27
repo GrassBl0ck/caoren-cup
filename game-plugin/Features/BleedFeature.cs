@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace CaorenCup.Features;
 
-public class BleedFeature : ICaorenFeature
+public class BleedFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRuntimeCountSource
 {
     public string FeatureName => "Bleed/Regen";
 
@@ -173,7 +173,10 @@ public class BleedFeature : ICaorenFeature
 
         float safeInterval = Math.Max(0.1f, _settings.Interval);
         _isRunning = true;
-        _healthTimer = _plugin.AddTimer(safeInterval, OnTimerTick, TimerFlags.REPEAT);
+        _healthTimer = _plugin.AddTimer(
+            safeInterval,
+            () => _plugin.MeasurePerformance("Bleed.Timer", OnTimerTick),
+            TimerFlags.REPEAT);
     }
 
     private void StopTimer()
@@ -198,6 +201,14 @@ public class BleedFeature : ICaorenFeature
             ApplyChange(player);
         }
     }
+
+    public IReadOnlyDictionary<string, long> CapturePerformanceRuntimeCounts() =>
+        new Dictionary<string, long>
+        {
+            ["TimerActive"] = _healthTimer is null ? 0 : 1,
+            ["EligibleAlivePlayers"] = Utilities.GetPlayers().LongCount(player =>
+                player is not null && player.IsValid && player.PawnIsAlive && IsTarget(player))
+        };
 
     private bool IsTarget(CCSPlayerController player)
     {
