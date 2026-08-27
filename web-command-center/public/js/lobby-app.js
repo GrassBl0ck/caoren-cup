@@ -1,6 +1,18 @@
 /* Main lobby app extracted from index.html */
+const caorenConfirm = window.caorenConfirm;
+const caorenPrompt = window.caorenPrompt;
+const caorenAlert = window.caorenAlert;
 const ws = io();
 window.__caorenCupLobbySocket = ws;
+// 管理员连接断开后，服务器会为重连创建全新 Socket 身份。
+// 清除旧 playerId，避免页面继续用失效身份发送推进/管理操作。
+ws.on('disconnect', (reason) => {
+    if (!myPlayerId) return;
+    resetToLogin('页面连接已断开，请重新登录后再继续操作。', '连接已断开');
+});
+document.addEventListener('caoren:terminate-confirmed', () => {
+    ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
+});
         let myPlayerId = null;
         let countdownInterval = null;
         let currentTimerEndAt = null;
@@ -15,10 +27,13 @@ window.__caorenCupLobbySocket = ws;
         window._currentTaskTemplate = null;
         window._editingTemplate = null;
         window._editingCellId = null;
+        window._taskTemplateHistory = window.CaorenTaskTemplateHistory?.TaskTemplateHistory
+            ? new window.CaorenTaskTemplateHistory.TaskTemplateHistory(100, 400)
+            : null;
         window._postmatchStatsMode = 'all';
         window._postmatchMatrixMode = 'all';
         window._lobbyAnnouncement = null;
-        const ADMIN_VIEWS = ['overview', 'access', 'setup', 'flow', 'announcement', 'tasks', 'mods'];
+        const ADMIN_VIEWS = ['overview', 'access', 'setup', 'announcement', 'tasks', 'mods'];
         const savedAdminView = localStorage.getItem('caoren-active-admin-tab');
         window._activeAdminView = ADMIN_VIEWS.includes(savedAdminView) ? savedAdminView : 'overview';
         const DUEL_DEFAULT_MAP = '5e_akm4_aim_duel';
@@ -57,7 +72,10 @@ window.__caorenCupLobbySocket = ws;
         }
 
         function confirmDuelWorkshopReady(map) {
-            return confirm('\u672c\u5c40\u4f7f\u7528\u521b\u610f\u5de5\u574a\u5730\u56fe\uff1a' + (map?.name || DUEL_DEFAULT_MAP) + '\\n\\n\u672a\u8ba2\u9605\u7684\u73a9\u5bb6\u53ef\u80fd\u4f1a\u5361\u5728\u8fde\u63a5\u754c\u9762\u3002\\n\u8bf7\u786e\u8ba4\u6240\u6709\u53c2\u8d5b\u73a9\u5bb6\u90fd\u5df2\u8ba2\u9605\u8be5\u5730\u56fe\u540e\u518d\u7ee7\u7eed\u3002');
+            return caorenConfirm('\u672c\u5c40\u4f7f\u7528\u521b\u610f\u5de5\u574a\u5730\u56fe\uff1a' + (map?.name || DUEL_DEFAULT_MAP) + '\\n\\n\u672a\u8ba2\u9605\u7684\u73a9\u5bb6\u53ef\u80fd\u4f1a\u5361\u5728\u8fde\u63a5\u754c\u9762\u3002\\n\u8bf7\u786e\u8ba4\u6240\u6709\u53c2\u8d5b\u73a9\u5bb6\u90fd\u5df2\u8ba2\u9605\u8be5\u5730\u56fe\u540e\u518d\u7ee7\u7eed\u3002', {
+                title: '\u786e\u8ba4\u5355\u6311\u5730\u56fe',
+                confirmText: '\u5df2\u5168\u5458\u8ba2\u9605'
+            });
         }
 
         function canSeeDuelControlMapNotice(state, currentPlayer) {
@@ -178,17 +196,21 @@ window.__caorenCupLobbySocket = ws;
             }
         }
 
-        function resetToLogin(message) {
+        function resetToLogin(message, title = '已退出当前房间') {
             document.getElementById('lobby-area').style.display = 'none';
             document.getElementById('login-area').style.display = 'block';
             myPlayerId = null;
             window._currentPlayer = null;
-            if (message) alert(message);
+            if (message) void caorenAlert(message, { title });
         }
 
 
         function isUndercoverModeEnabledFromState(state) {
             return state?.matchOptions?.undercoverModeEnabled !== false;
+        }
+
+        function canEditTaskTemplate(state) {
+            return state?.phase === 'Lobby' || (state?.phase === 'PreGameSetup' && state?.rolesReleased !== true);
         }
 
         function phaseDisplayName(phase) {
@@ -208,6 +230,65 @@ window.__caorenCupLobbySocket = ws;
             return map[phase] || phase || '未知';
         }
 
+        function nextPhaseForState(state) {
+            const isDuel = state?.matchOptions?.matchMode === 'duel';
+            switch (state?.phase) {
+                case 'Lobby': return isDuel ? 'PreGameSetup' : 'CaptainSelection';
+                case 'CaptainSelection': return isDuel ? 'PreGameSetup' : 'Roll';
+                case 'Roll': return isDuel ? 'PreGameSetup' : 'PlayerDraft';
+                case 'PlayerDraft': return isDuel ? 'PreGameSetup' : 'MapBan';
+                case 'MapBan': return isDuel ? 'PreGameSetup' : 'SidePick';
+                case 'SidePick': return 'PreGameSetup';
+                case 'PreGameSetup': return 'LiveGame';
+                case 'LiveGame':
+                case 'MidGameQA':
+                    return isDuel || !isUndercoverModeEnabledFromState(state) ? 'Scoreboard' : 'PostGameAccusation';
+                case 'PostGameAccusation': return 'Scoreboard';
+                case 'Scoreboard': return 'Lobby';
+                default: return null;
+            }
+        }
+
+        function renderPregameReadinessCard(state, currentPlayer) {
+            const card = document.getElementById('pregame-readiness-card');
+            if (!card) return;
+            const isUndercover = isUndercoverModeEnabledFromState(state);
+            const players = Object.values(state?.players || {}).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
+            const visible = state?.phase === 'PreGameSetup' && isUndercover;
+            card.hidden = !visible;
+            if (!visible) return;
+
+            const blockers = players.filter(p => !p.isReady || (p.gameRole === 'Undercover' && p.undercoverTaskAckStage !== 'read'));
+            const readyCount = players.length - blockers.length;
+            const summary = document.getElementById('pregame-readiness-summary');
+            const detail = document.getElementById('pregame-readiness-detail');
+            const list = document.getElementById('pregame-readiness-blockers');
+            const forceButton = document.getElementById('force-test-bots-ready-btn');
+            if (summary) summary.textContent = players.length === 0 ? '暂无参赛玩家' : (blockers.length ? `已准备 ${readyCount} / ${players.length}` : '全部准备完成');
+            if (detail) detail.textContent = players.length === 0
+                ? '当前没有参赛玩家，无法发放身份或进入正式比赛。'
+                : blockers.length
+                ? `还有 ${blockers.length} 名玩家需要完成准备，暂时不能进入正式比赛。`
+                : '所有参赛玩家都已完成网页准备，可以进入正式比赛。';
+            if (list) {
+                list.innerHTML = players.length === 0
+                    ? '<div class="pregame-readiness-blocker"><strong>暂无参赛玩家</strong><span>请先加入真实玩家或添加测试 BOT</span></div>'
+                    : blockers.length
+                    ? blockers.map(p => {
+                        const reasons = [];
+                        if (!p.isReady) reasons.push('未点击准备');
+                        if (p.gameRole === 'Undercover' && p.undercoverTaskAckStage !== 'read') reasons.push('未确认任务表');
+                        return `<div class="pregame-readiness-blocker"><strong>${htmlEscape(p.name)}</strong><span>${htmlEscape(reasons.join('、'))}</span></div>`;
+                    }).join('')
+                    : '<div class="pregame-readiness-ok">✓ 所有人已完成准备</div>';
+            }
+            const onlyTestBots = blockers.length > 0 && blockers.every(p => p.isTestBot === true);
+            if (forceButton) {
+                forceButton.hidden = currentPlayer?.role !== 'Admin' || !onlyTestBots;
+                forceButton.onclick = () => ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'FORCE_READY' });
+            }
+        }
+
         function renderFlowUndoSafetyBar(state, currentPlayer) {
             const bar = document.getElementById('flow-undo-safety-bar');
             if (!bar) return;
@@ -217,11 +298,26 @@ window.__caorenCupLobbySocket = ws;
             if (bar.hidden) return;
 
             const phase = document.getElementById('flow-undo-current-phase');
+            const nextPhase = document.getElementById('flow-next-phase');
             const latest = document.getElementById('flow-undo-latest-action');
             const count = document.getElementById('flow-undo-count');
             const reason = document.getElementById('flow-undo-reason');
             const button = document.getElementById('flow-undo-btn');
+            const advanceButton = document.getElementById('advance-phase-btn');
+            const nextPhaseValue = nextPhaseForState(state);
             if (phase) phase.textContent = phaseDisplayName(state.phase);
+            if (nextPhase) {
+                nextPhase.textContent = state.phase === 'Scoreboard'
+                    ? '新一轮大厅'
+                    : phaseDisplayName(nextPhaseValue);
+            }
+            if (advanceButton) {
+                advanceButton.textContent = state.phase === 'Scoreboard'
+                    ? '开启新一轮'
+                    : (nextPhaseValue ? `推进到：${phaseDisplayName(nextPhaseValue)}` : '当前阶段无法推进');
+                advanceButton.disabled = !nextPhaseValue;
+                advanceButton.title = nextPhaseValue ? advanceButton.textContent : '当前阶段无法继续推进';
+            }
             if (count) count.textContent = String(status.count || 0);
             if (latest) {
                 latest.textContent = status.latest
@@ -298,7 +394,7 @@ window.__caorenCupLobbySocket = ws;
 
         function isCompetitiveMatchzyState(state) {
             const options = state?.matchOptions || {};
-            return options.matchMode !== 'duel' && options.matchController !== 'caoren';
+            return options.matchMode !== 'duel';
         }
 
         function renderMatchStartTag(player, state) {
@@ -336,8 +432,14 @@ window.__caorenCupLobbySocket = ws;
             return !!liveSide && !!expectedSide && liveSide !== expectedSide;
         }
 
-        function getAdminPasswordForRequest() {
-            return prompt('请输入管理员密码：') || '';
+        async function getAdminPasswordForRequest() {
+            return await caorenPrompt('该操作需要管理员密码。', {
+                title: '管理员验证',
+                inputLabel: '管理员密码',
+                inputType: 'password',
+                required: true,
+                confirmText: '验证并继续'
+            }) || '';
         }
 
         function renderLobbyAnnouncement(announcement) {
@@ -393,17 +495,22 @@ window.__caorenCupLobbySocket = ws;
             document.execCommand('formatBlock', false, tagName);
         }
 
-        function formatLobbyAnnouncementLink() {
+        async function formatLobbyAnnouncementLink() {
             const editor = document.getElementById('lobby-announcement-editor');
             if (!editor) return;
-            const url = prompt('请输入链接地址，建议使用 https:// 开头：');
+            const url = await caorenPrompt('请输入要插入的链接地址。', {
+                title: '插入公告链接',
+                inputLabel: '链接地址',
+                placeholder: 'https://example.com',
+                confirmText: '插入链接'
+            });
             if (!url) return;
             editor.focus();
             document.execCommand('createLink', false, url);
         }
 
         async function saveLobbyAnnouncement() {
-            const adminPassword = getAdminPasswordForRequest();
+            const adminPassword = await getAdminPasswordForRequest();
             if (!adminPassword) return;
 
             const announcement = {
@@ -553,7 +660,9 @@ window.__caorenCupLobbySocket = ws;
                 };
             }
             if (duelRow) duelRow.style.display = duelEnabled ? '' : 'none';
-            if (testBotsRow) testBotsRow.style.display = duelEnabled ? '' : 'none';
+            // 测试 BOT 既用于单挑也用于普通/卧底网页流程；仅在管理员的大厅或赛前配置阶段显示。
+            const canManageTestBots = isAdmin && ['Lobby', 'PreGameSetup'].includes(phase);
+            if (testBotsRow) testBotsRow.style.display = canManageTestBots ? '' : 'none';
             if (duelMapInput) {
                 duelMapInput.value = duelMapByName(duelMap).name;
                 duelMapInput.disabled = !editable || !duelEnabled;
@@ -643,7 +752,7 @@ window.__caorenCupLobbySocket = ws;
             }
 
             const isLoggedInAdmin = window._currentPlayer?.role === 'Admin';
-            const adminPassword = isLoggedInAdmin ? '' : getAdminPasswordForRequest();
+            const adminPassword = isLoggedInAdmin ? '' : await getAdminPasswordForRequest();
             if (!isLoggedInAdmin && !adminPassword) return;
 
             const duelEnabled = document.getElementById('match-option-duel')?.checked === true;
@@ -829,11 +938,15 @@ if (window._caorenModifiersEnabled !== true) {
                 showLobbyNotice('本局未启用 CaorenCup 修改。请先在本局模式设置中开启。', 'error');
                 return;
             }
-            if (module === 'reset_all' && !confirm('确认重置所有 CaorenCup 修改？这会执行游戏内 reset_plu。')) {
+            if (module === 'reset_all' && !await caorenConfirm('这会执行游戏内 reset_plu，并重置所有 CaorenCup 修改。', {
+                title: '确认重置全部娱乐修改',
+                tone: 'danger',
+                confirmText: '确认重置'
+            })) {
                 return;
             }
 
-            const adminPassword = getAdminPasswordForRequest();
+            const adminPassword = await getAdminPasswordForRequest();
             if (!adminPassword) return;
 
             try {
@@ -861,13 +974,15 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         async function syncTeamLock() {
+            const adminPassword = await getAdminPasswordForRequest();
+            if (!adminPassword) return;
             const status = document.getElementById('team-lock-status');
             if (status) status.textContent = '正在下发网页分队名单……';
             try {
                 const res = await fetch('/api/admin/team-lock/sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ adminPassword: getAdminPasswordForRequest() })
+                    body: JSON.stringify({ adminPassword })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '同步分队失败');
@@ -885,14 +1000,19 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         async function clearTeamLock() {
-            if (!confirm('确认解除网页强制分队？解除后玩家可以自行换边。')) return;
+            if (!await caorenConfirm('解除后玩家可以自行换边。', {
+                title: '确认解除网页强制分队',
+                confirmText: '解除锁队'
+            })) return;
+            const adminPassword = await getAdminPasswordForRequest();
+            if (!adminPassword) return;
             const status = document.getElementById('team-lock-status');
             if (status) status.textContent = '正在解除强制分队……';
             try {
                 const res = await fetch('/api/admin/team-lock/clear', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ adminPassword: getAdminPasswordForRequest() })
+                    body: JSON.stringify({ adminPassword })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '解除强制分队失败');
@@ -914,7 +1034,7 @@ if (window._caorenModifiersEnabled !== true) {
                 if (data.resetClient || data.message === '你已退出游戏' || String(data.message || '').includes('终止')) {
                     resetToLogin(data.message || '你已退出房间，请重新进入');
                 } else {
-                    alert('登录失败：' + data.message);
+                    void caorenAlert('登录失败：' + data.message, { title: '无法登录' });
                 }
             }
         });
@@ -961,6 +1081,7 @@ if (window._caorenModifiersEnabled !== true) {
             const isDuel = state?.matchOptions?.matchMode === 'duel';
             const undercoverEnabled = isUndercoverModeEnabledFromState(state);
             const live = state.liveGameData || window._liveGameData || {};
+            renderPregameReadinessCard(state, currentPlayer);
             renderFlowUndoSafetyBar(state, currentPlayer);
             window._undercoverModeEnabled = undercoverEnabled;
             window._caorenModifiersEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
@@ -1028,12 +1149,10 @@ if (window._caorenModifiersEnabled !== true) {
             listDiv.innerHTML = playerTable;
 
             if (isAdmin) {
-                const btn = document.getElementById('advance-phase-btn');
-                if (btn) btn.textContent = '推进阶段 (当前: ' + state.phase + ')';
                 const templateBtn = document.getElementById('template-config-btn');
-                if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
+                if (templateBtn) templateBtn.style.display = undercoverEnabled && canEditTaskTemplate(state) ? '' : 'none';
                 const taskTemplateBtn = document.getElementById('task-template-config-btn');
-                if (taskTemplateBtn) taskTemplateBtn.style.display = undercoverEnabled ? '' : 'none';
+                if (taskTemplateBtn) taskTemplateBtn.style.display = undercoverEnabled && canEditTaskTemplate(state) ? '' : 'none';
                 const players = Object.values(state.players || {}).filter(player => player.role !== 'Admin');
                 const pending = players.filter(player => player.confirmationState && player.confirmationState !== 'confirmed').length;
                 const overviewPhase = document.getElementById('overview-phase');
@@ -1356,7 +1475,7 @@ if (window._caorenModifiersEnabled !== true) {
                         html += '</table>';
                         html += `<p style="margin-top:10px;">目标名额(单边)：${state.undercoverCount} 卧底, ${state.detectiveCount} 侦探</p>`;
                         html += '<button onclick="randomRemainingRoles()" style="background:#7c3aed; color:#fff; font-weight:bold;">随机补齐剩余身份（仅管理员可见）</button> ';
-                        html += '<button onclick="releaseRoles()" style="background:#d32f2f; color:#fff; font-weight:bold;">发放身份给玩家</button>';
+                        html += `<button onclick="releaseRoles()" ${state.rolesReleased ? 'disabled' : ''} style="background:#d32f2f; color:#fff; font-weight:bold;">${state.rolesReleased ? '身份已发放' : '发放身份给玩家'}</button>`;
                         html += `<p style="font-size:13px;color:#6b7280;margin-bottom:0;">发放状态：${state.rolesReleased ? '<b style="color:#2e7d32;">已发放</b>' : '<b style="color:#d32f2f;">未发放</b>'}。未发放前，普通玩家看不到任何人的身份。</p></div><hr>`;
                     }
                     if (role) {
@@ -1365,7 +1484,7 @@ if (window._caorenModifiersEnabled !== true) {
                         html += '<div style="text-align:center;"><button onclick="showRules()" style="font-size:18px; padding:10px 20px;">📜 查看此身份的专属说明书</button></div>';
                         if (role === 'Undercover' && currentPlayer?.taskGrid) {
                             html += '<div style="margin:20px 0;"><h3 style="color:#d32f2f;">\u4f60\u7684\u4efb\u52a1\u9762\u677f</h3>';
-                            html += renderTaskGrid(currentPlayer.taskGrid || {}, { compact: true });
+                            html += renderTaskGrid(currentPlayer.taskGrid || {}, { compact: true, taskActionLog: currentPlayer.taskActionLog });
                             html += '</div>';
                         }
                     } else {
@@ -1846,15 +1965,15 @@ if (window._caorenModifiersEnabled !== true) {
 
         // 取对应的色彩值，便于显示UI
         function getLevelColor(lbl) {
-            if (!lbl) return '#333';
+            if (!lbl) return 'var(--text-default)';
             const s = lbl.toString().toUpperCase();
-            if (s.includes('1')) return '#00B050';
-            if (s.includes('2')) return '#0070C0';
-            if (s.includes('3')) return '#E36C09';
-            if (s.includes('6')) return '#C00000';
-            if (s.includes('5')) return '#FF0000';
-            if (s.includes('4')) return '#7030A0';
-            return '#333';
+            if (s.includes('1')) return 'var(--task-level-1)';
+            if (s.includes('2')) return 'var(--task-level-2)';
+            if (s.includes('3')) return 'var(--task-level-3)';
+            if (s.includes('6')) return 'var(--task-level-6)';
+            if (s.includes('5')) return 'var(--task-level-5)';
+            if (s.includes('4')) return 'var(--task-level-4)';
+            return 'var(--text-default)';
         }
 
         function formatNDisplayText(value, cell) {
@@ -1865,37 +1984,84 @@ if (window._caorenModifiersEnabled !== true) {
 
         function getTaskStatusBadge(status) {
             const map = {
-                Complete: { text: 'Complete', bg: '#e8f5e9', fg: '#1b5e20', border: '#81c784' },
-                Abandoned: { text: 'Abandoned', bg: '#eeeeee', fg: '#616161', border: '#bdbdbd' },
-                Partial: { text: 'Partial', bg: '#fff8e1', fg: '#e65100', border: '#ffcc80' },
-                Incomplete: { text: 'Incomplete', bg: '#ffebee', fg: '#b71c1c', border: '#ef9a9a' },
+                Complete: { text: '已完成', className: 'complete' },
+                Abandoned: { text: '已放弃', className: 'abandoned' },
+                Partial: { text: '进行中', className: 'progress' },
+                Incomplete: { text: '未完成', className: 'incomplete' },
             };
             const item = map[status] || map.Incomplete;
-            return `<span style="display:inline-block;min-width:86px;text-align:center;padding:2px 8px;border-radius:999px;background:${item.bg};color:${item.fg};border:1px solid ${item.border};font-weight:800;">${item.text}</span>`;
+            return `<span class="task-status-badge task-status-${item.className}">${item.text}</span>`;
         }
+
+        function taskStateClass(cell) {
+            if (cell?.status === 'Abandoned') return 'task-state-abandoned';
+            if (cell?.status === 'Complete') return 'task-state-complete';
+            if (Number(cell?.nValue || 0) > 0 || cell?.status === 'Partial') return 'task-state-progress';
+            return 'task-state-incomplete';
+        }
+
+        function taskLevelClass(cell) {
+            return Number(cell?.level || 0) >= 3 ? ' task-level-strong' : '';
+        }
+
+        function taskActionLabel(action) {
+            const labels = {
+                MARK_COMPLETE: '标记完成', UNDO_COMPLETE: '撤销状态', ABANDON: '放弃任务',
+                REQUEST_HINT: '查看提示', REPLACE: '替换任务', N_ADD: 'N + 1', N_SUB: 'N - 1', N_SET: '设置 N 值'
+            };
+            return labels[action] || action || '任务操作';
+        }
+
+        function renderTaskHistory(cellId, taskActionLog) {
+            const entries = (Array.isArray(taskActionLog) ? taskActionLog : [])
+                .filter(entry => entry.cellId === cellId)
+                .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
+                .slice(0, 6);
+            if (!entries.length) return '';
+            const rows = entries.map(entry => `<li><strong>第 ${Number(entry.round || 0)} 回合 · ${htmlEscape(taskActionLabel(entry.action))}</strong><span>${htmlEscape(formatTaskLogChange(entry))}</span><small>${htmlEscape(formatTaskLogTime(entry.timestamp))}</small></li>`).join('');
+            return `<span class="task-history-shell"><button type="button" class="task-history-trigger" aria-label="查看格子 ${cellId} 的操作历史" onclick="toggleTaskHistory(event, '${cellId}')">◷</button><span class="task-history-popover" role="tooltip"><b>格子 ${cellId} 操作历史</b><ol>${rows}</ol></span></span>`;
+        }
+
+        function toggleTaskHistory(event, cellId) {
+            event.preventDefault();
+            event.stopPropagation();
+            const shell = event.currentTarget?.closest?.('.task-history-shell');
+            document.querySelectorAll('.task-history-shell.open').forEach(item => {
+                if (item !== shell) item.classList.remove('open');
+            });
+            shell?.classList.toggle('open');
+        }
+
+        document.addEventListener('click', event => {
+            if (event.target?.closest?.('.task-history-shell')) return;
+            document.querySelectorAll('.task-history-shell.open').forEach(item => item.classList.remove('open'));
+        });
 
         function renderTaskCell(cellId, cell, options = {}) {
             const clickable = options.clickable === true;
             const compact = options.compact === true;
-            const bgClass = cell?.status === 'Abandoned' ? 'background:#e0e0e0;' : 'background:#fff;';
-            let boxShadow = '';
-            if (cell && cell.borderHistory && cell.borderHistory.length > 0) {
-                boxShadow = cell.borderHistory.map((color, idx) => `0 0 0 ${(idx + 1) * 4}px ${color}`).join(', ');
-            }
+            const stateClass = taskStateClass(cell);
+            const borderHistory = Array.isArray(cell?.borderHistory) ? cell.borderHistory : [];
+            const specialClass = `${borderHistory.includes('blue') ? ' task-special-blue' : ''}${borderHistory.includes('purple') ? ' task-special-purple' : ''}`;
             let titleHtml = '';
             if (cell && cell.levelLabel) {
                 const displayLabel = formatNDisplayText(cell.levelLabel, cell);
                 const color = getLevelColor(displayLabel);
-                titleHtml = `<div style="color:${color}; font-weight:900; font-size:${compact ? '13px' : '16px'}; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${htmlEscape(displayLabel)}】</div>`;
+                titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color}; font-size:${compact ? '13px' : '16px'};">【${htmlEscape(displayLabel)}】</div>`;
             }
             const desc = cell ? renderSafeTaskRichText(formatNDisplayText(cell.description, cell)) : '无';
             const hasN = cell && cell.nType !== 'none' && Number(cell.nValue || 0) > 0;
-            const nInfo = hasN ? `<div style="color:#d32f2f; font-size:${compact ? '12px' : '15px'}; margin-top:8px; font-weight:bold; background:#ffebee; padding:4px; border-radius:4px; width:100%;">当前 N = ${cell.nValue}</div>` : '';
+            const nInfo = hasN ? `<div class="task-n-progress" style="font-size:${compact ? '12px' : '15px'};">当前 N = ${cell.nValue}</div>` : '';
             const roundInfo = cell?.completedRound ? `<div class="task-round-note">完成回合：第 ${cell.completedRound} 回合</div>` : '';
-            const status = cell ? `<div style="margin-top:6px;">${getTaskStatusBadge(cell.status || 'Incomplete')}</div>` : '';
+            const displayStatus = cell?.status === 'Incomplete' && Number(cell?.nValue || 0) > 0 ? 'Partial' : (cell?.status || 'Incomplete');
+            const status = cell ? `<div class="task-status-wrap">${getTaskStatusBadge(displayStatus)}</div>` : '';
+            const hintAvailable = !!String(cell?.hint || '').trim();
+            const hintBadge = hintAvailable ? `<span class="task-hint-availability${cell?.isHintUsed ? ' used' : ''}">${cell?.isHintUsed ? '提示已查看' : '有提示'}</span>` : '';
+            const hintText = hintAvailable && cell?.isHintUsed ? `<div class="task-hint-text"><b>提示：</b>${htmlEscape(String(cell.hint))}</div>` : '';
+            const history = renderTaskHistory(cellId, options.taskActionLog);
             const selectedClass = clickable && window.selectedCellId === cellId ? ' selected' : '';
             const click = clickable ? ` id="cell-${cellId}" onclick="handleCellClick('${cellId}')"` : '';
-            return `<div class="task-cell${selectedClass}" ${click} style="${bgClass} box-shadow: ${boxShadow}; margin: 8px;">${titleHtml}<div class="task-desc" style="flex:1; display:flex; align-items:center; justify-content:center; font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${nInfo}${status}${roundInfo}</div>`;
+            return `<div class="task-cell ${stateClass}${specialClass}${selectedClass}" ${click}>${hintBadge}${history}${titleHtml}<div class="task-desc" style="font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${hintText}${nInfo}${status}${roundInfo}</div>`;
         }
 
         function renderTaskGrid(taskGrid, options = {}) {
@@ -1933,7 +2099,8 @@ if (window._caorenModifiersEnabled !== true) {
 
         function formatTaskLogChange(entry) {
             const parts = [];
-            if (entry.beforeStatus !== entry.afterStatus) parts.push(`${entry.beforeStatus || '-'} -> ${entry.afterStatus || '-'}`);
+            const statusText = status => ({ Complete: '已完成', Partial: '进行中', Incomplete: '未完成', Abandoned: '已放弃' }[status] || status || '-');
+            if (entry.beforeStatus !== entry.afterStatus) parts.push(`${statusText(entry.beforeStatus)} → ${statusText(entry.afterStatus)}`);
             if (Number(entry.beforeNValue || 0) !== Number(entry.afterNValue || 0)) parts.push(`N ${entry.beforeNValue || 0} -> ${entry.afterNValue || 0}`);
             if (entry.beforeCompletedRound !== entry.afterCompletedRound) parts.push(`\u5b8c\u6210\u56de\u5408 ${entry.beforeCompletedRound || '-'} -> ${entry.afterCompletedRound || '-'}`);
             if (!!entry.beforeHintUsed !== !!entry.afterHintUsed) parts.push(`\u63d0\u793a ${entry.beforeHintUsed ? '\u5df2\u7528' : '\u672a\u7528'} -> ${entry.afterHintUsed ? '\u5df2\u7528' : '\u672a\u7528'}`);
@@ -1958,7 +2125,7 @@ if (window._caorenModifiersEnabled !== true) {
                     <td>${htmlEscape(formatTaskLogTime(entry.timestamp))}</td>
                     <td>\u7b2c ${Number(entry.round || 0)} \u56de\u5408</td>
                     <td><b>${htmlEscape(entry.cellId || '-')}</b></td>
-                    <td>${htmlEscape(entry.action || '-')}</td>
+                    <td>${htmlEscape(taskActionLabel(entry.action))}</td>
                     <td>${htmlEscape(formatTaskLogChange(entry))}</td>
                 </tr>`;
             });
@@ -1979,7 +2146,7 @@ if (window._caorenModifiersEnabled !== true) {
             const phase = state?.phase || window._currentGamePhase || 'Lobby';
             const players = state?.players || window._allPlayers || {};
 
-            if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
+            if (templateBtn) templateBtn.style.display = undercoverEnabled && canEditTaskTemplate(state) ? '' : 'none';
 
             if (currentPlayer?.role !== 'Admin') {
                 status.textContent = '只有管理员可以查看卧底任务。';
@@ -2006,7 +2173,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const liveSide = getLiveSide(p) || '未进队';
                 const expected = getExpectedSide(p, state).label;
                 html += `<div class="admin-undercover-task-item"><h5>玩家：${htmlEscape(p.name)} <span>[${p.rosterTeam || '-'}队 / 当前边 ${htmlEscape(liveSide)} / 应在边 ${htmlEscape(expected)}]</span></h5>`;
-                html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                html += renderTaskGrid(p.taskGrid || {}, { compact: true, taskActionLog: p.taskActionLog });
                 html += renderTaskActionLog(p.taskActionLog || [], { title: '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55', limit: 20 });
                 html += '</div>';
             });
@@ -2420,7 +2587,7 @@ if (window._caorenModifiersEnabled !== true) {
             let html = '<div class="postmatch-panel"><h3 style="margin-top:0;">卧底任务复盘</h3>';
             undercovers.forEach(p => {
                 html += `<div style="margin-top:14px;"><b>${htmlEscape(p.name)} [${p.rosterTeam || '-'}队]</b>`;
-                html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                html += renderTaskGrid(p.taskGrid || {}, { compact: true, taskActionLog: p.taskActionLog });
                 html += renderTaskActionLog(p.taskActionLog || [], { title: '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55' });
                 html += '</div>';
             });
@@ -2492,14 +2659,14 @@ if (window._caorenModifiersEnabled !== true) {
 
             if (undercoverEnabled && currentPlayer?.gameRole === 'Undercover') {
                 html += '<h3 style="color:#d32f2f;">你的任务面板</h3>';
-                html += renderTaskGrid(currentPlayer.taskGrid || {}, { clickable: true });
+                html += renderTaskGrid(currentPlayer.taskGrid || {}, { clickable: true, taskActionLog: currentPlayer.taskActionLog });
 
                 html += '<div style="background:#fff3e0; padding:15px; border-radius:6px; border:1px solid #ffcc80; margin-top:20px;">';
                 html += '<p><b>基础状态干预：</b> ' +
                     '<button id="btn-complete" onclick="markComplete()" style="background:#4caf50; color:#fff;">✓ 标记完成</button> ' +
                     '<button id="btn-undo" onclick="undoComplete()">⟲ 撤销状态</button> ' +
                     '<button id="btn-abandon" onclick="abandonTask()" style="background:#9e9e9e; color:#fff;">放弃任务</button> ' +
-                    '<button id="btn-hint" onclick="requestHint()" style="background:#2196f3; color:#fff;">💡 申请提示</button> ' +
+                    '<button id="btn-hint" onclick="requestHint()" style="background:#2196f3; color:#fff;">查看提示</button> ' +
                     '<button id="btn-replace" onclick="replaceTask()" style="background:#9c27b0; color:#fff;">替换任务</button></p>';
                 html += '<p style="margin-top:15px;"><b>动态数值(N)修调：</b> ' +
                     '<button id="btn-n-add" onclick="changeN(\'N_ADD\')" style="font-weight:bold; font-size:16px;">N + 1</button> ' +
@@ -2593,7 +2760,11 @@ if (window._caorenModifiersEnabled !== true) {
             if (btnComplete) btnComplete.disabled = isNTask || isComplete;
             if (btnUndo) btnUndo.disabled = cell.isReplaced || (!isComplete && (!cell.nValue || cell.nValue === 0));
             if (btnAbandon) btnAbandon.disabled = isComplete || abandonCount >= 1;
-            if (btnHint) btnHint.disabled = isComplete || cell.isHintUsed;
+            const hintAvailable = !!String(cell.hint || '').trim();
+            if (btnHint) {
+                btnHint.textContent = !hintAvailable ? '此任务无提示' : (cell.isHintUsed ? '提示已查看' : '查看提示');
+                btnHint.disabled = !hintAvailable || isComplete || cell.isHintUsed;
+            }
             if (btnReplace) btnReplace.disabled = isComplete || cell.isReplaced || replaceCount >= 1;
 
             const canEditN = isNTask && !isComplete;
@@ -2603,26 +2774,34 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         // ===== 全局交互函数 =====
-        function advancePhase() {
+        async function advancePhase() {
             const isDuelMode = window._currentGameState?.matchOptions?.matchMode === 'duel';
             if ((window._currentGamePhase === 'Lobby' || window._currentGamePhase === 'PreGameSetup') && isDuelMode) {
                 const select = document.getElementById('duel-live-map') || document.getElementById('match-option-duel-map');
-                if (!confirmDuelWorkshopReady(selectedDuelMapFromSelect(select))) return;
+                if (!await confirmDuelWorkshopReady(selectedDuelMapFromSelect(select))) return;
             }
             if (window._currentGamePhase === 'PreGameSetup') {
-                const ok = confirm('进入正式比赛后将无法撤销赛前流程，所有撤销记录会立即清空。\n\n确认继续推进吗？');
+                const ok = await caorenConfirm('进入正式比赛后将无法撤销赛前流程，所有撤销记录会立即清空。', {
+                    title: '确认进入正式比赛',
+                    tone: 'danger',
+                    confirmText: '进入正式比赛'
+                });
                 if (!ok) return;
             }
             if (window._currentGamePhase === 'Scoreboard') {
                 const hasScores = Object.values(window._allPlayers || {}).some(p => p.finalScore !== undefined);
                 if (!hasScores) {
-                    const ok = confirm('⚠️ 警告：当前尚未导入 CSV 进行计分，确定要清空现场退回大厅吗？');
+                    const ok = await caorenConfirm('当前尚未导入 CSV 进行计分。继续后会清空现场并退回大厅。', {
+                        title: '尚未完成计分',
+                        tone: 'danger',
+                        confirmText: '仍然返回大厅'
+                    });
                     if (!ok) return;
                 }
             }
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADVANCE_PHASE' });
         }
-        function undoFlowAction() {
+        async function undoFlowAction() {
             const state = window._currentGameState;
             const status = state?.flowUndoStatus;
             if (!status?.canUndo || !status.latest || window._flowUndoRequestPending) {
@@ -2630,10 +2809,14 @@ if (window._caorenModifiersEnabled !== true) {
             }
             const currentPhase = phaseDisplayName(state.phase);
             const targetPhase = phaseDisplayName(status.targetPhase);
-            const prompt = status.latest.actionType === 'ADVANCE_PHASE'
+            const confirmationMessage = status.latest.actionType === 'ADVANCE_PHASE'
                 ? `确定要从“${currentPhase}”回退到“${targetPhase}”吗？\n\n当前阶段之后产生的流程操作将被丢弃，玩家登录和在线状态不会改变。`
                 : `确定撤销「${status.latest.summary}」吗？当前阶段仍为“${currentPhase}”。\n\n当前阶段之后产生的流程操作将被丢弃，玩家登录和在线状态不会改变。`;
-            const ok = confirm(prompt);
+            const ok = await caorenConfirm(confirmationMessage, {
+                title: '确认撤销流程操作',
+                tone: 'danger',
+                confirmText: '确认撤销'
+            });
             if (!ok) return;
             window._flowUndoRequestPending = true;
             document.querySelectorAll('#flow-undo-btn, [data-flow-undo-action]').forEach(item => {
@@ -2648,11 +2831,6 @@ if (window._caorenModifiersEnabled !== true) {
                     expectedEntryId: status.latest.id,
                 },
             });
-        }
-        function terminateGame() {
-            const text = prompt('危险操作：这会强制终止本局、踢出所有玩家、清空房间。所有人必须重新进入。请输入 TERMINATE 确认：');
-            if (text !== 'TERMINATE') return;
-            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
         }
         function duelSetMap() {
             const select = document.getElementById('duel-live-map');
@@ -2683,7 +2861,6 @@ if (window._caorenModifiersEnabled !== true) {
         Object.assign(window, {
             advancePhase,
             undoFlowAction,
-            terminateGame,
             duelSetMap,
             syncDuelLiveMapNotice,
             duelSetRounds,
@@ -2695,11 +2872,11 @@ if (window._caorenModifiersEnabled !== true) {
         function setCaptain(team) { const select = document.getElementById('cap' + team + '-select'); if (select && select.value) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_CAPTAIN', payload: { team, playerId: select.value } }); }
         function playAdminAudioCue() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'PLAY_AUDIO_CUE', payload: { cue: 'adminPrompt' } }); }
         function adminAddTestBots(count) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADD_TEST_BOTS', payload: { count } }); }
-        function adminClearTestBots() { if (confirm('确认清理所有网页测试BOT？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'CLEAR_TEST_BOTS' }); }
+        async function adminClearTestBots() { if (await caorenConfirm('所有网页测试 BOT 都会从当前房间移除。', { title: '清理测试 BOT', tone: 'danger', confirmText: '确认清理' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'CLEAR_TEST_BOTS' }); }
         function adminAssignTeam(playerId, team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ASSIGN_ROSTER_TEAM', payload: { playerId, team } }); }
         function adminUnassignTeam(playerId) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UNASSIGN_ROSTER_TEAM', payload: { playerId } }); }
         function adminStartCaptainDraft() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'START_CAPTAIN_DRAFT' }); }
-        function kickPlayer(playerId, name) { if (confirm('确定要踢出玩家：' + name + '？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
+        async function kickPlayer(playerId, name) { if (await caorenConfirm('玩家“' + name + '”会被移出当前房间。', { title: '确认踢出玩家', tone: 'danger', confirmText: '踢出玩家' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
         function voteMap(map) { ws.emit('VOTE', { playerId: myPlayerId, map }); }
         function adminBanMap(map) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADMIN_BAN_MAP', payload: { map } }); }
         function selectSide(side) { ws.emit('SIDE_PICK', { playerId: myPlayerId, side }); }
@@ -2708,9 +2885,9 @@ if (window._caorenModifiersEnabled !== true) {
         function updateRoleCounts() { const u = parseInt(document.getElementById('undercover-count').value) || 0; const d = parseInt(document.getElementById('detective-count').value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_ROLES_COUNT', payload: { undercoverCount: u, detectiveCount: d } }); }
         function setPlayerRole(playerId) { const sel = document.getElementById('role-select-' + playerId); if (sel) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_PLAYER_ROLE', payload: { playerId, gameRole: sel.value } }); }
         function randomRemainingRoles() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RANDOM_REMAINING_ROLES' }); }
-        function releaseRoles() { if (confirm('确认现在向所有玩家发放身份？发放后玩家只能看到自己的身份。')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RELEASE_ROLES' }); }
+        async function releaseRoles() { if (await caorenConfirm('发放后，每名玩家只能看到自己的身份。', { title: '向所有玩家发放身份', confirmText: '确认发放' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RELEASE_ROLES' }); }
         function updateLiveData() { const scoreA = parseInt(document.getElementById('admin-scoreA')?.value) || 0; const scoreB = parseInt(document.getElementById('admin-scoreB')?.value) || 0; const scoreCT = parseInt(document.getElementById('admin-scoreCT')?.value) || 0; const scoreT = parseInt(document.getElementById('admin-scoreT')?.value) || 0; const round = parseInt(document.getElementById('admin-round')?.value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_LIVE_DATA', payload: { scoreA, scoreB, scoreCT, scoreT, round } }); }
-        function resetFormalMatchCounters() { if (confirm('确认从当前插件回合开始正式统计，并视为正式第 1 回合？这会清零当前正式比分/战绩，请只在正式开赛第一回合使用。')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RESET_FORMAL_MATCH_COUNTERS' }); }
+        async function resetFormalMatchCounters() { if (await caorenConfirm('当前插件回合会被视为正式第 1 回合，同时清零当前正式比分和战绩。请只在正式开赛第一回合使用。', { title: '重置正式比赛统计', tone: 'danger', confirmText: '确认重置' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RESET_FORMAL_MATCH_COUNTERS' }); }
         function setDetectiveQuestionCount(targetId) { const el = document.getElementById('dq-' + targetId); const count = Math.max(0, Math.min(2, parseInt(el?.value || '0') || 0)); ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_DETECTIVE_QUESTION_COUNT', payload: { playerId: targetId, count } }); }
         function accuse(targetId, type) { ws.emit('ACCUSE', { playerId: myPlayerId, targetId, type }); }
         function uploadCsv() {
@@ -2782,12 +2959,21 @@ if (window._caorenModifiersEnabled !== true) {
         window.abandonTask = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'ABANDON', cellId }); };
         window.requestHint = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REQUEST_HINT', cellId }); };
         window.replaceTask = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REPLACE', cellId }); };
-        window.changeN = function (action) {
+        window.changeN = async function (action) {
             const cellId = window.selectedCellId;
             if (!cellId) return showLobbyNotice('请先点击一个带 N 的格子。', 'error');
             let nValue = undefined;
             if (action === 'N_SET') {
-                const n = prompt('请输入准确的 N 值 (整数):');
+                const n = await caorenPrompt('请输入准确的整数值。', {
+                    title: '设置任务 N 值',
+                    inputLabel: 'N 值',
+                    inputType: 'number',
+                    inputMode: 'numeric',
+                    min: 0,
+                    step: 1,
+                    required: true,
+                    confirmText: '保存 N 值'
+                });
                 if (n === null) return;
                 nValue = parseInt(n);
                 if (isNaN(nValue)) return showLobbyNotice('请输入有效数字。', 'error');
@@ -2798,7 +2984,9 @@ if (window._caorenModifiersEnabled !== true) {
         // ========== 真·可视化模板编辑器相关 ==========
         function openTemplateModal() {
             if (!window._currentTaskTemplate) return showLobbyNotice('模板尚未加载完成，请稍后再试。', 'error');
+            if (!canEditTaskTemplate(window._currentGameState)) return showLobbyNotice('任务模板只能在大厅或身份发放前修改。', 'error');
             window._editingTemplate = JSON.parse(JSON.stringify(window._currentTaskTemplate));
+            window._taskTemplateHistory?.reset(window._editingTemplate);
             document.getElementById('template-json-textarea').value = JSON.stringify(window._editingTemplate, null, 4);
 
             // 默认选中 A1
@@ -2809,20 +2997,52 @@ if (window._caorenModifiersEnabled !== true) {
 
         function closeTemplateModal() {
             document.getElementById('template-modal').style.display = 'none';
+            if (window._editingTemplate) window._taskTemplateHistory?.reset(window._editingTemplate);
         }
+
+        function applyTaskTemplateHistorySnapshot(snapshot) {
+            if (!snapshot) return;
+            window._editingTemplate = snapshot;
+            document.getElementById('template-json-textarea').value = JSON.stringify(snapshot, null, 4);
+            renderTplPreview();
+            selectTplCell(window._editingCellId || 'A1');
+        }
+
+        function undoTaskTemplateEdit() {
+            applyTaskTemplateHistorySnapshot(window._taskTemplateHistory?.undo());
+        }
+
+        function redoTaskTemplateEdit() {
+            applyTaskTemplateHistorySnapshot(window._taskTemplateHistory?.redo());
+        }
+
+        document.addEventListener('keydown', event => {
+            const modal = document.getElementById('template-modal');
+            if (!modal || modal.style.display === 'none' || !(event.ctrlKey || event.metaKey)) return;
+            if (event.target?.id === 'template-json-textarea') return;
+            const key = String(event.key || '').toLowerCase();
+            if (key === 'z') {
+                event.preventDefault();
+                if (event.shiftKey) redoTaskTemplateEdit();
+                else undoTaskTemplateEdit();
+            } else if (key === 'y') {
+                event.preventDefault();
+                redoTaskTemplateEdit();
+            }
+        });
 
         function switchTemplateTab(tab) {
             if (tab === 'visual') {
                 document.getElementById('template-visual-tab').style.display = 'block';
                 document.getElementById('template-json-tab').style.display = 'none';
-                document.getElementById('btn-tab-visual').style.background = '#e0e0e0';
-                document.getElementById('btn-tab-json').style.background = '#fff';
+                document.getElementById('btn-tab-visual').classList.add('active');
+                document.getElementById('btn-tab-json').classList.remove('active');
             } else {
                 document.getElementById('template-visual-tab').style.display = 'none';
                 document.getElementById('template-json-tab').style.display = 'block';
                 document.getElementById('template-json-textarea').value = JSON.stringify(window._editingTemplate, null, 4);
-                document.getElementById('btn-tab-visual').style.background = '#fff';
-                document.getElementById('btn-tab-json').style.background = '#e0e0e0';
+                document.getElementById('btn-tab-visual').classList.remove('active');
+                document.getElementById('btn-tab-json').classList.add('active');
             }
         }
 
@@ -2839,11 +3059,13 @@ if (window._caorenModifiersEnabled !== true) {
                 let titleHtml = '';
                 if (cell.levelLabel) {
                     const color = getLevelColor(cell.levelLabel);
-                    titleHtml = `<div style="color:${color}; font-weight:900; font-size:16px; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${htmlEscape(cell.levelLabel)}】</div>`;
+                    titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color};font-size:16px;">【${htmlEscape(cell.levelLabel)}】</div>`;
                 }
                 const nInfo = (cell.nType && cell.nType !== 'none') ? `<div style="color:#d32f2f; font-size:14px; margin-top:8px; font-weight:bold;">[带N任务体系]</div>` : '';
+                const hintInfo = String(cell.hint || '').trim() ? '<span class="task-hint-availability">有提示</span>' : '';
 
                 html += `<div class="task-cell" style="${border} position:relative;" onclick="selectTplCell('${id}')">
+                                ${hintInfo}
                                 ${titleHtml}
                                 <div class="task-desc" style="flex:1; display:flex; align-items:center;"><div>${renderSafeTaskRichText(cell.description || '')}</div></div>
                                 ${nInfo}
@@ -2854,8 +3076,7 @@ if (window._caorenModifiersEnabled !== true) {
 
             const rep = window._editingTemplate.replacementTask || {};
             const isRepSelected = window._editingCellId === 'rep';
-            document.getElementById('tpl-preview-replacement').style.borderColor = isRepSelected ? '#f44336' : '#aaa';
-            document.getElementById('tpl-preview-replacement').style.background = isRepSelected ? '#ffebee' : '#fff';
+            document.getElementById('tpl-preview-replacement').classList.toggle('selected', isRepSelected);
             document.getElementById('tpl-prev-rep-desc').innerHTML = `<span class="task-desc">${renderSafeTaskRichText(rep.description || '')}</span> <span style="color:#888;">(等级 ${htmlEscape(rep.level || 4)})</span>`;
         }
 
@@ -2891,6 +3112,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const rep = window._editingTemplate.replacementTask;
                 document.getElementById('tpl-edit-title').innerHTML = `🔄 正在配置：<b style="color:#7030a0;">备用任务</b>`;
                 document.getElementById('tpl-edit-desc').value = rep.description || '';
+                document.getElementById('tpl-edit-hint').value = rep.hint || '';
                 setTplSelectValue('tpl-edit-level', rep.level || 4, 4);
                 setTplSelectValue('tpl-edit-ntype', 'none', 'none');
                 document.getElementById('tpl-edit-nmax').value = '';
@@ -2901,6 +3123,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const cell = window._editingTemplate.cells[id];
                 document.getElementById('tpl-edit-title').innerHTML = `📝 正在编辑：<b style="color:#1976d2;">格子 ${id}</b>`;
                 document.getElementById('tpl-edit-desc').value = cell.description || '';
+                document.getElementById('tpl-edit-hint').value = cell.hint || '';
                 const type = cell.nType || 'none';
                 setTplSelectValue('tpl-edit-ntype', type, 'none');
                 setTplSelectValue('tpl-edit-level', cell.level || 1, 1);
@@ -2913,18 +3136,20 @@ if (window._caorenModifiersEnabled !== true) {
         };
 
         // 处理编辑框输入
-        window.handleTplInput = function () {
+        window.handleTplInput = function (options = {}) {
             if (!window._editingCellId) return;
             const id = window._editingCellId;
 
             if (id === 'rep') {
                 window._editingTemplate.replacementTask.description = document.getElementById('tpl-edit-desc').value;
+                window._editingTemplate.replacementTask.hint = document.getElementById('tpl-edit-hint').value;
                 window._editingTemplate.replacementTask.level = parseInt(document.getElementById('tpl-edit-level').value) || 4;
             } else {
                 const cell = window._editingTemplate.cells[id];
                 const type = document.getElementById('tpl-edit-ntype').value;
                 const level = parseInt(document.getElementById('tpl-edit-level').value) || 1;
                 cell.description = document.getElementById('tpl-edit-desc').value;
+                cell.hint = document.getElementById('tpl-edit-hint').value;
                 cell.nType = type;
 
                 if (type === 'none') {
@@ -2955,6 +3180,9 @@ if (window._caorenModifiersEnabled !== true) {
                 }
                 syncTplEditorVisibility();
             }
+            const activeField = document.activeElement?.id || 'template-field';
+            const coalesceKey = options.coalesceKey || `${id}:${activeField}`;
+            window._taskTemplateHistory?.record(window._editingTemplate, { coalesceKey, timestamp: Date.now() });
             renderTplPreview(); // 实时更新预览
         };
 
@@ -2978,7 +3206,7 @@ if (window._caorenModifiersEnabled !== true) {
             ta.focus();
             ta.setSelectionRange(start + openTag.length, start + openTag.length + selectedText.length);
 
-            handleTplInput(); // 触发保存与预览更新
+            handleTplInput({ coalesceKey: `format:${Date.now()}` }); // 触发保存与预览更新
         };
 
         function getTemplateExportTarget() {
@@ -3026,6 +3254,7 @@ if (window._caorenModifiersEnabled !== true) {
             try {
                 const parsed = JSON.parse(raw);
                 window._editingTemplate = parsed;
+                window._taskTemplateHistory?.record(window._editingTemplate, { coalesceKey: `load-local:${Date.now()}`, timestamp: Date.now() });
                 document.getElementById('template-json-textarea').value = JSON.stringify(parsed, null, 4);
                 if (document.getElementById('template-visual-tab').style.display !== 'none') {
                     if (!window._editingCellId) window._editingCellId = 'A1';
@@ -3039,18 +3268,26 @@ if (window._caorenModifiersEnabled !== true) {
             }
         }
 
-        function saveTemplate() {
-            if (!confirm("确定要将当前模板应用到服务器吗？如果已有玩家正在查看任务面板，界面会立即刷新。")) return;
+        function confirmTaskTemplateReplacement() {
+            return caorenConfirm('所有卧底的任务会立即重新生成；任务进度、操作记录和确认状态会被清空。已发放身份的卧底页面会立即刷新，并需要重新确认任务。', {
+                title: '确认应用任务模板',
+                tone: 'danger',
+                confirmText: '应用并重置任务'
+            });
+        }
+
+        async function saveTemplate() {
+            if (!await confirmTaskTemplateReplacement()) return;
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_TASK_TEMPLATE', payload: { taskTemplate: window._editingTemplate } });
             closeTemplateModal();
         }
 
-        function saveTemplateFromJson() {
+        async function saveTemplateFromJson() {
             try {
                 const text = document.getElementById('template-json-textarea').value;
                 const parsed = JSON.parse(text);
                 if (!parsed.cells || !parsed.lines || !parsed.replacementTask) throw new Error("JSON 结构不完整：缺少 cells / lines / replacementTask");
-                if (!confirm("JSON 校验通过，确定要用这份内容覆盖当前模板吗？")) return;
+                if (!await confirmTaskTemplateReplacement()) return;
                 ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_TASK_TEMPLATE', payload: { taskTemplate: parsed } });
                 closeTemplateModal();
             } catch (e) {
@@ -3068,6 +3305,8 @@ if (window._caorenModifiersEnabled !== true) {
             copyTemplateJson,
             saveTemplateToLocal,
             loadTemplateFromLocal,
+            undoTaskTemplateEdit,
+            redoTaskTemplateEdit,
             saveTemplate,
             saveTemplateFromJson,
         });
@@ -3086,12 +3325,12 @@ if (window._caorenModifiersEnabled !== true) {
                     '<b style="color:#d32f2f;font-size:20px;">【卧底说明 1/2】</b><br/><br/>' +
                     '1. 目标：在尽量不暴露身份的前提下完成个人任务，并尽可能影响本队表现。<br/>' +
                     '2. 完成任务格可获得分数（分值会随任务等级变化）；达成横、竖、斜三连线时会有额外奖励。<br/>' +
-                    '3. 格子状态说明（最新状态显示在最外层）：<br/>' +
-                    ' - <b style="color:green">绿色包边</b>：已完成 / N值已达成<br/>' +
-                    ' - <b style="color:orange">橙色包边</b>：N任务正在推进(进度未满)<br/>' +
-                    ' - <b style="color:blue">蓝色包边</b>：已使用提示<br/>' +
+                    '3. 格子状态说明：<br/>' +
+                    ' - <b style="color:green">淡绿色底色</b>：已完成 / N值已达成<br/>' +
+                    ' - <b style="color:orange">淡橙色底色</b>：N任务正在推进（N ≥ 1 即可参与连线）<br/>' +
+                    ' - <b style="color:blue">蓝色包边</b>：已查看提示<br/>' +
                     ' - <b style="color:purple">紫色包边</b>：已使用替换任务<br/>' +
-                    ' - 灰暗色调：该任务已放弃',
+                    ' - 灰暗底色：该任务已放弃',
                     '<b style="color:#d32f2f;font-size:20px;">【卧底说明 2/2】</b><br/><br/>' +
                     '4. N 类任务说明：<br/>' +
                     ' - [多回合累计]：在多回合内累计完成即可。<br/>' +

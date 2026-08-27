@@ -1,7 +1,6 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Collections.Concurrent;
 using System.Threading.Channels;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
@@ -36,10 +35,12 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
     private CounterStrikeSharp.API.Modules.Timers.Timer? _gameManagedSafetyTimer;
-    private readonly Channel<PluginOutboundMessage> _outboundQueue = Channel.CreateUnbounded<PluginOutboundMessage>(new UnboundedChannelOptions
+    private readonly PluginTelemetryBatchBuffer _telemetryBatch = new(PluginTelemetryPolicy.MaxBufferedEvents);
+    private readonly Channel<PluginOutboundMessage> _outboundQueue = Channel.CreateBounded<PluginOutboundMessage>(new BoundedChannelOptions(PluginTelemetryPolicy.OutboundQueueCapacity)
     {
         SingleReader = true,
-        SingleWriter = false
+        SingleWriter = false,
+        FullMode = BoundedChannelFullMode.Wait
     });
     private readonly CancellationTokenSource _outboundCts = new();
     private Task? _outboundWorker;
@@ -217,7 +218,9 @@ public sealed class CaorenCupPlugin : BasePlugin
         }, TimerFlags.REPEAT));
         _timers.Add(AddTimer(1.0f, () =>
         {
-            if (!_isUnloading) QueueCrouchSamples();
+            if (_isUnloading) return;
+            QueueCrouchSamples();
+            FlushTelemetryBatch();
         }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
         StartGameManagedSafetyTimer();
         _timers.Add(AddTimer(5.0f, () =>
@@ -2104,6 +2107,17 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         if (!ShouldPublishMatchTelemetry()) return;
 
+        if (PluginTelemetryPolicy.IsBatchable(type))
+        {
+            if (_telemetryBatch.TryAdd(type, payload)) return;
+            FlushTelemetryBatch();
+            if (_telemetryBatch.TryAdd(type, payload)) return;
+            Logger.LogWarning("Telemetry batch is full; dropped newest event {Type}", type);
+            return;
+        }
+
+        FlushTelemetryBatch();
+
         var message = PluginOutboundMessage.ForEvent(
             type,
             payload,
@@ -2115,6 +2129,25 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             Logger.LogWarning("Failed to queue event {Type} seq={Sequence}", type, message.Sequence);
         }
+    }
+
+    private void FlushTelemetryBatch()
+    {
+        var events = _telemetryBatch.Drain();
+        if (events.Count == 0) return;
+
+        var message = PluginOutboundMessage.ForEventBatch(
+            events,
+            _currentMatchId,
+            Interlocked.Increment(ref _eventSequence),
+            DateTimeOffset.UtcNow);
+
+        if (_outboundQueue.Writer.TryWrite(message)) return;
+        var dropped = _telemetryBatch.RestoreOlder(events);
+        Logger.LogWarning(
+            "Outbound queue full; restored {Restored} telemetry events and dropped {Dropped} newest buffered events",
+            events.Count - dropped,
+            dropped);
     }
 
     private void QueueSnapshot()
@@ -2147,6 +2180,10 @@ public sealed class CaorenCupPlugin : BasePlugin
                 if (message.Kind == PluginOutboundKind.Event)
                 {
                     await PostEventAsync(message, cancellationToken);
+                }
+                else if (message.Kind == PluginOutboundKind.EventBatch)
+                {
+                    await PostEventBatchAsync(message, cancellationToken);
                 }
                 else
                 {
@@ -2207,6 +2244,44 @@ public sealed class CaorenCupPlugin : BasePlugin
             {
                 Logger.LogWarning(ex, "Failed to post event {Type} seq={Sequence}", type, message.Sequence);
             }
+        }
+    }
+
+    private async Task PostEventBatchAsync(PluginOutboundMessage message, CancellationToken cancellationToken)
+    {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        try
+        {
+            var response = await _http.PostAsJsonAsync("api/plugin/events", new
+            {
+                matchId = message.MatchId,
+                eventSequence = message.Sequence,
+                eventTimestampUtc = message.TimestampUtc,
+                events = message.Body
+            }, _jsonOptions, cancellationToken);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                Logger.LogWarning(
+                    "Telemetry batch seq={Sequence} rejected: {Status} {Body}",
+                    message.Sequence,
+                    response.StatusCode,
+                    body);
+            }
+            else
+            {
+                LogDebug("Telemetry batch seq={Sequence} posted", message.Sequence);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            Logger.LogWarning(ex, "Failed to post telemetry batch seq={Sequence}", message.Sequence);
         }
     }
 
@@ -3591,6 +3666,7 @@ internal sealed record DuelWorkshopMap(string Name, string WorkshopId);
 public enum PluginOutboundKind
 {
     Event,
+    EventBatch,
     Snapshot
 }
 
@@ -3617,6 +3693,15 @@ public sealed class PluginOutboundMessage
     {
         Kind = PluginOutboundKind.Snapshot,
         Body = body,
+        Sequence = sequence,
+        TimestampUtc = timestamp.ToString("O")
+    };
+
+    public static PluginOutboundMessage ForEventBatch(IReadOnlyList<PluginTelemetryEvent> events, string? matchId, long sequence, DateTimeOffset timestamp) => new()
+    {
+        Kind = PluginOutboundKind.EventBatch,
+        Body = events,
+        MatchId = matchId,
         Sequence = sequence,
         TimestampUtc = timestamp.ToString("O")
     };

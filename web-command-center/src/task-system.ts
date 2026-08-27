@@ -2,7 +2,7 @@
 import { TaskTemplate, TaskCell, Player } from './types';
 
 export const getDefaultTaskTemplate = (): TaskTemplate => {
-    return {
+    const template: TaskTemplate = {
         cells: {
             'A1': { levelLabel: '1', description: '\u51fb\u6740 2 \u540d\u654c\u4eba', level: 1, type: 'count', targetCount: 2, nType: 'none', nValue: 0 },
             'A2': { levelLabel: '3N', description: 'N\u56de\u5408\uff0c\u51fb\u6740\u4e00\u540d\u961f\u53cb', level: 3, type: 'custom', nType: '3N_multi', nMin: 1, nMax: 3, nValue: 0 },
@@ -21,6 +21,9 @@ export const getDefaultTaskTemplate = (): TaskTemplate => {
         ],
         replacementTask: { level: 4, description: '\u9690\u85cf\u7684\u672a\u77e5\u66ff\u6362\u4efb\u52a1' }
     };
+    for (const cell of Object.values(template.cells)) cell.hint = '';
+    template.replacementTask.hint = '';
+    return template;
 };
 
 export const assignTaskGridToPlayer = (player: Player, template: TaskTemplate): void => {

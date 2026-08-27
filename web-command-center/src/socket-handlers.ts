@@ -1,7 +1,7 @@
 ﻿// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { CellStatus, GamePhase, LiveGameData, Player, RosterTeam, TaskCell, WsEvents } from './types';
+import { CellStatus, GamePhase, GameSession, LiveGameData, Player, RosterTeam, TaskCell, WsEvents } from './types';
 import { getSession, resetSessionWithAdmins, terminateAndClear } from './session-manager';
 import {
     findPlayerById,
@@ -89,11 +89,37 @@ const getReadinessBlockers = () => {
     return players.filter(p => !p.isReady || (p.gameRole === 'Undercover' && p.undercoverTaskAckStage !== 'read'));
 };
 
+const invalidateReleasedRolesForEditing = (session: GameSession) => {
+    if (!session.rolesReleased) return false;
+    session.rolesReleased = false;
+    for (const player of getGamePlayers(session)) {
+        player.isReady = false;
+        player.undercoverTaskAckStage = player.gameRole === 'Undercover' ? 'none' : undefined;
+        delete player.taskGrid;
+        player.taskActionLog = [];
+    }
+    return true;
+};
+
+const roleCountMismatch = (session: GameSession): string | null => {
+    const unrostered = getGamePlayers(session).filter(player => player.rosterTeam !== 'A' && player.rosterTeam !== 'B');
+    if (unrostered.length > 0) return `还有 ${unrostered.length} 名玩家未分入 A/B 队，不能发放身份。`;
+    for (const team of ['A', 'B'] as const) {
+        const players = getGamePlayers(session).filter(player => player.rosterTeam === team);
+        const undercovers = players.filter(player => player.gameRole === 'Undercover').length;
+        const detectives = players.filter(player => player.gameRole === 'Detective').length;
+        if (undercovers !== session.undercoverCount || detectives !== session.detectiveCount) {
+            return `${team}队身份数量不符合目标：需要 ${session.undercoverCount} 名卧底、${session.detectiveCount} 名侦探；当前为 ${undercovers} 名卧底、${detectives} 名侦探。`;
+        }
+    }
+    return null;
+};
+
 const taskActionLabels: Record<string, string> = {
     MARK_COMPLETE: '标记完成',
     UNDO_COMPLETE: '撤销完成',
     ABANDON: '放弃任务',
-    REQUEST_HINT: '申请提示',
+    REQUEST_HINT: '查看提示',
     REPLACE: '替换任务',
     N_ADD: 'N + 1',
     N_SUB: 'N - 1',
@@ -574,19 +600,38 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const { playerId: targetId, gameRole } = data.payload || {};
                 const player = findPlayerById(session, targetId);
                 if (player && ['Undercover', 'Detective', 'Soldier'].includes(gameRole)) {
+                    const rolesWereReleased = invalidateReleasedRolesForEditing(session);
                     player.gameRole = gameRole;
                     player.isReady = false;
                     player.undercoverTaskAckStage = gameRole === 'Undercover' ? 'none' : undefined;
                     if (gameRole !== 'Undercover') delete player.taskGrid;
+                    if (rolesWereReleased) {
+                        socket.emit(WsEvents.NOTIFICATION, { message: '身份已撤回。修改完成后需要重新发放身份。' });
+                    }
                     broadcastState();
                 }
             } else if (data.action === 'RANDOM_REMAINING_ROLES') {
-                if (isUndercoverModeEnabled() && session.phase === GamePhase.PreGameSetup) randomRemainingRoles();
+                if (isUndercoverModeEnabled() && session.phase === GamePhase.PreGameSetup) {
+                    const rolesWereReleased = invalidateReleasedRolesForEditing(session);
+                    randomRemainingRoles();
+                    if (rolesWereReleased) {
+                        socket.emit(WsEvents.NOTIFICATION, { message: '身份已撤回并重新补齐。请检查后重新发放身份。' });
+                    }
+                }
             } else if (data.action === 'RELEASE_ROLES') {
                 if (!isUndercoverModeEnabled() || session.phase !== GamePhase.PreGameSetup) return;
+                if (session.rolesReleased) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '身份已经发放，无需重复操作。' });
+                    return;
+                }
                 const unassigned = getGamePlayers(session).filter(p => !p.gameRole);
                 if (unassigned.length > 0) {
                     socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${unassigned.length} 名玩家未分配身份，不能发放。` });
+                    return;
+                }
+                const mismatch = roleCountMismatch(session);
+                if (mismatch) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: mismatch });
                     return;
                 }
                 session.rolesReleased = true;
@@ -706,6 +751,12 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (session.phase === GamePhase.Scoreboard) calculateScores(session);
                 broadcastState();
             } else if (data.action === 'UPDATE_TASK_TEMPLATE') {
+                const templateEditable = session.phase === GamePhase.Lobby ||
+                    (session.phase === GamePhase.PreGameSetup && !session.rolesReleased);
+                if (!templateEditable) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '任务模板只能在大厅或身份发放前修改。' });
+                    return;
+                }
                 if (data.payload?.taskTemplate) {
                     session.taskTemplate = data.payload.taskTemplate;
                     for (const player of getGamePlayers(session)) {
@@ -913,7 +964,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     player.abandonCount++;
                     break;
                 case 'REQUEST_HINT':
-                    if (cell.status === 'Complete' || cell.status === 'Abandoned' || cell.isHintUsed) return;
+                    if (cell.status === 'Complete' || cell.status === 'Abandoned' || cell.isHintUsed || !String(cell.hint || '').trim()) return;
                     cell.isHintUsed = true;
                     if (!cell.borderHistory) cell.borderHistory = [];
                     if (!cell.borderHistory.includes('blue')) cell.borderHistory.push('blue');
@@ -930,9 +981,12 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     cell.status = 'Incomplete';
                     cell.isReplaced = true;
                     cell.description = repTask.description;
+                    cell.hint = String(repTask.hint || '');
+                    cell.isHintUsed = false;
                     cell.level = repTask.level;
                     cell.levelLabel = repTask.level.toString();
                     if (!cell.borderHistory) cell.borderHistory = [];
+                    cell.borderHistory = cell.borderHistory.filter(color => color !== 'blue');
                     if (!cell.borderHistory.includes('purple')) cell.borderHistory.push('purple');
                     player.replaceCount++;
                     break;
@@ -982,11 +1036,16 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const target = findPlayerById(session, data.targetId);
             if (!accuser || accuser.role === 'Spectator' || accuser.role === 'Admin') return;
             if (!target || target.role === 'Spectator' || target.role === 'Admin') return;
+            if (data.type !== 'own' && data.type !== 'enemy') return;
+            if (accuser.playerId === target.playerId) return;
+            if (!accuser.rosterTeam || !target.rosterTeam) return;
+            if (data.type === 'own' && accuser.rosterTeam !== target.rosterTeam) return;
+            if (data.type === 'enemy' && accuser.rosterTeam === target.rosterTeam) return;
             if (!session.accusations[data.playerId]) session.accusations[data.playerId] = { own: null, enemy: null };
-            if (data.type === 'own') session.accusations[data.playerId].own = data.targetId;
-            else session.accusations[data.playerId].enemy = data.targetId;
+            if (session.accusations[data.playerId][data.type]) return;
+            session.accusations[data.playerId][data.type] = data.targetId;
             broadcastState();
-            if (getGamePlayers(session).every(p => {
+            if (getGamePlayers(session).filter(player => player.isOnline !== false).every(p => {
                 const a = session.accusations[p.playerId];
                 return a && a.own && a.enemy;
             })) {

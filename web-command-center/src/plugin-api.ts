@@ -26,6 +26,18 @@ import { applyMembershipToPlayer } from './identity/session-integration';
 
 type TeamAssignmentSide = 'CT' | 'T';
 
+export interface PluginTelemetryEvent {
+    type: string;
+    payload: any;
+}
+
+export const HIGH_FREQUENCY_PLUGIN_EVENTS = new Set([
+    'weapon_fire',
+    'player_hurt',
+    'player_jump',
+    'player_crouch_sample',
+]);
+
 interface TeamAssignment {
     steamId: string;
     name: string;
@@ -249,9 +261,11 @@ const requirePluginAuth = (req: any, res: any, next: any) => {
 
 export function registerPluginRoutes(app: express.Express, deps: {
     broadcastState: () => void;
+    requestStateBroadcast: () => void;
+    flushStateBroadcast: () => void;
     notifyMessage: (msg: string) => void;
 }) {
-    const { broadcastState, notifyMessage } = deps;
+    const { broadcastState, requestStateBroadcast, flushStateBroadcast, notifyMessage } = deps;
 
     app.get('/api/plugin/state', requirePluginAuth, (req, res) => {
         const session = getSession();
@@ -414,41 +428,74 @@ export function registerPluginRoutes(app: express.Express, deps: {
             if (type === 'round_start' && Array.isArray(payload.players)) {
                 updateLivePlayersFromSnapshot(session, payload.players, { updateStats: false });
             }
-            broadcastState();
+            if (HIGH_FREQUENCY_PLUGIN_EVENTS.has(type)) requestStateBroadcast();
+            else flushStateBroadcast();
             return res.json({ success: true, ignored: true, reason: '正式统计尚未开始' });
         }
 
-        switch (type) {
-            case 'round_start':
-                applyRoundStartEvent(session, payload);
-                break;
-            case 'player_death':
-                applyKillEvent(session, payload);
-                break;
-            case 'player_hurt':
-                applyDamageEvent(session, payload);
-                break;
-            case 'player_blind':
-                applyBlindEvent(session, payload);
-                break;
-            case 'weapon_fire':
-                applyWeaponFireEvent(session, payload);
-                break;
-            case 'player_jump':
-                applyJumpEvent(session, payload);
-                break;
-            case 'player_crouch_sample':
-                applyCrouchSampleEvent(session, payload);
-                break;
-            case 'round_end':
-                applyRoundEndEvent(session, payload, notifyMessage);
-                break;
-            default:
-                return res.status(400).json({ success: false, error: `未知事件: ${type}` });
+        if (!applyPluginEvent(session, type, payload, notifyMessage)) {
+            return res.status(400).json({ success: false, error: `未知事件: ${type}` });
         }
-        broadcastState();
+        if (HIGH_FREQUENCY_PLUGIN_EVENTS.has(type)) requestStateBroadcast();
+        else flushStateBroadcast();
         res.json({ success: true });
     });
+
+    app.post('/api/plugin/events', requirePluginAuth, (req, res) => {
+        const session = getSession();
+        const events = Array.isArray(req.body?.events) ? req.body.events : [];
+        if (events.length === 0 || events.length > 4096) {
+            return res.status(400).json({ success: false, error: '批量事件数量必须在 1～4096 条之间' });
+        }
+        if (!isPluginLivePhase(session.phase)) {
+            return res.json({ success: true, ignored: true, reason: `当前阶段 ${session.phase} 不接收实时事件` });
+        }
+        if (req.body?.matchId && req.body.matchId !== session.matchId) {
+            return res.status(409).json({ success: false, error: 'matchId 不匹配' });
+        }
+        if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
+        if (isPluginStatsLocked(session)) return res.json({ success: true, ignored: true, reason: '赛后战绩已锁定' });
+        session.liveGameData.pluginConnected = true;
+        session.liveGameData.lastPluginHeartbeatAt = Date.now();
+        if (!isFormalStatsStarted(session)) {
+            requestStateBroadcast();
+            return res.json({ success: true, ignored: true, reason: '正式统计尚未开始' });
+        }
+        try {
+            const processed = applyPluginTelemetryBatch(session, events);
+            requestStateBroadcast();
+            return res.json({ success: true, processed });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '批量事件无效';
+            return res.status(400).json({ success: false, error: message });
+        }
+    });
+}
+
+function applyPluginEvent(session: any, type: string, payload: any, notifyMessage: (msg: string) => void): boolean {
+    switch (type) {
+        case 'round_start': applyRoundStartEvent(session, payload); return true;
+        case 'player_death': applyKillEvent(session, payload); return true;
+        case 'player_hurt': applyDamageEvent(session, payload); return true;
+        case 'player_blind': applyBlindEvent(session, payload); return true;
+        case 'weapon_fire': applyWeaponFireEvent(session, payload); return true;
+        case 'player_jump': applyJumpEvent(session, payload); return true;
+        case 'player_crouch_sample': applyCrouchSampleEvent(session, payload); return true;
+        case 'round_end': applyRoundEndEvent(session, payload, notifyMessage); return true;
+        default: return false;
+    }
+}
+
+export function applyPluginTelemetryBatch(session: any, events: PluginTelemetryEvent[]): number {
+    for (const event of events) {
+        if (!event || !HIGH_FREQUENCY_PLUGIN_EVENTS.has(String(event.type || ''))) {
+            throw new Error(`不允许批量处理的插件事件: ${String(event?.type || '')}`);
+        }
+    }
+    for (const event of events) {
+        applyPluginEvent(session, event.type, event.payload || {}, () => undefined);
+    }
+    return events.length;
 }
 
 // 内部事件累计

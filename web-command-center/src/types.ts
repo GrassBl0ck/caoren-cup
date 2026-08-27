@@ -49,6 +49,7 @@ export interface TaskActionLogEntry {
 export interface TaskCell {
     cellId: string;
     description: string;
+    hint?: string;
     level: number;
     levelLabel?: string;
     type: 'count' | 'damage' | 'custom';
@@ -128,7 +129,7 @@ export interface AdminLock {
 export interface TaskTemplate {
     cells: Record<string, Partial<TaskCell>>;
     lines: string[][];
-    replacementTask: { level: number; description: string };
+    replacementTask: { level: number; description: string; hint?: string };
 }
 
 export interface MapVoteState {

@@ -931,6 +931,13 @@ const advancePhase = (
         if (session.rollValues.A === null) session.rollValues.A = Math.floor(Math.random() * 100) + 1;
         if (session.rollValues.B === null) session.rollValues.B = Math.floor(Math.random() * 100) + 1;
         broadcast?.();
+        // 单人测试或未完成队长分配时没有完整的 A/B 掷骰流程，管理员推进应立即继续。
+        if (!session.captains.A || !session.captains.B) {
+            session.phase = GamePhase.PlayerDraft;
+            performPhaseTransition(GamePhase.PlayerDraft);
+            if (checkpoint) commitFlowUndoCheckpoint(checkpoint);
+            return true;
+        }
         if (session.rollTimeout) clearTimeout(session.rollTimeout);
         session.rollTimeout = setTimeout(() => {
             if (session.phase !== GamePhase.Roll) return;

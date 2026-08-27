@@ -81,11 +81,11 @@
   }
 
   function refreshIdentityAdmin() { socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'GET_STATUS' }); }
-  function revokeIdentityDevice(identityId, tokenId) {
-    if (confirm('确认撤销这一台设备的登录令牌？')) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_DEVICE', identityId: identityId, tokenId: tokenId });
+  async function revokeIdentityDevice(identityId, tokenId) {
+    if (await window.caorenConfirm('这台设备会立即退出登录，需要重新验证。', { title: '撤销设备登录', tone: 'danger', confirmText: '确认撤销' })) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_DEVICE', identityId: identityId, tokenId: tokenId });
   }
-  function revokeIdentityTokens(identityId) {
-    if (confirm('确认撤销该账号的全部设备令牌？')) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_ALL_TOKENS', identityId: identityId });
+  async function revokeIdentityTokens(identityId) {
+    if (await window.caorenConfirm('该账号的所有设备都会立即退出登录。', { title: '撤销全部设备登录', tone: 'danger', confirmText: '撤销全部' })) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_ALL_TOKENS', identityId: identityId });
   }
 
   Object.assign(window, { refreshIdentityAdmin, revokeIdentityDevice, revokeIdentityTokens });

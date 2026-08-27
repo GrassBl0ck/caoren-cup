@@ -20,6 +20,7 @@ import {
 } from './routes/lobby-announcement-routes';
 import { registerUpdateAnnouncementRoutes } from './routes/update-announcement-routes';
 import { registerPluginRoutes } from './plugin-api';
+import { PluginStateBroadcastScheduler } from './plugin-broadcast-scheduler';
 import { registerSocketHandlers } from './socket-handlers';
 import { registerGameCodeLogin, v1333ConsumeGameLoginTicket } from './v1333-game-login';
 import {
@@ -132,6 +133,8 @@ const broadcastState = () => {
         });
     }
 };
+
+const pluginStateBroadcastScheduler = new PluginStateBroadcastScheduler(broadcastState, 500);
 
 const notifyMessage = (msg: string) => {
     io.emit(WsEvents.NOTIFICATION, { message: msg });
@@ -275,6 +278,8 @@ registerUpdateAnnouncementAdminSocketHandlers({
 
 registerPluginRoutes(app, {
     broadcastState,
+    requestStateBroadcast: () => pluginStateBroadcastScheduler.request(),
+    flushStateBroadcast: () => pluginStateBroadcastScheduler.flush(),
     notifyMessage,
 });
 
