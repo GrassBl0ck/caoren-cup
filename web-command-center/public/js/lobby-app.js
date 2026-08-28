@@ -87,7 +87,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
         }
 
         function renderPublicDuelWorkshopNotice(state, currentPlayer) {
-            if (state?.matchOptions?.matchMode !== 'duel') return '';
+            return '';
             if (canSeeDuelControlMapNotice(state, currentPlayer)) return '';
             const map = duelMapByName(state.matchOptions.duelMap || DUEL_DEFAULT_MAP);
             return '<div class="panel" style="margin-bottom:12px;border-color:#f59e0b;background:#fffbeb;">' +
@@ -619,6 +619,9 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             const duelRoundTime = optionValue('duelRoundTimeMinutes', serverOptions.duelRoundTimeMinutes || 1);
             const duelRounds = optionValue('duelRounds', serverOptions.duelRounds || { pistol: 8, rifle: 16, sniper: 12 });
             const duelUtilityMode = optionValue('duelUtilityMode', serverOptions.duelUtilityMode || 'none');
+            const unbalancedEnabled = optionValue('unbalancedModeEnabled', serverOptions.unbalancedModeEnabled === true) === true;
+            const teamASize = optionValue('unbalancedTeamASize', serverOptions.unbalancedTeamASize || 3);
+            const teamBSize = optionValue('unbalancedTeamBSize', serverOptions.unbalancedTeamBSize || 5);
 
             const status = document.getElementById('match-options-status');
             const duelInput = document.getElementById('match-option-duel');
@@ -631,11 +634,23 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             const duelRifleInput = document.getElementById('match-option-duel-rifle-rounds');
             const duelSniperInput = document.getElementById('match-option-duel-sniper-rounds');
             const duelUtilityInput = document.getElementById('match-option-duel-utility-mode');
+            const unbalancedRow = document.getElementById('unbalanced-options-row');
+            const unbalancedInput = document.getElementById('match-option-unbalanced');
+            const teamASizeInput = document.getElementById('match-option-team-a-size');
+            const teamBSizeInput = document.getElementById('match-option-team-b-size');
             const undercoverInput = document.getElementById('match-option-undercover');
             const caorenInput = document.getElementById('match-option-caoren');
             const saveBtn = document.getElementById('save-match-options-btn');
             const refreshBtn = document.getElementById('refresh-match-options-btn');
             const optionsWarning = document.querySelector('#match-options-panel .match-options-warning');
+
+            // 网页单挑已归档，仅保留游戏内 /duel；旧缓存状态也不得重新打开网页入口。
+            if (duelInput) {
+                duelInput.checked = false;
+                duelInput.disabled = true;
+                duelInput.closest('label')?.setAttribute('hidden', 'hidden');
+            }
+            if (duelRow) duelRow.style.display = 'none';
 
             if (status) {
                 status.innerHTML = `\u5f53\u524d\u9636\u6bb5\uff1a<b>` + phaseDisplayName(phase) + `</b>\uff0c` + (editable ? `\u53ef\u4ee5\u4fee\u6539\u672c\u5c40\u6a21\u5f0f\u3002` : `\u672c\u5c40\u6a21\u5f0f\u5df2\u9501\u5b9a\u3002`);
@@ -661,6 +676,18 @@ document.addEventListener('caoren:terminate-confirmed', () => {
                 };
             }
             if (duelRow) duelRow.style.display = duelEnabled ? '' : 'none';
+            if (unbalancedRow) unbalancedRow.style.display = duelEnabled ? 'none' : '';
+            if (unbalancedInput) {
+                unbalancedInput.value = unbalancedEnabled ? 'true' : 'false';
+                unbalancedInput.disabled = !editable || duelEnabled;
+                unbalancedInput.onchange = () => { setPendingMatchOption('unbalancedModeEnabled', unbalancedInput.value === 'true'); scheduleMatchOptionsAutosave(100); };
+            }
+            for (const [input, key] of [[teamASizeInput, 'unbalancedTeamASize'], [teamBSizeInput, 'unbalancedTeamBSize']]) {
+                if (!input) continue;
+                input.value = key === 'unbalancedTeamASize' ? teamASize : teamBSize;
+                input.disabled = !editable || duelEnabled || !unbalancedEnabled;
+                input.oninput = () => { setPendingMatchOption(key, Math.max(1, Math.floor(Number(input.value || 1)))); scheduleMatchOptionsAutosave(500); };
+            }
             // 测试 BOT 既用于单挑也用于普通/卧底网页流程；仅在管理员的大厅或赛前配置阶段显示。
             const canManageTestBots = isAdmin && ['Lobby', 'PreGameSetup'].includes(phase);
             if (testBotsRow) testBotsRow.style.display = canManageTestBots ? '' : 'none';
@@ -756,11 +783,14 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             const adminPassword = isLoggedInAdmin ? '' : await getAdminPasswordForRequest();
             if (!isLoggedInAdmin && !adminPassword) return;
 
-            const duelEnabled = document.getElementById('match-option-duel')?.checked === true;
+            const duelEnabled = false;
             const matchOptions = {
                 matchMode: duelEnabled ? 'duel' : 'competitive',
                 undercoverModeEnabled: duelEnabled ? false : !!document.getElementById('match-option-undercover')?.checked,
                 caorenModifiersEnabled: !!document.getElementById('match-option-caoren')?.checked,
+                unbalancedModeEnabled: document.getElementById('match-option-unbalanced')?.value === 'true',
+                unbalancedTeamASize: Math.max(1, Math.floor(Number(document.getElementById('match-option-team-a-size')?.value || 3))),
+                unbalancedTeamBSize: Math.max(1, Math.floor(Number(document.getElementById('match-option-team-b-size')?.value || 5))),
                 duelMap: document.getElementById('match-option-duel-map')?.value || DUEL_DEFAULT_MAP,
                 duelMapWorkshopId: duelWorkshopIdForSelect(document.getElementById('match-option-duel-map')),
                 duelRoundTimeMinutes: Number(document.getElementById('match-option-duel-round-time')?.value || 1),
@@ -1291,6 +1321,16 @@ if (window._caorenModifiersEnabled !== true) {
                 html += `<div class="map-bp-summary-card"><span>B 队队长</span><strong>${capB?.name || '-'}</strong></div>`;
                 html += `<div class="map-bp-summary-card"><span>\u4f60\u7684\u72b6\u6001</span><strong>${!draftActive ? '\u7b49\u5f85\u7ba1\u7406\u5458\u5f00\u59cb' : (isMyTurn ? '\u8f6e\u5230\u4f60\u9009\u4eba' : (currentTeam ? '\u7b49\u5f85\u961f\u957f\u9009\u62e9' : '\u9009\u4eba\u5b8c\u6210'))}</strong></div>`;
                 html += '</div>';
+
+                const unbalancedOptions = state.matchOptions || {};
+                if (unbalancedOptions.unbalancedModeEnabled === true) {
+                    const rosterPlayers = Object.values(state.players || {}).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
+                    const aCount = rosterPlayers.filter(p => p.rosterTeam === 'A').length;
+                    const bCount = rosterPlayers.filter(p => p.rosterTeam === 'B').length;
+                    const unassignedCount = rosterPlayers.filter(p => p.rosterTeam !== 'A' && p.rosterTeam !== 'B').length;
+                    const missingBindCount = rosterPlayers.filter(p => !p.steamIdBound).length;
+                    html += `<div class="soft-block" style="margin-top:14px;">不平衡竞技目标：A 队 ${Number(unbalancedOptions.unbalancedTeamASize || 3)} 人，B 队 ${Number(unbalancedOptions.unbalancedTeamBSize || 5)} 人；当前 A ${aCount} 人、B ${bCount} 人${unassignedCount ? `，未分队 ${unassignedCount} 人` : ''}${missingBindCount ? `，未绑定 SteamID ${missingBindCount} 人` : ''}。</div>`;
+                }
 
                 if (available.length > 0) {
                     html += '<h3 style="margin-top:18px;">可选玩家</h3>';
@@ -2248,7 +2288,7 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         function renderDuelControlPanel(state, currentPlayer) {
-            if (!currentPlayer || currentPlayer.role !== 'Admin') return '';
+            return '';
             const opts = state.matchOptions || {};
             const isDuelMode = opts.matchMode === 'duel';
             const rounds = opts.duelRounds || { pistol: 8, rifle: 16, sniper: 12 };

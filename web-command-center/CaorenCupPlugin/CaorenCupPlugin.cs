@@ -577,10 +577,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 ApplyDuelAdminConfig(player, command, new DuelGameConfig());
                 break;
             case DuelAdminCommandKind.Start:
-                StartGameManagedDuel(player, command, false);
-                break;
-            case DuelAdminCommandKind.StartConfirm:
-                StartGameManagedDuel(player, command, true);
+                StartGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Pause:
                 PauseGameManagedDuel(player, command);
@@ -589,9 +586,6 @@ public sealed class CaorenCupPlugin : BasePlugin
                 ResumeGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Stop:
-                RequestStopGameManagedDuel(player, command);
-                break;
-            case DuelAdminCommandKind.StopConfirm:
                 StopGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Maps:
@@ -617,17 +611,17 @@ public sealed class CaorenCupPlugin : BasePlugin
     private static IReadOnlyCollection<string> BuildDuelAdminHelpLines() =>
     [
         "[草人杯] 推荐顺序：先切换地图，等待玩家重连并选择 T/CT，再配置回合数、时间和道具，最后 /duel start 开赛。",
-        "[草人杯] 若要有意替换现有网页管理状态，请使用 /duel start confirm。",
+        "[草人杯] 单挑仅由游戏内指令管理。",
         "[草人杯] /duel status：查看单挑状态和完整配置",
         "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 30",
         "[草人杯] /duel time <分钟>：设置每回合 0.25～5 分钟",
         "[草人杯] /duel utility <none|random1|random2|random3|full>：设置道具",
         "[草人杯] /duel reset：恢复默认配置；/duel start：按当前 T/CT 真人开赛",
-        "[草人杯] /duel pause、/duel resume、/duel stop、/duel stop confirm：控制比赛",
+        "[草人杯] /duel pause、/duel resume、/duel stop：控制比赛",
         "[草人杯] /duel maps；/duel map <序号|地图名|创意工坊ID>：查看或切换地图"
     ];
 
-    private void StartGameManagedDuel(CCSPlayerController? player, CommandInfo command, bool confirmWebTakeover)
+    private void StartGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
         if (!_duelTelemetryIsolation.CleanupRestartPending &&
             _duelCvarRestorePending)
@@ -655,7 +649,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 candidate.Team == CsTeam.Terrorist ? DuelTeam.Terrorist : DuelTeam.CounterTerrorist))
             .ToArray();
 
-        if (!_duelSession.TryStart(participants, confirmWebTakeover, out var error))
+        if (!_duelSession.TryStart(participants, out var error))
         {
             ReplyToDuelCaller(player, command, $"[草人杯] 无法开始单挑：{error}");
             return;
@@ -703,10 +697,9 @@ public sealed class CaorenCupPlugin : BasePlugin
                 ReplyToDuelCaller(player, command, $"[草人杯] {FormatDuelConfig(config)}");
             }
             Logger.LogInformation(
-                "Started game-managed duel session with {TCount} T and {CtCount} CT participants. WebTakeover={WebTakeover}",
+                "Started game-managed duel session with {TCount} T and {CtCount} CT participants.",
                 participants.Count(item => item.Team == DuelTeam.Terrorist),
-                participants.Count(item => item.Team == DuelTeam.CounterTerrorist),
-                confirmWebTakeover);
+                participants.Count(item => item.Team == DuelTeam.CounterTerrorist));
         }
         catch (Exception ex)
         {
@@ -913,17 +906,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         IReadOnlySet<string> acceptedMissingSteamIds,
         IReadOnlySet<string> currentMissingSteamIds) =>
         currentMissingSteamIds.Any(steamId => !acceptedMissingSteamIds.Contains(steamId));
-
-    private void RequestStopGameManagedDuel(CCSPlayerController? player, CommandInfo command)
-    {
-        if (_duelSession.ControlMode != DuelControlMode.GameManaged)
-        {
-            ReplyToDuelCaller(player, command, "[草人杯] 当前没有游戏内单挑可终止。");
-            return;
-        }
-
-        ReplyToDuelCaller(player, command, "[草人杯] 终止不会计算胜负；请使用 /duel stop confirm 再次确认。");
-    }
 
     private void StopGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
@@ -2467,10 +2449,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             ClearTeamAssignments();
         }
-        else if (string.Equals(command.Type, "CONFIGURE_DUEL_MODE", StringComparison.OrdinalIgnoreCase))
-        {
-            ConfigureDuelMode(command.Payload);
-        }
         else
         {
             Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
@@ -2559,68 +2537,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         });
     }
 
-    private void ConfigureDuelMode(JsonElement payload)
-    {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        if (_duelSession.ControlMode == DuelControlMode.GameManaged)
-        {
-            Logger.LogWarning("Rejected CONFIGURE_DUEL_MODE because a game-managed duel is active.");
-            return;
-        }
-
-        var pistol = 8;
-        var rifle = 16;
-        var sniper = 12;
-        if (payload.ValueKind == JsonValueKind.Object &&
-            payload.TryGetProperty("rounds", out var rounds) &&
-            rounds.ValueKind == JsonValueKind.Object)
-        {
-            pistol = ReadPayloadInt(rounds, "pistol", pistol);
-            rifle = ReadPayloadInt(rounds, "rifle", rifle);
-            sniper = ReadPayloadInt(rounds, "sniper", sniper);
-        }
-
-        if (pistol + rifle + sniper < 30)
-        {
-            pistol = 8;
-            rifle = 16;
-            sniper = 12;
-        }
-
-        var roundTimeMinutes = ReadPayloadDouble(payload, "roundTimeMinutes", 1);
-        var utilityMode = "none";
-        if (payload.ValueKind == JsonValueKind.Object &&
-            payload.TryGetProperty("utilityMode", out var utilityElement) &&
-            utilityElement.ValueKind == JsonValueKind.String)
-        {
-            utilityMode = NormalizeDuelUtilityMode(utilityElement.GetString());
-        }
-
-        var config = new DuelGameConfig(pistol, rifle, sniper, roundTimeMinutes, utilityMode);
-        try
-        {
-            _duelSession.EnterWebManaged(config);
-            ActivateDuelRuntime(config);
-        }
-        catch (Exception ex)
-        {
-            _duelModeEnabled = false;
-            ClearDuelEquipmentState();
-            _duelSession.Clear();
-            RestoreGameManagedDuelCvarsWithRetry();
-            Logger.LogError(ex, "Failed to configure web-managed duel runtime; restored server state.");
-            return;
-        }
-
-        var totalRounds = pistol + rifle + sniper;
-        Server.NextFrame(() =>
-        {
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 本局游戏共{totalRounds}回合，其中手枪{pistol}回合，步枪{rifle}回合，狙击枪{sniper}回合。");
-            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 从第一回合开始，每隔8回合会提示你可使用 /guns 来切换枪械。");
-        });
-    }
-
     private void ActivateDuelRuntime(DuelGameConfig config)
     {
         if (!DuelRuntimePolicy.CanActivateRuntime(
@@ -2637,9 +2553,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _duelFormalRound = 0;
         _duelLastAnnouncedStage = null;
         ClearDuelEquipmentState();
-        var cvarPlan = _duelSession.ControlMode == DuelControlMode.GameManaged
-            ? DuelRuntimePolicy.BuildCvarPlan(config)
-            : DuelRuntimePolicy.BuildWebManagedCvarPlan(config);
+        var cvarPlan = DuelRuntimePolicy.BuildCvarPlan(config);
         _duelServerCvars.Apply(cvarPlan);
         _duelModeEnabled = true;
         Server.ExecuteCommand("mp_warmup_end");

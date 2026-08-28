@@ -95,13 +95,13 @@ public class BleedFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRu
             return;
         }
 
-        if (!float.TryParse(info.GetArg(2), out float interval) || interval <= 0)
+        if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), _settings.Interval, out float interval) || interval <= 0)
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "无效的时间间隔。");
             return;
         }
 
-        if (!int.TryParse(info.GetArg(3), out int amount))
+        if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), _settings.Amount, out int amount))
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "无效的血量变化数值。");
             return;

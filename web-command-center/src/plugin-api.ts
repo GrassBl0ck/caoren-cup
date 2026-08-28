@@ -23,6 +23,7 @@ import { ADMIN_PASSWORD, PLUGIN_TOKEN } from './game-constants';
 import { resolveDuelMapConfig } from './duel-config';
 import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer } from './identity/session-integration';
+import { validateUnbalancedRosterForTeamLock } from './unbalanced-roster';
 
 type TeamAssignmentSide = 'CT' | 'T';
 
@@ -147,6 +148,8 @@ const enqueueTeamAssignments = (
     reason: string,
     lockTeams = true
 ): TeamAssignmentBuildResult & { commandId: string; queuedAt: number; reason: string } => {
+    const rosterCheck = validateUnbalancedRosterForTeamLock(session);
+    if (!rosterCheck.valid) throw new Error(rosterCheck.blockers.join(' '));
     const built = buildTeamAssignments(session);
     if (built.assignments.length === 0) {
         throw new Error('没有可同步的已绑定 A/B 队玩家。');

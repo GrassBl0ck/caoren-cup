@@ -169,10 +169,10 @@ public class EspFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRunt
         }
 
         int range = _config.Esp.MaxRange;
-        if (argCount >= 3) int.TryParse(info.GetArg(2), out range);
+        if (argCount >= 3) CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), range, out range);
 
         int mode = _config.Esp.Mode;
-        if (argCount >= 4) int.TryParse(info.GetArg(3), out mode);
+        if (argCount >= 4) CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), mode, out mode);
 
         _config.Esp.Enabled = true;
         _config.Esp.Target = targetArg;

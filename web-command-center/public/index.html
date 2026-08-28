@@ -384,7 +384,7 @@
                 <h4>本局模式设置</h4>
                 <div id="match-options-status" class="match-options-status">当前阶段：读取中……</div>
 
-                <label class="match-options-row">
+                <label class="match-options-row" style="display:none;" aria-hidden="true">
                     <input type="checkbox" id="match-option-duel">
                     <div>
                         <div class="match-options-title">&#21551;&#29992;&#21333;&#25361;&#27169;&#24335;</div>
@@ -445,6 +445,21 @@
                         </div>
                         <div class="match-options-desc" style="margin-top:6px;">&#21482;&#29992;&#20110;&#32593;&#39029;&#27969;&#31243;&#27979;&#35797;&#65292;&#19981;&#20250;&#36827;&#20837; CS2 &#26381;&#21153;&#22120;&#65292;&#20063;&#19981;&#20250;&#20135;&#29983;&#30495;&#23454;&#20987;&#26432;&#25968;&#25454;&#12290;</div>
                     </div>
+                </div>
+
+                <div class="match-options-row" id="unbalanced-options-row" style="display:none;">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;width:100%;">
+                        <label>
+                            <div class="match-options-title">不平衡竞技目标</div>
+                            <select id="match-option-unbalanced">
+                                <option value="false">平衡竞技</option>
+                                <option value="true">不平衡竞技</option>
+                            </select>
+                        </label>
+                        <label><div class="match-options-title">A 队人数</div><input id="match-option-team-a-size" type="number" min="1" step="1" value="3"></label>
+                        <label><div class="match-options-title">B 队人数</div><input id="match-option-team-b-size" type="number" min="1" step="1" value="5"></label>
+                    </div>
+                    <div class="match-options-desc" style="margin-top:6px;">不平衡竞技会在分队、地图 BP、赛前准备和锁队同步前校验目标人数。</div>
                 </div>
 
                 <label class="match-options-row">

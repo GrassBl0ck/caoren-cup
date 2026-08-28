@@ -86,7 +86,7 @@ public override void Load(bool hotReload)
         _features.Add(new ModifierFeature()); // 37 规则 buff CVar 托管
         _features.Add(new MovementRulesFeature()); // 38 全局移动规则 CVar 托管
         _features.Add(new PresetFeature()); // 39 grass 经典玩法预设
-        _features.Add(new ParticleMenuFeature()); // 40 Native Bridge 粒子测试菜单
+        // ParticleMenuFeature 暂停开发，不纳入运行插件。
         _features.Add(new RandomNadeFeature()); // 41 开枪随机发射投掷物
 
         // 3. 注入配置并初始化。先给配置，再 Init，保证 Alias 等模块能按 JSON 注册指令。
@@ -590,9 +590,20 @@ public override void Load(bool hotReload)
         player.PrintToChat($" {ChatColors.Green}/save_plu{ChatColors.Default} : 保存配置");
         player.PrintToChat($" {ChatColors.Green}/reset_plu{ChatColors.Default} : 一键重置");
         player.PrintToChat($" {ChatColors.Green}/hpcap <min> <max>{ChatColors.Default} : 设置模块血量全局上下限");
+        player.PrintToChat($" {ChatColors.Yellow}提示：配置类命令的数值参数可用 - 表示保持当前值。{ChatColors.Default}");
+
+        player.PrintToChat($" {ChatColors.Green}/rules{ChatColors.Default} : 查看草人杯当前服务器规则");
+        player.PrintToChat($" {ChatColors.Green}/info <模块名>{ChatColors.Default} : 查看指定玩法说明");
+        player.PrintToChat($" {ChatColors.Green}/info_cast <模块名>{ChatColors.Default} : 向全服广播玩法说明（管理员）");
+        player.PrintToChat($" {ChatColors.Green}/sv_noclip <1|0|status>{ChatColors.Default} : 控制或查看 noclip（管理员）");
+        player.PrintToChat($" {ChatColors.Green}/cclogin{ChatColors.Default} : 获取草人杯网页登录码");
+        player.PrintToChat($" {ChatColors.Green}/ccstate{ChatColors.Default} : 查看网页指挥台连接状态");
+        player.PrintToChat($" {ChatColors.Green}/ccsnapshot{ChatColors.Default} : 手动推送一次网页比赛快照");
+        player.PrintToChat($" {ChatColors.Green}/duel help{ChatColors.Default} : 查看游戏内单挑全部命令");
 
         if (AdminManager.PlayerHasPermissions(player, "@css/root"))
         {
+            player.PrintToChat($" {ChatColors.Green}/notice <范围> <内容>{ChatColors.Default} : 向玩家发送醒目提示（管理员）");
             player.PrintToChat($" {ChatColors.Green}/lobbyreminder on|off|1|0{ChatColors.Default} : 开启或关闭大厅验证提醒（管理员）");
         }
     }

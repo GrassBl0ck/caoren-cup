@@ -232,14 +232,14 @@ public class AccuracyFeature : ICaorenFeature
             return;
         }
 
-        if (!TryParseNonNegativeFloat(command.GetArg(2), out float movePenaltyMultiplier))
+        if (!CaorenCupUtils.TryParseOptionalFloat(command.GetArg(2), _settings.MovePenaltyMultiplier, out float movePenaltyMultiplier) || movePenaltyMultiplier < 0)
         {
             Reply(player,
                 $"{ChatColors.LightRed}移动惩罚倍数无效。{ChatColors.Default} 请输入 >= 0 的数字，例如 0 / 0.5 / 1 / 2");
             return;
         }
 
-        if (!TryParseNonNegativeFloat(command.GetArg(3), out float recoilMultiplier))
+        if (!CaorenCupUtils.TryParseOptionalFloat(command.GetArg(3), _settings.RecoilMultiplier, out float recoilMultiplier) || recoilMultiplier < 0)
         {
             Reply(player,
                 $"{ChatColors.LightRed}后坐力倍数无效。{ChatColors.Default} 请输入 >= 0 的数字，例如 0 / 0.5 / 1 / 2");

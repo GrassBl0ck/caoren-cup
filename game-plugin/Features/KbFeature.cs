@@ -87,10 +87,10 @@ public class KbFeature : ICaorenFeature
         bool friendly = _config.Kb.Friendly;
         float mult = _config.Kb.Multiplier;
 
-        if (argCount >= 3) float.TryParse(info.GetArg(2), out horiz);
-        if (argCount >= 4) float.TryParse(info.GetArg(3), out vert);
-        if (argCount >= 5) friendly = info.GetArg(4) == "1";
-        if (argCount >= 6) float.TryParse(info.GetArg(5), out mult);
+        if (argCount >= 3 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), horiz, out horiz)) { if (player != null) CaorenCupUtils.PrintToChat(player, "无效的水平力参数。"); return; }
+        if (argCount >= 4 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(3), vert, out vert)) { if (player != null) CaorenCupUtils.PrintToChat(player, "无效的垂直力参数。"); return; }
+        if (argCount >= 5 && info.GetArg(4) != "-") friendly = info.GetArg(4) == "1";
+        if (argCount >= 6 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(5), mult, out mult)) { if (player != null) CaorenCupUtils.PrintToChat(player, "无效的伤害倍数参数。"); return; }
 
         _config.Kb.Enabled = true;
         _config.Kb.Target = targetArg;

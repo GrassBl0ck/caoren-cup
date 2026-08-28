@@ -175,17 +175,17 @@ dotnet build
 
 ### 4.1 指令、配置和开局
 
-- [ ] 输入 `/duel help`，确认明确给出推荐顺序：先切换地图，等待玩家重连并选择 T/CT，再配置回合数、时间和道具，最后 `/duel start`；同时列出 `status`、`rounds`、`time`、`utility`、`reset`、`start`、`start confirm`、`pause`、`resume`、`stop`、`stop confirm`、`maps`、`map` 的用途，并说明 `/duel start confirm` 仅用于有意替换现有网页管理状态。
+- [ ] 输入 `/duel help`，确认明确给出推荐顺序：先切换地图，等待玩家重连并选择 T/CT，再配置回合数、时间和道具，最后 `/duel start`；同时列出 `status`、`rounds`、`time`、`utility`、`reset`、`start`、`pause`、`resume`、`stop`、`maps`、`map` 的用途。单挑只由游戏内指令管理。
 - [ ] 分别在闲置、进行中、暂停和网页管理状态输入 `/duel status`；确认状态、已完成回合、T/CT 比分、完整配置和（暂停时）暂停原因都与实际一致；游戏内管理状态还必须显示 T/CT 参赛人数与姓名、当前阶段和剩余回合数。
 - [ ] 闲置时输入 `/duel rounds 0 18 12`（合法，总和 30），确认手枪阶段 0 回合被保存并在开局后跳过；再分别输入 `/duel rounds -1 19 12`、`/duel rounds 100 0 0`、`/duel rounds 8 x 22`、`/duel rounds 8 16`、`/duel rounds 8 16 5`，确认负数、超过 99、非数字、缺少参数和总和小于 30 都被拒绝，原配置不变。
 - [ ] 闲置时输入 `/duel time 1.25`（合法）后确认配置更新；再输入 `/duel time 0.2`、`/duel time 6`、`/duel time abc` 和 `/duel time`，确认范围外、非数字和缺少参数被拒绝，原配置不变。
 - [ ] 闲置时输入 `/duel utility random2`（合法）后确认配置更新；再输入 `/duel utility banana` 和 `/duel utility`，确认未知值和缺少参数被拒绝，原配置不变。
-- [ ] 在游戏内单挑已经开始（GameManaged）或网页管理状态（WebManaged）时，重复输入 `/duel rounds 8 16 12`、`/duel time 1`、`/duel utility none` 或 `/duel reset`；确认都被拒绝，既有状态和配置不改变。
+- [ ] 在游戏内单挑已经开始时，重复输入 `/duel rounds 8 16 12`、`/duel time 1`、`/duel utility none` 或 `/duel reset`；确认都被拒绝，既有状态和配置不改变。
 - [ ] 闲置时输入 `/duel reset`，确认恢复为手枪 8、步枪 16、狙击 12、每回合 1 分钟、道具 `none`；不要把 reset 预期写成“清理网页大厅”。
 - [ ] 闲置且当前 T、CT 都至少有一名真人时输入 `/duel start`，确认按当前 T/CT 真人开赛；已经有 GameManaged 单挑时再次输入 `/duel start`，确认被拒绝。
-- [ ] 网页存在未清理的旧对局状态时，先输入 `/duel start`，确认只提示使用 `/duel start confirm` 接管；再输入 `/duel start confirm`，确认独立单挑可接管，且没有向网页创建、更新或结束比赛。
+- [ ] 网页端不再提供单挑状态；在闲置服务器输入 `/duel start`，确认直接按当前 T/CT 真人开赛，且不会创建、更新或结束网页比赛。
 - [ ] 进行中的 GameManaged 单挑输入 `/duel pause`，确认比赛暂停；输入 `/duel resume`，确认在所有参赛者已就绪时恢复。闲置或已暂停时重复输入不适用的 pause/resume，确认被拒绝且状态不变。
-- [ ] 进行中的 GameManaged 单挑输入 `/duel stop`，确认只提示使用 `/duel stop confirm`，不会终止；输入 `/duel stop confirm` 后确认强制终止且本次不计算胜负。闲置时输入两者均应拒绝。
+- [ ] 进行中的 GameManaged 单挑输入 `/duel stop`，确认直接强制终止且本次不计算胜负；闲置时输入 `/duel stop` 应拒绝。
 - [ ] 输入 `/duel maps`，确认仅列出可用创意工坊地图及切图用法，不改变比赛状态；兼容指令 `/duel_maps` 应得到同样的地图列表。
 - [ ] 闲置时输入 `/duel map 1`（合法）或 `/duel map aim_redline`，确认开始切换对应地图；输入 `/duel map 999`（列表外）时确认不切图并显示地图帮助；输入 `/duel map`（缺少参数）时确认不切图并提示参数格式错误。兼容指令 `/duel_map 1` 应与 `/duel map 1` 行为一致。
 - [ ] GameManaged 单挑进行中或暂停时输入 `/duel map 1` 或 `/duel_map 1`，确认拒绝切图且比赛状态不变。
@@ -200,9 +200,9 @@ dotnet build
 
 ### 4.3 结束、结算和幂等清理
 
-- [ ] 执行 `/duel stop confirm`，确认需要明确确认才会终止，并且终止后不能继续推进回合。
+- [ ] 执行 `/duel stop`，确认终止后不能继续推进回合。
 - [ ] 分别完成“打满总回合后 T 胜”“打满总回合后 CT 胜”和“打满总回合同分平局”三种结算，确认胜方/平局显示正确。
-- [ ] 对正常打满结算、`/duel stop confirm` 强制终止和异常结束（例如换图、插件卸载）分别检查：cvar 已恢复、队伍锁定已清除、阶段武器已清理、暂停状态已解除；重复触发清理也不报错或残留状态。
+- [ ] 对正常打满结算、`/duel stop` 强制终止和异常结束（例如换图、插件卸载）分别检查：cvar 已恢复、队伍锁定已清除、阶段武器已清理、暂停状态已解除；重复触发清理也不报错或残留状态。
 
 ### 4.4 网页隔离回归
 

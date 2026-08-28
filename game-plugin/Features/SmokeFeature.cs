@@ -91,19 +91,13 @@ public class SmokeFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRu
         }
 
         // 解析时长
-        float duration = -1.0f;
+        float duration = _settings.Duration;
         string arg2 = info.GetArg(2);
-        if (arg2 != "-")
-        {
-            if (!float.TryParse(arg2, out duration) || duration <= 0)
-            {
-                if (player != null) CaorenCupUtils.PrintToChat(player, "无效的持续时间。");
-                return;
-            }
-        }
+        if (!CaorenCupUtils.TryParseOptionalFloat(arg2, _settings.Duration, out duration) || duration <= 0)
+        { if (player != null) CaorenCupUtils.PrintToChat(player, "无效的持续时间。"); return; }
 
         // 解析血量变动 (正数回血，负数扣血)
-        if (!int.TryParse(info.GetArg(3), out int hpChange))
+        if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), _settings.HealthChangePerSecond, out int hpChange))
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "无效的血量变化数值。");
             return;

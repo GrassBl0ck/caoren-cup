@@ -86,7 +86,7 @@ public class ArmorFeature : ICaorenFeature
             return;
         }
 
-        if (!int.TryParse(info.GetArg(2), out int armorValue))
+        if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), _settings.Value, out int armorValue))
         {
             Reply(player, "无效的护甲耐久数值。");
             return;

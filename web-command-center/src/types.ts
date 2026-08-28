@@ -231,6 +231,9 @@ export interface MatchOptions {
     duelRoundTimeMinutes?: number;
     duelRounds?: DuelRoundConfig;
     duelUtilityMode?: DuelUtilityMode;
+    unbalancedModeEnabled?: boolean;
+    unbalancedTeamASize?: number;
+    unbalancedTeamBSize?: number;
 }
 
 export interface GameSession {
