@@ -1,7 +1,6 @@
 using System.Runtime;
 using System.Text.Json.Serialization;
 using CounterStrikeSharp.API.Core;
-using CaorenCup.Features.ParticleMenu;
 
 namespace CaorenCup;
 
@@ -70,9 +69,6 @@ public class CaorenCupConfig : BasePluginConfig
 
     [JsonPropertyName("HpCap")]
     public HpCapSettings HpCap { get; set; } = new HpCapSettings();
-
-    [JsonPropertyName("ParticleMenu")]
-    public ParticleMenuSettings ParticleMenu { get; set; } = new();
 
     [JsonPropertyName("RandomNade")]
     public RandomNadeSettings RandomNade { get; set; } = new();

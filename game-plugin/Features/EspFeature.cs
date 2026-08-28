@@ -26,7 +26,7 @@ using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
 namespace CaorenCup.Features;
 
-public class EspFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRuntimeCountSource
+public class EspFeature : ICaorenFeature
 {
     public string FeatureName => "ESP 透视模块";
 

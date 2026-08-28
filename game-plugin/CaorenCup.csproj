@@ -10,6 +10,12 @@
     <Compile Remove="Archive\**" />
     <EmbeddedResource Remove="Archive\**" />
     <None Remove="Archive\**" />
+    <Compile Remove="Features\ParticleMenu\**" />
+    <EmbeddedResource Remove="Features\ParticleMenu\**" />
+    <None Remove="Features\ParticleMenu\**" />
+    <Compile Remove="Diagnostics\**" />
+    <EmbeddedResource Remove="Diagnostics\**" />
+    <None Remove="Diagnostics\**" />
   </ItemGroup>
 
   <ItemGroup>

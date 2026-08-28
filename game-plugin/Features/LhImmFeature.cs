@@ -11,7 +11,7 @@ using Timer = CounterStrikeSharp.API.Modules.Timers.Timer;
 
 namespace CaorenCup.Features;
 
-public class LhImmFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRuntimeCountSource
+public class LhImmFeature : ICaorenFeature
 {
     public string FeatureName => "名刀无敌 (LhImm)";
 

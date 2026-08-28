@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace CaorenCup.Features;
 
-public class BleedFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRuntimeCountSource
+public class BleedFeature : ICaorenFeature
 {
     public string FeatureName => "Bleed/Regen";
 

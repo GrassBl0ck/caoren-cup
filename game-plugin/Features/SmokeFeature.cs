@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace CaorenCup.Features;
 
-public class SmokeFeature : ICaorenFeature, CaorenCup.Diagnostics.IPerformanceRuntimeCountSource
+public class SmokeFeature : ICaorenFeature
 {
     public string FeatureName => "Smoke (高级烟雾控制)";
 
