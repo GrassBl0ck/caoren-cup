@@ -5,7 +5,10 @@ export const GAME_INACTIVITY_CHECK_INTERVAL_MS = 60 * 1000;
 export const GAME_INACTIVITY_TERMINATION_REASON = '本场比赛连续 2 小时没有有效操作，已自动结束。';
 
 const buildSemanticDigest = (session: GameSession): string => {
-    const semanticSession = JSON.parse(JSON.stringify(session)) as Record<string, any>;
+    // rollTimeout is a live Node.js Timeout object. It contains circular
+    // linked-list references and must never enter the semantic JSON digest.
+    const { rollTimeout: _rollTimeout, ...serializableSession } = session as GameSession & { rollTimeout?: unknown };
+    const semanticSession = JSON.parse(JSON.stringify(serializableSession)) as Record<string, any>;
     delete semanticSession.lastActivityAt;
 
     for (const player of Object.values(semanticSession.players || {}) as Record<string, any>[]) {

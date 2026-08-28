@@ -61,7 +61,7 @@ assert.match(
     assert.ok(index.includes(label), `缺少固定更新公告分区：${label}`);
 });
 
-const appCssIndex = index.indexOf('href="/css/app.css"');
+const appCssIndex = index.indexOf('href="/css/app.css');
 const updateCssIndex = index.indexOf('href="/css/update-announcements.css"');
 assert.ok(updateCssIndex > appCssIndex, '更新公告样式必须在 app.css 之后加载');
 
@@ -76,7 +76,7 @@ assert.ok(
     lobbyControllerIndex < publicControllerIndex,
     '公开更新公告控制器必须在大厅创建共享 Socket 后加载',
 );
-const adminControllerIndex = index.indexOf('src="/js/update-announcement-admin.js"');
+const adminControllerIndex = index.indexOf('src="/js/update-announcement-admin.js');
 const adminMutationStateIndex = index.indexOf('src="/js/update-announcement-admin-mutation-state.js"');
 assert.ok(
     adminMutationStateIndex > publicControllerIndex
@@ -110,8 +110,8 @@ for (const status of ['draft', 'published', 'hidden']) {
 for (const token of [
     'confirmVersionChange',
     'remindAgain',
-    '发布后的版本号已改变。保存后会重新提醒所有玩家，确定继续吗？',
-    '选择“取消”只表示不重复提醒，公告仍会重新发布。',
+    '发布后的版本号已改变，保存后会重新提醒所有玩家。',
+    '选择“暂不提醒”不会取消重新发布，只是不重复提醒玩家。',
 ]) {
     assert.ok(adminJs.includes(token), `管理员控制器缺少行为：${token}`);
 }

@@ -1185,14 +1185,14 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
-    public void Both_duel_control_modes_use_the_shared_runtime_activation_path()
+    public void Duel_runtime_uses_the_game_managed_activation_path()
     {
         var source = ReadPluginSource();
         Assert.Contains("private void ActivateDuelRuntime(DuelGameConfig config)", source);
-        Assert.Contains("DuelRuntimePolicy.BuildWebManagedCvarPlan(config)", source);
+        Assert.DoesNotContain("DuelRuntimePolicy.BuildWebManagedCvarPlan(config)", source);
         Assert.Contains("DuelRuntimePolicy.BuildCvarPlan(config)", source);
-        Assert.Contains("ReadPayloadDouble(payload, \"roundTimeMinutes\", 1)", source);
-        Assert.Contains("_duelSession.EnterWebManaged(config);", source);
+        Assert.DoesNotContain("ReadPayloadDouble(payload, \"roundTimeMinutes\", 1)", source);
+        Assert.DoesNotContain("_duelSession.EnterWebManaged(config);", source);
         Assert.DoesNotContain(
             "_duelServerCvars.Set(\"mp_maxrounds\", config.TotalRounds.ToString()",
             source);
@@ -1495,7 +1495,7 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
-    public void Admin_help_states_the_recommended_setup_order_and_confirmed_web_takeover()
+    public void Admin_help_states_the_recommended_setup_order_without_web_takeover()
     {
         var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
             "BuildDuelAdminHelpLines",
@@ -1512,8 +1512,8 @@ public sealed class FinalReviewFixTests
         Assert.True(reconnectIndex > mapIndex);
         Assert.True(configureIndex > reconnectIndex);
         Assert.True(startIndex > configureIndex);
-        Assert.Contains("/duel start confirm", output);
-        Assert.Contains("替换现有网页管理状态", output);
+        Assert.DoesNotContain("/duel start confirm", output);
+        Assert.DoesNotContain("替换现有网页管理状态", output);
     }
 
     private static PluginCommand CreateServerCommand(

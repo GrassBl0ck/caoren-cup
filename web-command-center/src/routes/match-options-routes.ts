@@ -44,7 +44,15 @@ export function registerMatchOptionsRoutes(app: Express, deps: RegisterMatchOpti
       });
     }
 
-    const matchOptions = deps.applyMatchOptions(req.body?.matchOptions || {});
+    const rawOptions = req.body?.matchOptions || {};
+    if (rawOptions.matchMode === 'duel') {
+      return res.status(400).json({
+        success: false,
+        error: '网页单挑已归档，请在游戏内使用 /duel 指令。',
+        phase,
+      });
+    }
+    const matchOptions = deps.applyMatchOptions(rawOptions);
 
     deps.notify(
       matchOptions.matchMode === 'duel'

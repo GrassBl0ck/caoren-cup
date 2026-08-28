@@ -1,6 +1,7 @@
 (function () {
     'use strict';
 
+    const caorenConfirm = window.caorenConfirm;
     const WEAPONPAINTS_ACTION = 'WEAPONPAINTS_ACTION';
     const WEAPONPAINTS_STATUS = 'WEAPONPAINTS_STATUS';
     const CATEGORIES = [
@@ -800,10 +801,16 @@
         return guardUnsavedChange(() => applyCategory(category));
     }
 
+    function setPromoVisibility(visible) {
+        const promo = el('weaponpaints-open-btn');
+        if (promo) promo.hidden = !visible;
+    }
+
     async function openPanel() {
         const panel = el('weaponpaints-panel');
         panel.hidden = false;
         state.open = true;
+        setPromoVisibility(false);
         try {
             state.status = await emit(WEAPONPAINTS_STATUS);
             renderHealth();
@@ -817,7 +824,7 @@
     }
 
     async function resetTarget() {
-        if (!confirm('确认重置该玩家 CT/T 的全部换肤配置？此操作会写入审计日志。')) return;
+        if (!await caorenConfirm('该玩家 CT/T 的全部换肤配置会恢复默认，并写入审计日志。', { title: '重置玩家换肤配置', tone: 'danger', confirmText: '确认重置' })) return;
         try {
             await action({ action: 'reset' });
             clearDraftSelection();
@@ -863,7 +870,7 @@
     }
 
     async function forceRefresh() {
-        if (!confirm('确认立即强刷该在线玩家？正式回合中也会立刻应用。')) return;
+        if (!await caorenConfirm('正式回合中也会立即应用到该在线玩家。', { title: '立即强刷换肤', confirmText: '确认强刷' })) return;
         try { await action({ action: 'forceRefresh' }); notice('强刷命令已进入服务器队列。', 'success'); } catch (error) { notice(error.message, 'error'); }
     }
 
@@ -873,6 +880,7 @@
             clearDraftSelection();
             el('weaponpaints-panel').hidden = true;
             state.open = false;
+            setPromoVisibility(true);
         }));
         el('weaponpaints-target')?.addEventListener('change', async (event) => {
             const select = event.target;

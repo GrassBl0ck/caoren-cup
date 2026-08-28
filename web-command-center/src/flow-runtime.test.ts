@@ -58,6 +58,19 @@ test('delayed roll transition records its checkpoint only when the phase actuall
     assert.equal(exportFlowUndoState().entries[0].restorePhase, GamePhase.Roll);
 });
 
+test('单人测试缺少另一名队长时手动推进立即进入队长选人', () => {
+    const session = createInitialSession();
+    session.phase = GamePhase.Roll;
+    session.captains = { A: 'captain-a', B: null };
+    session.players['captain-a'] = { playerId: 'captain-a', name: 'A', role: 'Player', isReady: false };
+    session.playerOrder = ['captain-a'];
+    setSession(session);
+
+    assert.equal(advancePhase(GamePhase.Roll, GamePhase.PlayerDraft, 'Admin', 'admin'), true);
+    assert.equal(session.phase, GamePhase.PlayerDraft);
+    assert.equal(getDraftPickTimer(), null);
+});
+
 test('map and side vote completion record system phase checkpoints', () => {
     const map = createInitialSession();
     map.phase = GamePhase.MapBan;

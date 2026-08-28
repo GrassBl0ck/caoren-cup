@@ -86,7 +86,7 @@ public class FOVFeature : ICaorenFeature
             return;
         }
 
-        if (!int.TryParse(info.GetArg(2), out int fovVal))
+        if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), _settings.FovValue, out int fovVal))
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "无效的 FOV 数值。");
             return;

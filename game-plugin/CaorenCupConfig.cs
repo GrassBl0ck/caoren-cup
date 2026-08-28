@@ -69,6 +69,9 @@ public class CaorenCupConfig : BasePluginConfig
 
     [JsonPropertyName("HpCap")]
     public HpCapSettings HpCap { get; set; } = new HpCapSettings();
+
+    [JsonPropertyName("RandomNade")]
+    public RandomNadeSettings RandomNade { get; set; } = new();
 }
 
 // ==========================================
@@ -337,6 +340,18 @@ public class AmmoSettings
     public float BulletChance { get; set; } = 50f;  // 不消耗子弹概率 (0-100)
     public float GrenadeChance { get; set; } = 30f; // 不消耗道具概率 (0-100)
 }
+
+public class RandomNadeSettings
+{
+    public bool Enabled { get; set; } = false;
+    public double TotalChance { get; set; } = 100;
+    public double SmokeChance { get; set; } = 8;
+    public double FireChance { get; set; } = 40;
+    public double HighExplosiveChance { get; set; } = 40;
+    public double FlashChance { get; set; } = 2;
+    public double DecoyChance { get; set; } = 10;
+}
+
 public class MagicSettings
 {
     public bool Enabled { get; set; } = false;

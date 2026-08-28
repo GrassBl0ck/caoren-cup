@@ -61,10 +61,6 @@ export const buildSessionSnapshotPayload = (session: GameSession): SessionSnapsh
         undercoverCount: session.undercoverCount,
         detectiveCount: session.detectiveCount,
         rolesReleased: session.rolesReleased,
-        duelTempAdminId: session.duelTempAdminId,
-        duelAdminVote: session.duelAdminVote,
-        duelAdminRequest: session.duelAdminRequest,
-        duelTerminateRequest: session.duelTerminateRequest,
         liveGameData: session.liveGameData,
         accusations: session.accusations,
         taskTemplate: session.taskTemplate,
@@ -83,9 +79,10 @@ export const buildSessionSnapshotPayload = (session: GameSession): SessionSnapsh
 
 const normalizeRestoredSession = (raw: any): GameSession => {
     const base = createInitialSession();
+    const allowedRaw = buildSessionSnapshotPayload(raw as GameSession).session;
     const restored = {
         ...base,
-        ...clonePlain(raw),
+        ...clonePlain(allowedRaw),
         rollTimeout: undefined,
     } as GameSession;
 
@@ -104,18 +101,12 @@ const normalizeRestoredSession = (raw: any): GameSession => {
         ...base.matchOptions,
         ...(restored.matchOptions || {}),
     };
-    // Step7: older snapshots may contain lobbyAccess invitation data. It is intentionally
-    // ignored in memory and omitted from all new snapshots; the source snapshot file is
-    // never migrated or deleted during startup.
-    delete (restored as any).lobbyAccess;
+    // Older snapshots may contain fields removed from the current session model. Restoring
+    // through the current snapshot whitelist keeps those fields out of memory and broadcasts.
     restored.matchOptions.matchMode = restored.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
     restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
     restored.accusations = restored.accusations || {};
     restored.adminLock = restored.adminLock || { holderId: null, acquiredAt: null };
-    restored.duelTempAdminId = restored.duelTempAdminId || null;
-    restored.duelAdminVote = undefined;
-    restored.duelAdminRequest = restored.duelAdminRequest;
-    restored.duelTerminateRequest = restored.duelTerminateRequest;
     restored.rollTimeout = undefined;
     for (const player of Object.values(restored.players)) {
         if (player.gameRole !== 'Undercover') player.undercoverTaskAckStage = undefined;

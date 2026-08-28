@@ -90,6 +90,21 @@ test('插件心跳和网页在线状态变化不会重置计时', () => {
     assert.equal(session.lastActivityAt, START);
 });
 
+test('流程定时器存在时仍可生成活动摘要', () => {
+    const session = createInitialSession();
+    session.phase = GamePhase.Roll;
+    session.rollTimeout = setTimeout(() => {}, 60_000);
+    const tracker = new GameInactivityTracker();
+
+    try {
+        tracker.observe(session, START);
+        assert.equal(session.lastActivityAt, START);
+    } finally {
+        clearTimeout(session.rollTimeout);
+        session.rollTimeout = undefined;
+    }
+});
+
 test('有效插件命令加入和确认都会显式重置计时', () => {
     const session = createInitialSession();
     session.phase = GamePhase.LiveGame;

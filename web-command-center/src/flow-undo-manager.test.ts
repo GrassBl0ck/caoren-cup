@@ -168,31 +168,6 @@ test('stale duplicate request cannot pop a second checkpoint', () => {
     assert.equal(getFlowUndoStatus(session, admin).count, 1);
 });
 
-test('official admin can undo any checkpoint while duel temporary admin can only undo their phase advance', () => {
-    const session = createInitialSession();
-    const admin = makePlayer('admin', 'Admin', 'Admin');
-    const temporary = makePlayer('temporary', 'Temporary');
-    addPlayer(session, admin);
-    addPlayer(session, temporary);
-    session.duelTempAdminId = temporary.playerId;
-    session.phase = GamePhase.Lobby;
-
-    pushFlowUndoCheckpoint(session, {
-        actionType: 'ASSIGN_ROSTER_TEAM', actorId: temporary.playerId, actorName: temporary.name, summary: 'Temporary assignment',
-    });
-    assert.equal(getFlowUndoStatus(session, temporary).canUndo, false);
-    assert.equal(undoLatestFlowAction(session, temporary, currentRequest(session, admin) as any).ok, false);
-    assert.equal(undoLatestFlowAction(session, admin, currentRequest(session, admin) as any).ok, true);
-
-    pushFlowUndoCheckpoint(session, {
-        actionType: 'ADVANCE_PHASE', actorId: temporary.playerId, actorName: temporary.name, summary: 'Start duel setup',
-    });
-    session.phase = GamePhase.PreGameSetup;
-    assert.equal(getFlowUndoStatus(session, temporary).canUndo, true);
-    assert.equal(undoLatestFlowAction(session, temporary, currentRequest(session, temporary) as any).ok, true);
-    assert.equal(session.phase, GamePhase.Lobby);
-});
-
 test('history is capped at fifty entries and status exposes safe concurrency fields', () => {
     const session = createInitialSession();
     session.phase = GamePhase.CaptainSelection;

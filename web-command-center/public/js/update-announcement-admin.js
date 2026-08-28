@@ -1,6 +1,8 @@
 (function () {
     'use strict';
 
+    const caorenConfirm = window.caorenConfirm;
+    const caorenPrompt = window.caorenPrompt;
     const mutationStateApi = window.CaorenUpdateAnnouncementAdminMutationState;
 
     function adminSocketRequest(event, payload) {
@@ -186,7 +188,7 @@
                 && versionInput.value.trim() !== originalVersion;
             let confirmedVersionChange = false;
             if (versionChanged) {
-                confirmedVersionChange = confirm('发布后的版本号已改变。保存后会重新提醒所有玩家，确定继续吗？');
+                confirmedVersionChange = await caorenConfirm('发布后的版本号已改变，保存后会重新提醒所有玩家。', { title: '确认修改已发布版本号', confirmText: '保存并重新提醒' });
                 if (!confirmedVersionChange) return;
             }
             adminStatus.textContent = '正在保存更新公告……';
@@ -223,9 +225,9 @@
         setMutationState(mutation.state);
         const action = targetStatus === 'hidden' ? '隐藏' : item.status === 'hidden' ? '重新发布' : '发布';
         try {
-            if (!confirm('确定要' + action + ' ' + item.version + ' 吗？')) return;
+            if (!await caorenConfirm('确定要' + action + ' ' + item.version + ' 吗？', { title: action + '更新公告', confirmText: '确认' + action })) return;
             const remindAgain = item.status === 'hidden' && targetStatus === 'published'
-                ? confirm('是否同时重新提醒所有玩家？选择“取消”只表示不重复提醒，公告仍会重新发布。')
+                ? await caorenConfirm('选择“暂不提醒”不会取消重新发布，只是不重复提醒玩家。', { title: '是否重新提醒玩家？', confirmText: '重新提醒', cancelText: '暂不提醒' })
                 : false;
             adminStatus.textContent = '正在' + action + '更新公告……';
             await adminSocketRequest('UPDATE_ANNOUNCEMENT_ADMIN_SET_STATUS', {
@@ -252,10 +254,10 @@
         document.execCommand(command, false, null);
     }
 
-    function linkUpdateAnnouncementEditor(section) {
+    async function linkUpdateAnnouncementEditor(section) {
         const editor = editorBySection[section];
         if (!editor) return;
-        const url = prompt('请输入链接地址，建议使用 https:// 开头：');
+        const url = await caorenPrompt('请输入要插入的链接地址。', { title: '插入更新公告链接', inputLabel: '链接地址', placeholder: 'https://example.com', confirmText: '插入链接' });
         if (!url) return;
         editor.focus();
         document.execCommand('createLink', false, url);

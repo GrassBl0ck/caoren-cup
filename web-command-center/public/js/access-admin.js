@@ -22,19 +22,23 @@
   async function refreshServerStatus() {
     var status = byId('v1333-server-status');
     var dot = byId('v1333-server-dot');
-    var button = byId('v1333-connect-server-btn');
+    var buttons = [byId('v1333-connect-server-btn'), byId('v1333-lobby-connect-server-btn')];
     try {
       var response = await fetch('/api/public/server-status', { credentials: 'same-origin' });
       latestServerStatus = await response.json();
       if (!response.ok || !latestServerStatus.success) throw new Error('status_unavailable');
       if (status) status.textContent = latestServerStatus.pluginReady ? '服务器在线' : '服务器暂未就绪';
       if (dot) dot.classList.toggle('is-online', latestServerStatus.pluginReady === true);
-      if (button) button.disabled = !latestServerStatus.joinAllowed;
+      buttons.forEach(function (button) {
+        if (button) button.disabled = !latestServerStatus.joinAllowed;
+      });
     } catch (_error) {
       latestServerStatus = null;
       if (status) status.textContent = '服务器状态读取失败';
       if (dot) dot.classList.remove('is-online');
-      if (button) button.disabled = true;
+      buttons.forEach(function (button) {
+        if (button) button.disabled = true;
+      });
     }
   }
 
@@ -77,17 +81,19 @@
   }
 
   function refreshIdentityAdmin() { socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'GET_STATUS' }); }
-  function revokeIdentityDevice(identityId, tokenId) {
-    if (confirm('确认撤销这一台设备的登录令牌？')) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_DEVICE', identityId: identityId, tokenId: tokenId });
+  async function revokeIdentityDevice(identityId, tokenId) {
+    if (await window.caorenConfirm('这台设备会立即退出登录，需要重新验证。', { title: '撤销设备登录', tone: 'danger', confirmText: '确认撤销' })) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_DEVICE', identityId: identityId, tokenId: tokenId });
   }
-  function revokeIdentityTokens(identityId) {
-    if (confirm('确认撤销该账号的全部设备令牌？')) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_ALL_TOKENS', identityId: identityId });
+  async function revokeIdentityTokens(identityId) {
+    if (await window.caorenConfirm('该账号的所有设备都会立即退出登录。', { title: '撤销全部设备登录', tone: 'danger', confirmText: '撤销全部' })) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_ALL_TOKENS', identityId: identityId });
   }
 
   Object.assign(window, { refreshIdentityAdmin, revokeIdentityDevice, revokeIdentityTokens });
 
   function boot() {
-    byId('v1333-connect-server-btn')?.addEventListener('click', connectServer);
+    [byId('v1333-connect-server-btn'), byId('v1333-lobby-connect-server-btn')].forEach(function (button) {
+      button?.addEventListener('click', connectServer);
+    });
     byId('admin-login-btn')?.addEventListener('click', loginAdmin);
     byId('admin-login-password')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') loginAdmin(); });
     var loginSocket = socket();

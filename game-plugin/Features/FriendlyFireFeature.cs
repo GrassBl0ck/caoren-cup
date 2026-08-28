@@ -126,6 +126,11 @@ public class FriendlyFireFeature : ICaorenFeature
     // --- 游戏核心拦截逻辑 ---
 
     private HookResult OnTakeDamagePre(CCSPlayerPawn victimPawn, CTakeDamageInfo info)
+        => _plugin.MeasurePerformance(
+            "FriendlyFire.OnTakeDamagePre",
+            () => OnTakeDamagePreCore(victimPawn, info));
+
+    private HookResult OnTakeDamagePreCore(CCSPlayerPawn victimPawn, CTakeDamageInfo info)
     {
         if (!_settings.Enabled) return HookResult.Continue;
         if (victimPawn == null || !victimPawn.IsValid) return HookResult.Continue;

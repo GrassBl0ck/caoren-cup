@@ -89,7 +89,7 @@ public class IncDmgFeature : ICaorenFeature
         float rate = _config.IncDmg.Rate;
         if (argCount >= 3)
         {
-            if (!float.TryParse(info.GetArg(2), out rate))
+            if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), rate, out rate))
             {
                 if (player != null) CaorenCupUtils.PrintToChat(player, "倍率格式错误，请输入有效的数字 (如 0.01 或 -0.01)。");
                 return;

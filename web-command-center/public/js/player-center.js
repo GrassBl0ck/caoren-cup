@@ -78,7 +78,7 @@
     }
     var matchButton = byId('player-center-join-btn');
     if (matchButton) {
-      matchButton.textContent = currentMatchState.joined ? '退出本场比赛' : '加入本场比赛';
+      matchButton.textContent = currentMatchState.joined ? '取消本场参赛' : '加入本场比赛';
       matchButton.disabled = currentMatchState.joined ? !currentMatchState.leaveAvailable : !currentMatchState.joinAvailable;
       matchButton.classList.toggle('joined', currentMatchState.joined);
     }
@@ -116,7 +116,7 @@
   async function joinOrLeaveMatch() {
     var button = byId('player-center-join-btn');
     if (button) button.disabled = true;
-    setHomeMessage(currentMatchState.joined ? '正在退出本场比赛...' : '正在加入本场比赛...');
+    setHomeMessage(currentMatchState.joined ? '正在取消本场参赛...' : '正在加入本场比赛...');
     var endpoint = currentMatchState.joined ? '/api/player-center/match/leave' : '/api/player-center/match/join';
     var result = await requestJson(endpoint, jsonOptions('POST', {}));
     if (result.status === 401) return showEntry('会话已失效，请重新登录。');
@@ -129,7 +129,7 @@
       consumeMatchSocketTicket(result.data.socketTicket);
       setHomeMessage('已加入本场比赛，正在进入比赛大厅。', true);
     } else {
-      setHomeMessage('已退出本场比赛，玩家中心账号仍保持登录。', true);
+      setHomeMessage('已取消本场参赛，玩家中心账号仍保持登录。', true);
     }
   }
 
@@ -363,8 +363,6 @@
     byId('player-center-logout-btn')?.addEventListener('click', logout);
     byId('player-center-forget-device-btn')?.addEventListener('click', forgetDesktopDevice);
     byId('player-center-join-btn')?.addEventListener('click', joinOrLeaveMatch);
-    byId('player-center-announcements-btn')?.addEventListener('click', function () { byId('update-announcement-trigger')?.click(); });
-    byId('player-center-weaponpaints-btn')?.addEventListener('click', function () { byId('weaponpaints-open-btn')?.click(); });
     bindSocketInvalidation();
     var desktopAvailable = !!window.caorenDesktop?.loginPlayerCenter;
     if (byId('player-center-remember-device-row')) byId('player-center-remember-device-row').hidden = !desktopAvailable;

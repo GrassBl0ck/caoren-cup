@@ -10,6 +10,18 @@ public static class CaorenCupUtils
 {
     public const string Tag = " [草人杯] ";
 
+    public static bool TryParseOptionalFloat(string raw, float current, out float value)
+    {
+        if (raw.Trim() == "-") { value = current; return true; }
+        return float.TryParse(raw, out value);
+    }
+
+    public static bool TryParseOptionalInt(string raw, int current, out int value)
+    {
+        if (raw.Trim() == "-") { value = current; return true; }
+        return int.TryParse(raw, out value);
+    }
+
     // 统一发送消息到所有玩家
     public static void PrintToChatAll(string message)
     {

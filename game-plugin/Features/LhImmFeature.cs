@@ -180,6 +180,11 @@ public class LhImmFeature : ICaorenFeature
      * 这版使用 OnEntityTakeDamagePre。
      */
     private HookResult OnEntityTakeDamagePre(CEntityInstance entity, CTakeDamageInfo info)
+        => _plugin.MeasurePerformance(
+            "LhImm.OnEntityTakeDamagePre",
+            () => OnEntityTakeDamagePreCore(entity, info));
+
+    private HookResult OnEntityTakeDamagePreCore(CEntityInstance entity, CTakeDamageInfo info)
     {
         if (!_settings.Enabled) return HookResult.Continue;
         if (entity == null || !entity.IsValid) return HookResult.Continue;
@@ -544,10 +549,18 @@ public class LhImmFeature : ICaorenFeature
 
         _tickTimer = _plugin.AddTimer(
             0.1f,
-            Tick,
+            () => _plugin.MeasurePerformance("LhImm.Timer", Tick),
             TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE
         );
     }
+
+    public IReadOnlyDictionary<string, long> CapturePerformanceRuntimeCounts() =>
+        new Dictionary<string, long>
+        {
+            ["ImmunePlayers"] = _immunePlayers.Count,
+            ["UsedThisLife"] = _usedThisLife.Count,
+            ["TimerActive"] = _tickTimer is null ? 0 : 1
+        };
 
     private void StopTickTimer()
     {

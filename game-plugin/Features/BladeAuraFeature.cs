@@ -84,9 +84,9 @@ public class BladeAuraFeature : ICaorenFeature
         float decay = _config.Aura.DecayRate;
         int minDmg = _config.Aura.MinDamage;
 
-        if (argCount >= 3) allowKb = info.GetArg(2) == "1";
-        if (argCount >= 4) float.TryParse(info.GetArg(3), out decay);
-        if (argCount >= 5) int.TryParse(info.GetArg(4), out minDmg);
+        if (argCount >= 3 && info.GetArg(2) != "-") allowKb = info.GetArg(2) == "1";
+        if (argCount >= 4 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(3), decay, out decay)) { if (player != null) CaorenCupUtils.PrintToChat(player, "无效的衰减倍率参数。"); return; }
+        if (argCount >= 5 && !CaorenCupUtils.TryParseOptionalInt(info.GetArg(4), minDmg, out minDmg)) { if (player != null) CaorenCupUtils.PrintToChat(player, "无效的最低伤害参数。"); return; }
 
         _config.Aura.Enabled = true;
         _config.Aura.Target = targetArg;

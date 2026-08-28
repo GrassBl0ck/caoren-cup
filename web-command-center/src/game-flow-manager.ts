@@ -46,7 +46,7 @@ import {
     normalizeDuelUtilityMode,
     resolveDuelMapConfig,
 } from './duel-config';
-import { buildDuelRuntimeConfigPayload } from './duel-runtime-config';
+import { normalizeUnbalancedRosterOptions, validateUnbalancedRoster, validateUnbalancedRosterForTeamLock } from './unbalanced-roster';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import {
     clearFlowUndoHistory,
@@ -719,14 +719,6 @@ const queueDuelMapOnlySetup = () => {
     }
 };
 
-const queueDuelFormalStart = () => {
-    const session = getSession();
-    enqueuePluginCommand(
-        'CONFIGURE_DUEL_MODE',
-        buildDuelRuntimeConfigPayload(session.matchId, session.matchOptions, Date.now()),
-    );
-};
-
 const rollbackDuelToLobby = (reason = '单挑等待结束后参赛玩家不足，已回到大厅。') => {
     const session = getSession();
     clearFlowUndoHistory();
@@ -792,7 +784,6 @@ const beginDuelFormalMatch = (matchId: string) => {
     session.liveGameData!.rawPluginRound = 1;
     session.liveGameData!.roundBaseOffset = 0;
     session.liveGameData!.formalRoundStartRaw = 1;
-    queueDuelFormalStart();
     enqueuePluginCommand('RESET_LIVE_MATCH_STATS', { currentRound: rawPluginRound });
     session.timerEndAt = null;
     session.timerPhase = null;
@@ -925,12 +916,26 @@ const advancePhase = (
     if (from === GamePhase.Lobby && isDuelMode()) {
         if (!setupDuelFromLobby()) return false;
     }
+    if (!isDuelMode() && [GamePhase.MapBan, GamePhase.PreGameSetup, GamePhase.LiveGame].includes(nextTo)) {
+        const rosterCheck = validateUnbalancedRoster(session);
+        if (!rosterCheck.valid) {
+            notifyMessage?.(`不能推进阶段：${rosterCheck.blockers.join(' ')}`);
+            return false;
+        }
+    }
     if (!canTransition(from, nextTo)) return false;
 
     if (from === GamePhase.Roll) {
         if (session.rollValues.A === null) session.rollValues.A = Math.floor(Math.random() * 100) + 1;
         if (session.rollValues.B === null) session.rollValues.B = Math.floor(Math.random() * 100) + 1;
         broadcast?.();
+        // 单人测试或未完成队长分配时没有完整的 A/B 掷骰流程，管理员推进应立即继续。
+        if (!session.captains.A || !session.captains.B) {
+            session.phase = GamePhase.PlayerDraft;
+            performPhaseTransition(GamePhase.PlayerDraft);
+            if (checkpoint) commitFlowUndoCheckpoint(checkpoint);
+            return true;
+        }
         if (session.rollTimeout) clearTimeout(session.rollTimeout);
         session.rollTimeout = setTimeout(() => {
             if (session.phase !== GamePhase.Roll) return;
@@ -996,6 +1001,11 @@ export const markStandardMatchLiveFromMatchZy = (): boolean => {
     const session = getSession();
     if (session.phase !== GamePhase.PreGameSetup) return false;
     if (session.matchOptions?.matchMode === 'duel') return false;
+    const rosterCheck = validateUnbalancedRosterForTeamLock(session);
+    if (!rosterCheck.valid) {
+        notifyMessage?.(`MatchZy 开赛被阻止：${rosterCheck.blockers.join(' ')}`);
+        return false;
+    }
 
     session.phase = GamePhase.LiveGame;
     performPhaseTransition(GamePhase.LiveGame);
@@ -1214,6 +1224,7 @@ const applyMatchOptions = (rawOptions: unknown) => {
         duelRoundTimeMinutes: normalizeDuelRoundTimeMinutes((rawOptions as any)?.duelRoundTimeMinutes || DUEL_DEFAULT_ROUND_TIME_MINUTES),
         duelRounds: normalizeDuelRounds((rawOptions as any)?.duelRounds),
         duelUtilityMode: normalizeDuelUtilityMode((rawOptions as any)?.duelUtilityMode),
+        ...normalizeUnbalancedRosterOptions(rawOptions as any),
     };
     if (session.matchOptions.matchMode === 'duel') {
         session.matchOptions.undercoverModeEnabled = false;

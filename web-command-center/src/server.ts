@@ -10,6 +10,7 @@ import {
 } from './types';
 import { getSession } from './session-manager';
 import { restoreSessionSnapshot, saveSessionSnapshotNow, scheduleSessionSnapshotSave } from './session-persistence';
+import { loadTaskPresets } from './task-preset-store';
 import { findPlayerById, generateBindCode, sanitizeGameStateForViewer } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
@@ -20,6 +21,7 @@ import {
 } from './routes/lobby-announcement-routes';
 import { registerUpdateAnnouncementRoutes } from './routes/update-announcement-routes';
 import { registerPluginRoutes } from './plugin-api';
+import { PluginStateBroadcastScheduler } from './plugin-broadcast-scheduler';
 import { registerSocketHandlers } from './socket-handlers';
 import { registerGameCodeLogin, v1333ConsumeGameLoginTicket } from './v1333-game-login';
 import {
@@ -38,6 +40,7 @@ import {
 import { ADMIN_PASSWORD } from './game-constants';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds, normalizeDuelMap, normalizeDuelRoundTimeMinutes, normalizeDuelRounds, normalizeDuelUtilityMode, normalizeDuelWorkshopId } from './duel-config';
 import { registerIdentityAuthRoutes } from './identity/auth-routes';
+import { normalizeUnbalancedRosterOptions } from './unbalanced-roster';
 import { initializeIdentityRuntime, lobbyIdentityService, playerCenterMatchSocketTickets, playerCenterSessionStore } from './identity/identity-runtime';
 import { bindPlayerCenterSocketIdentity } from './identity/player-center-socket';
 import { attachMembershipToSession, detachMatchMembershipsForScoreboard, removeIdentityFromSession } from './identity/session-integration';
@@ -80,6 +83,7 @@ app.use(express.static('public', {
 }));
 const upload = multer({ storage: multer.memoryStorage() });
 const restoredSessionSnapshot = restoreSessionSnapshot();
+loadTaskPresets();
 
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
@@ -132,6 +136,8 @@ const broadcastState = () => {
         });
     }
 };
+
+const pluginStateBroadcastScheduler = new PluginStateBroadcastScheduler(broadcastState, 500);
 
 const notifyMessage = (msg: string) => {
     io.emit(WsEvents.NOTIFICATION, { message: msg });
@@ -231,6 +237,7 @@ const ensureMatchOptions = () => {
     session.matchOptions.duelRoundTimeMinutes = normalizeDuelRoundTimeMinutes(session.matchOptions.duelRoundTimeMinutes);
     session.matchOptions.duelRounds = normalizeDuelRounds(session.matchOptions.duelRounds);
     session.matchOptions.duelUtilityMode = normalizeDuelUtilityMode(session.matchOptions.duelUtilityMode);
+    Object.assign(session.matchOptions, normalizeUnbalancedRosterOptions(session.matchOptions));
     return session.matchOptions;
 };
 
@@ -275,6 +282,8 @@ registerUpdateAnnouncementAdminSocketHandlers({
 
 registerPluginRoutes(app, {
     broadcastState,
+    requestStateBroadcast: () => pluginStateBroadcastScheduler.request(),
+    flushStateBroadcast: () => pluginStateBroadcastScheduler.flush(),
     notifyMessage,
 });
 

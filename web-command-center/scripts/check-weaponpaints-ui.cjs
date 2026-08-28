@@ -15,6 +15,34 @@ const mysqlRepository = fs.readFileSync(path.join(root, 'src', 'weaponpaints', '
 
 assert.match(html, /id="weaponpaints-open-btn"/);
 assert.match(html, /id="weaponpaints-panel"/);
+assert.match(
+    html,
+    /id="weaponpaints-open-btn"[^>]*class="[^"]*weaponpaints-promo[^"]*"[^>]*aria-label="打开换肤中心"/,
+    '大厅换肤入口必须升级为可访问的右侧宣传卡片',
+);
+assert.match(html, /class="weaponpaints-promo-slides"/, '宣传卡片必须提供高级皮肤轮播区域');
+assert.ok(
+    (html.match(/class="weaponpaints-promo-slide"/g) || []).length >= 4,
+    '宣传卡片至少轮播四张精选高级皮肤',
+);
+assert.match(html, />换肤中心</, '宣传卡片必须固定显示“换肤中心”');
+assert.doesNotMatch(html, /weaponpaints-promo-name/, '宣传卡片下方不应显示当前皮肤名称');
+assert.match(
+    html,
+    /src="\/weaponpaints\/base\/images\/weapon_knife_butterfly-[0-9]+\.png"/,
+    '宣传卡片应复用本地蝴蝶刀图片',
+);
+for (const featuredImage of ['weapon_awp-344.png', 'weapon_ak47-180.png', 'weapon_m4a1-309.png', 'weapon_knife_karambit-415.png']) {
+    assert.match(html, new RegExp(`/weaponpaints/base/images/${featuredImage.replace('.', '\\.')}"`), `宣传卡片缺少精选皮肤 ${featuredImage}`);
+}
+const identityToolbarStart = html.indexOf('<div class="identity-toolbar-actions">');
+const identityToolbarEnd = html.indexOf('</div>', identityToolbarStart);
+assert.ok(identityToolbarStart >= 0 && identityToolbarEnd > identityToolbarStart, '必须能定位大厅工具栏操作区');
+assert.doesNotMatch(
+    html.slice(identityToolbarStart, identityToolbarEnd),
+    /id="weaponpaints-open-btn"/,
+    '旧的“我的换肤”工具栏按钮必须删除',
+);
 const lobbyAreaStart = html.indexOf('<div id="lobby-area"');
 const postLobbyMarker = html.indexOf('<!-- 须知模态框 -->', lobbyAreaStart);
 assert.ok(lobbyAreaStart >= 0 && postLobbyMarker > lobbyAreaStart, '必须能定位大厅容器边界');
@@ -25,8 +53,8 @@ assert.doesNotMatch(
 );
 assert.match(html, /weaponpaints-app\.js/);
 assert.match(html, /weaponpaints\.css/);
-assert.match(html, /weaponpaints\.css\?v=1\.9\.2-qol2/);
-assert.match(html, /weaponpaints-app\.js\?v=1\.9\.2-qol2/);
+assert.match(html, /weaponpaints\.css\?v=1\.9\.2-skinpromo1/);
+assert.match(html, /weaponpaints-app\.js\?v=1\.9\.2-modern-dialog8/);
 for (const category of ['gun', 'knife', 'glove', 'agent', 'music', 'pin', 'keychain']) {
     assert.match(js, new RegExp(`['"]${category}['"]`), `缺少分类 ${category}`);
 }
@@ -107,6 +135,20 @@ assert.match(css, /\.weaponpaints-card-status\.current/, '当前使用状态必�
 assert.match(css, /\.weaponpaints-card-status\.pending/, '待保存状态必须有独立样式');
 assert.doesNotMatch(css, /#weaponpaints-copy-btn/, '不应残留已删除按钮的样式');
 assert.match(css, /@media\s*\(max-width:/);
+assert.match(
+    css,
+    /\.weaponpaints-promo\s*\{[^}]*position\s*:\s*fixed[^}]*right\s*:/s,
+    '桌面宣传卡片必须固定在屏幕右侧',
+);
+assert.match(
+    css,
+    /@media\s*\(max-width:\s*[0-9]+px\)[\s\S]*\.weaponpaints-promo\s*\{[^}]*right\s*:[^}]*bottom\s*:/,
+    '窄屏宣传卡片必须缩为右下角悬浮入口',
+);
+assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/, '减少动画模式必须停止皮肤轮播');
+assert.match(js, /function setPromoVisibility\(visible\)/, '换肤面板必须统一控制宣传卡片显隐');
+assert.match(js, /openPanel\(\)[\s\S]{0,240}setPromoVisibility\(false\)/, '打开换肤面板后必须隐藏宣传卡片');
+assert.match(js, /weaponpaints-panel['"]\)\.hidden\s*=\s*true;[\s\S]{0,160}setPromoVisibility\(true\)/, '关闭换肤面板后必须恢复宣传卡片');
 assert.doesNotMatch(js, /https?:\/\//i, '换肤 UI 不应依赖远程图片或接口');
 assert.match(webPackageScript, /public[\\\\/]weaponpaints/, '网页主包必须排除独立发布的 WeaponPaints 图片目录');
 assert.match(webPackageScript, /weaponpaints-data/, '网页主包必须携带 WeaponPaints 本地目录数据');

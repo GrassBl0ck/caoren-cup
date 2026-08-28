@@ -114,7 +114,10 @@ public class EspFeature : ICaorenFeature
         if (_config.Esp.Enabled)
         {
             if (_glowTimer == null)
-                _glowTimer = _plugin.AddTimer(1.0f, EspTimerTick, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
+                _glowTimer = _plugin.AddTimer(
+                    1.0f,
+                    () => _plugin.MeasurePerformance("Esp.Timer", EspTimerTick),
+                    TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE);
         }
         else
         {
@@ -166,10 +169,10 @@ public class EspFeature : ICaorenFeature
         }
 
         int range = _config.Esp.MaxRange;
-        if (argCount >= 3) int.TryParse(info.GetArg(2), out range);
+        if (argCount >= 3) CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), range, out range);
 
         int mode = _config.Esp.Mode;
-        if (argCount >= 4) int.TryParse(info.GetArg(3), out mode);
+        if (argCount >= 4) CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), mode, out mode);
 
         _config.Esp.Enabled = true;
         _config.Esp.Target = targetArg;
@@ -223,7 +226,19 @@ public class EspFeature : ICaorenFeature
         }
     }
 
+    public IReadOnlyDictionary<string, long> CapturePerformanceRuntimeCounts() =>
+        new Dictionary<string, long>
+        {
+            ["TrackedPlayers"] = _playerData.Count,
+            ["TimerActive"] = _glowTimer is null ? 0 : 1
+        };
+
     private void OnCheckTransmit(CCheckTransmitInfoList infoList)
+        => _plugin.MeasurePerformance(
+            "Esp.CheckTransmit",
+            () => OnCheckTransmitCore(infoList));
+
+    private void OnCheckTransmitCore(CCheckTransmitInfoList infoList)
     {
         if (!_config.Esp.Enabled) return;
 

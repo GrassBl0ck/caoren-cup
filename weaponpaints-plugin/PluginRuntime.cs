@@ -258,12 +258,14 @@ public partial class CaorenWeaponPaintsPlugin
 
     private HookResult OnChatMessage(CCSPlayerController? player, CommandInfo info)
     {
-        if (player is null || _menus is null)
+        if (!ChatListenerPolicy.ShouldForward(
+                _menus is not null,
+                WeaponPaintsUtility.IsPlayerValid(player)))
         {
             return HookResult.Continue;
         }
 
-        return _menus.HandleChatInput(player, info.ArgString)
+        return _menus!.HandleChatInput(player!, info.ArgString)
             ? HookResult.Handled
             : HookResult.Continue;
     }

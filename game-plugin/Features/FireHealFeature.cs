@@ -83,7 +83,7 @@ public class FireHealFeature : ICaorenFeature
             return;
         }
 
-        if (!float.TryParse(info.GetArg(2), out float scale))
+        if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), _settings.Scale, out float scale))
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "无效的倍率数值。");
             return;
