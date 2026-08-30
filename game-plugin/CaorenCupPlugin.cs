@@ -86,7 +86,6 @@ public override void Load(bool hotReload)
         _features.Add(new MovementRulesFeature()); // 38 全局移动规则 CVar 托管
         _features.Add(new PresetFeature()); // 39 grass 经典玩法预设
         // ParticleMenuFeature 暂停开发，不纳入运行插件。
-        _features.Add(new RandomNadeFeature()); // 41 开枪随机发射投掷物
 
         // 3. 注入配置并初始化。先给配置，再 Init，保证 Alias 等模块能按 JSON 注册指令。
         foreach (var feature in _features)
