@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { GameSession, GamePhase, Player, RosterTeam } from './types';
 import { getDefaultTaskTemplate } from './task-system';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds } from './duel-config';
-import { createLobbyAccess } from './identity/lobby-access';
 
 let gameSession: GameSession;
 
@@ -18,7 +17,6 @@ export const createInitialSession = (): GameSession => {
         sessionId: uuidv4(),
         phase: GamePhase.Lobby,
         matchId: uuidv4(),
-        lobbyAccess: createLobbyAccess(),
         matchOptions: {
             matchMode: 'competitive',
             matchController: 'matchzy',
@@ -29,6 +27,9 @@ export const createInitialSession = (): GameSession => {
             duelRoundTimeMinutes: DUEL_DEFAULT_ROUND_TIME_MINUTES,
             duelRounds: getDefaultDuelRounds(),
             duelUtilityMode: DUEL_DEFAULT_UTILITY_MODE,
+            unbalancedModeEnabled: false,
+            unbalancedTeamASize: 3,
+            unbalancedTeamBSize: 5,
         },
         players: {},
         playerOrder: [],
@@ -61,10 +62,6 @@ export const createInitialSession = (): GameSession => {
         timerEndAt: null,
         timerPhase: null,
         adminLock: { holderId: null, acquiredAt: null },
-        duelTempAdminId: null,
-        duelAdminVote: undefined,
-        duelAdminRequest: undefined,
-        duelTerminateRequest: undefined,
         liveGameData: undefined,
         rollTimeout: undefined as any,
         createdAt: Date.now(),
@@ -104,6 +101,26 @@ export const resetSessionWithPlayers = (reason?: string): GameSession => {
             isReady: false,
         };
         newSession.players[playerId] = resetPlayer;
+        newSession.playerOrder.push(playerId);
+    }
+    gameSession = newSession;
+    return gameSession;
+};
+
+export const resetSessionWithAdmins = (): GameSession => {
+    const oldSession = gameSession;
+    const newSession = createInitialSession();
+    for (const playerId of oldSession.playerOrder) {
+        const old = oldSession.players[playerId];
+        if (!old || old.role !== 'Admin') continue;
+        newSession.players[playerId] = {
+            playerId,
+            name: old.name,
+            role: 'Admin',
+            bindCode: old.bindCode || Math.floor(1000 + Math.random() * 9000).toString(),
+            isReady: false,
+            isOnline: old.isOnline,
+        };
         newSession.playerOrder.push(playerId);
     }
     gameSession = newSession;

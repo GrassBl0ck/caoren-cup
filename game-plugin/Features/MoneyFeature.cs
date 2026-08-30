@@ -84,7 +84,7 @@ public class MoneyFeature : ICaorenFeature
             return;
         }
 
-        if (!float.TryParse(info.GetArg(2), out float multiplier) || multiplier < 0)
+        if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), _settings.Multiplier, out float multiplier) || multiplier < 0)
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "无效的倍数数值 (需大于等于0)。");
             return;
@@ -93,10 +93,10 @@ public class MoneyFeature : ICaorenFeature
         bool enableRoundBonus = false;
         if (info.ArgCount >= 4)
         {
-            if (int.TryParse(info.GetArg(3), out int rbInt) && rbInt == 1)
-            {
-                enableRoundBonus = true;
-            }
+            var roundArg = info.GetArg(3);
+            if (roundArg == "-") enableRoundBonus = _settings.EnableRoundBonus;
+            else if (int.TryParse(roundArg, out int rbInt) && rbInt is 0 or 1) enableRoundBonus = rbInt == 1;
+            else { if (player != null) CaorenCupUtils.PrintToChat(player, "回合奖励参数只能是 0、1 或 -。"); return; }
         }
 
         // 应用配置 (后覆盖机制)

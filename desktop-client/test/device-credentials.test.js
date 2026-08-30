@@ -14,7 +14,7 @@ const makeMemoryFs = () => {
   };
 };
 
-test('device credential store encrypts and decrypts the token envelope', () => {
+test('device credential store encrypts the token envelope and ignores legacy Steam selection data', () => {
   const fs = makeMemoryFs();
   const safeStorage = {
     isEncryptionAvailable: () => true,
@@ -27,7 +27,7 @@ test('device credential store encrypts and decrypts the token envelope', () => {
   assert.equal(String(fs.files.get('credentials.dat')).includes('secret-token'), false);
   assert.deepEqual(store.load(), {
     ok: true,
-    credential: { deviceToken: 'secret-token', deviceId: 'device-1', selectedSteamId: '76561198000000001' },
+    credential: { deviceToken: 'secret-token', deviceId: 'device-1' },
   });
   assert.deepEqual(store.clear(), { ok: true });
   assert.equal(fs.files.has('credentials.dat'), false);

@@ -110,7 +110,7 @@ public class OneHpFeature : ICaorenFeature
             return;
         }
 
-        if (argCount < 3 || !int.TryParse(info.GetArg(2), out int mode) || mode < 1 || mode > 2)
+        if (argCount < 3 || !CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), _config.OneHp.Mode, out int mode) || mode < 1 || mode > 2)
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "模式代码错误，请使用 1 (转生) 或 2 (自爆)。");
             return;
@@ -121,10 +121,10 @@ public class OneHpFeature : ICaorenFeature
         float arg3 = _config.OneHp.Arg3;
         float arg4 = _config.OneHp.Arg4;
 
-        if (argCount >= 4) float.TryParse(info.GetArg(3), out arg1);
-        if (argCount >= 5) float.TryParse(info.GetArg(4), out arg2);
-        if (argCount >= 6) float.TryParse(info.GetArg(5), out arg3);
-        if (argCount >= 7) float.TryParse(info.GetArg(6), out arg4);
+        if (argCount >= 4 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(3), arg1, out arg1)) return;
+        if (argCount >= 5 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(4), arg2, out arg2)) return;
+        if (argCount >= 6 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(5), arg3, out arg3)) return;
+        if (argCount >= 7 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(6), arg4, out arg4)) return;
 
         _config.OneHp.Enabled = true;
         _config.OneHp.Target = targetArg;

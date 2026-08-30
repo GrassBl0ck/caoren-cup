@@ -1,7 +1,6 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Collections.Concurrent;
 using System.Threading.Channels;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
@@ -21,7 +20,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     public override string ModuleName => "CaorenCup Command Center Bridge";
     public override string ModuleVersion => "0.3.12";
     public override string ModuleAuthor => "CaorenCup";
-    public override string ModuleDescription => "Bridge CS2 score, player binding and match stats to the CaorenCup web command center.";
+    public override string ModuleDescription => "Bridge trusted CS2 identity, score and match stats to the CaorenCup web command center.";
 
     private readonly HttpClient _http = new();
     private readonly DuelGameSession _duelSession = new();
@@ -36,10 +35,12 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
     private CounterStrikeSharp.API.Modules.Timers.Timer? _gameManagedSafetyTimer;
-    private readonly Channel<PluginOutboundMessage> _outboundQueue = Channel.CreateUnbounded<PluginOutboundMessage>(new UnboundedChannelOptions
+    private readonly PluginTelemetryBatchBuffer _telemetryBatch = new(PluginTelemetryPolicy.MaxBufferedEvents);
+    private readonly Channel<PluginOutboundMessage> _outboundQueue = Channel.CreateBounded<PluginOutboundMessage>(new BoundedChannelOptions(PluginTelemetryPolicy.OutboundQueueCapacity)
     {
         SingleReader = true,
-        SingleWriter = false
+        SingleWriter = false,
+        FullMode = BoundedChannelFullMode.Wait
     });
     private readonly CancellationTokenSource _outboundCts = new();
     private Task? _outboundWorker;
@@ -56,7 +57,6 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly HashSet<string> _lobbySteamIds = new(StringComparer.Ordinal);
     private readonly object _webStateLock = new();
     private readonly List<WebPlayerState> _lastNoticeMissingTargets = new();
-    private readonly ConcurrentDictionary<string, long> _shownIdentityChallenges = new(StringComparer.Ordinal);
     private bool _teamLockEnabled;
     private int _teamAssignmentsValidFromRound;
     private int _teamAssignmentsValidUntilRound;
@@ -75,6 +75,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, string> _duelCurrentPrimary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _duelCurrentSecondary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingAwpRequest> _duelAwpRequests = new(StringComparer.Ordinal);
+    private int _duelLoadoutGeneration;
     private readonly HashSet<string> _gameManagedDuelAcceptedMissingSteamIds = new(StringComparer.Ordinal);
     private bool _gameManagedDuelRuntimeActive;
     private bool _gameManagedDuelReconnectReadyAnnounced;
@@ -189,9 +190,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _http.DefaultRequestHeaders.Remove("x-caoren-plugin-token");
         _http.DefaultRequestHeaders.Add("x-caoren-plugin-token", _config.PluginToken);
 
-        AddCommand("css_ccbind", "绑定草人杯网页身份。用法：!ccbind 1234", OnBindCommand);
         AddCommand("css_cclogin", "获取草人杯网页登录码。用法：!cclogin", OnGameLoginCommand);
-        AddCommand("css_cccode", "获取草人杯网页登录码。用法：!cccode", OnGameLoginCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
@@ -219,7 +218,9 @@ public sealed class CaorenCupPlugin : BasePlugin
         }, TimerFlags.REPEAT));
         _timers.Add(AddTimer(1.0f, () =>
         {
-            if (!_isUnloading) QueueCrouchSamples();
+            if (_isUnloading) return;
+            QueueCrouchSamples();
+            FlushTelemetryBatch();
         }, TimerFlags.REPEAT | TimerFlags.STOP_ON_MAPCHANGE));
         StartGameManagedSafetyTimer();
         _timers.Add(AddTimer(5.0f, () =>
@@ -305,27 +306,6 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         var text = File.ReadAllText(path);
         _config = JsonSerializer.Deserialize<CaorenConfig>(text, _jsonOptions) ?? new CaorenConfig();
-    }
-
-    private void OnBindCommand(CCSPlayerController? player, CommandInfo command)
-    {
-        if (!IsRealPlayer(player))
-        {
-            command.ReplyToCommand("该命令只能由玩家在游戏内执行。");
-            return;
-        }
-
-        var bindCode = command.ArgByIndex(1)?.Trim();
-        if (string.IsNullOrWhiteSpace(bindCode))
-        {
-            player!.PrintToChat("[草人杯] 用法：!ccbind 你的网页绑定码，例如 !ccbind 1234");
-            return;
-        }
-
-        var steamId = player!.SteamID.ToString();
-        var name = SafePlayerName(player);
-        ReplyToPlayer(player, "[草人杯] 已收到绑定请求，正在连接网页指挥台...");
-        _ = BindAsync(player, bindCode, steamId, name);
     }
 
     private void OnGameLoginCommand(CCSPlayerController? player, CommandInfo command)
@@ -597,10 +577,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 ApplyDuelAdminConfig(player, command, new DuelGameConfig());
                 break;
             case DuelAdminCommandKind.Start:
-                StartGameManagedDuel(player, command, false);
-                break;
-            case DuelAdminCommandKind.StartConfirm:
-                StartGameManagedDuel(player, command, true);
+                StartGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Pause:
                 PauseGameManagedDuel(player, command);
@@ -609,9 +586,6 @@ public sealed class CaorenCupPlugin : BasePlugin
                 ResumeGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Stop:
-                RequestStopGameManagedDuel(player, command);
-                break;
-            case DuelAdminCommandKind.StopConfirm:
                 StopGameManagedDuel(player, command);
                 break;
             case DuelAdminCommandKind.Maps:
@@ -637,17 +611,17 @@ public sealed class CaorenCupPlugin : BasePlugin
     private static IReadOnlyCollection<string> BuildDuelAdminHelpLines() =>
     [
         "[草人杯] 推荐顺序：先切换地图，等待玩家重连并选择 T/CT，再配置回合数、时间和道具，最后 /duel start 开赛。",
-        "[草人杯] 若要有意替换现有网页管理状态，请使用 /duel start confirm。",
+        "[草人杯] 单挑仅由游戏内指令管理。",
         "[草人杯] /duel status：查看单挑状态和完整配置",
         "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 30",
         "[草人杯] /duel time <分钟>：设置每回合 0.25～5 分钟",
         "[草人杯] /duel utility <none|random1|random2|random3|full>：设置道具",
         "[草人杯] /duel reset：恢复默认配置；/duel start：按当前 T/CT 真人开赛",
-        "[草人杯] /duel pause、/duel resume、/duel stop、/duel stop confirm：控制比赛",
+        "[草人杯] /duel pause、/duel resume、/duel stop：控制比赛",
         "[草人杯] /duel maps；/duel map <序号|地图名|创意工坊ID>：查看或切换地图"
     ];
 
-    private void StartGameManagedDuel(CCSPlayerController? player, CommandInfo command, bool confirmWebTakeover)
+    private void StartGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
         if (!_duelTelemetryIsolation.CleanupRestartPending &&
             _duelCvarRestorePending)
@@ -675,7 +649,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 candidate.Team == CsTeam.Terrorist ? DuelTeam.Terrorist : DuelTeam.CounterTerrorist))
             .ToArray();
 
-        if (!_duelSession.TryStart(participants, confirmWebTakeover, out var error))
+        if (!_duelSession.TryStart(participants, out var error))
         {
             ReplyToDuelCaller(player, command, $"[草人杯] 无法开始单挑：{error}");
             return;
@@ -723,10 +697,9 @@ public sealed class CaorenCupPlugin : BasePlugin
                 ReplyToDuelCaller(player, command, $"[草人杯] {FormatDuelConfig(config)}");
             }
             Logger.LogInformation(
-                "Started game-managed duel session with {TCount} T and {CtCount} CT participants. WebTakeover={WebTakeover}",
+                "Started game-managed duel session with {TCount} T and {CtCount} CT participants.",
                 participants.Count(item => item.Team == DuelTeam.Terrorist),
-                participants.Count(item => item.Team == DuelTeam.CounterTerrorist),
-                confirmWebTakeover);
+                participants.Count(item => item.Team == DuelTeam.CounterTerrorist));
         }
         catch (Exception ex)
         {
@@ -933,17 +906,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         IReadOnlySet<string> acceptedMissingSteamIds,
         IReadOnlySet<string> currentMissingSteamIds) =>
         currentMissingSteamIds.Any(steamId => !acceptedMissingSteamIds.Contains(steamId));
-
-    private void RequestStopGameManagedDuel(CCSPlayerController? player, CommandInfo command)
-    {
-        if (_duelSession.ControlMode != DuelControlMode.GameManaged)
-        {
-            ReplyToDuelCaller(player, command, "[草人杯] 当前没有游戏内单挑可终止。");
-            return;
-        }
-
-        ReplyToDuelCaller(player, command, "[草人杯] 终止不会计算胜负；请使用 /duel stop confirm 再次确认。");
-    }
 
     private void StopGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
@@ -1612,6 +1574,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void ClearDuelEquipmentState()
     {
+        _duelLoadoutGeneration++;
         _duelPendingPrimary.Clear();
         _duelPendingSecondary.Clear();
         _duelCurrentPrimary.Clear();
@@ -1696,37 +1659,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             {
                 Logger.LogDebug(ex, "Skipping invalid player while refreshing round health state");
             }
-        }
-    }
-
-    private async Task BindAsync(CCSPlayerController player, string bindCode, string steamId, string name)
-    {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        try
-        {
-            var response = await _http.PostAsJsonAsync("api/plugin/bind", new { bindCode, steamId, name }, _jsonOptions);
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            var body = await response.Content.ReadAsStringAsync();
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            if (response.IsSuccessStatusCode)
-            {
-                var result = JsonSerializer.Deserialize<PluginBindResponse>(body, _jsonOptions);
-                var webName = string.IsNullOrWhiteSpace(result?.Name) ? name : result!.Name;
-                ReplyToPlayer(player, $"[草人杯] 绑定成功：{webName} / {steamId}");
-                LogDebug("Bind success: {Body}", body);
-            }
-            else
-            {
-                var error = ExtractErrorMessage(body);
-                ReplyToPlayer(player, $"[草人杯] 绑定失败：{error}");
-                Logger.LogWarning("Bind failed: {Body}", body);
-            }
-        }
-        catch (Exception ex)
-        {
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            ReplyToPlayer(player, "[草人杯] 绑定失败：无法连接网页指挥台，请联系管理员检查插件配置。");
-            Logger.LogError(ex, "Bind failed: cannot connect to command center");
         }
     }
 
@@ -1886,7 +1818,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (response.IsSuccessStatusCode)
             {
-                ProcessIdentityConfirmationChallenges(text);
                 LogDebug("Snapshot OK: {Text}", text);
             }
             else
@@ -2023,7 +1954,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 now,
                 LobbyStateMaxAge,
                 lobbySteamIds)) continue;
-            ReplyToPlayer(player, "[草人杯] 请先打开草人杯客户端，使用 SteamID64 + 密码或邀请码进入大厅。");
+            ReplyToPlayer(player, "[草人杯] 请先打开草人杯客户端，登录玩家中心并明确加入本场比赛。");
         }
     }
 
@@ -2158,6 +2089,17 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         if (!ShouldPublishMatchTelemetry()) return;
 
+        if (PluginTelemetryPolicy.IsBatchable(type))
+        {
+            if (_telemetryBatch.TryAdd(type, payload)) return;
+            FlushTelemetryBatch();
+            if (_telemetryBatch.TryAdd(type, payload)) return;
+            Logger.LogWarning("Telemetry batch is full; dropped newest event {Type}", type);
+            return;
+        }
+
+        FlushTelemetryBatch();
+
         var message = PluginOutboundMessage.ForEvent(
             type,
             payload,
@@ -2169,6 +2111,25 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             Logger.LogWarning("Failed to queue event {Type} seq={Sequence}", type, message.Sequence);
         }
+    }
+
+    private void FlushTelemetryBatch()
+    {
+        var events = _telemetryBatch.Drain();
+        if (events.Count == 0) return;
+
+        var message = PluginOutboundMessage.ForEventBatch(
+            events,
+            _currentMatchId,
+            Interlocked.Increment(ref _eventSequence),
+            DateTimeOffset.UtcNow);
+
+        if (_outboundQueue.Writer.TryWrite(message)) return;
+        var dropped = _telemetryBatch.RestoreOlder(events);
+        Logger.LogWarning(
+            "Outbound queue full; restored {Restored} telemetry events and dropped {Dropped} newest buffered events",
+            events.Count - dropped,
+            dropped);
     }
 
     private void QueueSnapshot()
@@ -2201,6 +2162,10 @@ public sealed class CaorenCupPlugin : BasePlugin
                 if (message.Kind == PluginOutboundKind.Event)
                 {
                     await PostEventAsync(message, cancellationToken);
+                }
+                else if (message.Kind == PluginOutboundKind.EventBatch)
+                {
+                    await PostEventBatchAsync(message, cancellationToken);
                 }
                 else
                 {
@@ -2264,6 +2229,44 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
     }
 
+    private async Task PostEventBatchAsync(PluginOutboundMessage message, CancellationToken cancellationToken)
+    {
+        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+        try
+        {
+            var response = await _http.PostAsJsonAsync("api/plugin/events", new
+            {
+                matchId = message.MatchId,
+                eventSequence = message.Sequence,
+                eventTimestampUtc = message.TimestampUtc,
+                events = message.Body
+            }, _jsonOptions, cancellationToken);
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                Logger.LogWarning(
+                    "Telemetry batch seq={Sequence} rejected: {Status} {Body}",
+                    message.Sequence,
+                    response.StatusCode,
+                    body);
+            }
+            else
+            {
+                LogDebug("Telemetry batch seq={Sequence} posted", message.Sequence);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            Logger.LogWarning(ex, "Failed to post telemetry batch seq={Sequence}", message.Sequence);
+        }
+    }
+
     private async Task PostSnapshotAsync(object body, long sequence, CancellationToken cancellationToken)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return;
@@ -2276,7 +2279,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (response.IsSuccessStatusCode)
             {
-                ProcessIdentityConfirmationChallenges(text);
                 LogDebug("Snapshot seq={Sequence} OK: {Text}", sequence, text);
             }
             else
@@ -2302,63 +2304,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (now - _lastPlayerHurtWarningUtc < TimeSpan.FromSeconds(10)) return false;
         _lastPlayerHurtWarningUtc = now;
         return true;
-    }
-
-    private void ProcessIdentityConfirmationChallenges(string responseText)
-    {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        PluginSnapshotResponse? snapshot;
-        try
-        {
-            snapshot = JsonSerializer.Deserialize<PluginSnapshotResponse>(responseText, _jsonOptions);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogDebug(ex, "Failed to parse identity confirmation challenges");
-            return;
-        }
-
-        var challenges = snapshot?.ConfirmationChallenges?.ToArray() ?? [];
-        if (challenges.Length == 0) return;
-        Server.NextFrame(() =>
-        {
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            ShowIdentityConfirmationChallenges(challenges);
-        });
-    }
-
-    private void ShowIdentityConfirmationChallenges(IReadOnlyList<PluginIdentityConfirmationChallenge> challenges)
-    {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        foreach (var expiredId in _shownIdentityChallenges.Where(pair => pair.Value <= now).Select(pair => pair.Key).ToArray())
-        {
-            _shownIdentityChallenges.TryRemove(expiredId, out _);
-        }
-
-        foreach (var challenge in challenges)
-        {
-            if (string.IsNullOrWhiteSpace(challenge.ChallengeId) ||
-                string.IsNullOrWhiteSpace(challenge.SteamId) ||
-                string.IsNullOrWhiteSpace(challenge.Code) ||
-                challenge.ExpiresAt <= now ||
-                _shownIdentityChallenges.ContainsKey(challenge.ChallengeId))
-            {
-                continue;
-            }
-
-            var player = Utilities.GetPlayers().FirstOrDefault(candidate =>
-                IsRealPlayer(candidate) && string.Equals(candidate.SteamID.ToString(), challenge.SteamId, StringComparison.Ordinal));
-            if (player == null) continue;
-
-            if (!_shownIdentityChallenges.TryAdd(challenge.ChallengeId, challenge.ExpiresAt)) continue;
-            var code = challenge.Code.Trim().ToUpperInvariant();
-            ReplyToPlayer(player, "[草人杯] =================================");
-            ReplyToPlayer(player, $"[草人杯]  本场 Steam 确认码： {code}");
-            ReplyToPlayer(player, "[草人杯]  请回到草人杯客户端输入，只需首次绑定时确认一次");
-            ReplyToPlayer(player, "[草人杯]  10 分钟内有效；不要把确认码告诉其他人");
-            ReplyToPlayer(player, "[草人杯] =================================");
-            ReplyToPlayerCenter(player, $"Steam 确认码：{code}\n请回草人杯客户端输入");
-        }
     }
 
     private async Task<PluginCommandExecutionResult> TryApplyAndAckPluginCommandAsync(
@@ -2504,10 +2449,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             ClearTeamAssignments();
         }
-        else if (string.Equals(command.Type, "CONFIGURE_DUEL_MODE", StringComparison.OrdinalIgnoreCase))
-        {
-            ConfigureDuelMode(command.Payload);
-        }
         else
         {
             Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
@@ -2596,68 +2537,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         });
     }
 
-    private void ConfigureDuelMode(JsonElement payload)
-    {
-        if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-        if (_duelSession.ControlMode == DuelControlMode.GameManaged)
-        {
-            Logger.LogWarning("Rejected CONFIGURE_DUEL_MODE because a game-managed duel is active.");
-            return;
-        }
-
-        var pistol = 8;
-        var rifle = 16;
-        var sniper = 12;
-        if (payload.ValueKind == JsonValueKind.Object &&
-            payload.TryGetProperty("rounds", out var rounds) &&
-            rounds.ValueKind == JsonValueKind.Object)
-        {
-            pistol = ReadPayloadInt(rounds, "pistol", pistol);
-            rifle = ReadPayloadInt(rounds, "rifle", rifle);
-            sniper = ReadPayloadInt(rounds, "sniper", sniper);
-        }
-
-        if (pistol + rifle + sniper < 30)
-        {
-            pistol = 8;
-            rifle = 16;
-            sniper = 12;
-        }
-
-        var roundTimeMinutes = ReadPayloadDouble(payload, "roundTimeMinutes", 1);
-        var utilityMode = "none";
-        if (payload.ValueKind == JsonValueKind.Object &&
-            payload.TryGetProperty("utilityMode", out var utilityElement) &&
-            utilityElement.ValueKind == JsonValueKind.String)
-        {
-            utilityMode = NormalizeDuelUtilityMode(utilityElement.GetString());
-        }
-
-        var config = new DuelGameConfig(pistol, rifle, sniper, roundTimeMinutes, utilityMode);
-        try
-        {
-            _duelSession.EnterWebManaged(config);
-            ActivateDuelRuntime(config);
-        }
-        catch (Exception ex)
-        {
-            _duelModeEnabled = false;
-            ClearDuelEquipmentState();
-            _duelSession.Clear();
-            RestoreGameManagedDuelCvarsWithRetry();
-            Logger.LogError(ex, "Failed to configure web-managed duel runtime; restored server state.");
-            return;
-        }
-
-        var totalRounds = pistol + rifle + sniper;
-        Server.NextFrame(() =>
-        {
-            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 本局游戏共{totalRounds}回合，其中手枪{pistol}回合，步枪{rifle}回合，狙击枪{sniper}回合。");
-            Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 从第一回合开始，每隔8回合会提示你可使用 /guns 来切换枪械。");
-        });
-    }
-
     private void ActivateDuelRuntime(DuelGameConfig config)
     {
         if (!DuelRuntimePolicy.CanActivateRuntime(
@@ -2674,9 +2553,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _duelFormalRound = 0;
         _duelLastAnnouncedStage = null;
         ClearDuelEquipmentState();
-        var cvarPlan = _duelSession.ControlMode == DuelControlMode.GameManaged
-            ? DuelRuntimePolicy.BuildCvarPlan(config)
-            : DuelRuntimePolicy.BuildWebManagedCvarPlan(config);
+        var cvarPlan = DuelRuntimePolicy.BuildCvarPlan(config);
         _duelServerCvars.Apply(cvarPlan);
         _duelModeEnabled = true;
         Server.ExecuteCommand("mp_warmup_end");
@@ -2964,48 +2841,80 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         if (!_duelModeEnabled) return;
         var stage = GetDuelStage();
-        Server.NextFrame(() =>
-        {
-            foreach (var player in Utilities.GetPlayers().Where(IsRealPlayer))
+        var inputs = Utilities.GetPlayers()
+            .Where(IsRealPlayer)
+            .Where(player => player.Team == CsTeam.Terrorist || player.Team == CsTeam.CounterTerrorist)
+            .Select(player =>
             {
-                if (player.Team != CsTeam.Terrorist && player.Team != CsTeam.CounterTerrorist) continue;
-                ApplyDuelLoadout(player, stage);
+                var steamId = player.SteamID.ToString();
+                var primary = stage switch
+                {
+                    DuelStage.Pistol => string.Empty,
+                    DuelStage.Rifle => GetPendingOrCurrent(_duelPendingPrimary, _duelCurrentPrimary, steamId, "weapon_ak47"),
+                    DuelStage.Sniper => GetPendingOrCurrentSniper(steamId),
+                    _ => string.Empty
+                };
+                var secondary = stage switch
+                {
+                    DuelStage.Sniper => string.Empty,
+                    _ => GetPendingOrCurrent(_duelPendingSecondary, _duelCurrentSecondary, steamId, "weapon_usp_silencer")
+                };
+                return new DuelPlayerLoadoutInput(steamId, primary, secondary);
+            })
+            .ToList();
+        var plans = DuelRuntimePolicy.BuildSteamBoundLoadoutPlans(stage, inputs);
+        var generation = ++_duelLoadoutGeneration;
+
+        AddTimer(0.2f, () =>
+        {
+            if (_isUnloading || !_duelModeEnabled || generation != _duelLoadoutGeneration) return;
+            foreach (var plan in plans.Values)
+            {
+                ApplyDuelLoadout(plan, stage, generation);
             }
-        });
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
-    private void ApplyDuelLoadout(CCSPlayerController player, DuelStage stage)
+    private void ApplyDuelLoadout(DuelSteamBoundLoadoutPlan plan, DuelStage stage, int generation)
     {
-        var steamId = player.SteamID.ToString();
-        var primary = stage switch
-        {
-            DuelStage.Pistol => string.Empty,
-            DuelStage.Rifle => GetPendingOrCurrent(_duelPendingPrimary, _duelCurrentPrimary, steamId, "weapon_ak47"),
-            DuelStage.Sniper => GetPendingOrCurrentSniper(steamId),
-            _ => string.Empty
-        };
-        var secondary = stage switch
-        {
-            DuelStage.Sniper => string.Empty,
-            _ => GetPendingOrCurrent(_duelPendingSecondary, _duelCurrentSecondary, steamId, "weapon_usp_silencer")
-        };
-        var rule = DuelRuntimePolicy.BuildLoadoutRule(stage, primary, secondary);
+        var player = FindDuelPlayer(plan.SteamId);
+        if (player == null || !player.PawnIsAlive) return;
 
         try
         {
             player.RemoveWeapons();
             player.GiveNamedItem("weapon_knife");
-            if (!string.IsNullOrWhiteSpace(primary)) player.GiveNamedItem(primary);
-            if (!string.IsNullOrWhiteSpace(secondary)) player.GiveNamedItem(secondary);
+            if (!string.IsNullOrWhiteSpace(plan.Primary)) player.GiveNamedItem(plan.Primary);
+            if (!string.IsNullOrWhiteSpace(plan.Secondary)) player.GiveNamedItem(plan.Secondary);
             if (stage == DuelStage.Pistol) GivePlayerKevlar(player);
             else player.GiveNamedItem("item_assaultsuit");
             GiveDuelUtilities(player);
-            QueuePreferredDuelWeapon(player, rule);
+            QueuePreferredDuelWeapon(player, plan.Rule);
+            AddTimer(0.05f, () => LogAppliedDuelLoadout(plan, generation), TimerFlags.STOP_ON_MAPCHANGE);
         }
         catch (Exception ex)
         {
-            Logger.LogDebug(ex, "Failed to apply duel loadout for {SteamId}", steamId);
+            Logger.LogDebug(ex, "Failed to apply duel loadout for {SteamId}", plan.SteamId);
         }
+    }
+
+    private CCSPlayerController? FindDuelPlayer(string steamId) => Utilities.GetPlayers()
+        .Where(IsRealPlayer)
+        .FirstOrDefault(player =>
+            player.SteamID.ToString() == steamId
+            && (player.Team == CsTeam.Terrorist || player.Team == CsTeam.CounterTerrorist));
+
+    private void LogAppliedDuelLoadout(DuelSteamBoundLoadoutPlan plan, int generation)
+    {
+        if (_isUnloading || !_duelModeEnabled || generation != _duelLoadoutGeneration) return;
+        var player = FindDuelPlayer(plan.SteamId);
+        if (player == null) return;
+        Logger.LogDebug(
+            "Duel loadout bound by SteamID {SteamId}: expected primary={Primary} secondary={Secondary}; actual={Actual}",
+            plan.SteamId,
+            plan.Primary,
+            plan.Secondary,
+            string.Join(",", PlayerEquipment(player).Weapons));
     }
 
     private void QueuePreferredDuelWeapon(CCSPlayerController player, DuelLoadoutRule rule)
@@ -3582,7 +3491,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (string.IsNullOrWhiteSpace(body)) return "服务器没有返回错误信息";
         try
         {
-            var result = JsonSerializer.Deserialize<PluginBindResponse>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var result = JsonSerializer.Deserialize<PluginApiResponse>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
             if (!string.IsNullOrWhiteSpace(result?.Error)) return result.Error!;
         }
         catch { }
@@ -3612,7 +3521,7 @@ public sealed class LocalPlayerStats
     public int Damage { get; set; }
 }
 
-public sealed class PluginBindResponse
+public sealed class PluginApiResponse
 {
     [JsonPropertyName("success")]
     public bool Success { get; set; }
@@ -3671,6 +3580,7 @@ internal sealed record DuelWorkshopMap(string Name, string WorkshopId);
 public enum PluginOutboundKind
 {
     Event,
+    EventBatch,
     Snapshot
 }
 
@@ -3700,6 +3610,15 @@ public sealed class PluginOutboundMessage
         Sequence = sequence,
         TimestampUtc = timestamp.ToString("O")
     };
+
+    public static PluginOutboundMessage ForEventBatch(IReadOnlyList<PluginTelemetryEvent> events, string? matchId, long sequence, DateTimeOffset timestamp) => new()
+    {
+        Kind = PluginOutboundKind.EventBatch,
+        Body = events,
+        MatchId = matchId,
+        Sequence = sequence,
+        TimestampUtc = timestamp.ToString("O")
+    };
 }
 
 
@@ -3722,27 +3641,6 @@ public sealed class PluginGameLoginCodeResponse
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }
-}
-
-public sealed class PluginSnapshotResponse
-{
-    [JsonPropertyName("confirmationChallenges")]
-    public List<PluginIdentityConfirmationChallenge> ConfirmationChallenges { get; set; } = [];
-}
-
-public sealed class PluginIdentityConfirmationChallenge
-{
-    [JsonPropertyName("challengeId")]
-    public string ChallengeId { get; set; } = string.Empty;
-
-    [JsonPropertyName("steamId")]
-    public string SteamId { get; set; } = string.Empty;
-
-    [JsonPropertyName("code")]
-    public string Code { get; set; } = string.Empty;
-
-    [JsonPropertyName("expiresAt")]
-    public long ExpiresAt { get; set; }
 }
 
 public sealed class PluginCommand

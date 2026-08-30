@@ -49,6 +49,7 @@ export interface TaskActionLogEntry {
 export interface TaskCell {
     cellId: string;
     description: string;
+    hint?: string;
     level: number;
     levelLabel?: string;
     type: 'count' | 'damage' | 'custom';
@@ -128,7 +129,7 @@ export interface AdminLock {
 export interface TaskTemplate {
     cells: Record<string, Partial<TaskCell>>;
     lines: string[][];
-    replacementTask: { level: number; description: string };
+    replacementTask: { level: number; description: string; hint?: string };
 }
 
 export interface MapVoteState {
@@ -184,18 +185,6 @@ export interface DuelMapConfig {
     command: string;
 }
 
-export interface DuelAdminVoteState {
-    candidateId: string;
-    votes: Record<string, boolean>;
-    startedAt: number;
-    timeoutAt: number;
-}
-
-export interface DuelAdminRequestState {
-    candidateId: string;
-    requestedAt: number;
-}
-
 export interface PluginLivePlayer {
     steamId: string;
     name: string;
@@ -242,17 +231,15 @@ export interface MatchOptions {
     duelRoundTimeMinutes?: number;
     duelRounds?: DuelRoundConfig;
     duelUtilityMode?: DuelUtilityMode;
+    unbalancedModeEnabled?: boolean;
+    unbalancedTeamASize?: number;
+    unbalancedTeamBSize?: number;
 }
 
 export interface GameSession {
     sessionId: string;
     phase: GamePhase;
     matchId: string;
-    lobbyAccess: {
-        inviteCode: string;
-        inviteCreatedAt: number;
-        inviteExpiresAt: number;
-    };
     matchOptions: MatchOptions;
     players: Record<string, Player>;
     playerOrder: string[];
@@ -291,14 +278,11 @@ export interface GameSession {
     timerEndAt: number | null;
     timerPhase: GamePhase | null;
     adminLock: AdminLock;
-    duelTempAdminId?: string | null;
-    duelAdminVote?: DuelAdminVoteState;
-    duelAdminRequest?: DuelAdminRequestState;
-    duelTerminateRequest?: DuelAdminRequestState;
     liveGameData?: LiveGameData;
     rollTimeout?: any;
     createdAt: number;
     autoClearMinutes: number;
+    lastActivityAt?: number;
     [key: string]: any;
 }
 
@@ -309,16 +293,11 @@ export enum WsEvents {
     VOTE = 'VOTE',
     DRAFT_PICK = 'DRAFT_PICK',
     SIDE_PICK = 'SIDE_PICK',
-    DUEL_ACTION = 'DUEL_ACTION',
     TASK_ACTION = 'TASK_ACTION',
     SUBMIT_QUESTION = 'SUBMIT_QUESTION',
     UNDERCOVER_TASK_ACK = 'UNDERCOVER_TASK_ACK',
     LOGIN_RESPONSE = 'LOGIN_RESPONSE',
-    LOBBY_INVITE_LOGIN = 'LOBBY_INVITE_LOGIN',
-    DEVICE_SOCKET_LOGIN = 'DEVICE_SOCKET_LOGIN',
-    FIXED_MEMBER_SOCKET_LOGIN = 'FIXED_MEMBER_SOCKET_LOGIN',
-    STEAM_CONFIRM_CODE = 'STEAM_CONFIRM_CODE',
-    DEVICE_ENROLLMENT_READY = 'DEVICE_ENROLLMENT_READY',
+    PLAYER_CENTER_MATCH_LOGIN = 'PLAYER_CENTER_MATCH_LOGIN',
     IDENTITY_ADMIN_ACTION = 'IDENTITY_ADMIN_ACTION',
     GAME_STATE = 'GAME_STATE',
     PRIVATE_DATA = 'PRIVATE_DATA',

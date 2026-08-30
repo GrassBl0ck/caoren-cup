@@ -44,35 +44,35 @@
                 <article class="rules-guide">
                     <section id="rules-join" class="rules-section" aria-labelledby="rules-join-title">
                         <span class="rules-eyebrow">第一步</span>
-                        <h2 id="rules-join-title">选择你的登录方式</h2>
-                        <p>不用判断自己属于哪类参赛者。管理员给了你成员密码，就选择“成员账号登录”；管理员给了你本场邀请码，就选择“使用邀请码加入”。两种方式都需要先进入网页大厅，再连接 CS2。</p>
+                        <h2 id="rules-join-title">登录玩家中心</h2>
+                        <p>玩家统一使用草人杯账号和密码登录。没有账号或忘记凭据时，在 CS2 服务器输入 <code>!cclogin</code> 获取一次性游戏码。</p>
                         <div class="rules-card-grid">
                             <div class="rules-card">
-                                <span class="rules-eyebrow">收到成员密码</span>
-                                <h3>成员账号登录</h3>
-                                <p>输入管理员登记的 17 位 SteamID64 与草人杯独立密码，不需要邀请码和昵称。</p>
+                                <span class="rules-eyebrow">已有账号</span>
+                                <h3>账号密码登录</h3>
+                                <p>输入草人杯账号和独立密码。SteamID64 不再作为登录方式。</p>
                                 <ol class="rules-steps">
-                                    <li>输入 SteamID64 与密码</li>
-                                    <li>进入当前网页大厅</li>
-                                    <li>连接 CS2，等待自动确认</li>
+                                    <li>输入账号与密码</li>
+                                    <li>进入玩家中心</li>
+                                    <li>明确点击“加入本场比赛”</li>
                                 </ol>
-                                <p class="rules-small-note">游戏 SteamID 与预设 SteamID 一致时自动完成本场确认，不需要确认码、<code>!cclogin</code> 或 <code>!ccbind</code>。</p>
+                                <p class="rules-small-note">连接 CS2 后，插件使用服务器可信 SteamID 完成本场核对；不会改绑其他账号。</p>
                             </div>
                             <div class="rules-card">
-                                <span class="rules-eyebrow">收到本场邀请码</span>
-                                <h3>使用邀请码加入</h3>
-                                <p>输入管理员发放的本场邀请码、本场昵称与 17 位 SteamID64。</p>
+                                <span class="rules-eyebrow">没有账号或忘记凭据</span>
+                                <h3>使用 <code>!cclogin</code></h3>
+                                <p>游戏码由服务器插件根据可信 SteamID64 发放，是开户与恢复的唯一入口。</p>
                                 <ol class="rules-steps">
-                                    <li>填写邀请码、昵称与 SteamID64</li>
-                                    <li>进入当前网页大厅</li>
-                                    <li>连接 CS2，完成确认码流程</li>
+                                    <li>在 CS2 聊天栏输入 <code>!cclogin</code></li>
+                                    <li>回到玩家中心输入一次性游戏码</li>
+                                    <li>保存新账号凭据或重设密码</li>
                                 </ol>
-                                <p class="rules-small-note">原有游戏码和旧命令继续保留，用于首次识别失败或特殊情况恢复。</p>
+                                <p class="rules-small-note">游戏码成功验证后立即失效，不能重复使用。</p>
                             </div>
                         </div>
                         <div class="rules-warning-note">
                             <strong>密码提醒</strong>
-                            <p>草人杯当前使用 HTTP。使用成员账号登录时，请使用只给草人杯使用的独立密码，不要与 Steam、QQ、邮箱、游戏平台或其他网站共用。</p>
+                            <p>草人杯当前使用 HTTP。请使用只给草人杯使用的独立密码，不要与 Steam、QQ、邮箱、游戏平台或其他网站共用。</p>
                         </div>
                     </section>
 
@@ -110,7 +110,7 @@
                         <ul class="rules-list">
                             <li>可使用网页中的“连接 CS2”按钮，或在控制台输入 <code>connect 119.45.166.182:27015</code>。</li>
                             <li>建议输入 <code>snd_toolvolume 0.3</code>，推荐范围为 0.3 至 0.5，用于降低自定义音效音量。</li>
-                            <li>使用成员账号登录时无需手动输入确认码；使用邀请码加入时按网页提示完成确认。</li>
+                            <li>登录玩家中心后仍需明确点击“加入本场比赛”；管理员登录不会自动参赛。</li>
                             <li>若弹出创意工坊地图下载请求，请选择允许或下载。</li>
                         </ul>
                     </section>
@@ -147,7 +147,7 @@
                             <div><dt><code>.tech</code></dt><dd>技术暂停</dd></div>
                             <div><dt><code>.sp 1/3/5/r</code></dt><dd>不平衡竞技中申请技能</dd></div>
                             <div><dt><code>!ws</code></dt><dd>打开换肤界面</dd></div>
-                            <div><dt><code>!cclogin / !cccode / !ccbind</code></dt><dd>首次识别失败或特殊情况恢复</dd></div>
+                            <div><dt><code>!cclogin</code></dt><dd>新玩家开户，或恢复账号和密码</dd></div>
                         </dl>
                         <p>如有规则问题，可联系 GrassBl0ck / 草方块，QQ：3465434029。</p>
                         <a class="rules-download-link" href="/downloads/caoren-cup-full-rules.pdf" download>下载完整规则 PDF</a>

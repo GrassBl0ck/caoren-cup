@@ -22,13 +22,8 @@ export interface SkinAuditEntry {
     actorPlayerId: string;
     actorRole: 'Admin' | 'Player';
     targetSteamId: string;
-    action: 'save_weapon' | 'save_cosmetic' | 'copy_team' | 'reset' | 'force_refresh';
+    action: 'save_weapon' | 'save_cosmetic' | 'reset' | 'force_refresh';
     details?: Record<string, unknown>;
-}
-
-export interface TeamCopyRules {
-    excludedWeaponDefIndexes: readonly number[];
-    stickerEligibleWeaponDefIndexes: readonly number[];
 }
 
 export interface LoadoutRepository {
@@ -36,7 +31,6 @@ export interface LoadoutRepository {
     load(steamId: string): Promise<PlayerLoadout>;
     saveWeapon(steamId: string, update: WeaponUpdate, audit: SkinAuditEntry): Promise<void>;
     saveCosmetic(steamId: string, update: CosmeticUpdate, audit: SkinAuditEntry): Promise<void>;
-    copyTeam(steamId: string, fromTeam: 2 | 3, toTeam: 2 | 3, rules: TeamCopyRules, audit: SkinAuditEntry): Promise<void>;
     reset(steamId: string, team: 2 | 3 | undefined, audit: SkinAuditEntry): Promise<void>;
     audit(entry: SkinAuditEntry): Promise<void>;
 }

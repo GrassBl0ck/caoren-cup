@@ -46,6 +46,7 @@ internal static class WebCommandGameThreadDispatcher
         "RESET_LIVE_MATCH_STATS",
         "APPLY_TEAM_ASSIGNMENTS",
         "CLEAR_TEAM_ASSIGNMENTS",
+        // Retained as a blocked legacy command so stale web-duel requests cannot mutate the server.
         "CONFIGURE_DUEL_MODE"
     };
 

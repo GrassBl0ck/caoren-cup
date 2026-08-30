@@ -266,19 +266,11 @@ export const getFlowUndoStatus = (session: GameSession, actor?: Player): FlowUnd
         return { ...base, disabledReason: '正式比赛开始后不能撤销赛前流程。' };
     }
     const isOfficialAdmin = actor?.role === 'Admin';
-    const isDuelTempAdmin = !!actor && session.duelTempAdminId === actor.playerId;
-    if (!isOfficialAdmin && !isDuelTempAdmin) {
+    if (!isOfficialAdmin) {
         return { ...base, disabledReason: '只有管理员才能撤销流程操作。' };
     }
     if (!entry || undoState.sessionId !== session.sessionId) {
         return { ...base, disabledReason: '当前没有可撤销的操作。' };
-    }
-    if (isDuelTempAdmin && !isOfficialAdmin && (
-        entry.actorId !== actor.playerId ||
-        entry.actionType !== 'ADVANCE_PHASE' ||
-        entry.restorePhase !== GamePhase.Lobby
-    )) {
-        return { ...base, disabledReason: '单挑临时管理员只能撤销自己从大厅推进到赛前配置的操作。' };
     }
     return { ...base, canUndo: true, disabledReason: undefined };
 };

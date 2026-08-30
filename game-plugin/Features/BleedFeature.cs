@@ -95,13 +95,13 @@ public class BleedFeature : ICaorenFeature
             return;
         }
 
-        if (!float.TryParse(info.GetArg(2), out float interval) || interval <= 0)
+        if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), _settings.Interval, out float interval) || interval <= 0)
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "无效的时间间隔。");
             return;
         }
 
-        if (!int.TryParse(info.GetArg(3), out int amount))
+        if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), _settings.Amount, out int amount))
         {
             if (player != null) CaorenCupUtils.PrintToChat(player, "无效的血量变化数值。");
             return;
@@ -173,7 +173,10 @@ public class BleedFeature : ICaorenFeature
 
         float safeInterval = Math.Max(0.1f, _settings.Interval);
         _isRunning = true;
-        _healthTimer = _plugin.AddTimer(safeInterval, OnTimerTick, TimerFlags.REPEAT);
+        _healthTimer = _plugin.AddTimer(
+            safeInterval,
+            () => _plugin.MeasurePerformance("Bleed.Timer", OnTimerTick),
+            TimerFlags.REPEAT);
     }
 
     private void StopTimer()
@@ -198,6 +201,14 @@ public class BleedFeature : ICaorenFeature
             ApplyChange(player);
         }
     }
+
+    public IReadOnlyDictionary<string, long> CapturePerformanceRuntimeCounts() =>
+        new Dictionary<string, long>
+        {
+            ["TimerActive"] = _healthTimer is null ? 0 : 1,
+            ["EligibleAlivePlayers"] = Utilities.GetPlayers().LongCount(player =>
+                player is not null && player.IsValid && player.PawnIsAlive && IsTarget(player))
+        };
 
     private bool IsTarget(CCSPlayerController player)
     {

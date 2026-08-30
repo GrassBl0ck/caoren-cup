@@ -1,6 +1,18 @@
 /* Main lobby app extracted from index.html */
+const caorenConfirm = window.caorenConfirm;
+const caorenPrompt = window.caorenPrompt;
+const caorenAlert = window.caorenAlert;
 const ws = io();
 window.__caorenCupLobbySocket = ws;
+// 管理员连接断开后，服务器会为重连创建全新 Socket 身份。
+// 清除旧 playerId，避免页面继续用失效身份发送推进/管理操作。
+ws.on('disconnect', (reason) => {
+    if (!myPlayerId) return;
+    resetToLogin('页面连接已断开，请重新登录后再继续操作。', '连接已断开');
+});
+document.addEventListener('caoren:terminate-confirmed', () => {
+    ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
+});
         let myPlayerId = null;
         let countdownInterval = null;
         let currentTimerEndAt = null;
@@ -13,12 +25,16 @@ window.__caorenCupLobbySocket = ws;
 
         // 模板编辑器状态
         window._currentTaskTemplate = null;
+        window._taskPresets = [];
         window._editingTemplate = null;
         window._editingCellId = null;
+        window._taskTemplateHistory = window.CaorenTaskTemplateHistory?.TaskTemplateHistory
+            ? new window.CaorenTaskTemplateHistory.TaskTemplateHistory(100, 400)
+            : null;
         window._postmatchStatsMode = 'all';
         window._postmatchMatrixMode = 'all';
         window._lobbyAnnouncement = null;
-        const ADMIN_VIEWS = ['overview', 'access', 'setup', 'flow', 'announcement', 'tasks', 'mods'];
+        const ADMIN_VIEWS = ['overview', 'access', 'setup', 'announcement', 'tasks', 'mods'];
         const savedAdminView = localStorage.getItem('caoren-active-admin-tab');
         window._activeAdminView = ADMIN_VIEWS.includes(savedAdminView) ? savedAdminView : 'overview';
         const DUEL_DEFAULT_MAP = '5e_akm4_aim_duel';
@@ -57,19 +73,21 @@ window.__caorenCupLobbySocket = ws;
         }
 
         function confirmDuelWorkshopReady(map) {
-            return confirm('\u672c\u5c40\u4f7f\u7528\u521b\u610f\u5de5\u574a\u5730\u56fe\uff1a' + (map?.name || DUEL_DEFAULT_MAP) + '\\n\\n\u672a\u8ba2\u9605\u7684\u73a9\u5bb6\u53ef\u80fd\u4f1a\u5361\u5728\u8fde\u63a5\u754c\u9762\u3002\\n\u8bf7\u786e\u8ba4\u6240\u6709\u53c2\u8d5b\u73a9\u5bb6\u90fd\u5df2\u8ba2\u9605\u8be5\u5730\u56fe\u540e\u518d\u7ee7\u7eed\u3002');
+            return caorenConfirm('\u672c\u5c40\u4f7f\u7528\u521b\u610f\u5de5\u574a\u5730\u56fe\uff1a' + (map?.name || DUEL_DEFAULT_MAP) + '\\n\\n\u672a\u8ba2\u9605\u7684\u73a9\u5bb6\u53ef\u80fd\u4f1a\u5361\u5728\u8fde\u63a5\u754c\u9762\u3002\\n\u8bf7\u786e\u8ba4\u6240\u6709\u53c2\u8d5b\u73a9\u5bb6\u90fd\u5df2\u8ba2\u9605\u8be5\u5730\u56fe\u540e\u518d\u7ee7\u7eed\u3002', {
+                title: '\u786e\u8ba4\u5355\u6311\u5730\u56fe',
+                confirmText: '\u5df2\u5168\u5458\u8ba2\u9605'
+            });
         }
 
         function canSeeDuelControlMapNotice(state, currentPlayer) {
             if (!state || !currentPlayer) return false;
             const opts = state.matchOptions || {};
             const isDuelMode = opts.matchMode === 'duel';
-            const canManage = currentPlayer.playerId === state.duelTempAdminId || (!state.duelTempAdminId && currentPlayer.role === 'Admin');
-            return canManage && (isDuelMode || currentPlayer.playerId === state.duelTempAdminId) && ['Lobby', 'PreGameSetup', 'LiveGame', 'Scoreboard'].includes(state.phase);
+            return currentPlayer.role === 'Admin' && isDuelMode && ['Lobby', 'PreGameSetup', 'LiveGame', 'Scoreboard'].includes(state.phase);
         }
 
         function renderPublicDuelWorkshopNotice(state, currentPlayer) {
-            if (state?.matchOptions?.matchMode !== 'duel') return '';
+            return '';
             if (canSeeDuelControlMapNotice(state, currentPlayer)) return '';
             const map = duelMapByName(state.matchOptions.duelMap || DUEL_DEFAULT_MAP);
             return '<div class="panel" style="margin-bottom:12px;border-color:#f59e0b;background:#fffbeb;">' +
@@ -179,21 +197,21 @@ window.__caorenCupLobbySocket = ws;
             }
         }
 
-        function resetToLogin(message) {
+        function resetToLogin(message, title = '已退出当前房间') {
             document.getElementById('lobby-area').style.display = 'none';
             document.getElementById('login-area').style.display = 'block';
             myPlayerId = null;
             window._currentPlayer = null;
-            document.getElementById('name-input').value = '';
-            document.getElementById('extra-input').value = '';
-            const gameLoginInput = document.getElementById('v1333-game-login-code-input');
-            if (gameLoginInput) gameLoginInput.value = '';
-            if (message) alert(message);
+            if (message) void caorenAlert(message, { title });
         }
 
 
         function isUndercoverModeEnabledFromState(state) {
             return state?.matchOptions?.undercoverModeEnabled !== false;
+        }
+
+        function canEditTaskTemplate(state) {
+            return state?.phase === 'Lobby' || (state?.phase === 'PreGameSetup' && state?.rolesReleased !== true);
         }
 
         function phaseDisplayName(phase) {
@@ -213,20 +231,94 @@ window.__caorenCupLobbySocket = ws;
             return map[phase] || phase || '未知';
         }
 
+        function nextPhaseForState(state) {
+            const isDuel = state?.matchOptions?.matchMode === 'duel';
+            switch (state?.phase) {
+                case 'Lobby': return isDuel ? 'PreGameSetup' : 'CaptainSelection';
+                case 'CaptainSelection': return isDuel ? 'PreGameSetup' : 'Roll';
+                case 'Roll': return isDuel ? 'PreGameSetup' : 'PlayerDraft';
+                case 'PlayerDraft': return isDuel ? 'PreGameSetup' : 'MapBan';
+                case 'MapBan': return isDuel ? 'PreGameSetup' : 'SidePick';
+                case 'SidePick': return 'PreGameSetup';
+                case 'PreGameSetup': return 'LiveGame';
+                case 'LiveGame':
+                case 'MidGameQA':
+                    return isDuel || !isUndercoverModeEnabledFromState(state) ? 'Scoreboard' : 'PostGameAccusation';
+                case 'PostGameAccusation': return 'Scoreboard';
+                case 'Scoreboard': return 'Lobby';
+                default: return null;
+            }
+        }
+
+        function renderPregameReadinessCard(state, currentPlayer) {
+            const card = document.getElementById('pregame-readiness-card');
+            if (!card) return;
+            const isUndercover = isUndercoverModeEnabledFromState(state);
+            const players = Object.values(state?.players || {}).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
+            const visible = state?.phase === 'PreGameSetup' && isUndercover;
+            card.hidden = !visible;
+            if (!visible) return;
+
+            const blockers = players.filter(p => !p.isReady || (p.gameRole === 'Undercover' && p.undercoverTaskAckStage !== 'read'));
+            const readyCount = players.length - blockers.length;
+            const summary = document.getElementById('pregame-readiness-summary');
+            const detail = document.getElementById('pregame-readiness-detail');
+            const list = document.getElementById('pregame-readiness-blockers');
+            const forceButton = document.getElementById('force-test-bots-ready-btn');
+            if (summary) summary.textContent = players.length === 0 ? '暂无参赛玩家' : (blockers.length ? `已准备 ${readyCount} / ${players.length}` : '全部准备完成');
+            if (detail) detail.textContent = players.length === 0
+                ? '当前没有参赛玩家，无法发放身份或进入正式比赛。'
+                : blockers.length
+                ? `还有 ${blockers.length} 名玩家需要完成准备，暂时不能进入正式比赛。`
+                : '所有参赛玩家都已完成网页准备，可以进入正式比赛。';
+            if (list) {
+                list.innerHTML = players.length === 0
+                    ? '<div class="pregame-readiness-blocker"><strong>暂无参赛玩家</strong><span>请先加入真实玩家或添加测试 BOT</span></div>'
+                    : blockers.length
+                    ? blockers.map(p => {
+                        const reasons = [];
+                        if (!p.isReady) reasons.push('未点击准备');
+                        if (p.gameRole === 'Undercover' && p.undercoverTaskAckStage !== 'read') reasons.push('未确认任务表');
+                        return `<div class="pregame-readiness-blocker"><strong>${htmlEscape(p.name)}</strong><span>${htmlEscape(reasons.join('、'))}</span></div>`;
+                    }).join('')
+                    : '<div class="pregame-readiness-ok">✓ 所有人已完成准备</div>';
+            }
+            const onlyTestBots = blockers.length > 0 && blockers.every(p => p.isTestBot === true);
+            if (forceButton) {
+                forceButton.hidden = currentPlayer?.role !== 'Admin' || !onlyTestBots;
+                forceButton.onclick = () => ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'FORCE_READY' });
+            }
+        }
+
         function renderFlowUndoSafetyBar(state, currentPlayer) {
             const bar = document.getElementById('flow-undo-safety-bar');
             if (!bar) return;
             const status = state?.flowUndoStatus;
-            const canManage = currentPlayer?.role === 'Admin' || currentPlayer?.playerId === state?.duelTempAdminId;
+            const canManage = currentPlayer?.role === 'Admin';
             bar.hidden = !status || !canManage;
             if (bar.hidden) return;
 
             const phase = document.getElementById('flow-undo-current-phase');
+            const nextPhase = document.getElementById('flow-next-phase');
             const latest = document.getElementById('flow-undo-latest-action');
             const count = document.getElementById('flow-undo-count');
             const reason = document.getElementById('flow-undo-reason');
             const button = document.getElementById('flow-undo-btn');
+            const advanceButton = document.getElementById('advance-phase-btn');
+            const nextPhaseValue = nextPhaseForState(state);
             if (phase) phase.textContent = phaseDisplayName(state.phase);
+            if (nextPhase) {
+                nextPhase.textContent = state.phase === 'Scoreboard'
+                    ? '新一轮大厅'
+                    : phaseDisplayName(nextPhaseValue);
+            }
+            if (advanceButton) {
+                advanceButton.textContent = state.phase === 'Scoreboard'
+                    ? '开启新一轮'
+                    : (nextPhaseValue ? `推进到：${phaseDisplayName(nextPhaseValue)}` : '当前阶段无法推进');
+                advanceButton.disabled = !nextPhaseValue;
+                advanceButton.title = nextPhaseValue ? advanceButton.textContent : '当前阶段无法继续推进';
+            }
             if (count) count.textContent = String(status.count || 0);
             if (latest) {
                 latest.textContent = status.latest
@@ -303,7 +395,7 @@ window.__caorenCupLobbySocket = ws;
 
         function isCompetitiveMatchzyState(state) {
             const options = state?.matchOptions || {};
-            return options.matchMode !== 'duel' && options.matchController !== 'caoren';
+            return options.matchMode !== 'duel';
         }
 
         function renderMatchStartTag(player, state) {
@@ -341,8 +433,14 @@ window.__caorenCupLobbySocket = ws;
             return !!liveSide && !!expectedSide && liveSide !== expectedSide;
         }
 
-        function getAdminPasswordForRequest() {
-            return document.getElementById('extra-input')?.value || prompt('请输入管理员密码：') || '';
+        async function getAdminPasswordForRequest() {
+            return await caorenPrompt('该操作需要管理员密码。', {
+                title: '管理员验证',
+                inputLabel: '管理员密码',
+                inputType: 'password',
+                required: true,
+                confirmText: '验证并继续'
+            }) || '';
         }
 
         function renderLobbyAnnouncement(announcement) {
@@ -398,17 +496,22 @@ window.__caorenCupLobbySocket = ws;
             document.execCommand('formatBlock', false, tagName);
         }
 
-        function formatLobbyAnnouncementLink() {
+        async function formatLobbyAnnouncementLink() {
             const editor = document.getElementById('lobby-announcement-editor');
             if (!editor) return;
-            const url = prompt('请输入链接地址，建议使用 https:// 开头：');
+            const url = await caorenPrompt('请输入要插入的链接地址。', {
+                title: '插入公告链接',
+                inputLabel: '链接地址',
+                placeholder: 'https://example.com',
+                confirmText: '插入链接'
+            });
             if (!url) return;
             editor.focus();
             document.execCommand('createLink', false, url);
         }
 
         async function saveLobbyAnnouncement() {
-            const adminPassword = getAdminPasswordForRequest();
+            const adminPassword = await getAdminPasswordForRequest();
             if (!adminPassword) return;
 
             const announcement = {
@@ -516,6 +619,9 @@ window.__caorenCupLobbySocket = ws;
             const duelRoundTime = optionValue('duelRoundTimeMinutes', serverOptions.duelRoundTimeMinutes || 1);
             const duelRounds = optionValue('duelRounds', serverOptions.duelRounds || { pistol: 8, rifle: 16, sniper: 12 });
             const duelUtilityMode = optionValue('duelUtilityMode', serverOptions.duelUtilityMode || 'none');
+            const unbalancedEnabled = optionValue('unbalancedModeEnabled', serverOptions.unbalancedModeEnabled === true) === true;
+            const teamASize = optionValue('unbalancedTeamASize', serverOptions.unbalancedTeamASize || 3);
+            const teamBSize = optionValue('unbalancedTeamBSize', serverOptions.unbalancedTeamBSize || 5);
 
             const status = document.getElementById('match-options-status');
             const duelInput = document.getElementById('match-option-duel');
@@ -528,11 +634,23 @@ window.__caorenCupLobbySocket = ws;
             const duelRifleInput = document.getElementById('match-option-duel-rifle-rounds');
             const duelSniperInput = document.getElementById('match-option-duel-sniper-rounds');
             const duelUtilityInput = document.getElementById('match-option-duel-utility-mode');
+            const unbalancedRow = document.getElementById('unbalanced-options-row');
+            const unbalancedInput = document.getElementById('match-option-unbalanced');
+            const teamASizeInput = document.getElementById('match-option-team-a-size');
+            const teamBSizeInput = document.getElementById('match-option-team-b-size');
             const undercoverInput = document.getElementById('match-option-undercover');
             const caorenInput = document.getElementById('match-option-caoren');
             const saveBtn = document.getElementById('save-match-options-btn');
             const refreshBtn = document.getElementById('refresh-match-options-btn');
             const optionsWarning = document.querySelector('#match-options-panel .match-options-warning');
+
+            // 网页单挑已归档，仅保留游戏内 /duel；旧缓存状态也不得重新打开网页入口。
+            if (duelInput) {
+                duelInput.checked = false;
+                duelInput.disabled = true;
+                duelInput.closest('label')?.setAttribute('hidden', 'hidden');
+            }
+            if (duelRow) duelRow.style.display = 'none';
 
             if (status) {
                 status.innerHTML = `\u5f53\u524d\u9636\u6bb5\uff1a<b>` + phaseDisplayName(phase) + `</b>\uff0c` + (editable ? `\u53ef\u4ee5\u4fee\u6539\u672c\u5c40\u6a21\u5f0f\u3002` : `\u672c\u5c40\u6a21\u5f0f\u5df2\u9501\u5b9a\u3002`);
@@ -558,7 +676,21 @@ window.__caorenCupLobbySocket = ws;
                 };
             }
             if (duelRow) duelRow.style.display = duelEnabled ? '' : 'none';
-            if (testBotsRow) testBotsRow.style.display = duelEnabled ? '' : 'none';
+            if (unbalancedRow) unbalancedRow.style.display = duelEnabled ? 'none' : '';
+            if (unbalancedInput) {
+                unbalancedInput.value = unbalancedEnabled ? 'true' : 'false';
+                unbalancedInput.disabled = !editable || duelEnabled;
+                unbalancedInput.onchange = () => { setPendingMatchOption('unbalancedModeEnabled', unbalancedInput.value === 'true'); scheduleMatchOptionsAutosave(100); };
+            }
+            for (const [input, key] of [[teamASizeInput, 'unbalancedTeamASize'], [teamBSizeInput, 'unbalancedTeamBSize']]) {
+                if (!input) continue;
+                input.value = key === 'unbalancedTeamASize' ? teamASize : teamBSize;
+                input.disabled = !editable || duelEnabled || !unbalancedEnabled;
+                input.oninput = () => { setPendingMatchOption(key, Math.max(1, Math.floor(Number(input.value || 1)))); scheduleMatchOptionsAutosave(500); };
+            }
+            // 测试 BOT 既用于单挑也用于普通/卧底网页流程；仅在管理员的大厅或赛前配置阶段显示。
+            const canManageTestBots = isAdmin && ['Lobby', 'PreGameSetup'].includes(phase);
+            if (testBotsRow) testBotsRow.style.display = canManageTestBots ? '' : 'none';
             if (duelMapInput) {
                 duelMapInput.value = duelMapByName(duelMap).name;
                 duelMapInput.disabled = !editable || !duelEnabled;
@@ -648,14 +780,17 @@ window.__caorenCupLobbySocket = ws;
             }
 
             const isLoggedInAdmin = window._currentPlayer?.role === 'Admin';
-            const adminPassword = isLoggedInAdmin ? '' : getAdminPasswordForRequest();
+            const adminPassword = isLoggedInAdmin ? '' : await getAdminPasswordForRequest();
             if (!isLoggedInAdmin && !adminPassword) return;
 
-            const duelEnabled = document.getElementById('match-option-duel')?.checked === true;
+            const duelEnabled = false;
             const matchOptions = {
                 matchMode: duelEnabled ? 'duel' : 'competitive',
                 undercoverModeEnabled: duelEnabled ? false : !!document.getElementById('match-option-undercover')?.checked,
                 caorenModifiersEnabled: !!document.getElementById('match-option-caoren')?.checked,
+                unbalancedModeEnabled: document.getElementById('match-option-unbalanced')?.value === 'true',
+                unbalancedTeamASize: Math.max(1, Math.floor(Number(document.getElementById('match-option-team-a-size')?.value || 3))),
+                unbalancedTeamBSize: Math.max(1, Math.floor(Number(document.getElementById('match-option-team-b-size')?.value || 5))),
                 duelMap: document.getElementById('match-option-duel-map')?.value || DUEL_DEFAULT_MAP,
                 duelMapWorkshopId: duelWorkshopIdForSelect(document.getElementById('match-option-duel-map')),
                 duelRoundTimeMinutes: Number(document.getElementById('match-option-duel-round-time')?.value || 1),
@@ -834,11 +969,15 @@ if (window._caorenModifiersEnabled !== true) {
                 showLobbyNotice('本局未启用 CaorenCup 修改。请先在本局模式设置中开启。', 'error');
                 return;
             }
-            if (module === 'reset_all' && !confirm('确认重置所有 CaorenCup 修改？这会执行游戏内 reset_plu。')) {
+            if (module === 'reset_all' && !await caorenConfirm('这会执行游戏内 reset_plu，并重置所有 CaorenCup 修改。', {
+                title: '确认重置全部娱乐修改',
+                tone: 'danger',
+                confirmText: '确认重置'
+            })) {
                 return;
             }
 
-            const adminPassword = getAdminPasswordForRequest();
+            const adminPassword = await getAdminPasswordForRequest();
             if (!adminPassword) return;
 
             try {
@@ -866,13 +1005,15 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         async function syncTeamLock() {
+            const adminPassword = await getAdminPasswordForRequest();
+            if (!adminPassword) return;
             const status = document.getElementById('team-lock-status');
             if (status) status.textContent = '正在下发网页分队名单……';
             try {
                 const res = await fetch('/api/admin/team-lock/sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ adminPassword: getAdminPasswordForRequest() })
+                    body: JSON.stringify({ adminPassword })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '同步分队失败');
@@ -890,14 +1031,19 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         async function clearTeamLock() {
-            if (!confirm('确认解除网页强制分队？解除后玩家可以自行换边。')) return;
+            if (!await caorenConfirm('解除后玩家可以自行换边。', {
+                title: '确认解除网页强制分队',
+                confirmText: '解除锁队'
+            })) return;
+            const adminPassword = await getAdminPasswordForRequest();
+            if (!adminPassword) return;
             const status = document.getElementById('team-lock-status');
             if (status) status.textContent = '正在解除强制分队……';
             try {
                 const res = await fetch('/api/admin/team-lock/clear', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ adminPassword: getAdminPasswordForRequest() })
+                    body: JSON.stringify({ adminPassword })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '解除强制分队失败');
@@ -914,13 +1060,12 @@ if (window._caorenModifiersEnabled !== true) {
                 document.getElementById('login-area').style.display = 'none';
                 document.getElementById('lobby-area').style.display = 'block';
                 const displayName = data.name || data.player?.name || (data.message || '').split('，')[0].replace('欢迎，', '').replace('！已恢复你的房间身份。', '').replace('！你的绑定码是:', '').trim();
-                document.getElementById('my-name').textContent = displayName || document.getElementById('name-input').value.trim() || '未命名玩家';
-                document.getElementById('my-bindcode').textContent = data.loginCode || data.bindCode || '未分配';
+                document.getElementById('my-name').textContent = displayName || '未命名玩家';
             } else {
                 if (data.resetClient || data.message === '你已退出游戏' || String(data.message || '').includes('终止')) {
                     resetToLogin(data.message || '你已退出房间，请重新进入');
                 } else {
-                    alert('登录失败：' + data.message);
+                    void caorenAlert('登录失败：' + data.message, { title: '无法登录' });
                 }
             }
         });
@@ -967,6 +1112,7 @@ if (window._caorenModifiersEnabled !== true) {
             const isDuel = state?.matchOptions?.matchMode === 'duel';
             const undercoverEnabled = isUndercoverModeEnabledFromState(state);
             const live = state.liveGameData || window._liveGameData || {};
+            renderPregameReadinessCard(state, currentPlayer);
             renderFlowUndoSafetyBar(state, currentPlayer);
             window._undercoverModeEnabled = undercoverEnabled;
             window._caorenModifiersEnabled = state?.matchOptions?.caorenModifiersEnabled === true;
@@ -1012,7 +1158,7 @@ if (window._caorenModifiersEnabled !== true) {
             const useMatchZyStartStatus = isCompetitiveMatchzyState(state);
             const readyHeader = useMatchZyStartStatus ? '开赛状态' : '准备';
             playerTable += '<div class="cc-table-wrap"><table class="cc-table"><thead><tr>' +
-                '<th>#</th><th>玩家名</th><th>比赛队伍</th>' + (isDuel ? '' : '<th>当前边</th><th>应在边</th>') + '<th>绑定状态</th><th>身份</th><th>' + readyHeader + '</th>' + ((isAdmin || (isDuel && currentPlayer?.playerId === state.duelTempAdminId)) ? '<th>操作</th>' : '') +
+                '<th>#</th><th>玩家名</th><th>比赛队伍</th>' + (isDuel ? '' : '<th>当前边</th><th>应在边</th>') + '<th>绑定状态</th><th>身份</th><th>' + readyHeader + '</th>' + (isAdmin ? '<th>操作</th>' : '') +
                 '</tr></thead><tbody>';
             visiblePlayers.forEach((p, idx) => {
                 const baseRoleClass = p.role === 'Admin' ? 'role-admin' : (p.gameRole === 'Undercover' ? 'role-undercover' : (p.gameRole === 'Detective' ? 'role-detective' : (p.gameRole === 'Soldier' ? 'role-soldier' : '')));
@@ -1023,7 +1169,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const bind = p.steamIdBound ? '<span class="tag tag-green">已绑定</span>' : '<span class="tag tag-red">未绑定</span>';
                 const roleText = p.role === 'Admin' ? '<span class="tag tag-purple">管理员</span>' : (p.gameRole ? `<span class="tag tag-gray">${p.gameRole}</span>` : '<span class="tag tag-gray">未分配</span>');
                 const ready = useMatchZyStartStatus ? renderMatchStartTag(p, state) : renderReadyTag(p);
-                const canDuelAssign = isDuel && (isAdmin || currentPlayer?.playerId === state.duelTempAdminId) && (!state.duelTempAdminId || currentPlayer?.playerId === state.duelTempAdminId) && p.role !== 'Admin' && p.role !== 'Spectator' && ['PreGameSetup', 'LiveGame'].includes(state.phase) && (state.phase !== 'LiveGame' || live?.duelWaitingForPlayers);
+                const canDuelAssign = isDuel && isAdmin && p.role !== 'Admin' && p.role !== 'Spectator' && ['PreGameSetup', 'LiveGame'].includes(state.phase) && (state.phase !== 'LiveGame' || live?.duelWaitingForPlayers);
                 const duelAssignOps = canDuelAssign ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;"><button onclick="adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;padding:4px 9px;">分到A</button><button onclick="adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;padding:4px 9px;">分到B</button>${p.rosterTeam ? `<button onclick="adminUnassignTeam('${p.playerId}')" style="background:#64748b;color:#fff;padding:4px 9px;">撤销分队</button>` : ''}</div>` : '';
                 const kickOp = isAdmin && p.role !== 'Admin' ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
                 const adminOps = (isAdmin || duelAssignOps) ? `<td>${duelAssignOps}${kickOp || '-'}</td>` : '';
@@ -1034,12 +1180,10 @@ if (window._caorenModifiersEnabled !== true) {
             listDiv.innerHTML = playerTable;
 
             if (isAdmin) {
-                const btn = document.getElementById('advance-phase-btn');
-                if (btn) btn.textContent = '推进阶段 (当前: ' + state.phase + ')';
                 const templateBtn = document.getElementById('template-config-btn');
-                if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
+                if (templateBtn) templateBtn.style.display = undercoverEnabled && canEditTaskTemplate(state) ? '' : 'none';
                 const taskTemplateBtn = document.getElementById('task-template-config-btn');
-                if (taskTemplateBtn) taskTemplateBtn.style.display = undercoverEnabled ? '' : 'none';
+                if (taskTemplateBtn) taskTemplateBtn.style.display = undercoverEnabled && canEditTaskTemplate(state) ? '' : 'none';
                 const players = Object.values(state.players || {}).filter(player => player.role !== 'Admin');
                 const pending = players.filter(player => player.confirmationState && player.confirmationState !== 'confirmed').length;
                 const overviewPhase = document.getElementById('overview-phase');
@@ -1104,7 +1248,7 @@ if (window._caorenModifiersEnabled !== true) {
                         html += '<div style="background:#e8f5e9; padding:15px; border-radius:5px; border:1px solid #a5d6a7;"><b>普通比赛模式：</b>卧底模式已关闭，本局不会配置卧底/侦探数量，也不会出现任务、侦探问答或赛后指认。</div>';
                     }
                 }
-                html += '<hr><button onclick="confirmQuit()" style="color:#d32f2f; border-color:#d32f2f;">退出房间</button>';
+                html += '<hr><button onclick="confirmQuit()" style="color:#d32f2f; border-color:#d32f2f;">取消本场参赛</button>';
                 extraDiv.innerHTML = html;
             }
 
@@ -1177,6 +1321,16 @@ if (window._caorenModifiersEnabled !== true) {
                 html += `<div class="map-bp-summary-card"><span>B 队队长</span><strong>${capB?.name || '-'}</strong></div>`;
                 html += `<div class="map-bp-summary-card"><span>\u4f60\u7684\u72b6\u6001</span><strong>${!draftActive ? '\u7b49\u5f85\u7ba1\u7406\u5458\u5f00\u59cb' : (isMyTurn ? '\u8f6e\u5230\u4f60\u9009\u4eba' : (currentTeam ? '\u7b49\u5f85\u961f\u957f\u9009\u62e9' : '\u9009\u4eba\u5b8c\u6210'))}</strong></div>`;
                 html += '</div>';
+
+                const unbalancedOptions = state.matchOptions || {};
+                if (unbalancedOptions.unbalancedModeEnabled === true) {
+                    const rosterPlayers = Object.values(state.players || {}).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
+                    const aCount = rosterPlayers.filter(p => p.rosterTeam === 'A').length;
+                    const bCount = rosterPlayers.filter(p => p.rosterTeam === 'B').length;
+                    const unassignedCount = rosterPlayers.filter(p => p.rosterTeam !== 'A' && p.rosterTeam !== 'B').length;
+                    const missingBindCount = rosterPlayers.filter(p => !p.steamIdBound).length;
+                    html += `<div class="soft-block" style="margin-top:14px;">不平衡竞技目标：A 队 ${Number(unbalancedOptions.unbalancedTeamASize || 3)} 人，B 队 ${Number(unbalancedOptions.unbalancedTeamBSize || 5)} 人；当前 A ${aCount} 人、B ${bCount} 人${unassignedCount ? `，未分队 ${unassignedCount} 人` : ''}${missingBindCount ? `，未绑定 SteamID ${missingBindCount} 人` : ''}。</div>`;
+                }
 
                 if (available.length > 0) {
                     html += '<h3 style="margin-top:18px;">可选玩家</h3>';
@@ -1362,7 +1516,7 @@ if (window._caorenModifiersEnabled !== true) {
                         html += '</table>';
                         html += `<p style="margin-top:10px;">目标名额(单边)：${state.undercoverCount} 卧底, ${state.detectiveCount} 侦探</p>`;
                         html += '<button onclick="randomRemainingRoles()" style="background:#7c3aed; color:#fff; font-weight:bold;">随机补齐剩余身份（仅管理员可见）</button> ';
-                        html += '<button onclick="releaseRoles()" style="background:#d32f2f; color:#fff; font-weight:bold;">发放身份给玩家</button>';
+                        html += `<button onclick="releaseRoles()" ${state.rolesReleased ? 'disabled' : ''} style="background:#d32f2f; color:#fff; font-weight:bold;">${state.rolesReleased ? '身份已发放' : '发放身份给玩家'}</button>`;
                         html += `<p style="font-size:13px;color:#6b7280;margin-bottom:0;">发放状态：${state.rolesReleased ? '<b style="color:#2e7d32;">已发放</b>' : '<b style="color:#d32f2f;">未发放</b>'}。未发放前，普通玩家看不到任何人的身份。</p></div><hr>`;
                     }
                     if (role) {
@@ -1371,7 +1525,7 @@ if (window._caorenModifiersEnabled !== true) {
                         html += '<div style="text-align:center;"><button onclick="showRules()" style="font-size:18px; padding:10px 20px;">📜 查看此身份的专属说明书</button></div>';
                         if (role === 'Undercover' && currentPlayer?.taskGrid) {
                             html += '<div style="margin:20px 0;"><h3 style="color:#d32f2f;">\u4f60\u7684\u4efb\u52a1\u9762\u677f</h3>';
-                            html += renderTaskGrid(currentPlayer.taskGrid || {}, { compact: true });
+                            html += renderTaskGrid(currentPlayer.taskGrid || {}, { compact: true, taskActionLog: currentPlayer.taskActionLog });
                             html += '</div>';
                         }
                     } else {
@@ -1393,7 +1547,7 @@ if (window._caorenModifiersEnabled !== true) {
 
             if (state.phase === 'LiveGame') {
                 let liveHtml = renderLiveGame(state);
-                if (isDuel && (isAdmin || currentPlayer?.playerId === state.duelTempAdminId)) {
+                if (isDuel && isAdmin) {
                     liveHtml = renderDuelControlPanel(state, currentPlayer) + liveHtml;
                 }
                 extraDiv.innerHTML = liveHtml;
@@ -1505,7 +1659,7 @@ if (window._caorenModifiersEnabled !== true) {
                     }
                     html += '</div>';
                 }
-                if (currentPlayer?.playerId === state.duelTempAdminId) {
+                if (isDuel && isAdmin) {
                     html = renderDuelControlPanel(state, currentPlayer) + html;
                 }
                 extraDiv.innerHTML = html;
@@ -1852,15 +2006,15 @@ if (window._caorenModifiersEnabled !== true) {
 
         // 取对应的色彩值，便于显示UI
         function getLevelColor(lbl) {
-            if (!lbl) return '#333';
+            if (!lbl) return 'var(--text-default)';
             const s = lbl.toString().toUpperCase();
-            if (s.includes('1')) return '#00B050';
-            if (s.includes('2')) return '#0070C0';
-            if (s.includes('3')) return '#E36C09';
-            if (s.includes('6')) return '#C00000';
-            if (s.includes('5')) return '#FF0000';
-            if (s.includes('4')) return '#7030A0';
-            return '#333';
+            if (s.includes('1')) return 'var(--task-level-1)';
+            if (s.includes('2')) return 'var(--task-level-2)';
+            if (s.includes('3')) return 'var(--task-level-3)';
+            if (s.includes('6')) return 'var(--task-level-6)';
+            if (s.includes('5')) return 'var(--task-level-5)';
+            if (s.includes('4')) return 'var(--task-level-4)';
+            return 'var(--text-default)';
         }
 
         function formatNDisplayText(value, cell) {
@@ -1871,37 +2025,88 @@ if (window._caorenModifiersEnabled !== true) {
 
         function getTaskStatusBadge(status) {
             const map = {
-                Complete: { text: 'Complete', bg: '#e8f5e9', fg: '#1b5e20', border: '#81c784' },
-                Abandoned: { text: 'Abandoned', bg: '#eeeeee', fg: '#616161', border: '#bdbdbd' },
-                Partial: { text: 'Partial', bg: '#fff8e1', fg: '#e65100', border: '#ffcc80' },
-                Incomplete: { text: 'Incomplete', bg: '#ffebee', fg: '#b71c1c', border: '#ef9a9a' },
+                Complete: { text: '已完成', className: 'complete' },
+                Abandoned: { text: '已放弃', className: 'abandoned' },
+                Partial: { text: '进行中', className: 'progress' },
+                Incomplete: { text: '未完成', className: 'incomplete' },
             };
             const item = map[status] || map.Incomplete;
-            return `<span style="display:inline-block;min-width:86px;text-align:center;padding:2px 8px;border-radius:999px;background:${item.bg};color:${item.fg};border:1px solid ${item.border};font-weight:800;">${item.text}</span>`;
+            return `<span class="task-status-badge task-status-${item.className}">${item.text}</span>`;
         }
+
+        function taskStateClass(cell) {
+            if (cell?.status === 'Abandoned') return 'task-state-abandoned';
+            if (cell?.status === 'Complete') return 'task-state-complete';
+            if (Number(cell?.nValue || 0) > 0 || cell?.status === 'Partial') return 'task-state-progress';
+            return 'task-state-incomplete';
+        }
+
+        function taskLevelClass(cell) {
+            return Number(cell?.level || 0) >= 3 ? ' task-level-strong' : '';
+        }
+
+        function taskActionLabel(action) {
+            const labels = {
+                MARK_COMPLETE: '标记完成', UNDO_COMPLETE: '撤销状态', ABANDON: '放弃任务',
+                REQUEST_HINT: '查看提示', REPLACE: '替换任务', N_ADD: 'N + 1', N_SUB: 'N - 1', N_SET: '设置 N 值'
+            };
+            return labels[action] || action || '任务操作';
+        }
+
+        function renderTaskHistory(cellId, taskActionLog) {
+            const entries = (Array.isArray(taskActionLog) ? taskActionLog : [])
+                .filter(entry => entry.cellId === cellId)
+                .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
+                .slice(0, 6);
+            if (!entries.length) return '';
+            const rows = entries.map(entry => `<li><strong>第 ${Number(entry.round || 0)} 回合 · ${htmlEscape(taskActionLabel(entry.action))}</strong><span>${htmlEscape(formatTaskLogChange(entry))}</span><small>${htmlEscape(formatTaskLogTime(entry.timestamp))}</small></li>`).join('');
+            return `<span class="task-history-shell"><button type="button" class="task-history-trigger" aria-label="查看格子 ${cellId} 的操作历史" onclick="toggleTaskHistory(event, '${cellId}')">◷</button><span class="task-history-popover" role="tooltip"><b>格子 ${cellId} 操作历史</b><ol>${rows}</ol></span></span>`;
+        }
+
+        function toggleTaskHistory(event, cellId) {
+            event.preventDefault();
+            event.stopPropagation();
+            const shell = event.currentTarget?.closest?.('.task-history-shell');
+            document.querySelectorAll('.task-history-shell.open').forEach(item => {
+                if (item !== shell) item.classList.remove('open');
+            });
+            shell?.classList.toggle('open');
+        }
+
+        document.addEventListener('click', event => {
+            if (event.target?.closest?.('.task-history-shell')) return;
+            document.querySelectorAll('.task-history-shell.open').forEach(item => item.classList.remove('open'));
+        });
+        ws.on('TASK_PRESETS', (data) => {
+            window._taskPresets = Array.isArray(data?.presets) ? data.presets : [];
+            renderTaskPresetOptions();
+        });
 
         function renderTaskCell(cellId, cell, options = {}) {
             const clickable = options.clickable === true;
             const compact = options.compact === true;
-            const bgClass = cell?.status === 'Abandoned' ? 'background:#e0e0e0;' : 'background:#fff;';
-            let boxShadow = '';
-            if (cell && cell.borderHistory && cell.borderHistory.length > 0) {
-                boxShadow = cell.borderHistory.map((color, idx) => `0 0 0 ${(idx + 1) * 4}px ${color}`).join(', ');
-            }
+            const stateClass = taskStateClass(cell);
+            const borderHistory = Array.isArray(cell?.borderHistory) ? cell.borderHistory : [];
+            const specialClass = `${borderHistory.includes('blue') ? ' task-special-blue' : ''}${borderHistory.includes('purple') ? ' task-special-purple' : ''}`;
             let titleHtml = '';
             if (cell && cell.levelLabel) {
                 const displayLabel = formatNDisplayText(cell.levelLabel, cell);
                 const color = getLevelColor(displayLabel);
-                titleHtml = `<div style="color:${color}; font-weight:900; font-size:${compact ? '13px' : '16px'}; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${htmlEscape(displayLabel)}】</div>`;
+                titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color}; font-size:${compact ? '13px' : '16px'};">【${htmlEscape(displayLabel)}】</div>`;
             }
             const desc = cell ? renderSafeTaskRichText(formatNDisplayText(cell.description, cell)) : '无';
             const hasN = cell && cell.nType !== 'none' && Number(cell.nValue || 0) > 0;
-            const nInfo = hasN ? `<div style="color:#d32f2f; font-size:${compact ? '12px' : '15px'}; margin-top:8px; font-weight:bold; background:#ffebee; padding:4px; border-radius:4px; width:100%;">当前 N = ${cell.nValue}</div>` : '';
+            const nInfo = hasN ? `<div class="task-n-progress" style="font-size:${compact ? '12px' : '15px'};">当前 N = ${cell.nValue}</div>` : '';
             const roundInfo = cell?.completedRound ? `<div class="task-round-note">完成回合：第 ${cell.completedRound} 回合</div>` : '';
-            const status = cell ? `<div style="margin-top:6px;">${getTaskStatusBadge(cell.status || 'Incomplete')}</div>` : '';
+            const displayStatus = cell?.status === 'Incomplete' && Number(cell?.nValue || 0) > 0 ? 'Partial' : (cell?.status || 'Incomplete');
+            const status = cell ? `<div class="task-status-wrap">${getTaskStatusBadge(displayStatus)}</div>` : '';
+            const hintAvailable = !!String(cell?.hint || '').trim();
+            const hintBadge = hintAvailable ? `<span class="task-hint-availability${cell?.isHintUsed ? ' used' : ''}">${cell?.isHintUsed ? '提示已查看' : '有提示'}</span>` : '';
+            const hintText = hintAvailable && cell?.isHintUsed ? `<div class="task-hint-text"><b>提示：</b>${htmlEscape(String(cell.hint))}</div>` : '';
+            const history = renderTaskHistory(cellId, options.taskActionLog);
             const selectedClass = clickable && window.selectedCellId === cellId ? ' selected' : '';
             const click = clickable ? ` id="cell-${cellId}" onclick="handleCellClick('${cellId}')"` : '';
-            return `<div class="task-cell${selectedClass}" ${click} style="${bgClass} box-shadow: ${boxShadow}; margin: 8px;">${titleHtml}<div class="task-desc" style="flex:1; display:flex; align-items:center; justify-content:center; font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${nInfo}${status}${roundInfo}</div>`;
+            return `<div class="task-cell ${stateClass}${specialClass}${selectedClass}" ${click}>${hintBadge}${history}${titleHtml}<div class="task-desc" style="font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${hintText}${nInfo}${status}${roundInfo}</div>`;
         }
 
         function renderTaskGrid(taskGrid, options = {}) {
@@ -1939,7 +2144,8 @@ if (window._caorenModifiersEnabled !== true) {
 
         function formatTaskLogChange(entry) {
             const parts = [];
-            if (entry.beforeStatus !== entry.afterStatus) parts.push(`${entry.beforeStatus || '-'} -> ${entry.afterStatus || '-'}`);
+            const statusText = status => ({ Complete: '已完成', Partial: '进行中', Incomplete: '未完成', Abandoned: '已放弃' }[status] || status || '-');
+            if (entry.beforeStatus !== entry.afterStatus) parts.push(`${statusText(entry.beforeStatus)} → ${statusText(entry.afterStatus)}`);
             if (Number(entry.beforeNValue || 0) !== Number(entry.afterNValue || 0)) parts.push(`N ${entry.beforeNValue || 0} -> ${entry.afterNValue || 0}`);
             if (entry.beforeCompletedRound !== entry.afterCompletedRound) parts.push(`\u5b8c\u6210\u56de\u5408 ${entry.beforeCompletedRound || '-'} -> ${entry.afterCompletedRound || '-'}`);
             if (!!entry.beforeHintUsed !== !!entry.afterHintUsed) parts.push(`\u63d0\u793a ${entry.beforeHintUsed ? '\u5df2\u7528' : '\u672a\u7528'} -> ${entry.afterHintUsed ? '\u5df2\u7528' : '\u672a\u7528'}`);
@@ -1964,7 +2170,7 @@ if (window._caorenModifiersEnabled !== true) {
                     <td>${htmlEscape(formatTaskLogTime(entry.timestamp))}</td>
                     <td>\u7b2c ${Number(entry.round || 0)} \u56de\u5408</td>
                     <td><b>${htmlEscape(entry.cellId || '-')}</b></td>
-                    <td>${htmlEscape(entry.action || '-')}</td>
+                    <td>${htmlEscape(taskActionLabel(entry.action))}</td>
                     <td>${htmlEscape(formatTaskLogChange(entry))}</td>
                 </tr>`;
             });
@@ -1985,7 +2191,7 @@ if (window._caorenModifiersEnabled !== true) {
             const phase = state?.phase || window._currentGamePhase || 'Lobby';
             const players = state?.players || window._allPlayers || {};
 
-            if (templateBtn) templateBtn.style.display = undercoverEnabled ? '' : 'none';
+            if (templateBtn) templateBtn.style.display = undercoverEnabled && canEditTaskTemplate(state) ? '' : 'none';
 
             if (currentPlayer?.role !== 'Admin') {
                 status.textContent = '只有管理员可以查看卧底任务。';
@@ -2012,7 +2218,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const liveSide = getLiveSide(p) || '未进队';
                 const expected = getExpectedSide(p, state).label;
                 html += `<div class="admin-undercover-task-item"><h5>玩家：${htmlEscape(p.name)} <span>[${p.rosterTeam || '-'}队 / 当前边 ${htmlEscape(liveSide)} / 应在边 ${htmlEscape(expected)}]</span></h5>`;
-                html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                html += renderTaskGrid(p.taskGrid || {}, { compact: true, taskActionLog: p.taskActionLog });
                 html += renderTaskActionLog(p.taskActionLog || [], { title: '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55', limit: 20 });
                 html += '</div>';
             });
@@ -2082,38 +2288,17 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         function renderDuelControlPanel(state, currentPlayer) {
-            if (!currentPlayer) return '';
+            return '';
             const opts = state.matchOptions || {};
             const isDuelMode = opts.matchMode === 'duel';
             const rounds = opts.duelRounds || { pistol: 8, rifle: 16, sniper: 12 };
-            const tempAdmin = state.duelTempAdminId ? state.players?.[state.duelTempAdminId] : null;
-            const canManage = currentPlayer.playerId === state.duelTempAdminId || (!state.duelTempAdminId && currentPlayer.role === 'Admin');
-            const hasPendingAdminDecision = state.duelAdminVote || state.duelAdminRequest || state.duelTerminateRequest;
-            if (state.phase === 'Lobby' && currentPlayer.role === 'Admin' && !state.duelTempAdminId && !hasPendingAdminDecision) {
+            const canManage = currentPlayer.role === 'Admin';
+            if (state.phase === 'Lobby' && !isDuelMode) {
                 return '';
             }
             let html = '<div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:14px;margin:12px 0;">';
             html += '<h3 style="margin-top:0;">单挑模式控制</h3>';
-            if (!isDuelMode) {
-                html += '<p style="color:#64748b;">当前未开启单挑模式。普通玩家仍可申请成为临时单挑管理员；通过后由临时管理员开启并管理单挑模式。</p>';
-            }
-            html += `<p>当前临时管理员：<b>${tempAdmin ? htmlEscape(tempAdmin.name) : '无'}</b></p>`;
-            if (state.duelAdminVote) {
-                const candidate = state.players?.[state.duelAdminVote.candidateId];
-                html += `<p>正在投票：${htmlEscape(candidate?.name || '玩家')} 申请成为临时管理员。</p>`;
-                if (currentPlayer.role !== 'Admin' && currentPlayer.role !== 'Spectator') html += '<button onclick="duelVoteTempAdmin(true)">同意</button>';
-            }
-            if (state.duelAdminRequest && currentPlayer.role === 'Admin') {
-                const candidate = state.players?.[state.duelAdminRequest.candidateId];
-                html += `<p>${htmlEscape(candidate?.name || '玩家')} 申请成为临时管理员。</p><button onclick="duelApproveTempAdmin(true)">同意</button> <button onclick="duelApproveTempAdmin(false)">拒绝</button>`;
-            }
-            if (!state.duelTempAdminId && currentPlayer.role !== 'Admin' && currentPlayer.role !== 'Spectator') {
-                html += '<button onclick="duelRequestTempAdmin()" style="background:#2563eb;color:#fff;">申请成为临时管理员</button> ';
-            }
-            if (state.duelTempAdminId && currentPlayer.role === 'Admin') {
-                html += '<button onclick="duelRevokeTempAdmin()" style="background:#b91c1c;color:#fff;">收回临时管理员</button> ';
-            }
-            if (canManage && (isDuelMode || currentPlayer.playerId === state.duelTempAdminId) && ['Lobby', 'PreGameSetup', 'LiveGame', 'Scoreboard'].includes(state.phase)) {
+            if (canManage && isDuelMode && ['Lobby', 'PreGameSetup', 'LiveGame', 'Scoreboard'].includes(state.phase)) {
                 const currentMap = duelMapByName(opts.duelMap || DUEL_DEFAULT_MAP);
                 const mapOptions = DUEL_MAPS.map(map => `<option value="${htmlEscape(map.name)}" data-workshop-id="${htmlEscape(map.workshopId)}"${map.name === currentMap.name ? ' selected' : ''}>${htmlEscape(map.name)}</option>`).join('');
                 const utilityMode = opts.duelUtilityMode || 'none';
@@ -2129,22 +2314,6 @@ if (window._caorenModifiersEnabled !== true) {
                     html += '</div><div style="margin-top:10px;"><button onclick="duelSetMap()">保存地图</button> <button onclick="duelSetRounds()">保存回合分配</button> <button onclick="duelSetUtilityMode()">保存道具</button></div>';
                     html += `<p id="duel-live-map-workshop-notice" style="margin-top:8px;color:#b45309;line-height:1.6;">${duelWorkshopNoticeHtml(currentMap)}</p>`;
                 }
-                if (currentPlayer.playerId === state.duelTempAdminId) {
-                    const label = state.phase === 'Lobby' ? '\u5f00\u542f\u5355\u6311\u6d41\u7a0b' : (state.phase === 'PreGameSetup' ? '\u8fdb\u5165\u6b63\u5f0f\u5355\u6311' : '\u63a8\u8fdb\u5230\u4e0b\u4e00\u9636\u6bb5');
-                    const undoStatus = state.flowUndoStatus;
-                    const undoLabel = undoStatus?.latest?.actionType === 'ADVANCE_PHASE'
-                        ? `回退到：${phaseDisplayName(undoStatus.targetPhase)}`
-                        : (undoStatus?.latest ? `撤销：${undoStatus.latest.summary}` : '当前没有可撤销操作');
-                    const undoDisabled = undoStatus?.canUndo ? '' : ' disabled';
-                    html += `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;"><button onclick="advancePhase()" style="font-weight:bold;background:#facc15;color:#111827;">${label}</button><button data-flow-undo-action="duel" onclick="undoFlowAction()"${undoDisabled}>${htmlEscape(undoLabel)}</button></div>`;
-                }
-            }
-            if (state.duelTerminateRequest && currentPlayer.role === 'Admin') {
-                const candidate = state.players?.[state.duelTerminateRequest.candidateId];
-                html += `<p style="color:#b91c1c;">${htmlEscape(candidate?.name || '临时管理员')} 申请强制终止单挑游戏。</p><button onclick="duelApproveTerminate(true)">同意终止</button> <button onclick="duelApproveTerminate(false)">拒绝</button>`;
-            }
-            if (currentPlayer.playerId === state.duelTempAdminId && ['LiveGame', 'Scoreboard'].includes(state.phase)) {
-                html += '<div style="margin-top:10px;"><button onclick="duelRequestTerminate()" style="background:#b91c1c;color:#fff;">终止单挑游戏</button></div>';
             }
             html += '</div>';
             return html;
@@ -2463,7 +2632,7 @@ if (window._caorenModifiersEnabled !== true) {
             let html = '<div class="postmatch-panel"><h3 style="margin-top:0;">卧底任务复盘</h3>';
             undercovers.forEach(p => {
                 html += `<div style="margin-top:14px;"><b>${htmlEscape(p.name)} [${p.rosterTeam || '-'}队]</b>`;
-                html += renderTaskGrid(p.taskGrid || {}, { compact: true });
+                html += renderTaskGrid(p.taskGrid || {}, { compact: true, taskActionLog: p.taskActionLog });
                 html += renderTaskActionLog(p.taskActionLog || [], { title: '\u4efb\u52a1\u64cd\u4f5c\u8bb0\u5f55' });
                 html += '</div>';
             });
@@ -2525,7 +2694,7 @@ if (window._caorenModifiersEnabled !== true) {
                 '<span style="font-size:20px; color:#aed581;">' + liveRoundText + '</span> ' +
                 '<button onclick="showRules()" style="background:#455a64; color:#fff; border:1px solid #78909c;">📖 温习规则指引</button></div>';
             if (live.duelWaitingForPlayers) {
-                html += '<div style="background:#eff6ff; border:1px solid #93c5fd; padding:12px; border-radius:6px; margin-bottom:12px; color:#1e3a8a;">单挑准备等待中：游戏内 warmup 倒计时就是等人/分队时间，玩家可以先进服务器，临时管理员可以继续把玩家分到 A/B 队并锁边。倒计时结束后，如果 A/B 双方都有玩家且没有未分队参赛玩家，服务器会重启并从手枪第 1 回合开始；否则自动回到大厅。</div>';
+                html += '<div style="background:#eff6ff; border:1px solid #93c5fd; padding:12px; border-radius:6px; margin-bottom:12px; color:#1e3a8a;">单挑准备等待中：游戏内 warmup 倒计时就是等人/分队时间，玩家可以先进服务器，管理员可以继续把玩家分到 A/B 队并锁边。倒计时结束后，如果 A/B 双方都有玩家且没有未分队参赛玩家，服务器会重启并从手枪第 1 回合开始；否则自动回到大厅。</div>';
             }
             if (live.matchFinished) {
                 const resolvedWinner = resolveLiveWinnerTeam(live, scoreA, scoreB);
@@ -2535,14 +2704,14 @@ if (window._caorenModifiersEnabled !== true) {
 
             if (undercoverEnabled && currentPlayer?.gameRole === 'Undercover') {
                 html += '<h3 style="color:#d32f2f;">你的任务面板</h3>';
-                html += renderTaskGrid(currentPlayer.taskGrid || {}, { clickable: true });
+                html += renderTaskGrid(currentPlayer.taskGrid || {}, { clickable: true, taskActionLog: currentPlayer.taskActionLog });
 
                 html += '<div style="background:#fff3e0; padding:15px; border-radius:6px; border:1px solid #ffcc80; margin-top:20px;">';
                 html += '<p><b>基础状态干预：</b> ' +
                     '<button id="btn-complete" onclick="markComplete()" style="background:#4caf50; color:#fff;">✓ 标记完成</button> ' +
                     '<button id="btn-undo" onclick="undoComplete()">⟲ 撤销状态</button> ' +
                     '<button id="btn-abandon" onclick="abandonTask()" style="background:#9e9e9e; color:#fff;">放弃任务</button> ' +
-                    '<button id="btn-hint" onclick="requestHint()" style="background:#2196f3; color:#fff;">💡 申请提示</button> ' +
+                    '<button id="btn-hint" onclick="requestHint()" style="background:#2196f3; color:#fff;">查看提示</button> ' +
                     '<button id="btn-replace" onclick="replaceTask()" style="background:#9c27b0; color:#fff;">替换任务</button></p>';
                 html += '<p style="margin-top:15px;"><b>动态数值(N)修调：</b> ' +
                     '<button id="btn-n-add" onclick="changeN(\'N_ADD\')" style="font-weight:bold; font-size:16px;">N + 1</button> ' +
@@ -2636,7 +2805,11 @@ if (window._caorenModifiersEnabled !== true) {
             if (btnComplete) btnComplete.disabled = isNTask || isComplete;
             if (btnUndo) btnUndo.disabled = cell.isReplaced || (!isComplete && (!cell.nValue || cell.nValue === 0));
             if (btnAbandon) btnAbandon.disabled = isComplete || abandonCount >= 1;
-            if (btnHint) btnHint.disabled = isComplete || cell.isHintUsed;
+            const hintAvailable = !!String(cell.hint || '').trim();
+            if (btnHint) {
+                btnHint.textContent = !hintAvailable ? '此任务无提示' : (cell.isHintUsed ? '提示已查看' : '查看提示');
+                btnHint.disabled = !hintAvailable || isComplete || cell.isHintUsed;
+            }
             if (btnReplace) btnReplace.disabled = isComplete || cell.isReplaced || replaceCount >= 1;
 
             const canEditN = isNTask && !isComplete;
@@ -2646,33 +2819,34 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         // ===== 全局交互函数 =====
-        function login() {
-            const name = document.getElementById('name-input').value.trim();
-            const extra = document.getElementById('extra-input').value.trim();
-            if (!name && !extra) return alert('请输入昵称，或输入绑定码恢复身份');
-            ws.emit('LOGIN', { name, extraParam: extra || undefined });
-        }
-        function resume() { login(); }
-        function advancePhase() {
+        async function advancePhase() {
             const isDuelMode = window._currentGameState?.matchOptions?.matchMode === 'duel';
             if ((window._currentGamePhase === 'Lobby' || window._currentGamePhase === 'PreGameSetup') && isDuelMode) {
                 const select = document.getElementById('duel-live-map') || document.getElementById('match-option-duel-map');
-                if (!confirmDuelWorkshopReady(selectedDuelMapFromSelect(select))) return;
+                if (!await confirmDuelWorkshopReady(selectedDuelMapFromSelect(select))) return;
             }
             if (window._currentGamePhase === 'PreGameSetup') {
-                const ok = confirm('进入正式比赛后将无法撤销赛前流程，所有撤销记录会立即清空。\n\n确认继续推进吗？');
+                const ok = await caorenConfirm('进入正式比赛后将无法撤销赛前流程，所有撤销记录会立即清空。', {
+                    title: '确认进入正式比赛',
+                    tone: 'danger',
+                    confirmText: '进入正式比赛'
+                });
                 if (!ok) return;
             }
             if (window._currentGamePhase === 'Scoreboard') {
                 const hasScores = Object.values(window._allPlayers || {}).some(p => p.finalScore !== undefined);
                 if (!hasScores) {
-                    const ok = confirm('⚠️ 警告：当前尚未导入 CSV 进行计分，确定要清空现场退回大厅吗？');
+                    const ok = await caorenConfirm('当前尚未导入 CSV 进行计分。继续后会清空现场并退回大厅。', {
+                        title: '尚未完成计分',
+                        tone: 'danger',
+                        confirmText: '仍然返回大厅'
+                    });
                     if (!ok) return;
                 }
             }
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADVANCE_PHASE' });
         }
-        function undoFlowAction() {
+        async function undoFlowAction() {
             const state = window._currentGameState;
             const status = state?.flowUndoStatus;
             if (!status?.canUndo || !status.latest || window._flowUndoRequestPending) {
@@ -2680,10 +2854,14 @@ if (window._caorenModifiersEnabled !== true) {
             }
             const currentPhase = phaseDisplayName(state.phase);
             const targetPhase = phaseDisplayName(status.targetPhase);
-            const prompt = status.latest.actionType === 'ADVANCE_PHASE'
+            const confirmationMessage = status.latest.actionType === 'ADVANCE_PHASE'
                 ? `确定要从“${currentPhase}”回退到“${targetPhase}”吗？\n\n当前阶段之后产生的流程操作将被丢弃，玩家登录和在线状态不会改变。`
                 : `确定撤销「${status.latest.summary}」吗？当前阶段仍为“${currentPhase}”。\n\n当前阶段之后产生的流程操作将被丢弃，玩家登录和在线状态不会改变。`;
-            const ok = confirm(prompt);
+            const ok = await caorenConfirm(confirmationMessage, {
+                title: '确认撤销流程操作',
+                tone: 'danger',
+                confirmText: '确认撤销'
+            });
             if (!ok) return;
             window._flowUndoRequestPending = true;
             document.querySelectorAll('#flow-undo-btn, [data-flow-undo-action]').forEach(item => {
@@ -2699,15 +2877,6 @@ if (window._caorenModifiersEnabled !== true) {
                 },
             });
         }
-        function terminateGame() {
-            const text = prompt('危险操作：这会强制终止本局、踢出所有玩家、清空房间。所有人必须重新进入。请输入 TERMINATE 确认：');
-            if (text !== 'TERMINATE') return;
-            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'TERMINATE_GAME' });
-        }
-        function duelRequestTempAdmin() { ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'REQUEST_TEMP_ADMIN' }); }
-        function duelVoteTempAdmin(agree) { ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'VOTE_TEMP_ADMIN', payload: { agree } }); }
-        function duelApproveTempAdmin(ok) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: ok ? 'DUEL_APPROVE_TEMP_ADMIN' : 'DUEL_REJECT_TEMP_ADMIN' }); }
-        function duelRevokeTempAdmin() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DUEL_REVOKE_TEMP_ADMIN' }); }
         function duelSetMap() {
             const select = document.getElementById('duel-live-map');
             const map = select?.value || DUEL_DEFAULT_MAP;
@@ -2734,28 +2903,13 @@ if (window._caorenModifiersEnabled !== true) {
             const utilityMode = document.getElementById('duel-live-utility-mode')?.value || 'none';
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DUEL_SET_UTILITY_MODE', payload: { utilityMode } });
         }
-        function duelRequestTerminate() {
-            const text = prompt('请输入 TERMINATE 确认终止单挑游戏：');
-            if (text !== 'TERMINATE') return;
-            ws.emit('DUEL_ACTION', { playerId: myPlayerId, action: 'REQUEST_TERMINATE' });
-        }
-        function duelApproveTerminate(ok) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: ok ? 'DUEL_APPROVE_TERMINATE' : 'DUEL_REJECT_TERMINATE' }); }
         Object.assign(window, {
-            login,
-            resume,
             advancePhase,
             undoFlowAction,
-            terminateGame,
-            duelRequestTempAdmin,
-            duelVoteTempAdmin,
-            duelApproveTempAdmin,
-            duelRevokeTempAdmin,
             duelSetMap,
             syncDuelLiveMapNotice,
             duelSetRounds,
             duelSetUtilityMode,
-            duelRequestTerminate,
-            duelApproveTerminate,
         });
         function doRoll() { ws.emit('ROLL', { playerId: myPlayerId, value: Math.floor(Math.random() * 100) + 1 }); }
         function pick(pickedId) { ws.emit('DRAFT_PICK', { playerId: myPlayerId, pickedId }); }
@@ -2763,11 +2917,11 @@ if (window._caorenModifiersEnabled !== true) {
         function setCaptain(team) { const select = document.getElementById('cap' + team + '-select'); if (select && select.value) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_CAPTAIN', payload: { team, playerId: select.value } }); }
         function playAdminAudioCue() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'PLAY_AUDIO_CUE', payload: { cue: 'adminPrompt' } }); }
         function adminAddTestBots(count) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADD_TEST_BOTS', payload: { count } }); }
-        function adminClearTestBots() { if (confirm('确认清理所有网页测试BOT？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'CLEAR_TEST_BOTS' }); }
+        async function adminClearTestBots() { if (await caorenConfirm('所有网页测试 BOT 都会从当前房间移除。', { title: '清理测试 BOT', tone: 'danger', confirmText: '确认清理' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'CLEAR_TEST_BOTS' }); }
         function adminAssignTeam(playerId, team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ASSIGN_ROSTER_TEAM', payload: { playerId, team } }); }
         function adminUnassignTeam(playerId) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UNASSIGN_ROSTER_TEAM', payload: { playerId } }); }
         function adminStartCaptainDraft() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'START_CAPTAIN_DRAFT' }); }
-        function kickPlayer(playerId, name) { if (confirm('确定要踢出玩家：' + name + '？')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
+        async function kickPlayer(playerId, name) { if (await caorenConfirm('玩家“' + name + '”会被移出当前房间。', { title: '确认踢出玩家', tone: 'danger', confirmText: '踢出玩家' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
         function voteMap(map) { ws.emit('VOTE', { playerId: myPlayerId, map }); }
         function adminBanMap(map) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADMIN_BAN_MAP', payload: { map } }); }
         function selectSide(side) { ws.emit('SIDE_PICK', { playerId: myPlayerId, side }); }
@@ -2776,9 +2930,9 @@ if (window._caorenModifiersEnabled !== true) {
         function updateRoleCounts() { const u = parseInt(document.getElementById('undercover-count').value) || 0; const d = parseInt(document.getElementById('detective-count').value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_ROLES_COUNT', payload: { undercoverCount: u, detectiveCount: d } }); }
         function setPlayerRole(playerId) { const sel = document.getElementById('role-select-' + playerId); if (sel) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_PLAYER_ROLE', payload: { playerId, gameRole: sel.value } }); }
         function randomRemainingRoles() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RANDOM_REMAINING_ROLES' }); }
-        function releaseRoles() { if (confirm('确认现在向所有玩家发放身份？发放后玩家只能看到自己的身份。')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RELEASE_ROLES' }); }
+        async function releaseRoles() { if (await caorenConfirm('发放后，每名玩家只能看到自己的身份。', { title: '向所有玩家发放身份', confirmText: '确认发放' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RELEASE_ROLES' }); }
         function updateLiveData() { const scoreA = parseInt(document.getElementById('admin-scoreA')?.value) || 0; const scoreB = parseInt(document.getElementById('admin-scoreB')?.value) || 0; const scoreCT = parseInt(document.getElementById('admin-scoreCT')?.value) || 0; const scoreT = parseInt(document.getElementById('admin-scoreT')?.value) || 0; const round = parseInt(document.getElementById('admin-round')?.value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_LIVE_DATA', payload: { scoreA, scoreB, scoreCT, scoreT, round } }); }
-        function resetFormalMatchCounters() { if (confirm('确认从当前插件回合开始正式统计，并视为正式第 1 回合？这会清零当前正式比分/战绩，请只在正式开赛第一回合使用。')) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RESET_FORMAL_MATCH_COUNTERS' }); }
+        async function resetFormalMatchCounters() { if (await caorenConfirm('当前插件回合会被视为正式第 1 回合，同时清零当前正式比分和战绩。请只在正式开赛第一回合使用。', { title: '重置正式比赛统计', tone: 'danger', confirmText: '确认重置' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RESET_FORMAL_MATCH_COUNTERS' }); }
         function setDetectiveQuestionCount(targetId) { const el = document.getElementById('dq-' + targetId); const count = Math.max(0, Math.min(2, parseInt(el?.value || '0') || 0)); ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_DETECTIVE_QUESTION_COUNT', payload: { playerId: targetId, count } }); }
         function accuse(targetId, type) { ws.emit('ACCUSE', { playerId: myPlayerId, targetId, type }); }
         function uploadCsv() {
@@ -2807,7 +2961,7 @@ if (window._caorenModifiersEnabled !== true) {
 
         function confirmQuit() { document.getElementById('quit-modal').style.display = 'block'; }
         function closeQuit() { document.getElementById('quit-modal').style.display = 'none'; }
-        function doQuit() { const name = document.getElementById('quit-name-input').value.trim(); if (!name) return alert('请输入昵称确认'); ws.emit('PLAYER_QUIT', { playerId: myPlayerId, confirmName: name }); document.getElementById('quit-modal').style.display = 'none'; }
+        function doQuit() { ws.emit('PLAYER_QUIT', { playerId: myPlayerId }); document.getElementById('quit-modal').style.display = 'none'; }
 
         Object.assign(window, {
             doRoll,
@@ -2850,12 +3004,21 @@ if (window._caorenModifiersEnabled !== true) {
         window.abandonTask = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'ABANDON', cellId }); };
         window.requestHint = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REQUEST_HINT', cellId }); };
         window.replaceTask = function () { const cellId = window.selectedCellId; if (!cellId) return showLobbyNotice('请先选中一个格子。', 'error'); ws.emit('TASK_ACTION', { playerId: myPlayerId, action: 'REPLACE', cellId }); };
-        window.changeN = function (action) {
+        window.changeN = async function (action) {
             const cellId = window.selectedCellId;
             if (!cellId) return showLobbyNotice('请先点击一个带 N 的格子。', 'error');
             let nValue = undefined;
             if (action === 'N_SET') {
-                const n = prompt('请输入准确的 N 值 (整数):');
+                const n = await caorenPrompt('请输入准确的整数值。', {
+                    title: '设置任务 N 值',
+                    inputLabel: 'N 值',
+                    inputType: 'number',
+                    inputMode: 'numeric',
+                    min: 0,
+                    step: 1,
+                    required: true,
+                    confirmText: '保存 N 值'
+                });
                 if (n === null) return;
                 nValue = parseInt(n);
                 if (isNaN(nValue)) return showLobbyNotice('请输入有效数字。', 'error');
@@ -2866,7 +3029,10 @@ if (window._caorenModifiersEnabled !== true) {
         // ========== 真·可视化模板编辑器相关 ==========
         function openTemplateModal() {
             if (!window._currentTaskTemplate) return showLobbyNotice('模板尚未加载完成，请稍后再试。', 'error');
+            if (!canEditTaskTemplate(window._currentGameState)) return showLobbyNotice('任务模板只能在大厅或身份发放前修改。', 'error');
             window._editingTemplate = JSON.parse(JSON.stringify(window._currentTaskTemplate));
+            window._taskTemplateHistory?.reset(window._editingTemplate);
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'LIST_TASK_PRESETS' });
             document.getElementById('template-json-textarea').value = JSON.stringify(window._editingTemplate, null, 4);
 
             // 默认选中 A1
@@ -2877,20 +3043,93 @@ if (window._caorenModifiersEnabled !== true) {
 
         function closeTemplateModal() {
             document.getElementById('template-modal').style.display = 'none';
+            if (window._editingTemplate) window._taskTemplateHistory?.reset(window._editingTemplate);
         }
+
+        function renderTaskPresetOptions() {
+            const select = document.getElementById('task-preset-select');
+            if (!select) return;
+            const current = select.value;
+            select.innerHTML = window._taskPresets.map(p => `<option value="${htmlEscape(p.id)}">${htmlEscape(p.name)}${p.system ? '（系统）' : ''}</option>`).join('');
+            if (window._taskPresets.some(p => p.id === current)) select.value = current;
+            updateTaskPresetButtonState();
+        }
+        function updateTaskPresetButtonState() {
+            const preset = window._taskPresets.find(p => p.id === selectedTaskPresetId());
+            const locked = !preset || preset.system;
+            const rename = document.getElementById('task-preset-rename-btn');
+            const remove = document.getElementById('task-preset-delete-btn');
+            if (rename) rename.disabled = locked;
+            if (remove) remove.disabled = locked;
+        }
+        async function createTaskPresetFromEditor() {
+            const name = await caorenPrompt('请输入预设名称。', { title: '另存为任务预设', confirmText: '保存' });
+            if (!name?.trim()) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'CREATE_TASK_PRESET', payload: { name: name.trim(), taskTemplate: window._editingTemplate || window._currentTaskTemplate } });
+        }
+        function selectedTaskPresetId() { return document.getElementById('task-preset-select')?.value || ''; }
+        async function applySelectedTaskPreset() {
+            const id = selectedTaskPresetId(); if (!id) return;
+            if (!await confirmTaskTemplateReplacement()) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'APPLY_TASK_PRESET', payload: { id } }); closeTemplateModal();
+        }
+        async function renameSelectedTaskPreset() {
+            const preset = window._taskPresets.find(p => p.id === selectedTaskPresetId());
+            if (!preset || preset.system) return showLobbyNotice('系统默认预设不能重命名。', 'error');
+            const name = await caorenPrompt('请输入新的预设名称。', { title: '重命名任务预设', defaultValue: preset.name, confirmText: '保存' });
+            if (!name?.trim()) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RENAME_TASK_PRESET', payload: { id: preset.id, name: name.trim() } });
+        }
+        async function deleteSelectedTaskPreset() {
+            const preset = window._taskPresets.find(p => p.id === selectedTaskPresetId());
+            if (!preset || preset.system) return showLobbyNotice('系统默认预设不能删除。', 'error');
+            if (!await caorenConfirm(`确定删除预设“${preset.name}”吗？`, { title: '删除任务预设', tone: 'danger', confirmText: '删除' })) return;
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'DELETE_TASK_PRESET', payload: { id: preset.id } });
+        }
+
+        function applyTaskTemplateHistorySnapshot(snapshot) {
+            if (!snapshot) return;
+            window._editingTemplate = snapshot;
+            document.getElementById('template-json-textarea').value = JSON.stringify(snapshot, null, 4);
+            renderTplPreview();
+            selectTplCell(window._editingCellId || 'A1');
+        }
+
+        function undoTaskTemplateEdit() {
+            applyTaskTemplateHistorySnapshot(window._taskTemplateHistory?.undo());
+        }
+
+        function redoTaskTemplateEdit() {
+            applyTaskTemplateHistorySnapshot(window._taskTemplateHistory?.redo());
+        }
+
+        document.addEventListener('keydown', event => {
+            const modal = document.getElementById('template-modal');
+            if (!modal || modal.style.display === 'none' || !(event.ctrlKey || event.metaKey)) return;
+            if (event.target?.id === 'template-json-textarea') return;
+            const key = String(event.key || '').toLowerCase();
+            if (key === 'z') {
+                event.preventDefault();
+                if (event.shiftKey) redoTaskTemplateEdit();
+                else undoTaskTemplateEdit();
+            } else if (key === 'y') {
+                event.preventDefault();
+                redoTaskTemplateEdit();
+            }
+        });
 
         function switchTemplateTab(tab) {
             if (tab === 'visual') {
                 document.getElementById('template-visual-tab').style.display = 'block';
                 document.getElementById('template-json-tab').style.display = 'none';
-                document.getElementById('btn-tab-visual').style.background = '#e0e0e0';
-                document.getElementById('btn-tab-json').style.background = '#fff';
+                document.getElementById('btn-tab-visual').classList.add('active');
+                document.getElementById('btn-tab-json').classList.remove('active');
             } else {
                 document.getElementById('template-visual-tab').style.display = 'none';
                 document.getElementById('template-json-tab').style.display = 'block';
                 document.getElementById('template-json-textarea').value = JSON.stringify(window._editingTemplate, null, 4);
-                document.getElementById('btn-tab-visual').style.background = '#fff';
-                document.getElementById('btn-tab-json').style.background = '#e0e0e0';
+                document.getElementById('btn-tab-visual').classList.remove('active');
+                document.getElementById('btn-tab-json').classList.add('active');
             }
         }
 
@@ -2907,11 +3146,13 @@ if (window._caorenModifiersEnabled !== true) {
                 let titleHtml = '';
                 if (cell.levelLabel) {
                     const color = getLevelColor(cell.levelLabel);
-                    titleHtml = `<div style="color:${color}; font-weight:900; font-size:16px; margin-bottom:8px; border-bottom:1px solid #eee; width:100%; padding-bottom:5px;">【${htmlEscape(cell.levelLabel)}】</div>`;
+                    titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color};font-size:16px;">【${htmlEscape(cell.levelLabel)}】</div>`;
                 }
                 const nInfo = (cell.nType && cell.nType !== 'none') ? `<div style="color:#d32f2f; font-size:14px; margin-top:8px; font-weight:bold;">[带N任务体系]</div>` : '';
+                const hintInfo = String(cell.hint || '').trim() ? '<span class="task-hint-availability">有提示</span>' : '';
 
                 html += `<div class="task-cell" style="${border} position:relative;" onclick="selectTplCell('${id}')">
+                                ${hintInfo}
                                 ${titleHtml}
                                 <div class="task-desc" style="flex:1; display:flex; align-items:center;"><div>${renderSafeTaskRichText(cell.description || '')}</div></div>
                                 ${nInfo}
@@ -2922,8 +3163,7 @@ if (window._caorenModifiersEnabled !== true) {
 
             const rep = window._editingTemplate.replacementTask || {};
             const isRepSelected = window._editingCellId === 'rep';
-            document.getElementById('tpl-preview-replacement').style.borderColor = isRepSelected ? '#f44336' : '#aaa';
-            document.getElementById('tpl-preview-replacement').style.background = isRepSelected ? '#ffebee' : '#fff';
+            document.getElementById('tpl-preview-replacement').classList.toggle('selected', isRepSelected);
             document.getElementById('tpl-prev-rep-desc').innerHTML = `<span class="task-desc">${renderSafeTaskRichText(rep.description || '')}</span> <span style="color:#888;">(等级 ${htmlEscape(rep.level || 4)})</span>`;
         }
 
@@ -2959,6 +3199,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const rep = window._editingTemplate.replacementTask;
                 document.getElementById('tpl-edit-title').innerHTML = `🔄 正在配置：<b style="color:#7030a0;">备用任务</b>`;
                 document.getElementById('tpl-edit-desc').value = rep.description || '';
+                document.getElementById('tpl-edit-hint').value = rep.hint || '';
                 setTplSelectValue('tpl-edit-level', rep.level || 4, 4);
                 setTplSelectValue('tpl-edit-ntype', 'none', 'none');
                 document.getElementById('tpl-edit-nmax').value = '';
@@ -2969,6 +3210,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const cell = window._editingTemplate.cells[id];
                 document.getElementById('tpl-edit-title').innerHTML = `📝 正在编辑：<b style="color:#1976d2;">格子 ${id}</b>`;
                 document.getElementById('tpl-edit-desc').value = cell.description || '';
+                document.getElementById('tpl-edit-hint').value = cell.hint || '';
                 const type = cell.nType || 'none';
                 setTplSelectValue('tpl-edit-ntype', type, 'none');
                 setTplSelectValue('tpl-edit-level', cell.level || 1, 1);
@@ -2981,18 +3223,20 @@ if (window._caorenModifiersEnabled !== true) {
         };
 
         // 处理编辑框输入
-        window.handleTplInput = function () {
+        window.handleTplInput = function (options = {}) {
             if (!window._editingCellId) return;
             const id = window._editingCellId;
 
             if (id === 'rep') {
                 window._editingTemplate.replacementTask.description = document.getElementById('tpl-edit-desc').value;
+                window._editingTemplate.replacementTask.hint = document.getElementById('tpl-edit-hint').value;
                 window._editingTemplate.replacementTask.level = parseInt(document.getElementById('tpl-edit-level').value) || 4;
             } else {
                 const cell = window._editingTemplate.cells[id];
                 const type = document.getElementById('tpl-edit-ntype').value;
                 const level = parseInt(document.getElementById('tpl-edit-level').value) || 1;
                 cell.description = document.getElementById('tpl-edit-desc').value;
+                cell.hint = document.getElementById('tpl-edit-hint').value;
                 cell.nType = type;
 
                 if (type === 'none') {
@@ -3023,6 +3267,9 @@ if (window._caorenModifiersEnabled !== true) {
                 }
                 syncTplEditorVisibility();
             }
+            const activeField = document.activeElement?.id || 'template-field';
+            const coalesceKey = options.coalesceKey || `${id}:${activeField}`;
+            window._taskTemplateHistory?.record(window._editingTemplate, { coalesceKey, timestamp: Date.now() });
             renderTplPreview(); // 实时更新预览
         };
 
@@ -3046,7 +3293,7 @@ if (window._caorenModifiersEnabled !== true) {
             ta.focus();
             ta.setSelectionRange(start + openTag.length, start + openTag.length + selectedText.length);
 
-            handleTplInput(); // 触发保存与预览更新
+            handleTplInput({ coalesceKey: `format:${Date.now()}` }); // 触发保存与预览更新
         };
 
         function getTemplateExportTarget() {
@@ -3094,6 +3341,7 @@ if (window._caorenModifiersEnabled !== true) {
             try {
                 const parsed = JSON.parse(raw);
                 window._editingTemplate = parsed;
+                window._taskTemplateHistory?.record(window._editingTemplate, { coalesceKey: `load-local:${Date.now()}`, timestamp: Date.now() });
                 document.getElementById('template-json-textarea').value = JSON.stringify(parsed, null, 4);
                 if (document.getElementById('template-visual-tab').style.display !== 'none') {
                     if (!window._editingCellId) window._editingCellId = 'A1';
@@ -3107,18 +3355,26 @@ if (window._caorenModifiersEnabled !== true) {
             }
         }
 
-        function saveTemplate() {
-            if (!confirm("确定要将当前模板应用到服务器吗？如果已有玩家正在查看任务面板，界面会立即刷新。")) return;
+        function confirmTaskTemplateReplacement() {
+            return caorenConfirm('所有卧底的任务会立即重新生成；任务进度、操作记录和确认状态会被清空。已发放身份的卧底页面会立即刷新，并需要重新确认任务。', {
+                title: '确认应用任务模板',
+                tone: 'danger',
+                confirmText: '应用并重置任务'
+            });
+        }
+
+        async function saveTemplate() {
+            if (!await confirmTaskTemplateReplacement()) return;
             ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_TASK_TEMPLATE', payload: { taskTemplate: window._editingTemplate } });
             closeTemplateModal();
         }
 
-        function saveTemplateFromJson() {
+        async function saveTemplateFromJson() {
             try {
                 const text = document.getElementById('template-json-textarea').value;
                 const parsed = JSON.parse(text);
                 if (!parsed.cells || !parsed.lines || !parsed.replacementTask) throw new Error("JSON 结构不完整：缺少 cells / lines / replacementTask");
-                if (!confirm("JSON 校验通过，确定要用这份内容覆盖当前模板吗？")) return;
+                if (!await confirmTaskTemplateReplacement()) return;
                 ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UPDATE_TASK_TEMPLATE', payload: { taskTemplate: parsed } });
                 closeTemplateModal();
             } catch (e) {
@@ -3136,8 +3392,15 @@ if (window._caorenModifiersEnabled !== true) {
             copyTemplateJson,
             saveTemplateToLocal,
             loadTemplateFromLocal,
+            undoTaskTemplateEdit,
+            redoTaskTemplateEdit,
             saveTemplate,
             saveTemplateFromJson,
+            renderTaskPresetOptions,
+            createTaskPresetFromEditor,
+            applySelectedTaskPreset,
+            renameSelectedTaskPreset,
+            deleteSelectedTaskPreset,
         });
 
         // 须知弹窗 (省略不重要的文案，保持原样逻辑即可)
@@ -3154,12 +3417,12 @@ if (window._caorenModifiersEnabled !== true) {
                     '<b style="color:#d32f2f;font-size:20px;">【卧底说明 1/2】</b><br/><br/>' +
                     '1. 目标：在尽量不暴露身份的前提下完成个人任务，并尽可能影响本队表现。<br/>' +
                     '2. 完成任务格可获得分数（分值会随任务等级变化）；达成横、竖、斜三连线时会有额外奖励。<br/>' +
-                    '3. 格子状态说明（最新状态显示在最外层）：<br/>' +
-                    ' - <b style="color:green">绿色包边</b>：已完成 / N值已达成<br/>' +
-                    ' - <b style="color:orange">橙色包边</b>：N任务正在推进(进度未满)<br/>' +
-                    ' - <b style="color:blue">蓝色包边</b>：已使用提示<br/>' +
+                    '3. 格子状态说明：<br/>' +
+                    ' - <b style="color:green">淡绿色底色</b>：已完成 / N值已达成<br/>' +
+                    ' - <b style="color:orange">淡橙色底色</b>：N任务正在推进（N ≥ 1 即可参与连线）<br/>' +
+                    ' - <b style="color:blue">蓝色包边</b>：已查看提示<br/>' +
                     ' - <b style="color:purple">紫色包边</b>：已使用替换任务<br/>' +
-                    ' - 灰暗色调：该任务已放弃',
+                    ' - 灰暗底色：该任务已放弃',
                     '<b style="color:#d32f2f;font-size:20px;">【卧底说明 2/2】</b><br/><br/>' +
                     '4. N 类任务说明：<br/>' +
                     ' - [多回合累计]：在多回合内累计完成即可。<br/>' +

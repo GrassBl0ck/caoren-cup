@@ -57,18 +57,20 @@ namespace CaorenCup.Features
             // 注册 OnTick 监听
             _plugin.RegisterListener<Listeners.OnTick>(OnTick);
             // 注册玩家断开连接清理状态
-            _plugin.RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
-            {
-                var player = @event.Userid;
-                if (player != null && player.IsValid)
-                {
-                    _playerStates[player.Slot] = new PlayerJumpState();
-                }
-                return HookResult.Continue;
-            });
+            _plugin.RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
 
             // 注册多端集成指令
             _plugin.AddCommand("css_dj", "设置二段跳 [0关闭] 或 [t/ct/all] [跳跃次数] [向上推力]", Command_DJ);
+        }
+
+        private HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
+        {
+            var player = @event.Userid;
+            if (player != null && player.IsValid)
+            {
+                _playerStates[player.Slot] = new PlayerJumpState();
+            }
+            return HookResult.Continue;
         }
 
         public void OnConfigParsed(CaorenCupConfig config)
@@ -183,6 +185,9 @@ namespace CaorenCup.Features
 
         // ==================== 核心逻辑 ====================
         private void OnTick()
+            => _plugin.MeasurePerformance("DoubleJump.OnTick", OnTickCore);
+
+        private void OnTickCore()
         {
             if (!_settings.Enabled || _settings.MaxJumps <= 1)
                 return;

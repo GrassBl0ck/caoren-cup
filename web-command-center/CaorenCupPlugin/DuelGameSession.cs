@@ -60,17 +60,11 @@ public sealed class DuelGameSession
         ControlMode = DuelControlMode.WebManaged;
     }
 
-    public bool TryStart(IReadOnlyCollection<DuelParticipant> players, bool confirmWebTakeover, out string error)
+    public bool TryStart(IReadOnlyCollection<DuelParticipant> players, out string error)
     {
         if (ControlMode == DuelControlMode.GameManaged && Lifecycle is DuelLifecycle.Running or DuelLifecycle.Paused)
         {
             error = "游戏内单挑已经在进行。";
-            return false;
-        }
-
-        if (ControlMode == DuelControlMode.WebManaged && !confirmWebTakeover)
-        {
-            error = "检测到网页单挑状态，请输入 /duel start confirm 确认接管。";
             return false;
         }
 
@@ -95,6 +89,17 @@ public sealed class DuelGameSession
         Lifecycle = DuelLifecycle.Running;
         error = string.Empty;
         return true;
+    }
+
+    // Compatibility overload for legacy WebManaged callers; the in-game command uses the one-argument form.
+    public bool TryStart(IReadOnlyCollection<DuelParticipant> players, bool confirmWebTakeover, out string error)
+    {
+        if (ControlMode == DuelControlMode.WebManaged && !confirmWebTakeover)
+        {
+            error = "检测到网页单挑状态，请先清理网页单挑状态。";
+            return false;
+        }
+        return TryStart(players, out error);
     }
 
     public bool TryUpdateConfig(DuelGameConfig next, out string error)

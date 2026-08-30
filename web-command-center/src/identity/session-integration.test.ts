@@ -10,7 +10,7 @@ test('removing a disabled identity clears its current player and roster projecti
         name: 'Fixed Member',
         role: 'Player',
         identityId: 'fixed-identity',
-        membershipId: 'fixed-membership',
+        membershipId: 'login-membership',
         isReady: true,
         rosterTeam: 'A',
     };

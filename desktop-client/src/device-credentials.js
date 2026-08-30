@@ -31,7 +31,10 @@ class DeviceCredentialStore {
       if (!credential || typeof credential.deviceToken !== 'string' || typeof credential.deviceId !== 'string') {
         return { ok: false, reason: 'credential_corrupt' };
       }
-      return { ok: true, credential };
+      return {
+        ok: true,
+        credential: { deviceToken: credential.deviceToken, deviceId: credential.deviceId },
+      };
     } catch (_error) {
       return { ok: false, reason: 'credential_corrupt' };
     }

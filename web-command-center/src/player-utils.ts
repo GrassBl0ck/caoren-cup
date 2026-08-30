@@ -83,9 +83,6 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
     const revealAllPostgame = session.phase === 'Scoreboard';
     const s: any = { ...session };
     s.serverNow = Date.now();
-    s.lobbyAccess = viewer?.role === 'Admin'
-        ? { ...session.lobbyAccess }
-        : { inviteExpiresAt: session.lobbyAccess?.inviteExpiresAt };
     s.players = {};
     for (const [id, p] of Object.entries(session.players)) {
         const revealRole = revealAllPostgame || shouldRevealRoleToViewer(viewer, p, session.rolesReleased);
@@ -93,6 +90,7 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
         const revealTaskActionLog = revealAllPostgame || shouldRevealTaskActionLogToViewer(viewer, p, session.rolesReleased);
         s.players[id] = {
             playerId: p.playerId, name: p.name, role: p.role,
+            isTestBot: p.isTestBot === true,
             identityLevel: p.identityLevel,
             confirmationState: p.confirmationState,
             confirmationReason: viewer?.role === 'Admin' || p.playerId === viewerId ? p.confirmationReason : undefined,
@@ -115,9 +113,14 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
 };
 
 export const sanitizeGameStateForViewer = (session: GameSession, viewerId?: string | null): any => {
-    const state = sanitizeForPublic(session, viewerId);
     const viewer = viewerId ? session.players[viewerId] : undefined;
-    if (viewer && (viewer.role === 'Admin' || session.duelTempAdminId === viewer.playerId)) {
+    if (!viewer) {
+        return {
+            matchStatus: session.phase === 'Lobby' ? 'waiting' : session.phase === 'Scoreboard' ? 'ended' : 'started',
+        };
+    }
+    const state = sanitizeForPublic(session, viewerId);
+    if (viewer?.role === 'Admin') {
         state.flowUndoStatus = getFlowUndoStatus(session, viewer);
     }
     return state;

@@ -97,10 +97,11 @@ public class KillHealFeature : ICaorenFeature
         }
 
         // 解析数值 (缺省25)
-        int amount = 25;
-        if (info.ArgCount >= 3 && int.TryParse(info.GetArg(2), out int parsedAmount))
+        int amount = _settings.HealAmount;
+        if (info.ArgCount >= 3 && !CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), _settings.HealAmount, out amount))
         {
-            amount = parsedAmount;
+            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的变动数值。");
+            return;
         }
 
         if (info.ArgCount >= 4 && player != null)

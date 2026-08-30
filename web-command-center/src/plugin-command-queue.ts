@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { getSession } from './session-manager';
 import { canEnqueueServerCommand } from './match-command-policy';
+import { recordGameActivity } from './game-inactivity-watchdog';
 
 export type BridgeCommandStatus = 'queued' | 'sent' | 'acked';
 
@@ -105,6 +106,7 @@ export const enqueuePluginCommand = (
   };
 
   pluginCommandQueue.push(cmd);
+  recordGameActivity(getSession(), cmd.createdAt);
   return cmd;
 };
 
@@ -137,8 +139,10 @@ export const ackPluginCommand = (commandId: unknown): boolean => {
   const cmd = pluginCommandQueue.find(item => item.id === id);
   if (!cmd) return false;
 
+  const isNewAcknowledgement = cmd.status !== 'acked';
   cmd.status = 'acked';
   cmd.ackedAt = Date.now();
+  if (isNewAcknowledgement) recordGameActivity(getSession(), cmd.ackedAt);
   return true;
 };
 

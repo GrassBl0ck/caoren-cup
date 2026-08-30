@@ -87,8 +87,8 @@ public class MagicFeature : ICaorenFeature
         float radius = _config.Magic.Radius;
         int damage = _config.Magic.Damage;
 
-        if (argCount >= 3) float.TryParse(info.GetArg(2), out radius);
-        if (argCount >= 4) int.TryParse(info.GetArg(3), out damage);
+        if (argCount >= 3 && !CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), radius, out radius)) { if (player != null) CaorenCupUtils.PrintToChat(player, "无效的吸附半径参数。"); return; }
+        if (argCount >= 4 && !CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), damage, out damage)) { if (player != null) CaorenCupUtils.PrintToChat(player, "无效的单次伤害参数。"); return; }
 
         _config.Magic.Enabled = true;
         _config.Magic.Target = targetArg;

@@ -69,6 +69,7 @@ public class CaorenCupConfig : BasePluginConfig
 
     [JsonPropertyName("HpCap")]
     public HpCapSettings HpCap { get; set; } = new HpCapSettings();
+
 }
 
 // ==========================================
@@ -337,6 +338,7 @@ public class AmmoSettings
     public float BulletChance { get; set; } = 50f;  // 不消耗子弹概率 (0-100)
     public float GrenadeChance { get; set; } = 30f; // 不消耗道具概率 (0-100)
 }
+
 public class MagicSettings
 {
     public bool Enabled { get; set; } = false;

@@ -62,23 +62,24 @@ public class WeaponSpeedFeature : ICaorenFeature
         _plugin.RegisterListener<Listeners.OnTick>(OnTick);
         _plugin.RegisterEventHandler<EventWeaponFire>(OnWeaponFire, HookMode.Post);
 
-        _plugin.RegisterEventHandler<EventPlayerSpawn>((@event, info) =>
-        {
-            var p = @event.Userid;
-            if (p != null && p.IsValid && p.Slot >= 0 && p.Slot < _states.Length)
-                _states[p.Slot] = new PlayerWeaponSpeedState();
+        _plugin.RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
+        _plugin.RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
+    }
 
-            return HookResult.Continue;
-        });
+    private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
+    {
+        var p = @event.Userid;
+        if (p != null && p.IsValid && p.Slot >= 0 && p.Slot < _states.Length)
+            _states[p.Slot] = new PlayerWeaponSpeedState();
+        return HookResult.Continue;
+    }
 
-        _plugin.RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
-        {
-            var p = @event.Userid;
-            if (p != null && p.Slot >= 0 && p.Slot < _states.Length)
-                _states[p.Slot] = new PlayerWeaponSpeedState();
-
-            return HookResult.Continue;
-        });
+    private HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
+    {
+        var p = @event.Userid;
+        if (p != null && p.Slot >= 0 && p.Slot < _states.Length)
+            _states[p.Slot] = new PlayerWeaponSpeedState();
+        return HookResult.Continue;
     }
 
     public void OnConfigParsed(CaorenCupConfig config)
@@ -137,13 +138,13 @@ public class WeaponSpeedFeature : ICaorenFeature
             return;
         }
 
-        if (!float.TryParse(info.GetArg(2), out float switchSpeed))
+        if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), _settings.SwitchSpeedPercent, out float switchSpeed))
         {
             Reply(player, "切枪速度数值无效。");
             return;
         }
 
-        if (!float.TryParse(info.GetArg(3), out float fireSpeed))
+        if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(3), _settings.FireSpeedPercent, out float fireSpeed))
         {
             Reply(player, "射击速度数值无效。");
             return;
@@ -187,6 +188,9 @@ public class WeaponSpeedFeature : ICaorenFeature
     }
 
     private void OnTick()
+        => _plugin.MeasurePerformance("WeaponSpeed.OnTick", OnTickCore);
+
+    private void OnTickCore()
     {
         if (!_settings.Enabled) return;
 

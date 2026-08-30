@@ -5,7 +5,8 @@ import test from 'node:test';
 import { IdentityStore } from './identity-store';
 
 const makeStoreDir = (name: string) => {
-    const dir = path.resolve(__dirname, '..', '..', 'runtime', `identity-store-${name}-${process.pid}-${Date.now()}`);
+    const root = process.env.CAOREN_STEP8_DRILL_ROOT || path.resolve(__dirname, '..', '..', 'runtime');
+    const dir = path.resolve(root, `identity-store-${name}-${process.pid}-${Date.now()}`);
     fs.mkdirSync(dir, { recursive: true });
     return dir;
 };
@@ -85,7 +86,7 @@ test('failed persistence keeps the previous in-memory state and the write queue 
     assert.equal(store.snapshot().identities.recovered?.displayName, 'Recovered');
 });
 
-test('schema v1 migrates to v2 without losing identity membership or device token data', async (t) => {
+test('schema v1 migrates to v3 while preserving identities and memberships and clearing device tokens', async (t) => {
     const dir = makeStoreDir('migration');
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const file = path.join(dir, 'identity-store.json');
@@ -95,14 +96,19 @@ test('schema v1 migrates to v2 without losing identity membership or device toke
     const store = new IdentityStore(file);
     await store.load();
     const migrated = store.snapshot();
+    const expectedMemberships = structuredClone(fixture.memberships);
+    delete expectedMemberships.membership.claimedSteamId;
 
-    assert.equal(migrated.schemaVersion, 2);
+    assert.equal(migrated.schemaVersion, 3);
     assert.deepEqual(migrated.identities, fixture.identities);
-    assert.deepEqual(migrated.memberships, fixture.memberships);
-    assert.deepEqual(migrated.deviceTokens, fixture.deviceTokens);
+    assert.deepEqual(migrated.memberships, expectedMemberships);
+    assert.deepEqual(migrated.deviceTokens, {});
+    assert.equal(migrated.accounts.identity?.identityId, 'identity');
+    assert.equal(migrated.accounts.identity?.passwordState, 'recovery_required');
+    assert.equal(migrated.accounts.identity?.password, undefined);
 });
 
-test('a valid schema v1 previous file restores a corrupt primary as schema v2', async (t) => {
+test('a valid schema v1 previous file restores a corrupt primary as schema v3', async (t) => {
     const dir = makeStoreDir('previous-migration');
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const file = path.join(dir, 'identity-store.json');
@@ -112,8 +118,75 @@ test('a valid schema v1 previous file restores a corrupt primary as schema v2', 
     const store = new IdentityStore(file);
     await store.load();
 
-    assert.equal(store.snapshot().schemaVersion, 2);
+    assert.equal(store.snapshot().schemaVersion, 3);
     assert.equal(store.snapshot().identities.identity?.steamId, '76561198000000071');
+});
+
+test('legacy v3 claim and challenge fields load once but are omitted from the next write', async (t) => {
+    const dir = makeStoreDir('legacy-v3-rewrite');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'identity-store.json');
+    const legacyMembership = {
+        membershipId: 'membership',
+        sessionId: 'old-session',
+        identityId: 'identity',
+        nickname: 'Existing Member',
+        identityLevel: 'longTerm',
+        confirmationState: 'confirmed',
+        claimedSteamId: '76561198000000071',
+        claimPersonaName: 'Legacy Claim Name',
+        trustedSteamId: '76561198000000071',
+        challenge: {
+            challengeId: 'legacy-challenge',
+            code: 'legacy-code',
+            expiresAt: 30,
+            failedAttempts: 0,
+        },
+        joinedAt: 10,
+        updatedAt: 20,
+    };
+    fs.writeFileSync(file, JSON.stringify({
+        schemaVersion: 3,
+        identities: {
+            identity: {
+                identityId: 'identity',
+                displayName: 'Existing Member',
+                steamId: '76561198000000071',
+                steamNickname: 'Trusted Steam Name',
+                createdAt: 10,
+                updatedAt: 20,
+            },
+        },
+        accounts: {
+            identity: {
+                identityId: 'identity',
+                loginName: 'Member_A1',
+                enabled: true,
+                passwordState: 'recovery_required',
+                createdAt: 10,
+                updatedAt: 20,
+            },
+        },
+        memberships: { membership: legacyMembership },
+        deviceTokens: {},
+    }), 'utf8');
+
+    const store = new IdentityStore(file);
+    await store.load();
+    assert.deepEqual(store.snapshot().memberships.membership?.challenge, legacyMembership.challenge);
+    assert.equal(store.snapshot().memberships.membership?.claimedSteamId, '76561198000000071');
+
+    await store.mutate((data) => {
+        data.identities.identity.updatedAt = 21;
+    });
+
+    const rewritten = JSON.parse(fs.readFileSync(file, 'utf8')) as {
+        memberships: Record<string, Record<string, unknown>>;
+    };
+    assert.equal(Object.prototype.hasOwnProperty.call(rewritten.memberships.membership, 'claimedSteamId'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(rewritten.memberships.membership, 'claimPersonaName'), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(rewritten.memberships.membership, 'challenge'), false);
+    assert.equal(rewritten.memberships.membership.trustedSteamId, '76561198000000071');
 });
 
 test('unknown schema fails instead of silently creating an empty identity store', async (t) => {
@@ -127,7 +200,7 @@ test('unknown schema fails instead of silently creating an empty identity store'
 });
 
 test('schema v2 rejects a malformed fixed password credential without overwriting the file', async (t) => {
-    const dir = makeStoreDir('malformed-fixed-account');
+    const dir = makeStoreDir('malformed-legacy-account');
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const file = path.join(dir, 'identity-store.json');
     const malformed = {

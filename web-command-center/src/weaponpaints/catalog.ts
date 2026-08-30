@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-import { isWeaponAvailableForTeam, TEAM_EXCLUSIVE_WEAPON_DEF_INDEXES } from './team-policy';
+import { isWeaponAvailableForTeam } from './team-policy';
 
 export type CatalogCategory = 'skin' | 'glove' | 'agent' | 'music' | 'pin' | 'sticker' | 'keychain';
 
@@ -14,6 +14,11 @@ export interface CatalogItem {
     defIndex?: number;
     team?: 2 | 3;
     imageUrl?: string;
+    rarity?: {
+        id: string;
+        name: string;
+        color: string;
+    };
 }
 
 export interface CatalogSearchResult {
@@ -137,6 +142,23 @@ export class WeaponPaintsCatalog {
     static async load(dataRoot: string, imageRoot?: string): Promise<WeaponPaintsCatalog> {
         const normalizedRoot = path.resolve(String(dataRoot || ''));
         const imageIndex = new Map<string, string>();
+        const rarityIndex = new Map<string, CatalogItem['rarity']>();
+        try {
+            const rarityPayload = JSON.parse(await fs.readFile(path.join(normalizedRoot, 'skin-rarities.json'), 'utf8'));
+            if (rarityPayload?.schemaVersion !== 1 || !rarityPayload?.records || typeof rarityPayload.records !== 'object') {
+                throw new Error('skin-rarities.json 格式无效。');
+            }
+            for (const [key, rarity] of Object.entries(rarityPayload.records as Record<string, any>)) {
+                if (!/^\d+:\d+$/.test(key) || !rarity?.id || !/^#[0-9a-f]{6}$/i.test(String(rarity.color || ''))) continue;
+                rarityIndex.set(key, {
+                    id: String(rarity.id),
+                    name: String(rarity.name || ''),
+                    color: String(rarity.color).toLowerCase(),
+                });
+            }
+        } catch (error: any) {
+            if (error?.code !== 'ENOENT') throw error;
+        }
         if (imageRoot) {
             const normalizedImageRoot = path.resolve(imageRoot);
             await Promise.all([
@@ -156,7 +178,8 @@ export class WeaponPaintsCatalog {
                 const localized = chinese.get(item.key.toLowerCase());
                 const localizedItem = localized?.name ? { ...item, name: localized.name } : item;
                 const imageUrl = imageIndex.get(imageIndexKey(category, item.key));
-                return imageUrl ? { ...localizedItem, imageUrl } : localizedItem;
+                const rarity = category === 'skin' ? rarityIndex.get(`${item.defIndex || 0}:${item.id}`) : undefined;
+                return { ...localizedItem, ...(imageUrl ? { imageUrl } : {}), ...(rarity ? { rarity } : {}) };
             }));
         }
         return new WeaponPaintsCatalog(normalizedRoot, categories);
@@ -223,18 +246,6 @@ export class WeaponPaintsCatalog {
 
     isGunDefIndex(defIndex: number): boolean {
         return (this.categories.get('skin') || []).some((item) => item.defIndex === defIndex && !isKnifeItem(item));
-    }
-
-    gunDefIndexes(team?: 2 | 3): number[] {
-        return [...new Set((this.categories.get('skin') || [])
-            .filter((item) => !isKnifeItem(item) && (!team || isWeaponAvailableForTeam(item.defIndex || 0, team)))
-            .map((item) => item.defIndex || 0)
-            .filter(Boolean))];
-    }
-
-    teamExclusiveWeaponDefIndexes(): number[] {
-        const catalogDefIndexes = new Set(this.gunDefIndexes());
-        return TEAM_EXCLUSIVE_WEAPON_DEF_INDEXES.filter((defIndex) => catalogDefIndexes.has(defIndex));
     }
 
     hasWeaponPaint(defIndex: number, paintId: number): boolean {

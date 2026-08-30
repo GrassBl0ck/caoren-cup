@@ -11,10 +11,9 @@ for (const id of ['rules-join', 'rules-modes', 'rules-cs2', 'rules-conduct', 'ru
   assert.ok(html.includes(`id="${id}"`), `缺少规则章节：${id}`);
 }
 for (const text of [
-  '成员账号登录',
-  '使用邀请码加入',
-  '收到成员密码',
-  '收到本场邀请码',
+  '账号密码登录',
+  '使用 <code>!cclogin</code>',
+  '没有账号或忘记凭据',
   '不平衡竞技',
   '卧底模式',
   '.sp 1/3/5/r',
@@ -25,6 +24,9 @@ for (const text of [
 }
 assert.ok(!html.includes('<h3>固定成员</h3>'), '玩家指引不应继续使用固定成员分类标题');
 assert.ok(!html.includes('<h3>临时参赛者</h3>'), '玩家指引不应继续使用临时参赛者分类标题');
+for (const obsolete of ['邀请码', '!cccode', '!ccbind', '输入 SteamID64 与密码']) {
+  assert.ok(!html.includes(obsolete), `赛前指引仍包含旧登录文案：${obsolete}`);
+}
 
 assert.match(html, /href="\/downloads\/caoren-cup-full-rules\.pdf"/);
 assert.ok(!html.includes('/socket.io/socket.io.js'), '公开规则页不应连接 Socket');

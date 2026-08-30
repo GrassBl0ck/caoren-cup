@@ -3,7 +3,7 @@ namespace CaorenCupPlugin;
 public enum DuelAdminCommandKind
 {
     Invalid, Help, Status, Rounds, Time, Utility, Reset,
-    Start, StartConfirm, Pause, Resume, Stop, StopConfirm, Maps, Map
+    Start, Pause, Resume, Stop, Maps, Map
 }
 
 public sealed record DuelAdminCommand(
@@ -40,10 +40,6 @@ public static class DuelAdminCommandParser
                 : new(fixedKind);
         }
 
-        if (values.Length == 2 && verb == "start" && values[1].Equals("confirm", StringComparison.OrdinalIgnoreCase))
-            return new(DuelAdminCommandKind.StartConfirm);
-        if (values.Length == 2 && verb == "stop" && values[1].Equals("confirm", StringComparison.OrdinalIgnoreCase))
-            return new(DuelAdminCommandKind.StopConfirm);
         if (values.Length == 2 && verb == "time" && double.TryParse(values[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var minutes))
             return new(DuelAdminCommandKind.Time, RoundTimeMinutes: minutes);
         if (values.Length == 2 && verb == "utility") return new(DuelAdminCommandKind.Utility, Value: values[1].ToLowerInvariant());

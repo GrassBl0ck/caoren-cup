@@ -1,16 +1,12 @@
 ﻿// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { CellStatus, GamePhase, LiveGameData, Player, PlayerRole, RosterTeam, TaskCell, WsEvents } from './types';
-import { getSession, resetSessionWithPlayers, terminateAndClear } from './session-manager';
+import { CellStatus, GamePhase, GameSession, LiveGameData, Player, RosterTeam, TaskCell, WsEvents } from './types';
+import { getSession, resetSessionWithAdmins, terminateAndClear } from './session-manager';
 import {
     findPlayerById,
-    findPlayerByName,
-    findPlayerByBindCode,
-    normalizeLoginText,
     generateBindCode,
     getGamePlayers,
-    getDuelParticipants,
 } from './player-utils';
 import { calculateScores } from './scoring';
 import {
@@ -32,25 +28,18 @@ import {
     startDraftPickTimer,
     syncPendingDraftOrderWithRoster,
     setRosterLiveSides,
-    extendDuelWaitingIfLateJoin,
     resumeRestoredPregameFlow,
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
 import { ADMIN_PASSWORD } from './game-constants';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import { assignTaskGridToPlayer } from './task-system';
+import { loadTaskPresets, createTaskPreset, renameTaskPreset, deleteTaskPreset } from './task-preset-store';
 import { normalizeDuelMap, normalizeDuelRounds, normalizeDuelUtilityMode, getDuelTotalRounds, resolveDuelMapConfig } from './duel-config';
-import { LobbyInviteGuard, rotateLobbyInvite } from './identity/lobby-access';
-import { lastForwardedValue, socketLoginTicketMatchesSession } from './identity/auth-core';
 import {
-    deviceEnrollmentTickets,
-    fixedAccountAdminTickets,
-    fixedMemberSocketTickets,
     lobbyIdentityService,
-    socketLoginTickets,
-    steamClaimTickets,
+    playerCenterMatchSocketTickets,
 } from './identity/identity-runtime';
-import { applyMembershipToPlayer, attachMembershipToSession } from './identity/session-integration';
 import { registerWeaponPaintsSocketHandlers } from './weaponpaints/socket-api';
 import {
     clearFlowUndoHistory,
@@ -88,14 +77,12 @@ const isDuelWaitingForPlayers = () => {
         session.liveGameData?.duelWaitingForPlayers === true;
 };
 
-const enableDuelModeForTempAdmin = () => {
+const enableDuelMode = () => {
     const session = getSession();
     session.matchOptions.matchMode = 'duel';
     session.matchOptions.undercoverModeEnabled = false;
     clearUndercoverModeState();
 };
-
-const isAdminOnline = () => Object.values(getSession().players).some(p => p.role === 'Admin' && p.isOnline);
 
 const getReadinessBlockers = () => {
     const session = getSession();
@@ -103,11 +90,37 @@ const getReadinessBlockers = () => {
     return players.filter(p => !p.isReady || (p.gameRole === 'Undercover' && p.undercoverTaskAckStage !== 'read'));
 };
 
+const invalidateReleasedRolesForEditing = (session: GameSession) => {
+    if (!session.rolesReleased) return false;
+    session.rolesReleased = false;
+    for (const player of getGamePlayers(session)) {
+        player.isReady = false;
+        player.undercoverTaskAckStage = player.gameRole === 'Undercover' ? 'none' : undefined;
+        delete player.taskGrid;
+        player.taskActionLog = [];
+    }
+    return true;
+};
+
+const roleCountMismatch = (session: GameSession): string | null => {
+    const unrostered = getGamePlayers(session).filter(player => player.rosterTeam !== 'A' && player.rosterTeam !== 'B');
+    if (unrostered.length > 0) return `还有 ${unrostered.length} 名玩家未分入 A/B 队，不能发放身份。`;
+    for (const team of ['A', 'B'] as const) {
+        const players = getGamePlayers(session).filter(player => player.rosterTeam === team);
+        const undercovers = players.filter(player => player.gameRole === 'Undercover').length;
+        const detectives = players.filter(player => player.gameRole === 'Detective').length;
+        if (undercovers !== session.undercoverCount || detectives !== session.detectiveCount) {
+            return `${team}队身份数量不符合目标：需要 ${session.undercoverCount} 名卧底、${session.detectiveCount} 名侦探；当前为 ${undercovers} 名卧底、${detectives} 名侦探。`;
+        }
+    }
+    return null;
+};
+
 const taskActionLabels: Record<string, string> = {
     MARK_COMPLETE: '标记完成',
     UNDO_COMPLETE: '撤销完成',
     ABANDON: '放弃任务',
-    REQUEST_HINT: '申请提示',
+    REQUEST_HINT: '查看提示',
     REPLACE: '替换任务',
     N_ADD: 'N + 1',
     N_SUB: 'N - 1',
@@ -157,91 +170,12 @@ const appendTaskActionLog = (player: Player, cell: TaskCell, cellId: string, act
     });
 };
 
-const clearDuelTransientState = () => {
-    const session = getSession();
-    session.duelAdminVote = undefined;
-    session.duelAdminRequest = undefined;
-    session.duelTerminateRequest = undefined;
-};
-
-const clearDuelTempAdmin = () => {
-    const session = getSession();
-    session.duelTempAdminId = null;
-    clearDuelTransientState();
-};
-
-const isDuelTempAdmin = (playerId: string | undefined | null): boolean => {
-    const session = getSession();
-    return !!playerId && !!session.duelTempAdminId && session.duelTempAdminId === playerId;
-};
-
-const getEffectiveDuelManager = (): Player | undefined => {
-    const session = getSession();
-    if (session.duelTempAdminId) return findPlayerById(session, session.duelTempAdminId);
-    return Object.values(session.players).find(p => p.role === 'Admin');
-};
-
-const canOperateDuel = (player: Player | undefined): boolean => {
-    if (!player) return false;
-    const session = getSession();
-    if (session.duelTempAdminId) return player.playerId === session.duelTempAdminId;
-    return player.role === 'Admin';
-};
-
-const hasDuelParticipantJoined = () => {
-    const session = getSession();
-    if (session.phase !== GamePhase.Lobby) return false;
-    if (!session.duelAdminVote) return false;
-    session.duelAdminVote = undefined;
-    return true;
-};
-
-const setDuelTempAdmin = (playerId: string) => {
-    const session = getSession();
-    const player = findPlayerById(session, playerId);
-    if (!player || player.role === 'Admin' || player.role === 'Spectator') return false;
-    session.duelTempAdminId = playerId;
-    session.duelAdminVote = undefined;
-    session.duelAdminRequest = undefined;
-    return true;
-};
-
-const getDuelAdminElectors = (session: ReturnType<typeof getSession>) => {
-    const participants = getDuelParticipants(session);
-    if (participants.length > 0) return participants;
-    return getGamePlayers(session).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
-};
-
-const finishDuelAdminVoteIfPassed = () => {
-    const session = getSession();
-    const vote = session.duelAdminVote;
-    if (!vote) return;
-    const participants = getDuelAdminElectors(session);
-    if (participants.length === 0) return;
-    const allPassed = participants.every(p => vote.votes[p.playerId] === true);
-    if (allPassed) setDuelTempAdmin(vote.candidateId);
-    return allPassed;
-};
-
-const duelManagedActions = new Set([
-    'ADVANCE_PHASE',
-    'ASSIGN_ROSTER_TEAM',
-    'UNASSIGN_ROSTER_TEAM',
-    'SET_ROSTER_LIVE_SIDES',
-    'UPDATE_LIVE_DATA',
-    'RESET_FORMAL_MATCH_COUNTERS',
-    'DUEL_SET_MAP',
-    'DUEL_SET_ROUNDS',
-    'UNDO_FLOW_ACTION',
-]);
-
 export function registerSocketHandlers(io: SocketIOServer, deps: {
     broadcastState: () => void;
     notifyMessage: (msg: string) => void;
     persistSessionNow?: () => void;
 }) {
     const { broadcastState, notifyMessage, persistSessionNow } = deps;
-    const inviteGuard = new LobbyInviteGuard();
 
     const sendPrivateData = (socketId: string, playerId: string) => {
         const session = getSession();
@@ -277,63 +211,36 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
         broadcastState();
     };
 
-    const socketIsSecureForDeviceEnrollment = (socket: any): boolean => {
-        if (process.env.NODE_ENV !== 'production') return true;
-        if (socket.handshake?.secure === true) return true;
-        const address = String(socket.handshake?.address || '');
-        const trustedLoopbackProxy = process.env.TRUST_PROXY === 'loopback' &&
-            (address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1');
-        return trustedLoopbackProxy &&
-            lastForwardedValue(socket.handshake?.headers?.['x-forwarded-proto'])?.toLowerCase() === 'https';
-    };
-
-    const socketSourceKey = (socket: any): string => {
-        const address = String(socket.handshake?.address || 'unknown');
-        const trustedLoopbackProxy = process.env.TRUST_PROXY === 'loopback' &&
-            (address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1');
-        if (!trustedLoopbackProxy) return address;
-        return lastForwardedValue(socket.handshake?.headers?.['x-forwarded-for']) || address;
-    };
-
-    const offerDeviceEnrollment = (socket: any, identityId: string) => {
-        if (!socketIsSecureForDeviceEnrollment(socket)) {
-            socket.emit(WsEvents.NOTIFICATION, { message: '长期身份已确认，但当前生产地址不是 HTTPS，暂不能保存设备自动登录令牌。' });
-            return;
+    const clearMatchSocketPermissions = (oldSession: ReturnType<typeof getSession>, reason: string, preserveAdmins = false) => {
+        for (const connectedSocket of io.sockets.sockets.values()) {
+            const playerId = String(connectedSocket.data?.playerId || '');
+            const player = playerId ? oldSession.players[playerId] : undefined;
+            if (!player || (preserveAdmins && player.role === 'Admin')) continue;
+            connectedSocket.leave(playerId);
+            connectedSocket.data.playerId = null;
+            connectedSocket.emit(WsEvents.LOGIN_RESPONSE, { success: false, resetClient: true, message: reason });
+            if (connectedSocket.data.identityId) connectedSocket.emit('PLAYER_CENTER_MATCH_ENDED', { message: reason });
         }
-        const enrollment = deviceEnrollmentTickets.issue({ identityId }, 10 * 60 * 1000);
-        socket.emit(WsEvents.DEVICE_ENROLLMENT_READY, {
-            enrollmentCode: enrollment.ticket,
-            expiresAt: enrollment.expiresAt,
-        });
     };
 
     const resetCurrentGame = async (reason: string) => {
         clearAllFlowTimers();
         clearFlowUndoHistory();
-        const oldMembershipIds = new Map(
-            Object.values(getSession().players)
-                .filter((player) => !!player.membershipId)
-                .map((player) => [player.playerId, player.membershipId!] as const),
-        );
-        const newSession = resetSessionWithPlayers(reason);
-        for (const [playerId, oldMembershipId] of oldMembershipIds) {
-            const membership = await lobbyIdentityService.carryMembershipToSession(oldMembershipId, newSession.sessionId);
-            const player = newSession.players[playerId];
-            if (membership && player) applyMembershipToPlayer(player, membership);
-        }
+        const oldSession = getSession();
+        await lobbyIdentityService.leaveSessionMemberships(oldSession.sessionId);
+        clearMatchSocketPermissions(oldSession, reason, true);
+        resetSessionWithAdmins();
         notifyMessage(reason);
         broadcastState();
         persistSessionNow?.();
     };
 
-    const terminateCurrentGameAndKickAll = (reason: string) => {
+    const terminateCurrentGameAndKickAll = async (reason: string) => {
         clearAllFlowTimers();
         clearFlowUndoHistory();
         const oldSession = getSession();
-        for (const playerId of Object.keys(oldSession.players)) {
-            io.to(playerId).emit(WsEvents.LOGIN_RESPONSE, { success: false, resetClient: true, message: reason });
-        }
-        clearDuelTempAdmin();
+        await lobbyIdentityService.leaveSessionMemberships(oldSession.sessionId);
+        clearMatchSocketPermissions(oldSession, reason);
         terminateAndClear();
         notifyMessage(reason);
         broadcastState();
@@ -352,158 +259,36 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             return false;
         };
 
-        socket.on(WsEvents.LOBBY_INVITE_LOGIN, async (data: { inviteCode?: string; nickname?: string; steamClaimTicket?: string }) => {
+        socket.on(WsEvents.PLAYER_CENTER_MATCH_LOGIN, (data: { ticket?: string }) => {
+            const ticket = playerCenterMatchSocketTickets.consume(data?.ticket);
             const session = getSession();
-            const verification = inviteGuard.verify(session.lobbyAccess, socketSourceKey(socket), data?.inviteCode);
-            if (verification.ok === false) {
-                const message = verification.reason === 'rate_limited'
-                    ? `邀请码错误次数过多，请在 ${new Date(verification.retryAt).toLocaleTimeString('zh-CN')} 后重试。`
-                    : (verification.reason === 'expired' ? '本场大厅邀请码已过期，请联系管理员获取新邀请码。' : '本场大厅邀请码无效。');
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message, inviteError: verification.reason });
+            const identityId = String(socket.data.identityId || '');
+            const membership = ticket ? lobbyIdentityService.getMembership(ticket.membershipId) : undefined;
+            const account = ticket ? lobbyIdentityService.getLoginAccount(ticket.identityId) : undefined;
+            const identity = ticket ? lobbyIdentityService.getIdentity(ticket.identityId) : undefined;
+            const player = ticket ? Object.values(session.players).find((candidate) =>
+                candidate.membershipId === ticket.membershipId && candidate.identityId === ticket.identityId,
+            ) : undefined;
+            if (!ticket || !identityId || ticket.identityId !== identityId || ticket.sessionId !== session.sessionId ||
+                !membership || membership.sessionId !== session.sessionId || membership.identityId !== identityId ||
+                membership.leftAt || membership.blockedAt || !account?.enabled || account.passwordState !== 'active' ||
+                !account.password || !identity || !player) {
+                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '比赛登录票据无效或已过期，请回到玩家中心重试。' });
                 return;
             }
-            try {
-                const ticketClaim = data?.steamClaimTicket ? steamClaimTickets.consume(data.steamClaimTicket) : undefined;
-                const directSteamId = String((data as any)?.claimedSteamId || '').trim();
-                if (directSteamId && !/^7656119\d{10}$/.test(directSteamId)) {
-                    socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: 'SteamID64 格式无效。', inviteError: 'steam_id_invalid' });
-                    return;
-                }
-                const steamClaim = directSteamId ? { steamId: directSteamId } : ticketClaim;
-                if (!steamClaim) {
-                    socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '请输入 7656119 开头的 17 位 SteamID64。', inviteError: 'steam_id_required' });
-                    return;
-                }
-                const membership = await lobbyIdentityService.createTemporaryMembership({
-                    sessionId: session.sessionId,
-                    nickname: String(data?.nickname || ''),
-                    steamClaim,
-                });
-                const player = attachMembershipToSession(session, membership);
-                if (!player.bindCode) player.bindCode = generateBindCode();
-                establishSocketIdentity(socket, player, `欢迎，${player.name}！你已作为临时参赛者进入大厅。`);
-            } catch (error) {
-                const reason = error instanceof Error ? error.message : 'temporary_join_failed';
-                const message = reason === 'nickname_in_use'
-                    ? '该昵称已在本场大厅使用，请换一个昵称或使用原设备登录。'
-                    : (reason === 'steam_id_invalid' ? '本机 SteamID 格式无效，已停止提交该声明。' : '无法创建临时参赛身份。');
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message, inviteError: reason });
-            }
-        });
-
-        socket.on(WsEvents.DEVICE_SOCKET_LOGIN, (data: { ticket?: string }) => {
-            const ticket = socketLoginTickets.consume(data?.ticket);
-            if (!ticket) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '设备登录票据无效或已过期，请重新尝试自动登录。' });
-                return;
-            }
-            if (!socketLoginTicketMatchesSession(ticket, getSession().sessionId)) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '当前大厅已换新一轮，请重新尝试设备自动登录。' });
-                return;
-            }
-            const membership = lobbyIdentityService.getMembership(ticket.membershipId);
-            if (!membership || membership.blockedAt || membership.leftAt) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '该身份当前不能进入本场大厅。' });
-                return;
-            }
-            const player = attachMembershipToSession(getSession(), membership);
-            establishSocketIdentity(socket, player, `欢迎回来，${player.name}！已通过设备令牌自动进入当前大厅。`);
-        });
-
-        socket.on(WsEvents.FIXED_MEMBER_SOCKET_LOGIN, (data: { ticket?: string }) => {
-            const ticket = fixedMemberSocketTickets.consume(data?.ticket);
-            if (!ticket || !socketLoginTicketMatchesSession(ticket, getSession().sessionId)) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '固定成员登录票据无效或已过期，请重新输入密码。' });
-                return;
-            }
-            const membership = lobbyIdentityService.getMembership(ticket.membershipId);
-            const identity = membership?.claimedSteamId
-                ? lobbyIdentityService.findIdentityBySteamId(membership.claimedSteamId)
-                : undefined;
-            if (!membership || membership.blockedAt || membership.leftAt ||
-                !identity?.fixedAccount?.enabled || identity.identityId !== membership.identityId) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '该固定成员账户当前不能进入本场大厅。' });
-                return;
-            }
-            const player = attachMembershipToSession(getSession(), membership);
-            if (!player.bindCode) player.bindCode = generateBindCode();
-            establishSocketIdentity(socket, player, `欢迎，${player.name}！已通过固定成员密码进入当前大厅。`);
-        });
-
-        socket.on(WsEvents.STEAM_CONFIRM_CODE, async (data: { code?: string }) => {
-            const session = getSession();
-            const player = socket.data.playerId ? findPlayerById(session, socket.data.playerId) : undefined;
-            if (!player?.membershipId) {
-                socket.emit(WsEvents.NOTIFICATION, { message: '当前身份没有可确认的临时成员记录。' });
-                return;
-            }
-            const membership = lobbyIdentityService.getMembership(player.membershipId);
-            const result = await lobbyIdentityService.confirmChallenge(
-                player.membershipId,
-                data?.code,
-                membership?.claimedSteamId,
-            );
-            if (!result.ok || !result.membership || !result.identity) {
-                const messages: Record<string, string> = {
-                    challenge_not_found: '当前没有待输入的 Steam 确认码。',
-                    challenge_expired: 'Steam 确认码已过期，请等待插件显示新码或使用 !cclogin。',
-                    challenge_invalid: 'Steam 确认码错误。',
-                    steam_mismatch: '服务器 SteamID 与客户端声明不一致，已拒绝绑定。',
-                    steam_already_bound: '该 SteamID 已绑定其他长期身份，请使用旧游戏码或联系管理员。',
-                };
-                socket.emit(WsEvents.NOTIFICATION, { message: messages[result.reason] || 'Steam 身份确认失败。' });
-                return;
-            }
-            const updatedPlayer = attachMembershipToSession(session, result.membership);
-            socket.emit(WsEvents.NOTIFICATION, { message: 'Steam 身份已由游戏服务器确认，长期身份绑定完成。' });
-            sendPrivateData(socket.id, updatedPlayer.playerId);
-            offerDeviceEnrollment(socket, result.identity.identityId);
-            broadcastState();
+            player.isOnline = true;
+            establishSocketIdentity(socket, player, `欢迎，${player.name}！已加入本场比赛。`);
         });
 
         socket.on(WsEvents.IDENTITY_ADMIN_ACTION, async (data: {
             action?: string;
-            membershipId?: string;
             identityId?: string;
             tokenId?: string;
-            operation?: string;
-            steamId?: string;
-            requestId?: string;
         }) => {
             const session = getSession();
             const admin = socket.data.playerId ? findPlayerById(session, socket.data.playerId) : undefined;
             if (!admin || admin.role !== 'Admin') {
                 socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, error: 'admin_required' });
-                return;
-            }
-            if (data?.action === 'ISSUE_FIXED_ACCOUNT_TICKET') {
-                const operations = new Set(['create', 'rename', 'reset_password', 'set_enabled']);
-                if (!operations.has(String(data.operation || ''))) {
-                    socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, action: data.action, requestId: data.requestId, error: 'operation_invalid' });
-                    return;
-                }
-                const operation = data.operation as 'create' | 'rename' | 'reset_password' | 'set_enabled';
-                const steamId = String(data.steamId || '').trim();
-                const identityId = String(data.identityId || '').trim();
-                if ((operation === 'create' && !/^7656119\d{10}$/.test(steamId)) ||
-                    (operation !== 'create' && !identityId)) {
-                    socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, action: data.action, requestId: data.requestId, error: 'target_invalid' });
-                    return;
-                }
-                const issued = fixedAccountAdminTickets.issue({
-                    sessionId: session.sessionId,
-                    adminPlayerId: admin.playerId,
-                    operation,
-                    steamId: operation === 'create' ? steamId : undefined,
-                    identityId: operation === 'create' ? undefined : identityId,
-                }, 30_000);
-                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, {
-                    success: true,
-                    action: data.action,
-                    requestId: data.requestId,
-                    adminTicket: issued.ticket,
-                    expiresAt: issued.expiresAt,
-                });
                 return;
             }
             if (data?.action === 'GET_STATUS') {
@@ -514,41 +299,16 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     identityLevel: membership.identityLevel,
                     confirmationState: membership.confirmationState,
                     confirmationReason: membership.confirmationReason,
-                    claimedSteamIdMasked: membership.claimedSteamId ? `****${membership.claimedSteamId.slice(-4)}` : '',
+                    steamIdMasked: (membership.trustedSteamId || membership.claimedSteamId)
+                        ? `****${(membership.trustedSteamId || membership.claimedSteamId)!.slice(-4)}`
+                        : '',
                     devices: lobbyIdentityService.listDeviceTokens(membership.identityId),
-                }));
-                const fixedAccounts = lobbyIdentityService.listFixedAccounts(session.sessionId).map((account) => ({
-                    identityId: account.identityId,
-                    steamId: account.steamId,
-                    nickname: account.nickname,
-                    enabled: account.enabled,
-                    passwordUpdatedAt: account.passwordUpdatedAt,
-                    membershipId: account.membership?.membershipId,
-                    isOnline: Object.values(session.players).some((player) => player.identityId === account.identityId && player.isOnline),
-                    confirmationState: account.membership?.confirmationState,
-                    confirmationReason: account.membership?.confirmationReason,
-                    blocked: !!account.membership?.blockedAt,
                 }));
                 socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, {
                     success: true,
                     action: data.action,
                     memberships,
-                    fixedAccounts,
-                    lobbyAccess: session.lobbyAccess,
                 });
-                return;
-            }
-            if (data?.action === 'ROTATE_INVITE') {
-                session.lobbyAccess = rotateLobbyInvite(session.lobbyAccess);
-                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: true, action: data.action, lobbyAccess: session.lobbyAccess });
-                broadcastState();
-                return;
-            }
-            if (data?.action === 'CLEAR_CLAIM' && data.membershipId) {
-                const membership = await lobbyIdentityService.clearMembershipClaim(data.membershipId);
-                if (membership) attachMembershipToSession(session, membership);
-                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: !!membership, action: data.action });
-                broadcastState();
                 return;
             }
             if (data?.action === 'REVOKE_ALL_TOKENS' && data.identityId) {
@@ -566,21 +326,18 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
 
         socket.on(WsEvents.LOGIN, (data: { name: string; extraParam?: string }) => {
             const session = getSession();
-            const name = normalizeLoginText(data.name);
-            const extraParam = normalizeLoginText(data.extraParam);
+            const name = String(data?.name || '').trim() || 'Admin';
+            const extraParam = String(data?.extraParam || '').trim();
             if (extraParam !== ADMIN_PASSWORD) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '普通玩家请使用本场邀请码、设备自动登录或游戏内登录码进入。' });
+                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员密码错误。' });
                 return;
             }
-            const existingByBind = findPlayerByBindCode(session, extraParam);
-            const existingByName = findPlayerByName(session, name);
-            const existing = existingByBind || existingByName;
+            const existingByName = Object.values(session.players).find((player) =>
+                player.role === 'Admin' && player.name === name,
+            );
+            const existing = existingByName;
 
             if (existing) {
-                if (existing.role === 'Admin' && extraParam !== ADMIN_PASSWORD && extraParam !== existing.bindCode) {
-                    socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员恢复身份需要输入管理员密码，或输入该管理员账号的绑定码' });
-                    return;
-                }
                 existing.isOnline = true;
                 socket.data.playerId = existing.playerId;
                 socket.join(existing.playerId);
@@ -595,39 +352,18 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 return;
             }
 
-            if (!name) {
-                socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '请输入昵称；如果要恢复身份，也可以输入原昵称或绑定码' });
-                return;
-            }
-
-            let role: PlayerRole = 'Player';
-            if (extraParam === 'spec') role = 'Spectator';
-            else if (extraParam === ADMIN_PASSWORD) role = 'Admin';
-            if (session.phase !== GamePhase.Lobby && role !== 'Admin' && !isDuelWaitingForPlayers()) role = 'Spectator';
-            if (hasDuelParticipantJoined()) notifyMessage('有新玩家加入大厅，单挑临时管理员投票已取消。');
-            if (isDuelMode() && session.duelTempAdminId && role !== 'Admin' && !isDuelWaitingForPlayers()) role = 'Spectator';
-            if (isDuelWaitingForPlayers() && role !== 'Admin') {
-                role = 'Player';
-            }
-
             const playerId = uuidv4();
             const bindCode = generateBindCode();
-            const newPlayer: Player = { playerId, name, role, bindCode, isReady: false, isOnline: true };
-            if (isDuelWaitingForPlayers() && role === 'Player') {
-                newPlayer.gameRole = 'Soldier';
-            }
+            const newPlayer: Player = { playerId, name, role: 'Admin', bindCode, isReady: true, isOnline: true };
             session.players[playerId] = newPlayer;
             session.playerOrder.push(playerId);
             socket.data.playerId = playerId;
             socket.join(playerId);
-            if (isDuelWaitingForPlayers() && role === 'Player') extendDuelWaitingIfLateJoin();
             socket.emit(WsEvents.LOGIN_RESPONSE, {
                 success: true,
                 playerId,
                 bindCode,
-                message: role === 'Spectator' && session.phase !== GamePhase.Lobby
-                    ? `欢迎，${name}！当前对局已经开始，你已作为旁观者加入。你的绑定码是: ${bindCode}`
-                    : `欢迎，${name}！你的绑定码是: ${bindCode}`,
+                message: `管理员 ${name} 登录成功。`,
             });
             sendPrivateData(socket.id, playerId);
             broadcastState();
@@ -637,21 +373,60 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const session = getSession();
             if (!isAuthenticatedActor(data.playerId)) return;
             const admin = findPlayerById(session, data.playerId);
-            const allowDuelManager = duelManagedActions.has(data.action) && canOperateDuel(admin);
-            if (!admin || (admin.role !== 'Admin' && !allowDuelManager)) {
+            if (!admin || admin.role !== 'Admin') {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有管理员才能执行此操作' });
                 return;
             }
-            if (session.duelTempAdminId && admin.role === 'Admin' && duelManagedActions.has(data.action) && data.action !== 'UNDO_FLOW_ACTION') {
-                socket.emit(WsEvents.NOTIFICATION, { message: '当前已有单挑临时管理员，管理员不能直接操作单挑相关设置。' });
+
+            const templateEditable = session.phase === GamePhase.Lobby ||
+                (session.phase === GamePhase.PreGameSetup && !session.rolesReleased);
+            const sendTaskPresets = () => socket.emit('TASK_PRESETS', { presets: loadTaskPresets().map(({ taskTemplate, ...meta }) => meta) });
+            if (data.action === 'LIST_TASK_PRESETS') {
+                sendTaskPresets();
+                return;
+            } else if (['CREATE_TASK_PRESET', 'RENAME_TASK_PRESET', 'DELETE_TASK_PRESET', 'APPLY_TASK_PRESET'].includes(data.action)) {
+                if (!templateEditable) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '任务预设只能在大厅或身份发放前管理。' });
+                    return;
+                }
+                try {
+                    if (data.action === 'CREATE_TASK_PRESET') {
+                        createTaskPreset(data.payload?.name, data.payload?.taskTemplate || session.taskTemplate!);
+                        sendTaskPresets();
+                        socket.emit(WsEvents.NOTIFICATION, { message: '任务预设已保存。' });
+                    } else if (data.action === 'RENAME_TASK_PRESET') {
+                        renameTaskPreset(String(data.payload?.id || ''), data.payload?.name);
+                        sendTaskPresets();
+                        socket.emit(WsEvents.NOTIFICATION, { message: '任务预设名称已更新。' });
+                    } else if (data.action === 'DELETE_TASK_PRESET') {
+                        deleteTaskPreset(String(data.payload?.id || ''));
+                        sendTaskPresets();
+                        socket.emit(WsEvents.NOTIFICATION, { message: '任务预设已删除。' });
+                    } else {
+                        const preset = loadTaskPresets().find(p => p.id === String(data.payload?.id || ''));
+                        if (!preset) throw new Error('预设不存在。');
+                        session.taskTemplate = JSON.parse(JSON.stringify(preset.taskTemplate));
+                        for (const player of getGamePlayers(session)) {
+                            if (player.gameRole !== 'Undercover') continue;
+                            assignTaskGridToPlayer(player, session.taskTemplate);
+                            player.isReady = false;
+                            player.undercoverTaskAckStage = 'none';
+                            player.taskActionLog = [];
+                            player.abandonCount = 0; player.replaceCount = 0; player.hintUsedCount = 0;
+                        }
+                        broadcastState();
+                        socket.emit(WsEvents.NOTIFICATION, { message: `已应用任务预设：${preset.name}。` });
+                    }
+                } catch (error: any) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: error?.message || '任务预设操作失败。' });
+                }
                 return;
             }
 
             if (data.action === 'ADVANCE_PHASE') {
-                const enablesDuelForTempAdmin = !!session.duelTempAdminId && admin.playerId === session.duelTempAdminId;
                 const current = session.phase;
                 let nextPhase: GamePhase | null = null;
-                const duelMode = enablesDuelForTempAdmin || isDuelMode();
+                const duelMode = isDuelMode();
                 switch (current) {
                     case GamePhase.Lobby: nextPhase = duelMode ? GamePhase.PreGameSetup : GamePhase.CaptainSelection; break;
                     case GamePhase.CaptainSelection: nextPhase = GamePhase.Roll; break;
@@ -710,35 +485,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (nextPhase === GamePhase.Scoreboard) {
                     try { calculateScores(session); } catch (err) { console.error('[ADVANCE_PHASE] calculateScores failed:', err); }
                 }
-                const reversibleAdvance = [
-                    GamePhase.Lobby,
-                    GamePhase.CaptainSelection,
-                    GamePhase.Roll,
-                    GamePhase.PlayerDraft,
-                    GamePhase.MapBan,
-                    GamePhase.SidePick,
-                ].includes(current) && nextPhase !== GamePhase.LiveGame;
-                const checkpoint = reversibleAdvance && enablesDuelForTempAdmin
-                    ? pushFlowUndoCheckpoint(session, {
-                        actionType: 'ADVANCE_PHASE',
-                        actorId: admin.playerId,
-                        actorName: admin.name,
-                        summary: `推进阶段：${current} → ${nextPhase}`,
-                    })
-                    : undefined;
-                if (enablesDuelForTempAdmin) enableDuelModeForTempAdmin();
-                const wasScoreboard = String(current) === GamePhase.Scoreboard;
-                const advanced = advancePhase(current, nextPhase, admin.name, admin.playerId, !checkpoint);
+                const advanced = advancePhase(current, nextPhase, admin.name, admin.playerId);
                 if (!advanced) {
-                    if (checkpoint && enablesDuelForTempAdmin) {
-                        const status = getFlowUndoStatus(session, admin);
-                        undoLatestFlowAction(session, admin, {
-                            expectedPhase: session.phase,
-                            expectedHistoryDepth: status.historyDepth,
-                            expectedEntryId: status.latest?.id || '',
-                        });
-                    }
-                    else if (checkpoint) discardFlowUndoCheckpoint(checkpoint.id);
                     socket.emit(WsEvents.NOTIFICATION, { message: '阶段推进未生效，未创建撤销记录。' });
                     return;
                 }
@@ -746,7 +494,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame && !isDuelMode()) {
                     socket.emit(WsEvents.NOTIFICATION, { message: '网页流程已完成。请管理员在游戏内使用 MatchZy .start 开始比赛，网页不会直接重启或开赛。' });
                 }
-                if (wasScoreboard) clearDuelTempAdmin();
                 return;
             }
 
@@ -783,7 +530,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 io.emit('AUDIO_CUE', { cue, source: 'admin', adminName: admin.name });
                 socket.emit(WsEvents.NOTIFICATION, { message: '已向所有网页玩家发送提示音。' });
             } else if (data.action === 'TERMINATE_GAME') {
-                terminateCurrentGameAndKickAll('管理员强制终止本局游戏');
+                await terminateCurrentGameAndKickAll('管理员强制终止本局游戏');
             } else if (data.action === 'FORCE_READY') {
                 if (session.phase === GamePhase.PreGameSetup) {
                     getGamePlayers(session).forEach(p => {
@@ -899,19 +646,38 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 const { playerId: targetId, gameRole } = data.payload || {};
                 const player = findPlayerById(session, targetId);
                 if (player && ['Undercover', 'Detective', 'Soldier'].includes(gameRole)) {
+                    const rolesWereReleased = invalidateReleasedRolesForEditing(session);
                     player.gameRole = gameRole;
                     player.isReady = false;
                     player.undercoverTaskAckStage = gameRole === 'Undercover' ? 'none' : undefined;
                     if (gameRole !== 'Undercover') delete player.taskGrid;
+                    if (rolesWereReleased) {
+                        socket.emit(WsEvents.NOTIFICATION, { message: '身份已撤回。修改完成后需要重新发放身份。' });
+                    }
                     broadcastState();
                 }
             } else if (data.action === 'RANDOM_REMAINING_ROLES') {
-                if (isUndercoverModeEnabled() && session.phase === GamePhase.PreGameSetup) randomRemainingRoles();
+                if (isUndercoverModeEnabled() && session.phase === GamePhase.PreGameSetup) {
+                    const rolesWereReleased = invalidateReleasedRolesForEditing(session);
+                    randomRemainingRoles();
+                    if (rolesWereReleased) {
+                        socket.emit(WsEvents.NOTIFICATION, { message: '身份已撤回并重新补齐。请检查后重新发放身份。' });
+                    }
+                }
             } else if (data.action === 'RELEASE_ROLES') {
                 if (!isUndercoverModeEnabled() || session.phase !== GamePhase.PreGameSetup) return;
+                if (session.rolesReleased) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '身份已经发放，无需重复操作。' });
+                    return;
+                }
                 const unassigned = getGamePlayers(session).filter(p => !p.gameRole);
                 if (unassigned.length > 0) {
                     socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${unassigned.length} 名玩家未分配身份，不能发放。` });
+                    return;
+                }
+                const mismatch = roleCountMismatch(session);
+                if (mismatch) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: mismatch });
                     return;
                 }
                 session.rolesReleased = true;
@@ -1031,6 +797,12 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 if (session.phase === GamePhase.Scoreboard) calculateScores(session);
                 broadcastState();
             } else if (data.action === 'UPDATE_TASK_TEMPLATE') {
+                const templateEditable = session.phase === GamePhase.Lobby ||
+                    (session.phase === GamePhase.PreGameSetup && !session.rolesReleased);
+                if (!templateEditable) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '任务模板只能在大厅或身份发放前修改。' });
+                    return;
+                }
                 if (data.payload?.taskTemplate) {
                     session.taskTemplate = data.payload.taskTemplate;
                     for (const player of getGamePlayers(session)) {
@@ -1052,8 +824,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     broadcastState();
                 }
             } else if (data.action === 'DUEL_SET_MAP') {
-                if (!canOperateDuel(admin)) return;
-                enableDuelModeForTempAdmin();
+                enableDuelMode();
                 if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
                 const map = resolveDuelMapConfig(data.payload?.map, data.payload?.workshopId);
                 session.matchOptions.duelMap = map.name;
@@ -1063,8 +834,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 notifyMessage(`单挑地图已设置为 ${map.name}`);
                 broadcastState();
             } else if (data.action === 'DUEL_SET_ROUNDS') {
-                if (!canOperateDuel(admin)) return;
-                enableDuelModeForTempAdmin();
+                enableDuelMode();
                 if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
                 const rounds = normalizeDuelRounds(data.payload?.rounds);
                 session.matchOptions.duelRounds = rounds;
@@ -1072,8 +842,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 notifyMessage(`单挑回合分配已更新：手枪 ${rounds.pistol} / 步枪 ${rounds.rifle} / 狙击 ${rounds.sniper}`);
                 broadcastState();
             } else if (data.action === 'DUEL_SET_UTILITY_MODE') {
-                if (!canOperateDuel(admin)) return;
-                enableDuelModeForTempAdmin();
+                enableDuelMode();
                 if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return;
                 const utilityMode = normalizeDuelUtilityMode(data.payload?.utilityMode);
                 session.matchOptions.duelUtilityMode = utilityMode;
@@ -1083,32 +852,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                         ? '每回合 4 道具'
                         : `每回合随机 ${utilityMode.replace('random', '')} 道具`;
                 notifyMessage(`单挑道具模式已更新：${label}`);
-                broadcastState();
-            } else if (data.action === 'DUEL_REVOKE_TEMP_ADMIN') {
-                if (admin.role !== 'Admin') return;
-                clearDuelTempAdmin();
-                notifyMessage('管理员已收回单挑临时管理员。');
-                broadcastState();
-            } else if (data.action === 'DUEL_APPROVE_TEMP_ADMIN') {
-                if (admin.role !== 'Admin' || !session.duelAdminRequest) return;
-                if (setDuelTempAdmin(session.duelAdminRequest.candidateId)) {
-                    enableDuelModeForTempAdmin();
-                    const temp = findPlayerById(session, session.duelTempAdminId || '');
-                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
-                    broadcastState();
-                }
-            } else if (data.action === 'DUEL_REJECT_TEMP_ADMIN') {
-                if (admin.role !== 'Admin') return;
-                session.duelAdminRequest = undefined;
-                notifyMessage('管理员已拒绝单挑临时管理员申请。');
-                broadcastState();
-            } else if (data.action === 'DUEL_APPROVE_TERMINATE') {
-                if (admin.role !== 'Admin' || !session.duelTerminateRequest) return;
-                terminateCurrentGameAndKickAll('管理员同意后强制终止单挑游戏');
-            } else if (data.action === 'DUEL_REJECT_TERMINATE') {
-                if (admin.role !== 'Admin') return;
-                session.duelTerminateRequest = undefined;
-                notifyMessage('管理员已拒绝终止单挑游戏。');
                 broadcastState();
             }
         });
@@ -1192,82 +935,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             broadcastState();
         });
 
-        socket.on(WsEvents.DUEL_ACTION, (data: { playerId: string; action: string; payload?: any }) => {
-            const session = getSession();
-            if (!isAuthenticatedActor(data.playerId)) return;
-            const player = findPlayerById(session, data.playerId);
-            if (!player || player.role === 'Admin' || player.role === 'Spectator') return;
-
-            if (data.action === 'REQUEST_TEMP_ADMIN') {
-                if (session.phase !== GamePhase.Lobby) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '只能在大厅阶段申请单挑临时管理员。' });
-                    return;
-                }
-                if (session.duelTempAdminId) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '当前已经有单挑临时管理员。' });
-                    return;
-                }
-                if (isAdminOnline()) {
-                    session.duelAdminRequest = { candidateId: player.playerId, requestedAt: Date.now() };
-                    notifyMessage(`${player.name} 申请成为单挑临时管理员，等待管理员同意。`);
-                    broadcastState();
-                    return;
-                }
-
-                const participants = getDuelAdminElectors(session);
-                if (participants.length === 0) {
-                    const gamePlayers = getGamePlayers(session).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
-                    if (gamePlayers.length > 0 && gamePlayers.every(p => p.playerId === player.playerId)) {
-                        enableDuelModeForTempAdmin();
-                        setDuelTempAdmin(player.playerId);
-                        notifyMessage(`${player.name} 已成为单挑模式临时管理员。`);
-                        broadcastState();
-                        return;
-                    }
-                }
-                if (!participants.some(p => p.playerId === player.playerId)) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '只有当前参赛玩家可以发起单挑临时管理员投票。' });
-                    return;
-                }
-                const timeoutAt = Date.now() + 30000;
-                session.duelAdminVote = {
-                    candidateId: player.playerId,
-                    votes: { [player.playerId]: true },
-                    startedAt: Date.now(),
-                    timeoutAt,
-                };
-                notifyMessage(`${player.name} 发起单挑临时管理员投票，30 秒内需要所有参赛玩家同意。`);
-                setTimeout(() => {
-                    const current = getSession();
-                    if (current.duelAdminVote?.candidateId !== player.playerId || current.duelAdminVote.timeoutAt !== timeoutAt) return;
-                    current.duelAdminVote = undefined;
-                    notifyMessage('单挑临时管理员投票超时，未通过。');
-                    broadcastState();
-                }, 30000);
-                if (finishDuelAdminVoteIfPassed()) {
-                    enableDuelModeForTempAdmin();
-                    const temp = findPlayerById(session, session.duelTempAdminId || '');
-                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
-                }
-                broadcastState();
-            } else if (data.action === 'VOTE_TEMP_ADMIN') {
-                const vote = session.duelAdminVote;
-                if (!vote) return;
-                if (!getDuelAdminElectors(session).some(p => p.playerId === player.playerId)) return;
-                vote.votes[player.playerId] = data.payload?.agree !== false;
-                if (finishDuelAdminVoteIfPassed()) {
-                    enableDuelModeForTempAdmin();
-                    const temp = findPlayerById(session, session.duelTempAdminId || '');
-                    notifyMessage(`${temp?.name || '玩家'} 已成为单挑模式临时管理员。`);
-                }
-                broadcastState();
-            } else if (data.action === 'REQUEST_TERMINATE') {
-                if (!isDuelMode()) return;
-                if (!isDuelTempAdmin(player.playerId)) return;
-                terminateCurrentGameAndKickAll('单挑临时管理员强制终止本局游戏');
-            }
-        });
-
         socket.on('PLAYER_READY', (data: { playerId: string }) => {
             const session = getSession();
             if (!isAuthenticatedActor(data.playerId)) return;
@@ -1343,7 +1010,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     player.abandonCount++;
                     break;
                 case 'REQUEST_HINT':
-                    if (cell.status === 'Complete' || cell.status === 'Abandoned' || cell.isHintUsed) return;
+                    if (cell.status === 'Complete' || cell.status === 'Abandoned' || cell.isHintUsed || !String(cell.hint || '').trim()) return;
                     cell.isHintUsed = true;
                     if (!cell.borderHistory) cell.borderHistory = [];
                     if (!cell.borderHistory.includes('blue')) cell.borderHistory.push('blue');
@@ -1360,9 +1027,12 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     cell.status = 'Incomplete';
                     cell.isReplaced = true;
                     cell.description = repTask.description;
+                    cell.hint = String(repTask.hint || '');
+                    cell.isHintUsed = false;
                     cell.level = repTask.level;
                     cell.levelLabel = repTask.level.toString();
                     if (!cell.borderHistory) cell.borderHistory = [];
+                    cell.borderHistory = cell.borderHistory.filter(color => color !== 'blue');
                     if (!cell.borderHistory.includes('purple')) cell.borderHistory.push('purple');
                     player.replaceCount++;
                     break;
@@ -1412,11 +1082,16 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const target = findPlayerById(session, data.targetId);
             if (!accuser || accuser.role === 'Spectator' || accuser.role === 'Admin') return;
             if (!target || target.role === 'Spectator' || target.role === 'Admin') return;
+            if (data.type !== 'own' && data.type !== 'enemy') return;
+            if (accuser.playerId === target.playerId) return;
+            if (!accuser.rosterTeam || !target.rosterTeam) return;
+            if (data.type === 'own' && accuser.rosterTeam !== target.rosterTeam) return;
+            if (data.type === 'enemy' && accuser.rosterTeam === target.rosterTeam) return;
             if (!session.accusations[data.playerId]) session.accusations[data.playerId] = { own: null, enemy: null };
-            if (data.type === 'own') session.accusations[data.playerId].own = data.targetId;
-            else session.accusations[data.playerId].enemy = data.targetId;
+            if (session.accusations[data.playerId][data.type]) return;
+            session.accusations[data.playerId][data.type] = data.targetId;
             broadcastState();
-            if (getGamePlayers(session).every(p => {
+            if (getGamePlayers(session).filter(player => player.isOnline !== false).every(p => {
                 const a = session.accusations[p.playerId];
                 return a && a.own && a.enemy;
             })) {
@@ -1424,14 +1099,11 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             }
         });
 
-        socket.on('PLAYER_QUIT', async (data: { playerId: string; confirmName: string }) => {
+        socket.on('PLAYER_QUIT', async (data: { playerId: string }) => {
             const session = getSession();
             if (!isAuthenticatedActor(data.playerId)) return;
             const player = findPlayerById(session, data.playerId);
-            if (!player || player.name !== data.confirmName) {
-                socket.emit(WsEvents.NOTIFICATION, { message: '名字不匹配，无法退出' });
-                return;
-            }
+            if (!player) return;
             if (session.phase !== GamePhase.Lobby) {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有在大厅阶段才能退出' });
                 return;
@@ -1449,9 +1121,15 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const session = getSession();
             const playerId = socket.data?.playerId;
             const player = playerId ? findPlayerById(session, playerId) : undefined;
-            if (player) player.isOnline = false;
+            if (player) {
+                player.isOnline = [...io.sockets.sockets.values()].some((candidate) =>
+                    candidate.id !== socket.id && candidate.data?.playerId === playerId,
+                );
+            }
             console.log(`客户端断开: ${socket.id}`);
             broadcastState();
         });
     });
+
+    return { terminateCurrentGameAndKickAll };
 }
