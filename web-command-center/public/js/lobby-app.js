@@ -41,10 +41,12 @@ document.addEventListener('caoren:terminate-confirmed', () => {
 
         const DUEL_MAPS = [
             { name: '5e_akm4_aim_duel', workshopId: '3250543760' },
-            { name: 'aim_redline', workshopId: '3199551320' },
-            { name: '5e_aim_map', workshopId: '3250592791' },
             { name: 'AIM Map', workshopId: '3084291314' },
-            { name: 'aim_awp [CS2 Port]', workshopId: '3444237717' }
+            { name: 'aim_awp [CS2 Port]', workshopId: '3444237717' },
+            { name: 'The_Arena', workshopId: '3529094738' },
+            { name: '5e_awp_space', workshopId: '3250550000' },
+            { name: 'AIM TRAINING DUEL', workshopId: '3714852830' },
+            { name: 'AimDuel', workshopId: '3581460570' }
         ];
 
         function duelMapByName(name) {
@@ -1383,8 +1385,10 @@ if (window._caorenModifiersEnabled !== true) {
                 html += '<div class="map-bp-summary">';
                 html += `<div class="map-bp-summary-card"><span>剩余地图</span><strong>${available.length > 0 ? available.join(' / ') : '无'}</strong></div>`;
                 html += `<div class="map-bp-summary-card"><span>已 Ban</span><strong>${state.bannedMaps.length > 0 ? state.bannedMaps.join(' / ') : '暂无'}</strong></div>`;
-                html += `<div class="map-bp-summary-card"><span>你的状态</span><strong>${canVote ? '轮到你所在队伍，可点击/改选地图' : (myVotedMap ? '已投票：' + myVotedMap + '（可改选）' : '等待当前队伍操作')}</strong></div>`;
-                html += '</div>';
+                 html += `<div class="map-bp-summary-card"><span>你的状态</span><strong>${isAdmin ? '管理员干预已开启' : (canVote ? '轮到你所在队伍，可点击/改选地图' : (myVotedMap ? '已投票：' + myVotedMap + '（可改选）' : '等待当前队伍操作'))}</strong></div>`;
+                 html += '</div>';
+
+                 html += `<div class="bp-action-banner ${isAdmin ? 'admin' : (canVote ? 'active' : 'waiting')}"><strong>${isAdmin ? '管理员干预模式' : (canVote ? `轮到 ${currTeam || '-'} 队操作` : `等待 ${currTeam || '-'} 队完成 Ban`)}</strong><span>${isAdmin ? '未 Ban 地图均可强制操作；普通玩家仍按队伍轮次投票。' : (canVote ? '请选择一张未被 Ban 的地图。' : '未轮到自己队伍时，地图会显示为灰色。')}</span></div>`;
 
                 if (state.mapVote) {
                     html += '<div class="soft-block" style="margin-bottom:14px;">';
@@ -1395,7 +1399,7 @@ if (window._caorenModifiersEnabled !== true) {
 
                 html += '<div class="map-card-grid">';
                 state.mapPool.forEach(m => {
-                    html += renderMapCard(m, state, { canVote, myVote: myVotedMap });
+                    html += renderMapCard(m, state, { canVote, myVote: myVotedMap, isAdmin });
                 });
                 html += '</div>';
 
@@ -1964,10 +1968,12 @@ if (window._caorenModifiersEnabled !== true) {
             const selected = state.selectedMap === map;
             const myVote = options.myVote === map;
             const canVote = options.canVote && !banned && !selected;
+            const adminOverride = options.isAdmin === true && !banned && !selected;
+            const waiting = !banned && !selected && !canVote && !adminOverride;
             const voters = getMapVoters(map, state);
-            const statusClass = selected ? 'selected' : (banned ? 'banned' : (myVote ? 'available' : (canVote ? 'available' : 'waiting')));
-            const cardClass = ['map-card', banned ? 'banned' : '', selected ? 'selected-map' : '', myVote ? 'selected-map my-vote' : '', canVote ? 'clickable' : ''].join(' ');
-            const statusText = selected ? '本局地图' : (banned ? '已 Ban' : (myVote ? '你的选择' : (canVote ? '点击投票' : '等待')));
+            const cardClass = ['map-card', banned ? 'banned' : '', selected ? 'selected-map' : '', myVote ? 'selected-map my-vote' : '', waiting ? 'waiting' : '', canVote ? 'clickable' : ''].join(' ');
+            const statusClass = selected ? 'selected' : (banned ? 'banned' : (myVote ? 'available' : (canVote ? 'available' : (adminOverride ? 'admin' : 'waiting'))));
+            const statusText = selected ? '本局地图' : (banned ? '已 Ban' : (myVote ? '你的选择' : (canVote ? '点击投票' : (adminOverride ? '可强制 Ban' : '等待'))));
             const slug = normalizeMapSlug(map);
             const thumb = getMapThumb(map);
             const click = canVote ? `onclick="voteMap('${escapeAttr(map)}')"` : '';
@@ -1988,8 +1994,10 @@ if (window._caorenModifiersEnabled !== true) {
 
             return `
                 <div class="${cardClass}" ${click} title="${canVote ? '点击 Ban ' + escapeAttr(map) : escapeAttr(map)}">
-                    <div class="map-card-image" style="background-image: linear-gradient(180deg, rgba(15,23,42,.08), rgba(15,23,42,.26)), url('${thumb}');" onerror="this.classList.add('placeholder'); this.style.backgroundImage='linear-gradient(135deg,#334155,#94a3b8)'; this.textContent='${initials}';"></div>
-                    ${banned ? '<div class="map-card-overlay">BANNED</div>' : ''}
+                    <div class="map-card-visual">
+                        <div class="map-card-image" style="background-image: linear-gradient(180deg, rgba(15,23,42,.08), rgba(15,23,42,.26)), url('${thumb}');" onerror="this.classList.add('placeholder'); this.style.backgroundImage='linear-gradient(135deg,#334155,#94a3b8)'; this.textContent='${initials}';"></div>
+                        ${banned ? '<div class="map-card-overlay banned-overlay"><span class="map-card-ban-x" aria-hidden="true">×</span></div>' : ''}
+                    </div>
                     ${selected ? '<div class="map-card-overlay" style="background:rgba(22,101,52,.38);">PICK</div>' : ''}
                     <div class="map-card-body">
                         <div class="map-card-name">

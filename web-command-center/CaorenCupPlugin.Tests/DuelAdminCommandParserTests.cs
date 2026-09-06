@@ -19,12 +19,20 @@ public sealed class DuelAdminCommandParserTests
     }
 
     [Fact]
-    public void Parses_rounds_time_utility_and_map()
+    public void Parses_rounds_time_nades_and_map()
     {
         Assert.Equal((8, 16, 12), DuelAdminCommandParser.Parse(["rounds", "8", "16", "12"]).Rounds);
         Assert.Equal(1.25, DuelAdminCommandParser.Parse(["time", "1.25"]).RoundTimeMinutes);
-        Assert.Equal("random2", DuelAdminCommandParser.Parse(["utility", "random2"]).Value);
+        Assert.Equal("random2", DuelAdminCommandParser.Parse(["nades", "random2"]).Value);
         Assert.Equal("3250543760", DuelAdminCommandParser.Parse(["map", "3250543760"]).Value);
+    }
+
+    [Fact]
+    public void Utility_is_removed_from_the_command_language()
+    {
+        var result = DuelAdminCommandParser.Parse(["utility", "random2"]);
+
+        Assert.Equal(DuelAdminCommandKind.Invalid, result.Kind);
     }
 
     [Fact]

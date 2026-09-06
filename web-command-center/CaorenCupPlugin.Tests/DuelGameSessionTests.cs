@@ -86,19 +86,18 @@ public sealed class DuelGameSessionTests
     }
 
     [Fact]
-    public void Disconnect_pauses_and_reconnect_does_not_auto_resume()
+    public void Disconnect_does_not_pause_and_rounds_continue()
     {
         var session = new DuelGameSession();
         session.TryStart([T(), Ct()], false, out _);
+        session.MarkRoundStarted();
 
-        Assert.True(session.UpdateConnectedPlayers(new HashSet<string> { "ct1" }));
-        Assert.Equal(DuelLifecycle.Paused, session.Lifecycle);
-        Assert.False(session.UpdateConnectedPlayers(new HashSet<string> { "ct1" }));
+        session.UpdateConnectedPlayers(new HashSet<string> { "ct1" });
 
-        Assert.False(session.UpdateConnectedPlayers(new HashSet<string> { "t1", "ct1" }));
-        Assert.Equal(DuelLifecycle.Paused, session.Lifecycle);
-        Assert.True(session.TryResume(out _));
         Assert.Equal(DuelLifecycle.Running, session.Lifecycle);
+        var result = session.RecordRoundEnd(DuelTeam.CounterTerrorist);
+        Assert.True(result.Counted);
+        Assert.Equal(1, result.ScoreCt);
     }
 
     [Fact]
@@ -106,6 +105,7 @@ public sealed class DuelGameSessionTests
     {
         var session = new DuelGameSession();
         session.TryStart([T(), Ct()], false, out _);
+        session.Pause("管理员手动暂停");
         session.UpdateConnectedPlayers(new HashSet<string> { "ct1" });
 
         Assert.False(session.TryResume(out var error));
@@ -129,19 +129,6 @@ public sealed class DuelGameSessionTests
         Assert.True(session.TryStart([T(), Ct()], false, out _));
 
         Assert.False(Assert.IsType<bool>(publishMethod.Invoke(plugin, null)));
-    }
-
-    [Fact]
-    public void Accepted_missing_participants_only_pause_again_for_a_new_disconnect()
-    {
-        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin)
-            .GetMethod("HasNewMissingParticipant", BindingFlags.Static | BindingFlags.NonPublic);
-
-        Assert.NotNull(method);
-        var accepted = new HashSet<string>(StringComparer.Ordinal) { "t2", "ct2" };
-        Assert.False(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2", "ct2" }));
-        Assert.False(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2" }));
-        Assert.True(InvokeHasNewMissingParticipant(method, accepted, new HashSet<string> { "t2", "t1" }));
     }
 
     [Fact]
@@ -196,15 +183,10 @@ public sealed class DuelGameSessionTests
     {
         var session = new DuelGameSession();
         session.TryStart([T("t1"), T("t2"), Ct("ct1"), Ct("ct2")], false, out _);
+        session.Pause("管理员手动暂停");
         session.UpdateConnectedPlayers(new HashSet<string> { "t1", "ct1" });
         Assert.True(session.TryResume(out _));
     }
-
-    private static bool InvokeHasNewMissingParticipant(
-        MethodInfo method,
-        IReadOnlySet<string> accepted,
-        IReadOnlySet<string> current) =>
-        Assert.IsType<bool>(method.Invoke(null, [accepted, current]));
 
     private static MethodInfo GetPrivateStaticMethod(string name)
     {
@@ -329,7 +311,7 @@ public sealed class DuelGameSessionTests
     }
 
     [Theory]
-    [InlineData(8, 16, 5, 1, "none")]
+    [InlineData(0, 0, 0, 1, "none")]
     [InlineData(8, 16, 12, 0.2, "none")]
     [InlineData(8, 16, 12, 1, "unknown")]
     public void Update_config_rejects_invalid_values(int pistol, int rifle, int sniper, double roundTimeMinutes, string utilityMode)
@@ -345,9 +327,9 @@ public sealed class DuelGameSessionTests
     {
         var session = new DuelGameSession();
 
-        Assert.True(session.TryUpdateConfig(new DuelGameConfig(0, 30, 0, 0.25, "random3"), out var error));
+        Assert.True(session.TryUpdateConfig(new DuelGameConfig(0, 1, 0, 0.25, "random3"), out var error));
         Assert.Equal(string.Empty, error);
-        Assert.Equal(new DuelGameConfig(0, 30, 0, 0.25, "random3"), session.Config);
+        Assert.Equal(new DuelGameConfig(0, 1, 0, 0.25, "random3"), session.Config);
     }
 
     [Fact]
