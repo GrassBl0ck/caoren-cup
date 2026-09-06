@@ -15,7 +15,7 @@
     "test:undercover-logic": "tsx --test src/undercover-logic.test.ts",
     "test:undercover-task-ui": "node scripts/check-undercover-task-ui.cjs && node scripts/check-task-template-history.cjs",
     "test:match-command-policy": "tsx src/match-command-policy.test.ts",
-    "test:duel-runtime": "tsx --test src/duel-runtime-config.test.ts",
+    "test:duel-runtime": "tsx --test src/duel-config.test.ts",
     "test:duel-admin-only": "node scripts/check-duel-admin-only.cjs",
     "test:player-center-ui": "node scripts/check-player-center-ui.cjs",
     "test:legacy-login-removed": "node scripts/check-legacy-player-login-removed.cjs",

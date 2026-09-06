@@ -1457,8 +1457,17 @@
                 }
 
             .map-card.banned {
-                opacity: .58;
-                filter: grayscale(1);
+                opacity: 1;
+            }
+
+            .map-card.banned .map-card-body {
+                opacity: .78;
+            }
+
+            .map-card.waiting {
+                background: #eef2f7;
+                opacity: .62;
+                filter: grayscale(.72);
             }
 
             .map-card.selected-map {
@@ -1536,6 +1545,59 @@
                 border-color: #e2e8f0;
             }
 
+            .map-card-status.admin {
+                color: #7c2d12;
+                background: #ffedd5;
+                border-color: #fdba74;
+            }
+
+        .bp-action-banner {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 0 0 16px;
+            padding: 14px 16px;
+            border-radius: 14px;
+            border: 2px solid #cbd5e1;
+            background: #f1f5f9;
+        }
+
+            .bp-action-banner strong {
+                font-size: 18px;
+                color: #334155;
+                white-space: nowrap;
+            }
+
+            .bp-action-banner span {
+                color: #64748b;
+                font-size: 14px;
+            }
+
+            .bp-action-banner.active {
+                border-color: #f97316;
+                background: linear-gradient(90deg, #fff7ed, #fffbeb);
+                box-shadow: 0 8px 20px rgba(249, 115, 22, .12);
+            }
+
+                .bp-action-banner.active strong { color: #c2410c; }
+
+            .bp-action-banner.admin {
+                border-color: #a855f7;
+                background: #faf5ff;
+            }
+
+                .bp-action-banner.admin strong { color: #7e22ce; }
+
+        @media (max-width: 720px) {
+            .bp-action-banner {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 4px;
+            }
+
+                .bp-action-banner strong { white-space: normal; }
+        }
+
             .map-card-status.banned {
                 color: #334155;
                 background: #e2e8f0;
@@ -1547,6 +1609,10 @@
                 background: #dcfce7;
                 border-color: #bbf7d0;
             }
+
+        .map-card-visual {
+            position: relative;
+        }
 
         .map-card-overlay {
             position: absolute;
@@ -1561,6 +1627,22 @@
             background: rgba(15, 23, 42, .42);
             text-shadow: 0 3px 12px rgba(0,0,0,.35);
         }
+
+            .map-card-overlay.banned-overlay {
+                flex-direction: column;
+                gap: 0;
+                background: rgba(185, 28, 28, .58);
+            }
+
+            .map-card-ban-x {
+                display: block;
+                color: #fecaca;
+                font-size: clamp(96px, 12vw, 156px);
+                font-weight: 300;
+                line-height: .72;
+                text-shadow: 0 3px 10px rgba(69, 10, 10, .6);
+            }
+
 
         .map-vote-list {
             margin: 10px 0 0;
@@ -1826,6 +1908,14 @@
             .draft-player-card.pickable {
                 cursor: pointer;
                 border-color: #93c5fd;
+                background: #eff6ff;
+                box-shadow: 0 10px 24px rgba(37, 99, 235, .12);
+            }
+
+            .draft-player-card:not(.pickable) {
+                background: #eef2f7;
+                opacity: .68;
+                filter: grayscale(.55);
             }
 
                 .draft-player-card.pickable:hover {
@@ -3424,6 +3514,35 @@ body[data-theme="dark"] .map-card {
     box-shadow: 0 12px 26px rgba(0, 0, 0, 0.24);
 }
 
+body[data-theme="dark"] .map-card.waiting {
+    background: #202b3d !important;
+    opacity: .62;
+}
+
+body[data-theme="dark"] .bp-action-banner {
+    background: #202b3d !important;
+    border-color: #40516b !important;
+}
+
+body[data-theme="dark"] .bp-action-banner strong,
+body[data-theme="dark"] .bp-action-banner span {
+    color: var(--text) !important;
+}
+
+body[data-theme="dark"] .bp-action-banner.active {
+    background: rgba(249, 115, 22, .16) !important;
+    border-color: rgba(251, 146, 60, .72) !important;
+}
+
+body[data-theme="dark"] .bp-action-banner.active strong { color: #fed7aa !important; }
+
+body[data-theme="dark"] .bp-action-banner.admin {
+    background: rgba(168, 85, 247, .16) !important;
+    border-color: rgba(192, 132, 252, .72) !important;
+}
+
+body[data-theme="dark"] .bp-action-banner.admin strong { color: #e9d5ff !important; }
+
 body[data-theme="dark"] .map-card-image {
     border-color: #334155 !important;
 }
@@ -3546,6 +3665,12 @@ body[data-theme="dark"] .hltv-style-table thead th {
 
 body[data-theme="dark"] .hltv-style-table .team-heading {
     color: #d5dde6 !important;
+}
+
+body[data-theme="dark"] .map-card-status.admin {
+    background: rgba(249, 115, 22, .18) !important;
+    border-color: rgba(251, 146, 60, .5) !important;
+    color: #fed7aa !important;
 }
 
 body[data-theme="dark"] .funfact-card {

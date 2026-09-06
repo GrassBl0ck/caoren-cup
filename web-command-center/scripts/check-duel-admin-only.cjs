@@ -42,5 +42,14 @@ const lobby = fs.readFileSync(path.join(root, 'public/js/lobby-app.js'), 'utf8')
 if (!lobby.includes("const canManage = currentPlayer.role === 'Admin';")) {
   throw new Error('duel controls must be restricted to the official administrator');
 }
+if (!lobby.includes('const click = canVote ? `onclick="voteMap(\'${escapeAttr(map)}\')"` : \'\';')) {
+  throw new Error('map cards must remain ordinary team-vote controls');
+}
+if (lobby.includes('const canInteract = canVote || adminOverride;') || lobby.includes("adminOverride ? 'adminBanMap' : 'voteMap'")) {
+  throw new Error('administrator map cards must not duplicate the force-ban controls');
+}
+if (!lobby.includes('onclick="adminBanMap(\'${m}\')"')) {
+  throw new Error('administrator force-ban controls must remain in the dedicated button row');
+}
 
 console.log('Duel official-admin-only regression check passed.');

@@ -2,7 +2,7 @@ namespace CaorenCupPlugin;
 
 public enum DuelAdminCommandKind
 {
-    Invalid, Help, Status, Rounds, Time, Utility, Reset,
+    Invalid, Help, Status, Rounds, Time, Nades, Reset,
     Start, Pause, Resume, Stop, Maps, Map
 }
 
@@ -42,7 +42,7 @@ public static class DuelAdminCommandParser
 
         if (values.Length == 2 && verb == "time" && double.TryParse(values[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var minutes))
             return new(DuelAdminCommandKind.Time, RoundTimeMinutes: minutes);
-        if (values.Length == 2 && verb == "utility") return new(DuelAdminCommandKind.Utility, Value: values[1].ToLowerInvariant());
+        if (values.Length == 2 && verb == "nades") return new(DuelAdminCommandKind.Nades, Value: values[1].ToLowerInvariant());
         if (values.Length >= 2 && verb == "map") return new(DuelAdminCommandKind.Map, Value: string.Join(' ', values.Skip(1)));
         if (values.Length == 4 && verb == "rounds" && int.TryParse(values[1], out var pistol) && int.TryParse(values[2], out var rifle) && int.TryParse(values[3], out var sniper))
             return new(DuelAdminCommandKind.Rounds, (pistol, rifle, sniper));

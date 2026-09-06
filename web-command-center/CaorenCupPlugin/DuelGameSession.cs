@@ -116,9 +116,9 @@ public sealed class DuelGameSession
             return false;
         }
 
-        if (next.TotalRounds < 30)
+        if (next.TotalRounds < 1)
         {
-            error = "总回合数必须至少为 30。";
+            error = "总回合数必须至少为 1。";
             return false;
         }
 
@@ -185,7 +185,7 @@ public sealed class DuelGameSession
         return new(true, finished, ScoreT, ScoreCt);
     }
 
-    public bool UpdateConnectedPlayers(IReadOnlySet<string> connectedSteamIds)
+    public void UpdateConnectedPlayers(IReadOnlySet<string> connectedSteamIds)
     {
         _connected.Clear();
         foreach (var steamId in connectedSteamIds)
@@ -195,14 +195,6 @@ public sealed class DuelGameSession
                 _connected.Add(steamId);
             }
         }
-
-        if (Lifecycle != DuelLifecycle.Running || _participants.Keys.All(_connected.Contains))
-        {
-            return false;
-        }
-
-        Pause("有参赛玩家掉线");
-        return true;
     }
 
     public bool TryResume(out string error)

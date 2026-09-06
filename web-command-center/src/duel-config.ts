@@ -6,16 +6,18 @@ export const DUEL_DEFAULT_ROUND_TIME_MINUTES = Math.max(0.25, Number(process.env
 export const DUEL_DEFAULT_PISTOL_ROUNDS = normalizeDuelStageRounds(process.env.DUEL_DEFAULT_PISTOL_ROUNDS, 8);
 export const DUEL_DEFAULT_RIFLE_ROUNDS = normalizeDuelStageRounds(process.env.DUEL_DEFAULT_RIFLE_ROUNDS, 16);
 export const DUEL_DEFAULT_SNIPER_ROUNDS = normalizeDuelStageRounds(process.env.DUEL_DEFAULT_SNIPER_ROUNDS, 12);
-export const DUEL_MIN_TOTAL_ROUNDS = 30;
+export const DUEL_MIN_TOTAL_ROUNDS = 1;
 export const DUEL_DEFAULT_UTILITY_MODE: DuelUtilityMode = 'none';
 export const DUEL_UTILITY_MODES: DuelUtilityMode[] = ['none', 'random1', 'random2', 'random3', 'full'];
 
 export const DUEL_WORKSHOP_MAPS: DuelMapConfig[] = [
     { id: '5e_akm4_aim_duel_3250543760', name: '5e_akm4_aim_duel', workshopId: '3250543760', command: 'host_workshop_map 3250543760' },
-    { id: 'aim_redline_3199551320', name: 'aim_redline', workshopId: '3199551320', command: 'host_workshop_map 3199551320' },
-    { id: '5e_aim_map_3250592791', name: '5e_aim_map', workshopId: '3250592791', command: 'host_workshop_map 3250592791' },
     { id: 'aim_map_3084291314', name: 'AIM Map', workshopId: '3084291314', command: 'host_workshop_map 3084291314' },
     { id: 'aim_awp_3444237717', name: 'aim_awp [CS2 Port]', workshopId: '3444237717', command: 'host_workshop_map 3444237717' },
+    { id: 'the_arena_3529094738', name: 'The_Arena', workshopId: '3529094738', command: 'host_workshop_map 3529094738' },
+    { id: '5e_awp_space_3250550000', name: '5e_awp_space', workshopId: '3250550000', command: 'host_workshop_map 3250550000' },
+    { id: 'aim_training_duel_3714852830', name: 'AIM TRAINING DUEL', workshopId: '3714852830', command: 'host_workshop_map 3714852830' },
+    { id: 'aimduel_3581460570', name: 'AimDuel', workshopId: '3581460570', command: 'host_workshop_map 3581460570' },
 ];
 
 export const DUEL_MAP_POOL = DUEL_WORKSHOP_MAPS.map(map => map.name);

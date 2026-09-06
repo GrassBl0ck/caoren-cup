@@ -76,9 +76,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, string> _duelCurrentSecondary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingAwpRequest> _duelAwpRequests = new(StringComparer.Ordinal);
     private int _duelLoadoutGeneration;
-    private readonly HashSet<string> _gameManagedDuelAcceptedMissingSteamIds = new(StringComparer.Ordinal);
     private bool _gameManagedDuelRuntimeActive;
-    private bool _gameManagedDuelReconnectReadyAnnounced;
     private bool _duelCvarRestorePending;
     private volatile bool _isUnloading;
     private bool _hasSuccessfulLobbyStateSync;
@@ -136,11 +134,13 @@ public sealed class CaorenCupPlugin : BasePlugin
 };
     private static readonly DuelWorkshopMap[] DuelWorkshopMaps =
     [
-        new("aim_redline", "3199551320"),
         new("5e_akm4_aim_duel", "3250543760"),
-        new("5e_aim_map", "3250592791"),
         new("AIM Map", "3084291314"),
         new("aim_awp [CS2 Port]", "3444237717"),
+        new("The_Arena", "3529094738"),
+        new("5e_awp_space", "3250550000"),
+        new("AIM TRAINING DUEL", "3714852830"),
+        new("AimDuel", "3581460570"),
     ];
     private static readonly Dictionary<string, string> DuelWeaponAliases = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -198,6 +198,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_guns", "查看单挑模式可切换枪械。用法：/guns", OnDuelGunsCommand);
         AddCommand("css_agree_awp", "同意对方在步枪阶段使用 AWP。用法：/agree_awp", OnDuelAgreeAwpCommand);
         AddCommand("css_duel", "游戏内独立单挑管理。用法：/duel help", OnDuelAdminCommand);
+        AddCommand("css_dp", "暂停单挑。用法：/dp", OnDuelPauseAliasCommand);
+        AddCommand("css_dr", "恢复单挑。用法：/dr", OnDuelResumeAliasCommand);
         AddCommand("css_duel_map", "切换单挑创意工坊地图。用法：/duel_map <序号|地图名|创意工坊ID>", OnDuelMapCommand);
         AddCommand("css_duel_maps", "查看可切换的单挑地图。用法：/duel_maps", OnDuelMapsCommand);
         RegisterDuelWeaponCommands();
@@ -567,7 +569,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                     RoundTimeMinutes = parsed.RoundTimeMinutes!.Value
                 });
                 break;
-            case DuelAdminCommandKind.Utility:
+            case DuelAdminCommandKind.Nades:
                 ApplyDuelAdminConfig(player, command, _duelSession.Config with
                 {
                     UtilityMode = parsed.Value ?? string.Empty
@@ -600,6 +602,28 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
     }
 
+    private void OnDuelPauseAliasCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
+        {
+            ReplyToPlayer(player, "[草人杯] 只有服务器管理员可以管理单挑。");
+            return;
+        }
+
+        PauseGameManagedDuel(player, command);
+    }
+
+    private void OnDuelResumeAliasCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
+        {
+            ReplyToPlayer(player, "[草人杯] 只有服务器管理员可以管理单挑。");
+            return;
+        }
+
+        ResumeGameManagedDuel(player, command);
+    }
+
     private void ShowDuelAdminHelp(CCSPlayerController? player, CommandInfo command)
     {
         foreach (var line in BuildDuelAdminHelpLines())
@@ -613,11 +637,11 @@ public sealed class CaorenCupPlugin : BasePlugin
         "[草人杯] 推荐顺序：先切换地图，等待玩家重连并选择 T/CT，再配置回合数、时间和道具，最后 /duel start 开赛。",
         "[草人杯] 单挑仅由游戏内指令管理。",
         "[草人杯] /duel status：查看单挑状态和完整配置",
-        "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 30",
+        "[草人杯] /duel rounds <手枪> <步枪> <狙击>：设置阶段回合数，总和至少 1",
         "[草人杯] /duel time <分钟>：设置每回合 0.25～5 分钟",
-        "[草人杯] /duel utility <none|random1|random2|random3|full>：设置道具",
+        "[草人杯] /duel nades <none|random1|random2|random3|full>：设置道具",
         "[草人杯] /duel reset：恢复默认配置；/duel start：按当前 T/CT 真人开赛",
-        "[草人杯] /duel pause、/duel resume、/duel stop：控制比赛",
+        "[草人杯] /duel pause（/dp）、/duel resume（/dr）、/duel stop：控制比赛",
         "[草人杯] /duel maps；/duel map <序号|地图名|创意工坊ID>：查看或切换地图"
     ];
 
@@ -660,8 +684,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         _currentMatchId = null;
         _gameManagedDuelRuntimeActive = true;
         _duelCvarRestorePending = false;
-        _gameManagedDuelAcceptedMissingSteamIds.Clear();
-        _gameManagedDuelReconnectReadyAnnounced = false;
         try
         {
             var config = _duelSession.Config;
@@ -804,7 +826,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        _gameManagedDuelReconnectReadyAnnounced = true;
         PauseGameManagedDuel("管理员手动暂停");
         Logger.LogInformation("Game-managed duel paused by an administrator.");
         ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑状态已暂停。");
@@ -827,17 +848,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        _gameManagedDuelReconnectReadyAnnounced = false;
-        _gameManagedDuelAcceptedMissingSteamIds.Clear();
-        var connectedSteamIds = GetConnectedRealPlayerSteamIds();
-        foreach (var participant in _duelSession.Participants.Values)
-        {
-            if (!connectedSteamIds.Contains(participant.SteamId))
-            {
-                _gameManagedDuelAcceptedMissingSteamIds.Add(participant.SteamId);
-            }
-        }
-
         Server.ExecuteCommand("mp_unpause_match");
         Logger.LogInformation("Game-managed duel resumed by an administrator.");
         ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑状态已恢复。");
@@ -846,66 +856,13 @@ public sealed class CaorenCupPlugin : BasePlugin
     private void EvaluateGameManagedConnectivity()
     {
         if (_duelSession.ControlMode != DuelControlMode.GameManaged) return;
-
-        var connectedSteamIds = GetConnectedRealPlayerSteamIds();
-        var missingParticipants = _duelSession.Participants.Values
-            .Where(participant => !connectedSteamIds.Contains(participant.SteamId))
-            .ToArray();
-        var missingSteamIds = missingParticipants
-            .Select(participant => participant.SteamId)
-            .ToHashSet(StringComparer.Ordinal);
-        if (_duelSession.Lifecycle == DuelLifecycle.Running &&
-            _gameManagedDuelAcceptedMissingSteamIds.Count > 0 &&
-            !HasNewMissingParticipant(_gameManagedDuelAcceptedMissingSteamIds, missingSteamIds))
-        {
-            _gameManagedDuelAcceptedMissingSteamIds.IntersectWith(missingSteamIds);
-            if (_gameManagedDuelAcceptedMissingSteamIds.Count == 0)
-            {
-                _duelSession.UpdateConnectedPlayers(connectedSteamIds);
-            }
-            return;
-        }
-
-        if (_duelSession.Lifecycle == DuelLifecycle.Running)
-        {
-            _gameManagedDuelAcceptedMissingSteamIds.Clear();
-        }
-
-        var pausedNow = _duelSession.UpdateConnectedPlayers(connectedSteamIds);
-        if (pausedNow)
-        {
-            _gameManagedDuelAcceptedMissingSteamIds.Clear();
-            _gameManagedDuelReconnectReadyAnnounced = false;
-            var names = string.Join("、", missingParticipants.Select(participant => participant.Name));
-            PauseGameManagedDuel($"参赛者掉线：{names}");
-            Logger.LogWarning(
-                "Game-managed duel auto-paused because participants disconnected: {SteamIds}",
-                string.Join(",", missingParticipants.Select(participant => participant.SteamId)));
-            return;
-        }
-
-        if (_duelSession.Lifecycle != DuelLifecycle.Paused ||
-            _duelSession.PauseReason != "有参赛玩家掉线" ||
-            missingParticipants.Length != 0 ||
-            _gameManagedDuelReconnectReadyAnnounced)
-        {
-            return;
-        }
-
-        _gameManagedDuelReconnectReadyAnnounced = true;
-        Server.PrintToChatAll(
-            $" {ChatColors.Green}[草人杯]{ChatColors.Default} 掉线参赛者已全部返回；比赛仍保持暂停，请管理员使用 /duel resume 恢复。");
+        _duelSession.UpdateConnectedPlayers(GetConnectedRealPlayerSteamIds());
     }
 
     private static HashSet<string> GetConnectedRealPlayerSteamIds() => Utilities.GetPlayers()
         .Where(IsRealPlayer)
         .Select(candidate => candidate.SteamID.ToString())
         .ToHashSet(StringComparer.Ordinal);
-
-    private static bool HasNewMissingParticipant(
-        IReadOnlySet<string> acceptedMissingSteamIds,
-        IReadOnlySet<string> currentMissingSteamIds) =>
-        currentMissingSteamIds.Any(steamId => !acceptedMissingSteamIds.Contains(steamId));
 
     private void StopGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
@@ -1424,8 +1381,6 @@ public sealed class CaorenCupPlugin : BasePlugin
             _heartbeatResponseOrder.BeginBarrier();
             _duelTelemetryIsolation.BeginCleanupRestart();
             _duelTelemetryIsolation.UpdateCvarRestoreReady(false);
-            _gameManagedDuelAcceptedMissingSteamIds.Clear();
-            _gameManagedDuelReconnectReadyAnnounced = false;
             TryUnpauseDuelDuringCleanup();
         }
 
@@ -1479,8 +1434,6 @@ public sealed class CaorenCupPlugin : BasePlugin
         _teamAssignmentBypass.Clear();
         _teamAssignmentsValidFromRound = 0;
         _teamAssignmentsValidUntilRound = 0;
-        _gameManagedDuelAcceptedMissingSteamIds.Clear();
-        _gameManagedDuelReconnectReadyAnnounced = false;
         TryUnpauseDuelDuringCleanup();
         ClearDuelEquipmentState();
         ResetLiveMatchStats(0);
@@ -3409,7 +3362,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private void ShowDuelMapHelp(CCSPlayerController? player, CommandInfo command)
     {
         ReplyToDuelCaller(player, command, "[草人杯] 用法：/duel map <序号|地图名|创意工坊ID>（兼容 /duel_map）");
-        ReplyToDuelCaller(player, command, "[草人杯] 示例：/duel map 1 或 /duel map aim_redline 或 /duel map 3199551320");
+        ReplyToDuelCaller(player, command, "[草人杯] 示例：/duel map 1 或 /duel map AIM Map 或 /duel map 3084291314");
         for (var i = 0; i < DuelWorkshopMaps.Length; i++)
         {
             var map = DuelWorkshopMaps[i];
