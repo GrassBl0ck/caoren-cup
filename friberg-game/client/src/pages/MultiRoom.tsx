@@ -1,0 +1,1854 @@
+import { Ref, useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Globe,
+  Crown,
+  WifiOff,
+  Check,
+  Hourglass,
+  Swords,
+  DoorOpen,
+  Play,
+  Eye,
+  EyeOff,
+  Timer,
+  SkipForward,
+  X,
+  CircleAlert,
+  AlertTriangle,
+  Trophy,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUp,
+  ArrowDown,
+  CheckCircle2,
+} from 'lucide-react';
+import Page from '../components/Page';
+import GuessBoard from '../components/GuessBoard';
+import GuessInputBar from '../components/GuessInputBar';
+import AnswerOverlay, { AnswerInfo } from '../components/AnswerOverlay';
+import { getSocket } from '../api/socket';
+import { translate } from '../i18n/messages';
+import {
+  GuessFeedback,
+  MultiplayerGuessFeedback,
+  RoomPatch,
+  RoomState,
+  RoomPlayer,
+} from '../types';
+import { useConfirm } from '../components/ConfirmDialog';
+import { toast } from '../components/Toast';
+import { Trans, useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { difficultyLabel } from '../utils/difficulty';
+import PlayerStatsDialog, { type PlayerStatsView } from '../components/PlayerStatsDialog';
+import ModalPortal from '../components/ModalPortal';
+
+interface RoundOver {
+  winnerKey: string | null;
+  winnerTeam?: 'a' | 'b' | null;
+  reason: string;
+  nextRoundAt: number | null;
+  answer: AnswerInfo | null;
+}
+
+interface MatchOver {
+  winnerKey: string | null;
+  winnerTeam?: 'a' | 'b' | null;
+  reason: string;
+  answer: AnswerInfo | null;
+}
+
+interface RelayAbort {
+  reason: 'player_left' | 'disconnect_timeout';
+  playerKey: string;
+}
+
+interface RoomStateProbe {
+  roomId: string;
+  roundId: number;
+  stateVersion: number;
+  status: RoomState['status'];
+  gameMode: 'classic' | 'relay' | 'relay2v2';
+  currentTurnKey: string | null;
+}
+
+const DEFAULT_ROUND_DURATION_MS = 120_000;
+const NEXT_ROUND_DELAY_MS = 6_000;
+const RELAY_STATE_PROBE_INTERVAL_MS = 3_000;
+const RELAY_STATE_PROBE_TIMEOUT_MS = 5_000;
+
+interface ServerClockAnchor {
+  serverNow: number;
+  clientNow: number;
+}
+
+function createClockAnchor(value: unknown): ServerClockAnchor | null {
+  const serverNow = Number(value);
+  return Number.isFinite(serverNow) && serverNow > 0
+    ? { serverNow, clientNow: performance.now() }
+    : null;
+}
+
+function localDeadline(timestamp: unknown, anchor: ServerClockAnchor | null): number | null {
+  const serverDeadline = Number(timestamp);
+  if (!anchor || !Number.isFinite(serverDeadline) || serverDeadline <= 0) return null;
+  return anchor.clientNow + (serverDeadline - anchor.serverNow);
+}
+
+function isVisibleGuess(feedback: MultiplayerGuessFeedback): feedback is GuessFeedback {
+  return !('hidden' in feedback);
+}
+
+function matchmakingAverageClass(value: number | null | undefined): string {
+  if (value == null) return '';
+  if (value < 3.5) return ' matchmaking-average-low';
+  if (value <= 4.5) return ' matchmaking-average-medium';
+  return ' matchmaking-average-high';
+}
+
+export function resolveGuessCooldownMs(serverValue: unknown, roomValue: number): number {
+  return typeof serverValue === 'number' && Number.isFinite(serverValue)
+    ? Math.max(0, serverValue)
+    : Math.max(0, roomValue);
+}
+
+export function relayStateProbeNeedsSync(room: RoomState, probe: RoomStateProbe): boolean {
+  return probe.roomId !== room.id
+    || probe.roundId !== room.roundId
+    || probe.stateVersion !== room.stateVersion
+    || probe.status !== room.status
+    || probe.gameMode !== (room.gameMode ?? 'classic')
+    || probe.currentTurnKey !== (room.currentTurnKey ?? null);
+}
+
+function applyRoomPatchState(current: RoomState, patch: RoomPatch): RoomState {
+  const removedPlayers = new Set(patch.players?.removed ?? []);
+  let players = current.players
+    .filter((player) => !removedPlayers.has(player.key))
+    .map((player) => {
+      const update = patch.players?.updated?.find((candidate) => candidate.key === player.key);
+      return update ? { ...player, ...update } : player;
+    });
+  for (const added of patch.players?.added ?? []) {
+    const index = players.findIndex((player) => player.key === added.key);
+    if (index >= 0) players[index] = added;
+    else players = [...players, added];
+  }
+
+  return {
+    ...current,
+    stateVersion: patch.stateVersion,
+    hostKey: patch.hostKey ?? current.hostKey,
+    players,
+    spectatorCount: patch.spectatorCount ?? current.spectatorCount,
+    rematchInvite: patch.rematchInvite === undefined ? current.rematchInvite : patch.rematchInvite,
+  };
+}
+
+function matchOverReason(
+  result: MatchOver,
+  viewerKey: string,
+  isSpectator: boolean,
+  t: TFunction
+): string {
+  if (result.reason === 'score') return t('multi.matchReasons.score');
+  if (result.reason === 'draw') return t('common.draw');
+  if (result.reason === 'last_player_standing') return t('multi.matchReasons.lastPlayerStanding');
+  if (result.reason === 'opponent_left') {
+    if (isSpectator) return t('multi.matchReasons.sideLeft');
+    return result.winnerKey === viewerKey ? t('multi.matchReasons.opponentLeft') : t('multi.matchReasons.selfLeft');
+  }
+  if (result.reason === 'disconnect_timeout') {
+    if (result.winnerKey == null) return t('multi.matchReasons.bothDisconnected');
+    if (isSpectator) return t('multi.matchReasons.sideTimeout');
+    return result.winnerKey === viewerKey ? t('multi.matchReasons.opponentTimeout') : t('multi.matchReasons.selfTimeout');
+  }
+  return result.reason;
+}
+
+const ROUND_OVER_REASON: Record<string, string> = {
+  guessed: 'multi.roundReasons.guessed',
+  exhausted: 'multi.roundReasons.exhausted',
+  timeout: 'multi.roundReasons.timeout',
+  skipped: 'multi.roundReasons.skipped',
+  surrender: 'multi.roundReasons.surrender',
+};
+
+/** 使用浏览器单调时钟显示服务端校准后的截止时间。 */
+function Countdown({ deadline, onExpire }: { deadline: number | null; onExpire?: () => void }) {
+  const [left, setLeft] = useState(0);
+  const expired = useRef(false);
+  useEffect(() => {
+    expired.current = false;
+    if (!deadline) {
+      setLeft(0);
+      return;
+    }
+    const tick = () => {
+      const next = Math.max(0, Math.ceil((deadline - performance.now()) / 1000));
+      setLeft(next);
+      if (next === 0 && !expired.current) {
+        expired.current = true;
+        onExpire?.();
+      }
+    };
+    tick();
+    const t = setInterval(tick, 500);
+    return () => clearInterval(t);
+  }, [deadline, onExpire]);
+  if (!deadline) return null;
+  const m = Math.floor(left / 60);
+  const s = left % 60;
+  return (
+    <span className={`countdown ${left <= 15 ? 'urgent' : ''}`}>
+      <Timer size={15} />
+      {m}:{String(s).padStart(2, '0')}
+    </span>
+  );
+}
+
+function GuessCooldownStatus({ until }: { until: number }) {
+  const { t } = useTranslation();
+  const [remaining, setRemaining] = useState(() => Math.max(0, until - performance.now()));
+  useEffect(() => {
+    const initial = Math.max(0, until - performance.now());
+    setRemaining(initial);
+    if (initial <= 0) return;
+    const timer = window.setInterval(() => {
+      const next = Math.max(0, until - performance.now());
+      setRemaining(next);
+      if (next <= 0) window.clearInterval(timer);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [until]);
+  if (remaining <= 0) return null;
+  return <>{t('multi.cooldown', { seconds: (remaining / 1000).toFixed(1) })}</>;
+}
+
+function PlayerBoard({
+  player,
+  room,
+  title,
+  isSelf = false,
+  endRef,
+}: {
+  player: RoomPlayer;
+  room: RoomState;
+  title: string;
+  isSelf?: boolean;
+  endRef?: Ref<HTMLDivElement>;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className={`card player-board${isSelf ? ' player-board-self' : ' player-board-opponent'}`} style={{ margin: 0 }}>
+      <h3>
+        {title}
+        <span className="muted" style={{ fontWeight: 400 }}>
+          {player.guessCount}/{room.maxGuesses}
+        </span>
+        {!player.connected && (
+          <span className="badge red">
+            <WifiOff size={12} />
+            {t('multi.offline')}
+          </span>
+        )}
+        {player.skipped && <span className="badge"><SkipForward size={12} />{t('multi.roundSkipped')}</span>}
+      </h3>
+      {player.guesses.length ? (
+        <GuessBoard guesses={player.guesses} />
+      ) : (
+        <p className="muted">{t('multi.noGuesses')}</p>
+      )}
+      {endRef && <div className="guess-list-end" ref={endRef} aria-hidden="true" />}
+    </div>
+  );
+}
+
+function CompactFeedback({ feedback }: { feedback: MultiplayerGuessFeedback | undefined }) {
+  const attributes = feedback ? [
+    { level: feedback.correct ? 'correct' : 'wrong' },
+    feedback.attributes.team,
+    feedback.attributes.nationality,
+    feedback.attributes.age,
+    feedback.attributes.role,
+    feedback.attributes.majorChampionships,
+    feedback.attributes.majorAppearances,
+    feedback.attributes.isActive,
+  ] : [];
+  return (
+    <span className="compact-feedback" aria-hidden="true">
+      {attributes.length
+        ? attributes.map((attribute, index) => (
+            <i key={index} className={attribute.level}>
+              {'hint' in attribute && attribute.hint === 'higher' && <ArrowUp />}
+              {'hint' in attribute && attribute.hint === 'lower' && <ArrowDown />}
+            </i>
+          ))
+        : Array.from({ length: 8 }, (_, index) => <i key={index} className="empty" />)}
+    </span>
+  );
+}
+
+function CompactPlayers({
+  players,
+  room,
+  expandedKeys,
+  onToggle,
+}: {
+  players: RoomPlayer[];
+  room: RoomState;
+  expandedKeys: ReadonlySet<string>;
+  onToggle: (key: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="compact-players" aria-label={t('multi.otherPlayers')}>
+      {players.map((player, index) => {
+        const expanded = expandedKeys.has(player.key);
+        const latest = player.guesses.at(-1);
+        return (
+          <div className={`compact-player${player.eliminated ? ' compact-player-eliminated' : ''}`} key={player.key}>
+            <button
+              type="button"
+              className="compact-player-row"
+              aria-expanded={expanded}
+              onClick={() => onToggle(player.key)}
+            >
+              <span className="compact-player-rank">{index + 1}</span>
+              <span className="compact-player-name" title={player.name}>{player.name}</span>
+              <strong className="compact-player-score">{player.score}</strong>
+              <span className="compact-player-count">{player.guessCount}/{room.maxGuesses}</span>
+              <CompactFeedback feedback={latest} />
+              <span className="compact-player-state">
+                {player.eliminated
+                  ? t('multi.eliminated')
+                  : !player.connected
+                    ? t('multi.offline')
+                    : player.skipped
+                      ? t('multi.roundSkipped')
+                      : ''}
+              </span>
+              <ChevronRight className={expanded ? 'expanded' : ''} size={16} />
+            </button>
+            {expanded && (
+              <div className="compact-player-detail">
+                {player.guesses.length
+                  ? <GuessBoard guesses={player.guesses} />
+                  : <p className="muted">{t('multi.noGuesses')}</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+export default function MultiRoom() {
+  const { t } = useTranslation();
+  const [room, setRoom] = useState<RoomState | null>(null);
+  const [roundOver, setRoundOver] = useState<RoundOver | null>(null);
+  const [matchOver, setMatchOver] = useState<MatchOver | null>(null);
+  const [matchOverVisible, setMatchOverVisible] = useState(false);
+  const [relayAbort, setRelayAbort] = useState<RelayAbort | null>(null);
+  const [replayRoundIndex, setReplayRoundIndex] = useState<number | null>(null);
+  const [expandedPlayerKeys, setExpandedPlayerKeys] = useState<Set<string>>(() => new Set());
+  const [offlineNote, setOfflineNote] = useState('');
+  const [showRoomCode, setShowRoomCode] = useState(false);
+  const [myKey, setMyKey] = useState('');
+  const [roundExpired, setRoundExpired] = useState(false);
+  const [skipBusy, setSkipBusy] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [rematchBusy, setRematchBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
+  const reportDialogRef = useRef<HTMLDivElement>(null);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [guessCooldownUntil, setGuessCooldownUntil] = useState(0);
+  const [roundDeadline, setRoundDeadline] = useState<number | null>(null);
+  const [nextRoundDeadline, setNextRoundDeadline] = useState<number | null>(null);
+  const [readyDeadline, setReadyDeadline] = useState<number | null>(null);
+  const [statsLoadingKey, setStatsLoadingKey] = useState('');
+  const [playerStats, setPlayerStats] = useState<PlayerStatsView | null>(null);
+  const [opponentPreview, setOpponentPreview] = useState<PlayerStatsView | null>(null);
+  const navigate = useNavigate();
+  const confirm = useConfirm();
+  const roomRef = useRef<RoomState | null>(null);
+  const myKeyRef = useRef('');
+  const syncSequenceRef = useRef(0);
+  const clockAnchorRef = useRef<ServerClockAnchor | null>(null);
+  const activeGuessListEndRef = useRef<HTMLDivElement>(null);
+  const relayAbortRef = useRef<RelayAbort | null>(null);
+  roomRef.current = room;
+  myKeyRef.current = myKey;
+  relayAbortRef.current = relayAbort;
+
+  const applyRoomSnapshot = useCallback((
+    state: RoomState,
+    authoritative = false,
+    serverNow?: unknown,
+    fallbackDurationMs?: number
+  ) => {
+    const current = roomRef.current;
+    const hadMatchResult = Boolean(current?.matchResult);
+    if (!authoritative && (!current || state.id !== current.id)) return;
+    if (current && state.id === current.id && state.stateVersion < current.stateVersion) return;
+    const receivedAnchor = createClockAnchor(serverNow);
+    if (receivedAnchor) clockAnchorRef.current = receivedAnchor;
+    const anchor = receivedAnchor ?? clockAnchorRef.current;
+    const fallbackDeadline = fallbackDurationMs
+      ? performance.now() + fallbackDurationMs
+      : null;
+    setRoundDeadline(state.status === 'playing'
+      ? localDeadline(state.roundEndsAt, anchor) ?? fallbackDeadline
+      : null);
+    setNextRoundDeadline(state.status === 'round_over'
+      ? localDeadline(state.roundResult?.nextRoundAt, anchor) ?? fallbackDeadline
+      : null);
+    setReadyDeadline(state.status === 'waiting' && state.matchmaking
+      ? localDeadline(state.readyCheckEndsAt, anchor)
+      : null);
+    if (state.gameMode === 'relay' && state.status === 'playing') {
+      const lastGuessAt = state.relayGuesses?.at(-1)?.guessedAt;
+      const localLastGuessAt = localDeadline(lastGuessAt, anchor);
+      setGuessCooldownUntil(localLastGuessAt ? localLastGuessAt + state.guessIntervalMs : 0);
+    }
+    roomRef.current = state;
+    setRoom(state);
+    setRoundExpired(state.status !== 'playing');
+    const relay2v2Overtime = state.gameMode === 'relay2v2'
+      && state.status === 'round_over'
+      && !state.matchResult
+      && !state.roundResult?.winnerTeam;
+    setRoundOver(relay2v2Overtime || state.matchResult ? null : state.roundResult);
+    setMatchOver(state.matchResult);
+    if (!state.matchResult) {
+      setMatchOverVisible(false);
+      setReplayRoundIndex(null);
+    }
+    else if (!hadMatchResult) setMatchOverVisible(true);
+    if (state.players.every((player) => player.connected)) setOfflineNote('');
+  }, []);
+
+  const syncRoom = useCallback((socket = getSocket()) => {
+    const sequence = ++syncSequenceRef.current;
+    socket.emit('room:sync', {}, (res: any) => {
+      if (sequence !== syncSequenceRef.current) return;
+      if (res?.selfKey) setMyKey(res.selfKey);
+      if (res?.room) applyRoomSnapshot(res.room, true, res.serverNow);
+    });
+  }, [applyRoomSnapshot]);
+
+  useEffect(() => {
+    const socket = getSocket();
+    const onPatch = (patch: RoomPatch) => {
+      setRoom((current) => {
+        if (!current || current.id !== patch.roomId) return current;
+        if (patch.stateVersion <= current.stateVersion) return current;
+        if (patch.baseVersion !== current.stateVersion) {
+          syncRoom(socket);
+          return current;
+        }
+        const next = applyRoomPatchState(current, patch);
+        roomRef.current = next;
+        if (next.players.every((player) => player.connected)) setOfflineNote('');
+        return next;
+      });
+    };
+    const onRoundStart = (p: { room: RoomState; serverNow?: number }) => {
+      setGuessCooldownUntil(0);
+      setRoundOver(null);
+      setMatchOverVisible(false);
+      setReplayRoundIndex(null);
+      setOfflineNote('');
+      setRoundExpired(false);
+      applyRoomSnapshot(
+        p.room,
+        false,
+        p.serverNow,
+        p.room.roundDurationMs ?? DEFAULT_ROUND_DURATION_MS
+      );
+    };
+    const onRoundOver = (p: { room: RoomState; serverNow?: number }) => {
+      setGuessCooldownUntil(0);
+      setRoundExpired(true);
+      applyRoomSnapshot(p.room, false, p.serverNow, NEXT_ROUND_DELAY_MS);
+    };
+    const onMatchOver = (p: { room: RoomState; serverNow?: number }) => {
+      setGuessCooldownUntil(0);
+      setRoundExpired(true);
+      setRoundOver(null);
+      applyRoomSnapshot(p.room, false, p.serverNow);
+    };
+    const onRelayAborted = (p: {
+      roomId: string;
+      reason: RelayAbort['reason'];
+      playerKey: string;
+    }) => {
+      if (roomRef.current?.id !== p.roomId) return;
+      const aborted = { reason: p.reason, playerKey: p.playerKey };
+      relayAbortRef.current = aborted;
+      setRelayAbort(aborted);
+      setGuessCooldownUntil(0);
+      setRoundExpired(true);
+      setRoundOver(null);
+      setMatchOver(null);
+      setMatchOverVisible(false);
+      setOfflineNote('');
+    };
+    const onReadyEnded = (p: {
+      roomId: string;
+      reason: 'timeout' | 'opponent_left';
+      penalized: boolean;
+      retryAt: number | null;
+      serverNow?: number;
+    }) => {
+      if (roomRef.current?.id !== p.roomId) return;
+      roomRef.current = null;
+      setRoom(null);
+      if (p.reason === 'opponent_left') {
+        toast.error(t('multi.readyOpponentLeft'));
+      } else if (p.penalized) {
+        const seconds = p.retryAt && p.serverNow
+          ? Math.max(1, Math.ceil((p.retryAt - p.serverNow) / 1000))
+          : 10;
+        toast.error(t('multi.readyTimedOutPenalized', { seconds }));
+      } else {
+        toast.error(t('multi.readyTimedOutOpponent'));
+      }
+      navigate('/multi');
+    };
+    const onRematchUpdate = (p: {
+      roomId: string;
+      stateVersion: number;
+      outcome: 'wanted' | 'withdrawn' | 'updated' | 'waiting' | 'started';
+      actorKey: string;
+      acceptedKeys?: string[];
+      requiredKeys?: string[];
+      player?: { key: string; connected: boolean };
+    }) => {
+      setRoom((current) => {
+        if (!current || current.id !== p.roomId) return current;
+        if (p.stateVersion <= current.stateVersion) return current;
+        if (p.stateVersion !== current.stateVersion + 1) {
+          syncRoom(socket);
+          return current;
+        }
+        const next: RoomState = {
+          ...current,
+          rematchInvite: p.outcome === 'started' || !p.acceptedKeys?.length
+            ? null
+            : {
+                acceptedKeys: p.acceptedKeys,
+                requiredKeys: p.requiredKeys ?? [],
+              },
+          players: p.player
+            ? current.players.map((player) => player.key === p.player!.key
+              ? { ...player, connected: p.player!.connected }
+              : player)
+            : current.players,
+          stateVersion: p.stateVersion,
+        };
+        roomRef.current = next;
+        return next;
+      });
+      if (p.outcome === 'started' || p.outcome === 'waiting') {
+        setGuessCooldownUntil(0);
+        setRoundExpired(true);
+        setRoundOver(null);
+        setMatchOver(null);
+        setMatchOverVisible(false);
+        setReplayRoundIndex(null);
+        setOfflineNote('');
+        syncRoom(socket);
+      }
+    };
+    const onOffline = (p: { key: string; graceMs: number }) => {
+      if (p.key !== myKeyRef.current) {
+        const name = roomRef.current?.players.find((player) => player.key === p.key)?.name ?? t('multi.opponent');
+        setOfflineNote(t('multi.offlineGrace', { player: name, seconds: Math.round(p.graceMs / 1000) }));
+      }
+    };
+    const onRoomError = (p: { code: string }) => toast.error(translate(p.code));
+    const onIdentity = (p: { key: string }) => setMyKey(p.key);
+    const onGuessApplied = (p: {
+      roomId: string;
+      roundId: number;
+      key: string;
+      stateVersion: number;
+      feedback: MultiplayerGuessFeedback;
+      guessedAt?: number;
+      currentTurnKey?: string | null;
+      teamTurnKeys?: { a: string | null; b: string | null };
+      serverNow?: number;
+    }) => {
+      setRoom((current) => {
+        if (!current || current.id !== p.roomId) return current;
+        if (current.roundId !== p.roundId) {
+          if (p.stateVersion >= current.stateVersion) syncRoom(socket);
+          return current;
+        }
+        if (p.stateVersion < current.stateVersion) return current;
+        if (p.stateVersion === current.stateVersion) {
+          if (
+            (current.gameMode === 'relay'
+            && p.currentTurnKey !== undefined
+            && (p.currentTurnKey ?? null) !== (current.currentTurnKey ?? null))
+            || (current.gameMode === 'relay2v2'
+              && p.teamTurnKeys !== undefined
+              && (p.teamTurnKeys.a !== current.teamTurnKeys?.a || p.teamTurnKeys.b !== current.teamTurnKeys?.b))
+          ) syncRoom(socket);
+          return current;
+        }
+        if (p.stateVersion !== current.stateVersion + 1) {
+          syncRoom(socket);
+          return current;
+        }
+        const feedback = p.feedback;
+        if (current.gameMode === 'relay' && !isVisibleGuess(feedback)) {
+          syncRoom(socket);
+          return current;
+        }
+        const relayFeedback = isVisibleGuess(feedback) ? feedback : null;
+        const relayGuesses = current.gameMode === 'relay' && relayFeedback
+          ? [
+              ...(current.relayGuesses ?? []),
+              { actorKey: p.key, guessedAt: p.guessedAt ?? Date.now(), feedback: relayFeedback },
+            ]
+          : current.relayGuesses;
+        const actorTeam = current.players.find((player) => player.key === p.key)?.team;
+        const teamGuesses = current.gameMode === 'relay2v2' && actorTeam
+          ? {
+              a: actorTeam === 'a'
+                ? [...(current.teamGuesses?.a ?? []), { actorKey: p.key, guessedAt: p.guessedAt ?? Date.now(), feedback }]
+                : current.teamGuesses?.a ?? [],
+              b: actorTeam === 'b'
+                ? [...(current.teamGuesses?.b ?? []), { actorKey: p.key, guessedAt: p.guessedAt ?? Date.now(), feedback }]
+                : current.teamGuesses?.b ?? [],
+            }
+          : current.teamGuesses;
+        const next: RoomState = {
+          ...current,
+          stateVersion: p.stateVersion,
+          currentTurnKey: current.gameMode === 'relay'
+            ? p.currentTurnKey ?? null
+            : current.currentTurnKey,
+          teamTurnKeys: current.gameMode === 'relay2v2'
+            ? p.teamTurnKeys ?? current.teamTurnKeys
+            : current.teamTurnKeys,
+          relayGuesses,
+          teamGuesses,
+          players: current.players.map((player) => {
+            if (player.key !== p.key) return player;
+            return {
+              ...player,
+              guesses: [...player.guesses, feedback],
+              guessCount: player.guessCount + 1,
+            };
+          }),
+        };
+        roomRef.current = next;
+        if (current.gameMode === 'relay' || (current.gameMode === 'relay2v2' && actorTeam === current.players.find((player) => player.key === myKeyRef.current)?.team)) {
+          const anchor = createClockAnchor(p.serverNow) ?? clockAnchorRef.current;
+          const localGuessedAt = localDeadline(p.guessedAt, anchor);
+          setGuessCooldownUntil(localGuessedAt ? localGuessedAt + current.guessIntervalMs : 0);
+        }
+        return next;
+      });
+    };
+    socket.on('room:patch', onPatch);
+    socket.on('round:start', onRoundStart);
+    socket.on('round:over', onRoundOver);
+    socket.on('match:over', onMatchOver);
+    socket.on('relay:aborted', onRelayAborted);
+    socket.on('match:ready-ended', onReadyEnded);
+    socket.on('match:rematch:update', onRematchUpdate);
+    socket.on('player:offline', onOffline);
+    socket.on('room:error', onRoomError);
+    socket.on('game:guess:applied', onGuessApplied);
+    socket.on('identity:self', onIdentity);
+
+    // 关闭/刷新页面时立刻断开 socket,让对手第一时间收到离线通知
+    const onPageHide = () => socket.disconnect();
+    // 切回页面(含 bfcache 恢复/移动端切回)时重连并重新同步房间状态
+    const resync = () => {
+      const s = getSocket(); // 内部会对手动断开的 socket 执行 connect()
+      syncRoom(s);
+    };
+    const onPageShow = () => resync();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') resync();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('visibilitychange', onVisible);
+    // socket 层重连成功后也刷新一次(如网络闪断自动恢复)
+    socket.on('connect', resync);
+
+    // 主动向服务端同步一次房间状态;确认不在任何房间才回大厅
+    const initialSequence = ++syncSequenceRef.current;
+    socket.emit('room:sync', {}, (res: any) => {
+      if (initialSequence !== syncSequenceRef.current) return;
+      if (res?.selfKey) setMyKey(res.selfKey);
+      if (res?.room) applyRoomSnapshot(res.room, true, res.serverNow);
+      else if (!roomRef.current && !relayAbortRef.current) {
+        const code = res?.code === 'NOT_IN_ROOM' ? 'ROOM_NOT_FOUND' : res?.code ?? 'ROOM_NOT_FOUND';
+        toast.error(translate(code));
+        navigate('/multi');
+      }
+    });
+    return () => {
+      socket.off('room:patch', onPatch);
+      socket.off('round:start', onRoundStart);
+      socket.off('round:over', onRoundOver);
+      socket.off('match:over', onMatchOver);
+    socket.off('relay:aborted', onRelayAborted);
+      socket.off('match:ready-ended', onReadyEnded);
+      socket.off('match:rematch:update', onRematchUpdate);
+      socket.off('player:offline', onOffline);
+      socket.off('room:error', onRoomError);
+      socket.off('game:guess:applied', onGuessApplied);
+      socket.off('identity:self', onIdentity);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('visibilitychange', onVisible);
+      socket.off('connect', resync);
+    };
+  }, [applyRoomSnapshot, navigate, syncRoom, t]);
+
+  useEffect(() => {
+    if (room?.gameMode !== 'relay' || room.status !== 'playing') return;
+    const socket = getSocket();
+    const roomId = room.id;
+    let stopped = false;
+    let probeTimer: number | undefined;
+    let ackTimer: number | undefined;
+
+    const scheduleProbe = () => {
+      if (stopped || document.visibilityState !== 'visible') return;
+      probeTimer = window.setTimeout(runProbe, RELAY_STATE_PROBE_INTERVAL_MS);
+    };
+    const runProbe = () => {
+      probeTimer = undefined;
+      const current = roomRef.current;
+      if (
+        document.visibilityState !== 'visible'
+        || current?.id !== roomId
+        || current.gameMode !== 'relay'
+        || current.status !== 'playing'
+      ) {
+        return;
+      }
+
+      let settled = false;
+      ackTimer = window.setTimeout(() => {
+        if (stopped || settled) return;
+        settled = true;
+        ackTimer = undefined;
+        scheduleProbe();
+      }, RELAY_STATE_PROBE_TIMEOUT_MS);
+      socket.emit('room:state-probe', {}, (res?: RoomStateProbe & { code?: string }) => {
+        if (stopped || settled) return;
+        settled = true;
+        if (ackTimer !== undefined) window.clearTimeout(ackTimer);
+        ackTimer = undefined;
+        const latest = roomRef.current;
+        if (res?.code === 'NOT_IN_ROOM') {
+          syncRoom(socket);
+        } else if (res && !res.code && latest && relayStateProbeNeedsSync(latest, res)) {
+          syncRoom(socket);
+        }
+        scheduleProbe();
+      });
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' || probeTimer !== undefined || ackTimer !== undefined) {
+        return;
+      }
+      scheduleProbe();
+    };
+
+    scheduleProbe();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      stopped = true;
+      if (probeTimer !== undefined) window.clearTimeout(probeTimer);
+      if (ackTimer !== undefined) window.clearTimeout(ackTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [room?.gameMode, room?.id, room?.status, syncRoom]);
+
+  const emit = (event: string, payload: unknown = {}) => {
+    getSocket().emit(event, payload, (res: any) => {
+      if (res?.code) toast.error(translate(res.code));
+      if (res?.room) applyRoomSnapshot(res.room);
+    });
+  };
+
+  const submitGuess = (playerId: number): Promise<boolean> => new Promise((resolve) => {
+    const current = roomRef.current;
+    if (!current || current.status !== 'playing' || roundExpired) return resolve(false);
+    const remaining = guessCooldownUntil - performance.now();
+    if (remaining > 0) {
+      return resolve(false);
+    }
+    const socket = getSocket();
+    let settled = false;
+    const finish = (accepted: boolean) => {
+      if (settled) return false;
+      settled = true;
+      resolve(accepted);
+      return true;
+    };
+    const timer = window.setTimeout(() => {
+      if (!finish(false)) return;
+      toast.error(translate('NETWORK_ERROR'));
+      syncRoom(socket);
+    }, 5_000);
+    socket.emit('game:guess', {
+      playerId,
+      roundId: current.roundId,
+      eventId: crypto.randomUUID(),
+    }, (res: any) => {
+      if (settled) return;
+      window.clearTimeout(timer);
+      if (res?.room) applyRoomSnapshot(res.room);
+      if (res?.code === 'GUESS_COOLDOWN') {
+        setGuessCooldownUntil(performance.now() + Math.max(0, Number(res.retryAfterMs) || 0));
+        finish(false);
+        return;
+      }
+      if (res?.code === 'NO_ACTIVE_ROUND' || res?.code === 'STALE_ROUND') {
+        syncRoom(socket);
+        finish(false);
+        return;
+      }
+      if (res?.code === 'ROOM_BUSY') {
+        syncRoom(socket);
+        finish(false);
+        return;
+      }
+      if (res?.code === 'NOT_YOUR_TURN') {
+        syncRoom(socket);
+        toast.error(translate(res.code));
+        finish(false);
+        return;
+      }
+      if (res?.code) {
+        toast.error(translate(res.code));
+        finish(false);
+        return;
+      }
+      setGuessCooldownUntil(performance.now() + resolveGuessCooldownMs(
+        res?.cooldownMs,
+        current.guessIntervalMs
+      ));
+      finish(true);
+    });
+  });
+
+  const leaveRoom = async () => {
+    const currentRoom = room;
+    if (!currentRoom || leaving) return;
+    const isCurrentSpectator = !currentRoom.players.some((player) => player.key === myKey);
+    const isMatchmakingReadyRoom =
+      !isCurrentSpectator &&
+      currentRoom.matchmaking &&
+      currentRoom.status === 'waiting';
+    const matchOngoing =
+      !isCurrentSpectator &&
+      (currentRoom.status === 'playing' || currentRoom.status === 'round_over');
+    if (isMatchmakingReadyRoom) {
+      if (!await confirm({
+        title: t('multi.readyExitTitle'),
+        message: t('multi.readyExitWarning'),
+        confirmLabel: t('multi.readyExitConfirm'),
+        tone: 'warning',
+      })) return;
+    } else if (matchOngoing && !await confirm({
+      title: t('multi.leaveTitle'),
+      message: t('multi.leaveMessage'),
+      confirmLabel: t('multi.leaveConfirm'),
+      tone: 'danger',
+    })) return;
+    setLeaving(true);
+    const socket = getSocket();
+    const result = await new Promise<any>((resolve) => {
+      let settled = false;
+      const finish = (value: any) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const timer = window.setTimeout(() => finish({ code: 'NETWORK_ERROR' }), 5_000);
+      socket.emit('room:leave', {}, (res: any) => {
+        window.clearTimeout(timer);
+        finish(res ?? { ok: true });
+      });
+    });
+    if (result?.code) {
+      setLeaving(false);
+      toast.error(translate(result.code));
+      return;
+    }
+    const retryAt = Number(result?.retryAt);
+    const serverNow = Number(result?.serverNow);
+    const matchmakingCooldownUntil =
+      result?.retryAt != null &&
+      result?.serverNow != null &&
+      Number.isFinite(retryAt) &&
+      Number.isFinite(serverNow)
+        ? Date.now() + Math.max(0, retryAt - serverNow)
+        : null;
+    setRoom(null);
+    roomRef.current = null;
+    navigate('/multi', {
+      state: matchmakingCooldownUntil ? { matchmakingCooldownUntil } : null,
+    });
+  };
+
+  const returnFromRelayAbort = () => {
+    relayAbortRef.current = null;
+    setRelayAbort(null);
+    roomRef.current = null;
+    setRoom(null);
+    navigate('/multi');
+  };
+
+  const skipRound = async () => {
+    const current = roomRef.current;
+    const currentMe = current?.players.find((player) => player.key === myKeyRef.current);
+    if (!current || current.status !== 'playing' || !currentMe || currentMe.skipped || skipBusy) return;
+    if (!await confirm({
+      title: t('multi.skipTitle'),
+      message: t('multi.skipMessage'),
+      confirmLabel: t('multi.skipConfirm'),
+      tone: 'warning',
+    })) return;
+    setSkipBusy(true);
+    getSocket().emit('game:skip-round', { roundId: current.roundId }, (res: any) => {
+      setSkipBusy(false);
+      if (res?.room) applyRoomSnapshot(res.room);
+      if (res?.code === 'NO_ACTIVE_ROUND' || res?.code === 'STALE_ROUND') {
+        syncRoom();
+        return;
+      }
+      if (res?.code) toast.error(translate(res.code));
+    });
+  };
+
+  const updateRematch = (event: string, payload: unknown = {}) => {
+    if (rematchBusy) return;
+    setRematchBusy(true);
+    const socket = getSocket();
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setRematchBusy(false);
+      toast.error(translate('NETWORK_ERROR'));
+      syncRoom(socket);
+    }, 5_000);
+    socket.emit(event, payload, (res: any) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      setRematchBusy(false);
+      if (res?.code) toast.error(translate(res.code));
+    });
+  };
+
+  const me = room?.players.find((p) => p.key === myKey);
+  const opponent = room?.players.find((p) => p.key !== myKey);
+  const isSpectator = !!room && !me;
+  const isRelay2v2 = room?.gameMode === 'relay2v2';
+  const myTeam = me?.team ?? null;
+  const isHost = room?.hostKey === myKey;
+  const playing = room?.status === 'playing';
+  const guessInputDisabled = !playing || !me || me.eliminated || Boolean(relayAbort) || roundExpired || me?.skipped || (room?.gameMode === 'relay'
+    ? room.currentTurnKey !== myKey || (room.relayGuesses?.length ?? 0) >= room.maxGuesses
+    : room?.gameMode === 'relay2v2'
+      ? room.teamTurnKeys?.[myTeam ?? 'a'] !== myKey || Boolean(room.teamExhausted?.[myTeam ?? 'a'])
+      : (me?.guessCount ?? 0) >= (room?.maxGuesses ?? 0));
+  const rematchAcceptedKeys = room?.rematchInvite?.acceptedKeys ?? [];
+  const rematchRequiredKeys = room?.rematchInvite?.requiredKeys
+    ?? room?.players.filter((player) => player.connected && !player.eliminated).map((player) => player.key)
+    ?? [];
+  const rematchWantedByMe = rematchAcceptedKeys.includes(myKey);
+  const canRematch = Boolean(
+    room?.rematchAllowed &&
+    room.status === 'finished' &&
+    me &&
+    room.players.filter((player) => player.connected && !player.eliminated).length >= 2
+  );
+  useEffect(() => {
+    if (guessInputDisabled) setInputFocused(false);
+  }, [guessInputDisabled]);
+  const viewFinishedMatch = () => {
+    if (!room?.matchReplay) {
+      setMatchOverVisible(false);
+      return;
+    }
+    setMatchOverVisible(false);
+    setReplayRoundIndex(0);
+  };
+  const viewPlayerStats = (player: RoomPlayer) => {
+    if (statsLoadingKey) return;
+    if (opponentPreview?.displayId === player.name) {
+      setPlayerStats(opponentPreview);
+      return;
+    }
+    setStatsLoadingKey(player.key);
+    const socket = getSocket();
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setStatsLoadingKey('');
+      toast.error(translate('NETWORK_ERROR'));
+    }, 5_000);
+    socket.emit('room:player-stats', { playerKey: player.key }, (res: any) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      setStatsLoadingKey('');
+      if (res?.code) {
+        toast.error(translate(res.code));
+        return;
+      }
+      if (!res?.stats || res.playerKey !== player.key) {
+        toast.error(translate('INTERNAL_ERROR'));
+        return;
+      }
+      setPlayerStats({ displayId: res.displayId, stats: res.stats });
+    });
+  };
+
+  const statsButton = (player: RoomPlayer | undefined) => {
+    const allowed = Boolean(player && (isSpectator || (me && player.key !== myKey)));
+    if (!player || !allowed) return null;
+    const loading = statsLoadingKey === player.key;
+    return (
+      <button
+        type="button"
+        className="player-stats-trigger"
+        aria-label={t('multi.viewPlayerStats', { player: player.name })}
+        title={t('multi.viewStats')}
+        disabled={Boolean(statsLoadingKey)}
+        onClick={() => viewPlayerStats(player)}
+      >
+        {loading ? <span className="player-stats-spinner" /> : <CircleAlert size={16} />}
+      </button>
+    );
+  };
+
+  const submitReport = () => {
+    if (reportBusy || !room?.matchmaking || !opponent) return;
+    setReportBusy(true);
+    getSocket().emit('match:report', { description: reportDescription.trim() }, (res: any) => {
+      setReportBusy(false);
+      if (res?.code) {
+        toast.error(translate(res.code));
+        return;
+      }
+      setReportOpen(false);
+      setReportDescription('');
+      applyRoomSnapshot({ ...room, reportSubmitted: true });
+      toast.success(t('multi.reportSubmitted'));
+    });
+  };
+
+  useEffect(() => {
+    if (!reportOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusDialog = () => reportDialogRef.current?.querySelector<HTMLElement>('textarea, button, [href], input, select, [tabindex]:not([tabindex="-1"])')?.focus();
+    const frame = window.requestAnimationFrame(focusDialog);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setReportOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = reportDialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])');
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [reportOpen]);
+
+  useEffect(() => {
+    if (!room?.matchmaking || room.status !== 'waiting' || !opponent) {
+      setOpponentPreview(null);
+      return;
+    }
+    let cancelled = false;
+    getSocket().emit('room:player-stats', { playerKey: opponent.key }, (res: any) => {
+      if (cancelled || res?.code || !res?.stats || res.playerKey !== opponent.key) return;
+      setOpponentPreview({ displayId: res.displayId, stats: res.stats });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.id, room?.matchmaking, room?.status, opponent?.key]);
+
+  useEffect(() => {
+    if (!inputFocused || !me || !window.matchMedia('(max-width: 640px)').matches) return;
+    let frame = 0;
+    const keepActiveGuessesVisible = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const anchor = activeGuessListEndRef.current;
+        const scroller = anchor?.closest<HTMLElement>('.page-scroll');
+        if (!anchor || !scroller) return;
+        const anchorRect = anchor.getBoundingClientRect();
+        const scrollerRect = scroller.getBoundingClientRect();
+        const obscuredBy = anchorRect.bottom - (scrollerRect.bottom - 8);
+        if (obscuredBy > 0) scroller.scrollBy({ top: obscuredBy, behavior: 'auto' });
+      });
+    };
+    keepActiveGuessesVisible();
+    window.visualViewport?.addEventListener('resize', keepActiveGuessesVisible);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.visualViewport?.removeEventListener('resize', keepActiveGuessesVisible);
+    };
+  }, [inputFocused, me?.guessCount, room?.relayGuesses?.length, room?.roundId]);
+
+  if (!room) {
+    return (
+      <Page title={t('multi.roomLoadingTitle')} icon={<Globe size={17} />}>
+        <div style={{ textAlign: 'center', padding: 48 }}>
+          <div className="spinner" />
+          <p className="muted">{t('multi.loadingRoom')}</p>
+        </div>
+      </Page>
+    );
+  }
+
+  const leftPlayer = me ?? room.players[0];
+  const rightPlayer = me ? opponent : room.players[1];
+  const rankedPlayers = room.players
+    .map((player, joinIndex) => ({ player, joinIndex }))
+    .sort((a, b) => b.player.score - a.player.score || a.joinIndex - b.joinIndex)
+    .map(({ player }) => player);
+  const compactPlayers = me
+    ? rankedPlayers.filter((player) => player.key !== myKey)
+    : rankedPlayers;
+  const isLargeClassicRoom = (room.gameMode ?? 'classic') === 'classic' && room.players.length > 2;
+  const isCrowdedClassicRoom = (room.gameMode ?? 'classic') === 'classic' && (room.maxPlayers ?? 2) >= 3;
+  const replay = room.matchReplay;
+  const relayTurnPlayers = room.gameMode === 'relay'
+    ? room.players.filter((player) => !player.eliminated).map((player) => player.key).sort()
+    : [];
+  const relayCurrentTurnIndex = room.currentTurnKey
+    ? relayTurnPlayers.indexOf(room.currentTurnKey)
+    : -1;
+  const nextRelayTurnKey = relayCurrentTurnIndex >= 0 && relayTurnPlayers.length > 1
+    ? relayTurnPlayers[(relayCurrentTurnIndex + 1) % relayTurnPlayers.length]
+    : null;
+  const nextRelayTurnPlayer = nextRelayTurnKey
+    ? room.players.find((player) => player.key === nextRelayTurnKey)
+    : null;
+  const ownTeamTurnKey = me?.team ? room.teamTurnKeys?.[me.team] ?? null : null;
+  const ownTeamTurnPlayer = ownTeamTurnKey
+    ? room.players.find((player) => player.key === ownTeamTurnKey)
+    : null;
+  const replayRound = replayRoundIndex == null ? null : replay?.rounds[replayRoundIndex] ?? null;
+  const replayParticipantIdByPlayerKey = new Map(
+    room.players.map((player, index) => [player.key, replay?.participants?.[index]?.id])
+  );
+  const displayedCompactPlayers = replayRound?.players
+    ? compactPlayers.map((player) => {
+        const participantId = replayParticipantIdByPlayerKey.get(player.key);
+        const replayPlayer = replayRound.players?.find((candidate) => candidate.participantId === participantId);
+        return replayPlayer
+          ? { ...player, guessCount: replayPlayer.guesses.length, guesses: replayPlayer.guesses }
+          : player;
+      })
+    : compactPlayers;
+  const displayedLeftPlayer = leftPlayer && replayRound
+    ? { ...leftPlayer, guessCount: replayRound.me.guesses.length, guesses: replayRound.me.guesses }
+    : leftPlayer;
+  const displayedRightPlayer = rightPlayer && replayRound
+    ? { ...rightPlayer, guessCount: replayRound.opponent.guesses.length, guesses: replayRound.opponent.guesses }
+    : rightPlayer;
+  const displayedRelayGuesses = room.gameMode === 'relay'
+    ? replayRound
+      ? (replayRound.sharedGuesses ?? []).map((guess) => ({
+          feedback: guess.feedback,
+          label: guess.actor === 'me'
+            ? me?.name ?? t('replay.mySide')
+            : guess.actor === 'opponent'
+              ? opponent?.name ?? replay?.opponent?.displayId ?? '-'
+              : '-',
+          tone: guess.actor === 'me' ? 'self' as const : guess.actor === 'opponent' ? 'other' as const : undefined,
+        }))
+      : (room.relayGuesses ?? []).map((guess) => {
+          const player = room.players.find((candidate) => candidate.key === guess.actorKey);
+          return {
+            feedback: guess.feedback,
+            label: player?.name ?? '-',
+            tone: guess.actorKey === myKey ? 'self' as const : 'other' as const,
+          };
+        })
+    : [];
+  const displayedTeamScores = replayRound?.teamScores ?? room.teamScores;
+  const displayedTeamGuesses = Object.fromEntries((['a', 'b'] as const).map((team) => [team, replayRound
+    ? (replayRound.teamGuesses?.[team] ?? []).map((guess) => ({
+        feedback: guess.feedback,
+        label: guess.actor === 'me' ? me?.name ?? t('common.me') : guess.actorDisplayId ?? '-',
+        tone: guess.actor === 'me' ? 'self' as const : 'other' as const,
+      }))
+    : (room.teamGuesses?.[team] ?? []).map((guess) => ({
+        feedback: guess.feedback,
+        label: room.players.find((player) => player.key === guess.actorKey)?.name ?? '-',
+        tone: guess.actorKey === myKey ? 'self' as const : 'other' as const,
+      }))])) as Record<'a' | 'b', Array<{
+        feedback: MultiplayerGuessFeedback;
+        label: string;
+        tone: 'self' | 'other';
+      }>>;
+
+  return (
+    <Page
+      className={`game-page multi-game-page${inputFocused ? ' keyboard-active' : ''}`}
+      title={room.gameMode === 'relay'
+        ? t('multi.relayRoomTitle', { rounds: room.totalRounds ?? 3 })
+        : room.gameMode === 'relay2v2'
+          ? t('multi.relay2v2Mode')
+        : t('multi.roomTitle', { bo: room.boType })}
+      icon={<Globe size={17} />}
+      actions={
+        <div className="room-actions">
+          <span className="room-code-wrap">
+            <button
+              type="button"
+              className="room-code-toggle"
+              onClick={() => setShowRoomCode((visible) => !visible)}
+              title={showRoomCode ? t('multi.hideRoomCode') : t('multi.showRoomCode')}
+              aria-label={showRoomCode ? t('multi.hideRoomCode') : t('multi.showRoomCode')}
+              aria-pressed={showRoomCode}
+            >
+              {showRoomCode ? <EyeOff size={15} /> : <Eye size={15} />}
+              <span>{showRoomCode ? room.id : '•••••'}</span>
+            </button>
+            {showRoomCode && <span className="room-code-pop">{room.id}</span>}
+          </span>
+          <button
+            className="btn btn-danger btn-sm"
+            aria-label={isSpectator ? t('multi.exitSpectating') : t('multi.leaveRoom')}
+            disabled={leaving}
+            onClick={() => void leaveRoom()}
+          >
+            <DoorOpen size={15} />
+            <span className="btn-text">
+              {leaving ? t('multi.leaving') : isSpectator ? t('multi.exitSpectating') : t('multi.leaveRoom')}
+            </span>
+          </button>
+          {playing && me && (room.gameMode ?? 'classic') === 'classic' && (
+            <button
+              className="btn btn-ghost btn-sm"
+              disabled={roundExpired || skipBusy || me.skipped}
+              onClick={() => void skipRound()}
+            >
+              <SkipForward size={15} />
+              <span className="btn-text">{skipBusy ? t('multi.processing') : me.skipped ? t('multi.roundSkipped') : t('multi.skipRound')}</span>
+            </button>
+          )}
+          {room.status === 'finished' && matchOver && !matchOverVisible && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setMatchOverVisible(true)}
+            >
+              <Trophy size={15} />
+              <span className="btn-text">{t('multi.viewResult')}</span>
+            </button>
+          )}
+        </div>
+      }
+      statusBar={
+        <>
+          <Swords size={15} />
+          {room.gameMode === 'relay'
+            ? room.status === 'waiting'
+              ? t('multi.relayWaitingStatus', { database: difficultyLabel(t, room.dbType), total: room.totalRounds ?? 3 })
+              : t('multi.relayStatus', { solved: room.relaySolvedRounds, total: room.totalRounds, round: room.round })
+            : room.gameMode === 'relay2v2'
+              ? t('multi.teamScore', { a: displayedTeamScores?.a ?? 0, b: displayedTeamScores?.b ?? 0 })
+            : room.status === 'waiting'
+              ? t('multi.waitingStatus', { database: difficultyLabel(t, room.dbType), wins: room.winsNeeded })
+              : t('multi.playingStatus', { round: room.round, wins: room.winsNeeded })}
+          {room.status === 'waiting' && room.verifiedOnly && (
+            <span className="badge amber">{t('multi.verifiedRoomOnly')}</span>
+          )}
+          {room.status === 'waiting' && room.matchmaking && <Countdown deadline={readyDeadline} />}
+          {playing && <Countdown deadline={roundDeadline} onExpire={() => setRoundExpired(true)} />}
+          {isSpectator && (
+            <span className="badge">
+              <Eye size={12} />
+              {t('multi.spectating')}
+            </span>
+          )}
+          {room.spectatorCount > 0 && (
+            <span className="muted">
+              <Eye size={12} style={{ verticalAlign: -2 }} /> {t('multi.spectatorCount', { count: room.spectatorCount })}
+            </span>
+          )}
+          {offlineNote && <span className="error">{offlineNote}</span>}
+        </>
+      }
+      dock={
+        playing && me && !me.eliminated ? (
+          <GuessInputBar
+            onPick={(p) => submitGuess(p.id)}
+            onFocusChange={setInputFocused}
+            statusText={room.gameMode === 'relay' && room.currentTurnKey !== myKey
+              ? t('multi.waitingForTurn', {
+                player: room.players.find((player) => player.key === room.currentTurnKey)?.name ?? '-',
+              })
+              : room.gameMode === 'relay2v2' && ownTeamTurnKey !== myKey
+                ? t('multi.waitingForTurn', { player: ownTeamTurnPlayer?.name ?? '-' })
+                : <GuessCooldownStatus until={guessCooldownUntil} />}
+            disabled={guessInputDisabled}
+          />
+        ) : undefined
+      }
+    >
+      {/* 比分栏 */}
+      {isLargeClassicRoom ? (
+        <div className="card multiplayer-scoreboard">
+          {rankedPlayers.map((player, index) => (
+            <span key={player.key} className={`${player.key === myKey ? 'is-self' : ''}${player.eliminated ? ' is-eliminated' : ''}`}>
+              <b className="multiplayer-scoreboard-rank">#{index + 1}</b>
+              <span title={player.name}>{player.name}</span>
+              <strong className="multiplayer-scoreboard-score">
+                {t('multi.scoreValue', { score: player.score })}
+              </strong>
+            </span>
+          ))}
+        </div>
+      ) : <div className="card score-bar">
+        <span className="player-name score-bar-player-left">
+          {room.gameMode === 'relay2v2' ? (
+            <span className="player-id-text">{t('multi.blueTeam')}</span>
+          ) : <>
+            {leftPlayer?.key === room.hostKey && <Crown size={16} color="var(--warning)" />}
+            <span className="player-id-text">{leftPlayer?.name ?? '-'}</span>
+            {statsButton(leftPlayer)}
+          </>}
+        </span>
+        <span className="score">
+          {room.gameMode === 'relay'
+            ? t('multi.relayProgress', { solved: room.relaySolvedRounds, total: room.totalRounds })
+            : room.gameMode === 'relay2v2'
+              ? `${displayedTeamScores?.a ?? 0} : ${displayedTeamScores?.b ?? 0}`
+            : `${leftPlayer?.score ?? 0} : ${rightPlayer?.score ?? 0}`}
+        </span>
+        <span className="player-name score-bar-player-right">
+          {room.gameMode === 'relay2v2' ? (
+            <span className="player-id-text">{t('multi.redTeam')}</span>
+          ) : <>
+            {rightPlayer?.key === room.hostKey && <Crown size={16} color="var(--warning)" />}
+            <span className="player-id-text">{rightPlayer?.name ?? t('multi.waitingForJoin')}</span>
+            {statsButton(rightPlayer)}
+          </>}
+        </span>
+      </div>}
+
+      {replay && replayRound && replayRoundIndex != null && (
+        <div className="multi-inline-replay" aria-label={t('replay.pagination')}>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            aria-label={t('replay.previousRound')}
+            title={t('replay.previousRound')}
+            disabled={replayRoundIndex === 0}
+            onClick={() => setReplayRoundIndex((current) => current == null ? 0 : Math.max(0, current - 1))}
+          >
+            <ChevronLeft size={17} />
+          </button>
+          <div className="multi-inline-replay-meta">
+            <strong>{t('replay.roundPage', { current: replayRoundIndex + 1, total: replay.rounds.length })}</strong>
+            <span>{t('replay.correctAnswer', { name: replayRound.answer.nickname })}</span>
+            <span className="badge">
+              {room.gameMode === 'relay'
+                ? t(replayRound.reason === 'guessed' ? 'multi.relayRoundSolved' : 'multi.relayRoundMissed')
+                : room.gameMode === 'relay2v2'
+                  ? replayRound.winnerTeam
+                    ? t('multi.teamWonRound', { team: replayRound.winnerTeam === 'a' ? t('multi.blueTeam') : t('multi.redTeam') })
+                    : t('multi.relay2v2RoundComplete')
+                : replayRound.winner === 'me'
+                  ? t('replay.meWon')
+                  : replayRound.winner === 'opponent'
+                    ? t('replay.opponentWon')
+                    : t('common.draw')}
+            </span>
+          </div>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            aria-label={t('replay.nextRound')}
+            title={t('replay.nextRound')}
+            disabled={replayRoundIndex >= replay.rounds.length - 1}
+            onClick={() => setReplayRoundIndex((current) => current == null
+              ? 0
+              : Math.min(replay.rounds.length - 1, current + 1))}
+          >
+            <ChevronRight size={17} />
+          </button>
+        </div>
+      )}
+
+      {/* 等待区 */}
+      {room.status === 'waiting' && (
+        <div className="card room-waiting-card">
+          {!room.matchmaking && (
+            <section className="room-attributes" aria-labelledby="room-attributes-title">
+              <h3 id="room-attributes-title">{t('multi.roomAttributes')}</h3>
+              <ul>
+                <li>{t('multi.database', { type: difficultyLabel(t, room.dbType) })}</li>
+                <li>{room.gameMode === 'relay'
+                  ? t('multi.relayRounds', { rounds: room.totalRounds })
+                  : t('multi.format', { bo: room.boType })}</li>
+                <li>{t('multi.roomCapacity', {
+                  current: room.players.length,
+                  max: room.maxPlayers ?? 2,
+                })}</li>
+                <li>{t('multi.customRulesSummary', {
+                  guesses: room.maxGuesses,
+                  interval: room.guessIntervalMs / 1000,
+                  duration: (room.roundDurationMs ?? DEFAULT_ROUND_DURATION_MS) / 1000,
+                })}</li>
+                <li>{room.allowSpectators
+                  ? t('multi.allowSpectating')
+                  : t('multi.denySpectating')}</li>
+                <li>{room.verifiedOnly
+                  ? t('multi.verifiedRoomOnly')
+                  : t('multi.anyoneCanJoin')}</li>
+                <li>{room.anonymous ? t('multi.anonymousRoom') : t('multi.showNames')}</li>
+              </ul>
+            </section>
+          )}
+          {room.players.map((p) => (
+            <div
+              key={p.key}
+              className="room-player-row"
+            >
+              <b>{p.name}</b>
+              {p.key === room.hostKey && <Crown size={15} color="var(--warning)" />}
+              {statsButton(p)}
+              {!p.connected && (
+                <span className="badge red">
+                  <WifiOff size={12} />
+                  {t('multi.disconnected')}
+                </span>
+              )}
+              {p.ready ? (
+                <span className="badge green">
+                  <Check size={12} />
+                  {t('multi.ready')}
+                </span>
+              ) : (
+                <span className="badge amber">
+                  <Hourglass size={12} />
+                  {t('multi.notReady')}
+                </span>
+              )}
+              {isRelay2v2 && p.team && <span className="badge">{p.team === 'a' ? t('multi.blueTeam') : t('multi.redTeam')}</span>}
+            </div>
+          ))}
+          {isRelay2v2 && me && (
+            <div className="room-ready-actions">
+              <span className="muted">{t('multi.chooseTeam')}</span>
+              {(['a', 'b'] as const).map((team) => (
+                <button
+                  key={team}
+                  className={`btn btn-sm ${me.team === team ? 'btn-accent' : 'btn-ghost'}`}
+                  disabled={room.players.filter((player) => player.team === team).length >= 2 && me.team !== team}
+                  onClick={() => emit('room:team-select', { team })}
+                >
+                  {team === 'a' ? t('multi.blueTeam') : t('multi.redTeam')}
+                </button>
+              ))}
+            </div>
+          )}
+          {room.players.length < 2 && (
+            <p className="muted">{t('multi.waitingOpponent')}</p>
+          )}
+          {room.matchmaking && opponent && (
+            <div className="matchmaking-opponent-preview">
+              <span>{t('multi.opponentRecentWinningGuessAverage')}</span>
+              <strong className={matchmakingAverageClass(
+                opponentPreview?.stats.multi.recentAverageWinningGuesses
+              )}>
+                {opponentPreview?.stats.multi.recentAverageWinningGuesses?.toFixed(1) ?? '-'}
+              </strong>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={!opponentPreview}
+                onClick={() => opponentPreview && setPlayerStats(opponentPreview)}
+              >
+                <CircleAlert size={15} />
+                {t('multi.viewRecentMatches')}
+              </button>
+            </div>
+          )}
+          {!isSpectator && (
+            <div className="room-ready-actions">
+              {room.matchmaking ? (
+                <button
+                  className="btn btn-success"
+                  onClick={() => emit('room:ready', { ready: !me?.ready })}
+                >
+                  <Check size={16} />
+                  {me?.ready ? t('multi.cancelReady') : t('multi.readyAction')}
+                </button>
+              ) : isHost ? (
+                <button
+                  className="btn btn-success"
+                  onClick={() => emit('game:start')}
+                  disabled={isRelay2v2
+                    ? room.players.length !== 4 || room.players.filter((p) => p.team === 'a').length !== 2 || room.players.filter((p) => p.team === 'b').length !== 2 || !room.players.every((p) => p.connected) || !room.players.filter((p) => p.key !== room.hostKey).every((p) => p.ready)
+                    : room.players.length < 2 || !room.players.every((p) => p.connected) || !room.players.filter((p) => p.key !== room.hostKey).every((p) => p.ready)}
+                >
+                  <Play size={16} />
+                  {t('multi.startGame')}
+                </button>
+              ) : (
+                <button
+                  className="btn btn-success"
+                  onClick={() => emit('room:ready', { ready: !me?.ready })}
+                >
+                  <Check size={16} />
+                  {me?.ready ? t('multi.cancelReady') : t('multi.readyAction')}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 对局区:左右分栏(移动端上下堆叠) */}
+      {room.status !== 'waiting' && (
+        room.gameMode === 'relay2v2' ? (
+          <div className="boards relay2v2-boards">
+            {(['a', 'b'] as const).map((team) => {
+              const members = room.players.filter((player) => player.team === team);
+              const activeKey = room.teamTurnKeys?.[team] ?? null;
+              const activeIndex = activeKey ? members.findIndex((player) => player.key === activeKey) : -1;
+              const nextPlayer = activeIndex >= 0 && members.length > 1
+                ? members[(activeIndex + 1) % members.length]
+                : null;
+              const guesses = displayedTeamGuesses[team];
+              return (
+                <div className="card player-board" key={team} style={{ margin: 0 }}>
+                  <h3>{team === 'a' ? t('multi.blueTeam') : t('multi.redTeam')}
+                    <span className="muted">{displayedTeamScores?.[team] ?? 0} · {guesses.length}/{room.maxGuesses}</span>
+                    {!replayRound && activeKey ? (
+                      <>
+                        <span className="badge amber">
+                          {activeKey === myKey
+                            ? t('multi.yourTurn')
+                            : t('multi.currentTurn', { player: room.players.find((player) => player.key === activeKey)?.name ?? '-' })}
+                        </span>
+                        {nextPlayer && (
+                          <span className="muted">
+                            {nextPlayer.key === myKey
+                              ? t('multi.nextTurnSelf')
+                              : t('multi.nextTurn', { player: nextPlayer.name })}
+                          </span>
+                        )}
+                      </>
+                    ) : !replayRound ? <span className="badge amber">
+                      {room.teamExhausted?.[team]
+                        ? t('multi.relay2v2TeamExhausted')
+                        : t('multi.relay2v2RoundComplete')}
+                    </span> : null}
+                  </h3>
+                  <p className="muted">{members.map((player) => player.name).join(' / ')}</p>
+                  {guesses.length ? <GuessBoard
+                    guesses={guesses.map((guess) => guess.feedback)}
+                    rowAnnotations={guesses.map((guess) => ({
+                      content: guess.label,
+                      title: guess.label,
+                      tone: guess.tone,
+                    }))}
+                  /> : <p className="muted">{t('multi.noGuesses')}</p>}
+                </div>
+              );
+            })}
+          </div>
+        ) : room.gameMode === 'relay' ? (
+          <div className="card player-board relay-board" style={{ margin: 0 }}>
+            <h3>
+              {t('multi.sharedGuesses')}
+              <span className="muted">{displayedRelayGuesses.length}/{room.maxGuesses}</span>
+              {room.currentTurnKey && (
+                <>
+                  <span className="badge amber">
+                    {room.currentTurnKey === myKey
+                      ? t('multi.yourTurn')
+                      : t('multi.currentTurn', {
+                        player: room.players.find((player) => player.key === room.currentTurnKey)?.name ?? '-',
+                      })}
+                  </span>
+                  {nextRelayTurnPlayer && (
+                    <span className="muted">
+                      {nextRelayTurnKey === myKey
+                        ? t('multi.nextTurnSelf')
+                        : t('multi.nextTurn', { player: nextRelayTurnPlayer.name })}
+                    </span>
+                  )}
+                </>
+              )}
+            </h3>
+            {displayedRelayGuesses.length ? (
+              <GuessBoard
+                guesses={displayedRelayGuesses.map((guess) => guess.feedback)}
+                rowAnnotations={displayedRelayGuesses.map((guess) => ({
+                  content: guess.label,
+                  title: guess.label,
+                  tone: guess.tone,
+                }))}
+              />
+            ) : <p className="muted">{t('multi.noGuesses')}</p>}
+            <div className="guess-list-end" ref={activeGuessListEndRef} aria-hidden="true" />
+          </div>
+        ) : isLargeClassicRoom ? (
+          <div className={`multi-classic-layout${isCrowdedClassicRoom ? ' multi-classic-layout-crowded' : ''}${me ? '' : ' multi-classic-layout-spectator'}`}>
+            {me && (
+              <PlayerBoard
+                player={displayedLeftPlayer ?? me}
+                room={room}
+                title={t('multi.myGuesses')}
+                isSelf
+                endRef={activeGuessListEndRef}
+              />
+            )}
+            <CompactPlayers
+              players={displayedCompactPlayers}
+              room={room}
+              expandedKeys={expandedPlayerKeys}
+              onToggle={(key) => setExpandedPlayerKeys((current) => {
+                const next = new Set(current);
+                if (next.has(key)) next.delete(key);
+                else next.add(key);
+                return next;
+              })}
+            />
+          </div>
+        ) : <div className="boards">
+          {displayedLeftPlayer && (
+            <PlayerBoard
+              key={`${displayedLeftPlayer.key}:${replayRound?.round ?? room.roundId}`}
+              player={displayedLeftPlayer}
+              room={room}
+              title={me ? t('multi.myGuesses') : displayedLeftPlayer.name}
+              isSelf={displayedLeftPlayer.key === myKey}
+              endRef={displayedLeftPlayer.key === myKey ? activeGuessListEndRef : undefined}
+            />
+          )}
+          {displayedRightPlayer && (
+            <PlayerBoard
+              key={`${displayedRightPlayer.key}:${replayRound?.round ?? room.roundId}`}
+              player={displayedRightPlayer}
+              room={room}
+              title={displayedRightPlayer.name}
+              isSelf={displayedRightPlayer.key === myKey}
+              endRef={displayedRightPlayer.key === myKey ? activeGuessListEndRef : undefined}
+            />
+          )}
+        </div>
+      )}
+
+      {/* 小局结算 */}
+      {roundOver && !matchOver && (
+        <AnswerOverlay
+          title={
+            room.gameMode === 'relay'
+              ? t(roundOver.reason === 'guessed' ? 'multi.relayRoundSolved' : 'multi.relayRoundMissed')
+              : room.gameMode === 'relay2v2'
+                ? roundOver.winnerTeam
+                  ? t('multi.teamWonRound', {
+                    team: roundOver.winnerTeam === 'a' ? t('multi.blueTeam') : t('multi.redTeam'),
+                  })
+                  : t('multi.relay2v2Overtime')
+                : roundOver.winnerKey == null
+                  ? t('multi.roundDraw')
+                  : roundOver.winnerKey === myKey
+                    ? t('multi.roundWon')
+                    : isSpectator
+                      ? t('multi.playerWonRound', { player: room.players.find((p) => p.key === roundOver.winnerKey)?.name ?? '' })
+                      : t('multi.roundLost')
+          }
+          answer={roundOver.answer}
+          onClose={() => setRoundOver(null)}
+          extra={
+            <p className="muted">
+              <Trans
+                i18nKey={nextRoundDeadline ? 'multi.nextRoundCountdown' : 'multi.nextRoundSoon'}
+                values={{ reason: ROUND_OVER_REASON[roundOver.reason] ? t(ROUND_OVER_REASON[roundOver.reason]) : '' }}
+                components={{ countdown: <Countdown deadline={nextRoundDeadline} /> }}
+              />
+            </p>
+          }
+          actions={
+            <button className="btn btn-ghost" onClick={() => setRoundOver(null)}>
+              {t('multi.viewGame')}
+            </button>
+          }
+        />
+      )}
+
+      {/* 整场结算 */}
+      {matchOver && matchOverVisible && (
+        <AnswerOverlay
+          title={
+            room.gameMode === 'relay'
+              ? t('multi.relayMatchComplete')
+              : room.gameMode === 'relay2v2'
+                ? matchOver.winnerTeam
+                  ? t('multi.teamWonMatch', {
+                    team: matchOver.winnerTeam === 'a' ? t('multi.blueTeam') : t('multi.redTeam'),
+                  })
+                  : t('multi.matchEnded')
+                : matchOver.winnerKey == null
+                  ? t('multi.matchEnded')
+                  : isLargeClassicRoom || isSpectator
+                    ? t('multi.playerWonMatch', { player: room.players.find((p) => p.key === matchOver.winnerKey)?.name ?? '' })
+                    : matchOver.winnerKey === myKey
+                      ? t('multi.matchWon')
+                      : t('multi.matchLost')
+          }
+          answer={matchOver.answer}
+          onClose={() => setMatchOverVisible(false)}
+          extra={
+            <div className="match-over-extra">
+              <p className="muted">
+                {room.gameMode === 'relay' ? t('multi.relayFinalScore', {
+                  solved: room.relaySolvedRounds ?? 0,
+                  total: room.totalRounds ?? room.boType,
+                }) : room.gameMode === 'relay2v2'
+                  ? t('multi.finalScore', {
+                    reason: matchOverReason(matchOver, myKey, isSpectator, t),
+                    score: `${room.teamScores?.a ?? 0} : ${room.teamScores?.b ?? 0}`,
+                  })
+                  : isLargeClassicRoom
+                  ? matchOverReason(matchOver, myKey, isSpectator, t)
+                  : t('multi.finalScore', {
+                      reason: matchOverReason(matchOver, myKey, isSpectator, t),
+                      score: `${leftPlayer?.score ?? 0} : ${rightPlayer?.score ?? 0}`,
+                    })}
+              </p>
+              {canRematch && (
+                <p className="rematch-want-progress">
+                  <CheckCircle2 size={17} aria-hidden="true" />
+                  <span>{t('multi.rematchWantedProgress', {
+                    accepted: rematchAcceptedKeys.length,
+                    required: rematchRequiredKeys.length,
+                  })}</span>
+                </p>
+              )}
+            </div>
+          }
+          actions={
+            <>
+              <button className="btn btn-ghost" onClick={viewFinishedMatch}>
+                <Eye size={16} />
+                {t('multi.viewGame')}
+              </button>
+              {canRematch && (
+                <button
+                  className={rematchWantedByMe ? 'btn btn-ghost' : 'btn btn-success'}
+                  disabled={rematchBusy}
+                  onClick={() => updateRematch('match:rematch-want', { wanted: !rematchWantedByMe })}
+                >
+                  {rematchWantedByMe ? <X size={16} /> : <Check size={16} />}
+                  {t(rematchWantedByMe ? 'multi.cancelRematchWant' : 'multi.wantRematch')}
+                </button>
+              )}
+              <button className="btn btn-ghost" disabled={leaving} onClick={() => void leaveRoom()}>
+                <DoorOpen size={16} />
+                {leaving ? t('multi.leaving') : t('multi.returnLobby')}
+              </button>
+              {room.matchmaking && !isSpectator && opponent && !room.reportSubmitted && (
+                <button className="match-report-link" type="button" disabled={reportBusy} onClick={() => setReportOpen(true)}>
+                  <AlertTriangle size={13} aria-hidden="true" />
+                  {t('multi.reportOpponent')}
+                </button>
+              )}
+              {room.matchmaking && room.reportSubmitted && <span className="badge amber">{t('multi.reportSubmitted')}</span>}
+            </>
+          }
+        />
+      )}
+
+      {playerStats && (
+        <PlayerStatsDialog view={playerStats} onClose={() => setPlayerStats(null)} />
+      )}
+
+      {relayAbort && (
+        <AnswerOverlay
+          title={t('multi.relayAbortedTitle')}
+          answer={null}
+          extra={
+            <p className="muted">
+              {t(relayAbort.reason === 'player_left'
+                ? 'multi.relayAbortedPlayerLeft'
+                : 'multi.relayAbortedDisconnect')}
+            </p>
+          }
+          actions={
+            <button className="btn btn-ghost" onClick={returnFromRelayAbort}>
+              <DoorOpen size={16} />
+              {t('multi.returnLobby')}
+            </button>
+          }
+        />
+      )}
+      {reportOpen && room?.matchmaking && opponent && (
+        <ModalPortal>
+          <div className="confirm-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setReportOpen(false); }}>
+            <div ref={reportDialogRef} className="confirm-dialog match-report-dialog" role="dialog" aria-modal="true" aria-labelledby="match-report-title" tabIndex={-1}>
+              <div className="confirm-icon" aria-hidden="true"><AlertTriangle size={22} /></div>
+              <div className="confirm-content">
+                <div className="confirm-heading">
+                  <h2 id="match-report-title">{t('multi.reportTitle')}</h2>
+                  <button className="confirm-close" type="button" aria-label={t('common.close')} onClick={() => setReportOpen(false)}><X size={18} /></button>
+                </div>
+                <p>{t('multi.reportMessage', { player: opponent.name })}</p>
+                <textarea
+                  className="input match-report-input"
+                  value={reportDescription}
+                  maxLength={50}
+                  rows={3}
+                  placeholder={t('multi.reportPlaceholder')}
+                  onChange={(event) => setReportDescription(event.target.value.slice(0, 50))}
+                />
+                <div className="match-report-counter">{reportDescription.length}/50</div>
+                <div className="confirm-actions">
+                  <button className="btn btn-ghost" type="button" onClick={() => setReportOpen(false)}>{t('common.cancel')}</button>
+                  <button className="btn btn-warning" type="button" disabled={reportBusy} onClick={submitReport}><AlertTriangle size={15} />{t('multi.submitReport')}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+    </Page>
+  );
+}

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+pow-wasm/target/
+*.sqlite3
+*.db
+.env
+.DS_Store
+target/
+*.tsbuildinfo
+origin/
+data/pgdata/
+.docker-runtime-test/
+compose.override.yaml
+.pnpm-store/
+.claude/
+rule.txt
+AGENTS.md

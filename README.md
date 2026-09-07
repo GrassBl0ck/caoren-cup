@@ -2,12 +2,13 @@
 
 Caoren Cup 是一个面向 CS2 自定义娱乐赛的赛事系统。
 
-项目包含四部分：
+项目包含五部分：
 
 1. **CS2 娱乐玩法插件**
 2. **网页赛事指挥台 / 网页端**
 3. **CS2 与网页后端通信的桥接插件**
 4. **CS2 小游戏插件**
+5. **弗一把选手猜测游戏（1.10 开发中）**
 
 适用于 CS2 自定义娱乐赛、队长选人、地图 Ban/Pick、阵营选择、卧底玩法、赛后指认、战绩同步和积分结算等场景。
 
@@ -38,6 +39,9 @@ caoren-cup/
 │
 ├─ mini-games-plugin/
 │  └─ CS2 小游戏插件
+│
+├─ friberg-game/
+│  └─ 独立 AGPL-3.0 选手猜测游戏（1.10 开发中）
 │
 ├─ docs/
 │  └─ 项目文档
@@ -1125,6 +1129,8 @@ curl -I http://127.0.0.1:3000/assets/audio/manifest.json
 草人杯仓库主体使用 MIT License。
 
 许可证例外：`weaponpaints-plugin/` 基于 GPL-3.0 上游项目改造，该目录及其修改使用 GPL-3.0，不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `weaponpaints-plugin/UPSTREAM.md`。
+
+许可证例外：`friberg-game/` 基于 `shnlfriberg/csgofriberg` 的固定源码快照改造，该目录及其修改使用 GNU Affero General Public License v3.0（AGPL-3.0），不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `friberg-game/UPSTREAM.md`。通过网络向用户提供修改版服务时，必须按 AGPL-3.0 向相应用户提供对应源码获取方式。
 
 `mini-games-plugin/` 作为独立组件使用 GNU General Public License v3.0（GPL-3.0），其复制、修改和分发以该目录内的 `LICENSE` 为准。发布或再分发小游戏插件二进制时必须保留对应许可证与源码获取方式。
 

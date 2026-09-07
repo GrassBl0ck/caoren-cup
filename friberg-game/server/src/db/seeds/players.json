@@ -1,0 +1,67 @@
+[
+  {
+    "nickname": "s1mple",
+    "nationality": "乌克兰",
+    "region": "欧洲",
+    "team": "Natus Vincere",
+    "age": 29,
+    "role": "AWPer",
+    "major_championships": 1,
+    "major_appearances": 12,
+    "difficulties": ["normal", "easy", "beginner"],
+    "is_active": true,
+    "is_enabled": true
+  },
+  {
+    "nickname": "ZywOo",
+    "nationality": "法国",
+    "region": "欧洲",
+    "team": "Vitality",
+    "age": 26,
+    "role": "AWPer",
+    "major_championships": 3,
+    "major_appearances": 8,
+    "difficulties": ["normal", "easy", "beginner"],
+    "is_active": true,
+    "is_enabled": true
+  },
+  {
+    "nickname": "device",
+    "nationality": "丹麦",
+    "region": "欧洲",
+    "team": "Astralis",
+    "age": 31,
+    "role": "AWPer",
+    "major_championships": 4,
+    "major_appearances": 15,
+    "difficulties": ["normal", "easy", "beginner"],
+    "is_active": true,
+    "is_enabled": true
+  },
+  {
+    "nickname": "NiKo",
+    "nationality": "波黑",
+    "region": "欧洲",
+    "team": "Falcons",
+    "age": 29,
+    "role": "Rifler",
+    "major_championships": 0,
+    "major_appearances": 13,
+    "difficulties": ["normal", "easy"],
+    "is_active": true,
+    "is_enabled": true
+  },
+  {
+    "nickname": "donk",
+    "nationality": "俄罗斯",
+    "region": "独联体",
+    "team": "Team Spirit",
+    "age": 19,
+    "role": "Rifler",
+    "major_championships": 1,
+    "major_appearances": 3,
+    "difficulties": ["normal", "easy", "beginner"],
+    "is_active": true,
+    "is_enabled": true
+  }
+]

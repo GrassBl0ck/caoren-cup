@@ -1,0 +1,287 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+
+const readCss = (relativePath: string) =>
+  readFileSync(resolve(__dirname, relativePath), 'utf8');
+
+describe('desktop/mobile layout contracts', () => {
+  it('keeps every admin tab content at the player change review width', () => {
+    const admin = readCss('../../src/styles/data-admin.css');
+    expect(admin).toMatch(
+      /\.admin-players-card,\s*\.admin-users-card,\s*\.admin-api-tokens-card,\s*\.admin-reports-card,\s*\.admin-player-changes-card,\s*\.admin-import-card,\s*\.admin-centered-card,\s*\.admin-announcements-card\s*\{[^}]*width:\s*min\(1440px,\s*100%\)/s
+    );
+  });
+
+  it('keeps the admin user detail content vertically scrollable', () => {
+    const admin = readCss('../../src/styles/data-admin.css');
+    expect(admin).toMatch(
+      /\.admin-user-detail-dialog\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;/s
+    );
+    expect(admin).toMatch(
+      /\.admin-user-detail-content\s*\{[^}]*flex:\s*1\s+1\s+auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
+    );
+  });
+
+  it('fully disables CSS motion when the personal preference is reduced', () => {
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(/html\[data-motion='reduced'\][\s\S]*transition:\s*none\s*!important/s);
+    expect(responsive).toMatch(/html\[data-motion='reduced'\][\s\S]*animation:\s*none\s*!important/s);
+    expect(responsive).toMatch(
+      /html\[data-motion='reduced'\]\s+\.matchmaking-spinner\s*\{[^}]*animation:\s*spin\s+0\.8s\s+linear\s+infinite\s*!important/s
+    );
+  });
+
+  it('keeps decorative theme surfaces static while preserving finite entrance motion', () => {
+    const blastFoundation = readCss('../../src/styles/themes/blast-foundation.css');
+    const blastPages = readCss('../../src/styles/themes/blast-pages.css');
+    const light = readCss('../../src/styles/themes/light.css');
+    const blastBackdrop = /body::before\s*\{[^}]*\}/s.exec(blastFoundation)?.[0] ?? '';
+    const lightBackdrop = /body::before\s*\{[^}]*\}/s.exec(light)?.[0] ?? '';
+
+    expect(blastBackdrop).toMatch(/inset:\s*0;[\s\S]*radial-gradient/);
+    expect(blastBackdrop).not.toMatch(/animation:|will-change:|filter:\s*blur/);
+    expect(blastFoundation).not.toMatch(/ambient-drift|neon-pulse/);
+    expect(blastPages).not.toMatch(/hero-orbit|hero-beam/);
+    expect(lightBackdrop).toMatch(/inset:\s*0;[\s\S]*radial-gradient/);
+    expect(lightBackdrop).not.toMatch(/animation:|will-change:|filter:\s*blur/);
+    expect(light).not.toMatch(/day-ambient-drift|day-beam-pulse|day-hero-orbit|day-hero-beam/);
+    expect(blastFoundation).toMatch(/\.page-scroll\s*>\s*\*\s*\{[^}]*animation:\s*surface-enter\s+0\.52s/s);
+    expect(light).toMatch(/\.page-scroll\s*>\s*\*\s*\{[^}]*animation:\s*day-surface-enter\s+0\.52s/s);
+  });
+
+  it('caps single difficulty cards on wide screens and stacks actions on mobile', () => {
+    const home = readCss('../../src/styles/home-multiplayer.css');
+    expect(home).toMatch(
+      /\.single-difficulty-grid\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(230px,\s*360px\)\)/s
+    );
+    expect(home).toMatch(/\.single-difficulty-grid\s*\{[^}]*justify-content:\s*center/s);
+    expect(home).toMatch(
+      /\.single-difficulty-icon\s*\{[^}]*var\(--diff-color,\s*var\(--primary\)\)/s
+    );
+    expect(home).toMatch(
+      /\.single-difficulty-option\.active\s+\.single-difficulty-check\s*\{[^}]*background:\s*var\(--primary\)/s
+    );
+    expect(home).toMatch(/\.single-difficulty-check\s*\{[^}]*color:\s*#201118/s);
+    expect(home).toMatch(
+      /\.home-hero::before,\s*\n?\s*\.home-hero::after\s*\{[^}]*z-index:\s*0/s
+    );
+    expect(home).toMatch(/\.home-hero\s*>\s*\*\s*\{[^}]*z-index:\s*1/s);
+
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.single-lobby-action\s*\{[^}]*flex-direction:\s*column/ 
+    );
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.single-lobby-action\s+\.btn\s*\{[^}]*width:\s*100%/
+    );
+    expect(home).toMatch(/\.thanks-dialog\s*\{[^}]*max-height:\s*calc\(100dvh - 40px\)/s);
+    expect(home).toMatch(/\.home-sponsor-link\s*\{[^}]*font-size:\s*0\.72rem/s);
+    const game = readCss('../../src/styles/game.css');
+    expect(game).not.toMatch(/\.input-dock\s*\{[^}]*backdrop-filter/s);
+  });
+
+  it('hides chrome for mobile keyboards and stacks multiplayer boards only when space is genuinely narrow', () => {
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /\.game-page\.keyboard-active\s+\.header-bar,\s*\n?\s*\.game-page\.keyboard-active\s+\.status-bar\s*\{\s*display:\s*none/
+    );
+    expect(responsive).toMatch(
+      /\.multi-game-page\.keyboard-active\s+\.score-bar\s*\{\s*display:\s*none/
+    );
+    expect(responsive).toMatch(
+      /\.game-page\.keyboard-active\s+\.input-dock\s*\{[^}]*padding-top:\s*6px/s
+    );
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*960px\)\s*and\s*\(pointer:\s*coarse\),\s*\(max-width:\s*700px\)\s*\{[\s\S]*\.boards\s*\{[^}]*grid-template-columns:\s*1fr/
+    );
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*960px\)\s*and\s*\(pointer:\s*coarse\),\s*\(max-width:\s*700px\)\s*\{[\s\S]*\.multi-classic-layout\s+\.compact-players\s*\{[^}]*order:\s*1;[\s\S]*\.multi-classic-layout\s+\.player-board-self\s*\{[^}]*order:\s*2;/
+    );
+    expect(responsive).toMatch(
+      /\.leaderboard-card\s+table\s+th:nth-child\(1\)\s*\{\s*width:\s*7%/
+    );
+    expect(responsive).toMatch(
+      /\.leaderboard-card-multi\s+table\s+th:nth-child\(1\)\s*\{\s*width:\s*8%/
+    );
+    const dataAdmin = readCss('../../src/styles/data-admin.css');
+    expect(dataAdmin).toMatch(
+      /\.leaderboard-mode-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s
+    );
+    expect(dataAdmin).toMatch(
+      /\.leaderboard-self-summary\s*\{[^}]*grid-template-columns:[^}]*minmax\(5\.5rem,[^}]*minmax\(7rem,[^}]*min-height:\s*48px/s
+    );
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.leaderboard-controls\s*\{[^}]*flex-direction:\s*column/
+    );
+  });
+
+  it('keeps player autocomplete bounded and touch-scrollable on Safari', () => {
+    const game = readCss('../../src/styles/game.css');
+    expect(game).toMatch(/\.autocomplete-list\s*\{[\s\S]*max-height:\s*42vh;[\s\S]*max-height:\s*min\(42vh,\s*420px\);[\s\S]*overflow-y:\s*auto;[\s\S]*-webkit-overflow-scrolling:\s*touch;[\s\S]*touch-action:\s*pan-y;/);
+
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(/\.game-page\.keyboard-active\s+\.autocomplete-list\s*\{[\s\S]*max-height:\s*38vh;[\s\S]*max-height:\s*min\(38vh,\s*13rem\);[\s\S]*max-height:\s*38dvh;/);
+  });
+
+  it('orders mobile multiplayer lobby actions by workflow priority', () => {
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*960px\)\s*\{[\s\S]*\.multi-lobby-match-card\s*\{[^}]*order:\s*1[\s\S]*\.multi-lobby-join-card\s*\{[^}]*order:\s*2[\s\S]*\.multi-lobby-create-card\s*\{[^}]*order:\s*3/
+    );
+
+    const multiplayer = readCss('../../src/styles/home-multiplayer.css');
+    expect(multiplayer).toMatch(/\.multi-lobby-create-card\s*\{\s*grid-area:\s*create/);
+    expect(multiplayer).toMatch(/\.multi-lobby-match-card\s*\{\s*grid-area:\s*match/);
+    expect(multiplayer).toMatch(/\.multi-lobby-join-card\s*\{\s*grid-area:\s*join/);
+  });
+
+  it('keeps the room settings modal content in a full-width single column', () => {
+    const multiplayer = readCss('../../src/styles/home-multiplayer.css');
+    expect(multiplayer).toMatch(
+      /\.room-settings-dialog\s*\{[^}]*display:\s*block;[^}]*width:\s*min\(700px,\s*100%\)/s
+    );
+    expect(multiplayer).toMatch(
+      /\.room-settings-options\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s
+    );
+    expect(multiplayer).toMatch(
+      /\.room-preset-control\s+\.input,\s*\.room-preset-control\s+\.btn\s*\{[^}]*height:\s*46px;[^}]*min-height:\s*46px/s
+    );
+    expect(multiplayer).toMatch(
+      /\.room-preset-section\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1\.25fr\)/s
+    );
+
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /\.room-settings-dialog\s*\{[^}]*max-height:\s*calc\(100dvh - 20px\)/s
+    );
+    expect(responsive).toMatch(
+      /\.room-settings-options\s*\{[^}]*grid-template-columns:\s*1fr/s
+    );
+  });
+
+  it('centers a single answer overlay action on mobile', () => {
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /\.overlay-card\s+\.btns\s*>\s*\.btn:only-child\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*justify-self:\s*center;[^}]*width:\s*min\(100%,\s*220px\)/s
+    );
+  });
+
+  it('keeps the completed daily leaderboard in a capped desktop side column', () => {
+    const daily = readCss('../../src/styles/daily.css');
+    expect(daily).toMatch(
+      /\.daily-game-section\s*>\s*\.game-table-wrap\s*\{[^}]*align-self:\s*start/s
+    );
+    expect(daily).toMatch(
+      /\.daily-leaderboard-table\s+table\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*table-layout:\s*fixed/s
+    );
+    expect(daily).toMatch(
+      /\.daily-leaderboard-player-name\s*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap/s
+    );
+    expect(daily).toMatch(
+      /@media\s*\(min-width:\s*960px\)\s*\{[\s\S]*\.daily-content-layout\.has-leaderboard\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*7fr\)\s+minmax\(0,\s*3fr\)/s
+    );
+    expect(daily).toMatch(
+      /\.daily-leaderboard-section\s*\{[^}]*border-top:\s*1px\s+solid\s+var\(--border\)/s
+    );
+    expect(daily).toMatch(
+      /\.daily-content-layout\.has-leaderboard\s+\.daily-leaderboard-section\s*\{[^}]*border-top:\s*0;[^}]*border-left:\s*1px\s+solid\s+var\(--border\)/s
+    );
+  });
+
+  it('keeps wide low-zoom layouts at the 1920px design scale', () => {
+    const tokens = readCss('../../src/styles/tokens.css');
+    // 单一根字号刻度,不再包媒体查询:下界 100% 已覆盖 1600–1920 区间
+    expect(tokens).toMatch(/^html\s*\{\s*font-size:\s*clamp\(100%,\s*0\.833333vw,\s*400%\);\s*\}/m);
+    expect(tokens).not.toMatch(/@media\s*\(min-width:\s*1600px\)/);
+
+    const multiplayer = readCss('../../src/styles/home-multiplayer.css');
+    expect(multiplayer).toMatch(/\.score-bar\s*\{[^}]*width:\s*min\(57\.5rem,\s*100%\)/s);
+    expect(multiplayer).toMatch(/\.boards\s*\{[^}]*gap:\s*0\.875rem/s);
+    expect(multiplayer).toMatch(
+      /\.multi-classic-layout-crowded\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*13fr\)\s+minmax\(0,\s*7fr\)/s
+    );
+  });
+
+  it('scales the multiplayer board continuously so browser zoom cannot snap its density', () => {
+    // 参与版心宽度计算的间距,上下界必须是 rem,否则棋盘宽度占比会随缩放漂移
+    const tokens = readCss('../../src/styles/tokens.css');
+    expect(tokens).toMatch(/--page-inline:\s*clamp\(1rem,\s*4vw,\s*3\.25rem\)/);
+    expect(readCss('../../src/styles/controls.css')).toMatch(
+      /\.card\s*\{[^}]*padding:\s*clamp\(1\.125rem,\s*2\.25vw,\s*1\.5rem\)/s
+    );
+
+    const multiplayer = readCss('../../src/styles/home-multiplayer.css');
+    // 唯一的刻度旋钮。上界必须是常规宽度下生效的那一项(0.95rem ≈ 15.2px),
+    // 否则 cqw 会在放大页面时因容器变窄而抵消掉缩放
+    expect(multiplayer).toMatch(
+      /\.player-board\s+\.game-table\s*\{[^}]*font-size:\s*clamp\(0\.66rem,\s*3\.2cqw,\s*0\.95rem\)/s
+    );
+    // cqw 系数不能超过「不换行」上限,否则手机竖屏等窄容器会整片折行
+    const cqw = Number(
+      /\.player-board\s+\.game-table\s*\{[^}]*?([\d.]+)cqw/s.exec(multiplayer)?.[1]
+    );
+    const hPad = Number(
+      /\.player-board\s+\.game-table\s+td\s*\{[^}]*padding:\s*[\d.]+em\s+([\d.]+)em/s.exec(
+        multiplayer
+      )?.[1]
+    );
+    // 列宽% ÷ (字符数 × 字宽 + 箭头 + 2×横向留白),取最紧的一列
+    const demand = [
+      { w: 21, n: 11, cjk: false }, { w: 16, n: 8, cjk: false },
+      { w: 14, n: 7, cjk: false }, { w: 9, n: 2, cjk: false, arrow: true },
+      { w: 13, n: 3, cjk: true }, { w: 8, n: 1, cjk: false, arrow: true },
+      { w: 9, n: 2, cjk: false, arrow: true }, { w: 10, n: 2, cjk: true },
+    ];
+    const ceiling = Math.min(
+      ...demand.map(
+        (c) => c.w / (c.n * (c.cjk ? 1 : 0.5) + (c.arrow ? 0.88 : 0) + 2 * hPad)
+      )
+    );
+    expect(cqw).toBeLessThanOrEqual(ceiling);
+    // 板内尺寸全部由该字号用 em 派生 —— 出现 px 就意味着又引入了不随缩放变化的死值。
+    // 先剥注释:说明文字里会提到 1920px 之类的设计基准,不该被当成声明扫到
+    const boardBlock = multiplayer
+      .slice(multiplayer.indexOf('.player-board {'))
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    const boardRules = boardBlock.match(/\.player-board\s+\.game-table[^{]*\{[^}]*\}/gs) ?? [];
+    expect(boardRules.length).toBeGreaterThan(3);
+    for (const rule of boardRules) {
+      expect(rule).not.toMatch(/:\s*[^;{}]*\b\d+(\.\d+)?px\b/);
+    }
+    // 断点式容器查询已移除:有台阶就有缩放时的密度跳变
+    expect(multiplayer).not.toMatch(/@container\s*\(max-width:\s*(560|390)px\)/);
+
+    // 多人棋盘自己的列宽比例必须正好占满 100%,否则 table-layout: fixed 会自行分配余量
+    const widths = [
+      ...multiplayer.matchAll(
+        /\.player-board\s+\.game-table\s+td:nth-child\(\d\)\s*\{\s*width:\s*(\d+)%/g
+      ),
+    ].map((m) => Number(m[1]));
+    expect(widths).toHaveLength(8);
+    expect(widths.reduce((a, b) => a + b, 0)).toBe(100);
+  });
+
+  it('keeps mobile multiplayer tables compact without truncating content or changing desktop sizing', () => {
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.player-board\s+\.game-table\s*\{[^}]*font-size:\s*clamp\(0\.6rem,\s*2\.75cqw,\s*0\.78rem\)/
+    );
+    expect(responsive).toMatch(
+      /\.player-board\s+\.game-table\s+td\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*normal/s
+    );
+    expect(responsive).toMatch(
+      /\.player-board\s+\.game-table\s+th\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*normal/s
+    );
+
+    const mobileBoardRules = responsive
+      .slice(responsive.indexOf('@media (max-width: 640px)'))
+      .match(/\.player-board\s+\.game-table[^{]*\{[^}]*\}/gs) ?? [];
+    expect(mobileBoardRules.join('\n')).not.toMatch(/overflow:\s*hidden|text-overflow:\s*ellipsis/);
+
+    const multiplayer = readCss('../../src/styles/home-multiplayer.css');
+    expect(multiplayer).toMatch(
+      /\.player-board\s+\.game-table\s*\{[^}]*font-size:\s*clamp\(0\.66rem,\s*3\.2cqw,\s*0\.95rem\)/s
+    );
+  });
+});
