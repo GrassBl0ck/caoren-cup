@@ -6,7 +6,7 @@ import { db } from '../../src/db/knex';
 import { initDb } from '../../src/db/init';
 import { errorHandler } from '../../src/middleware/common';
 import { createAdminQuestionBankRouter } from '../../src/routes/adminQuestionBank';
-import externalQuestionBankRoutes, { externalQuestionBankAuth } from '../../src/routes/externalQuestionBank';
+import externalQuestionBankRoutes, { createExternalQuestionBankAuth } from '../../src/routes/externalQuestionBank';
 import { hashApiToken } from '../../src/services/apiTokens';
 
 let server: http.Server;
@@ -43,7 +43,7 @@ beforeAll(async () => {
   });
   const app = express();
   app.use(express.json());
-  app.use('/api/external', externalQuestionBankAuth({ preAuthLimit: noLimit, writeLimit: noLimit }));
+  app.use('/api/external', createExternalQuestionBankAuth({ preAuthLimit: noLimit, writeLimit: noLimit }));
   app.use('/api/external', externalQuestionBankRoutes({ writeLimit: noLimit }));
   app.use('/api/admin/question-bank', createAdminQuestionBankRouter({ readLimit: noLimit, writeLimit: noLimit }));
   app.use(errorHandler);
