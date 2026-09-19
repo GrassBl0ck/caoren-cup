@@ -62,6 +62,11 @@ function isCurrent(validFrom: string, validTo: string | null, cutoffDate: string
   return validFrom <= cutoffDate && (validTo === null || validTo > cutoffDate);
 }
 
+function naturalDateValue(value: unknown): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value);
+}
+
 function groupByPlayer<T extends { player_id: unknown }>(rows: readonly T[]): Map<number, T[]> {
   const grouped = new Map<number, T[]>();
   for (const row of rows) {
@@ -148,7 +153,7 @@ export async function buildDataVersion(
       throw new HttpError(409, 'DATA_VERSION_NOT_BUILDABLE');
     }
     const versionId = Number(version.id);
-    const cutoffDate = String(version.cutoff_date);
+    const cutoffDate = naturalDateValue(version.cutoff_date);
     await clearDerivedVersionRows(trx, versionId);
     await trx('data_versions').where({ id: versionId }).update({
       status: 'validating',
@@ -191,7 +196,7 @@ export async function buildDataVersion(
       ? (await trx('person_career_roles').whereIn('player_id', playerIds).orderBy('id'))
         .filter((row) => (
           hasValidEvidence(row.evidence_id)
-          && isCurrent(String(row.valid_from), row.valid_to == null ? null : String(row.valid_to), cutoffDate)
+          && isCurrent(naturalDateValue(row.valid_from), row.valid_to == null ? null : naturalDateValue(row.valid_to), cutoffDate)
         ))
       : [];
     const rolesByPlayer = groupByPlayer(careerRoles);
@@ -230,8 +235,8 @@ export async function buildDataVersion(
       const currentMemberships = (membershipsByPlayer.get(playerId) ?? []).filter((membership) => (
         membership.contract_type === 'official'
         && isCurrent(
-          String(membership.valid_from),
-          membership.valid_to == null ? null : String(membership.valid_to),
+          naturalDateValue(membership.valid_from),
+          membership.valid_to == null ? null : naturalDateValue(membership.valid_to),
           cutoffDate
         )
       ));
@@ -389,7 +394,7 @@ export async function buildDataVersion(
         id: versionSnapshotId,
         provider: row.provider,
         rankingScope: row.ranking_scope,
-        publishedOn: String(row.published_on),
+        publishedOn: naturalDateValue(row.published_on),
         evidenceId: Number(row.evidence_id),
         entries: entries.map((entry) => ({
           id: Number(entry.id), teamId: Number(entry.team_id), rank: Number(entry.rank),
@@ -425,7 +430,7 @@ export async function buildDataVersion(
         id: versionListId,
         year: Number(row.year),
         publicationStatus: row.publication_status,
-        publishedOn: String(evidence.evidence_date),
+        publishedOn: naturalDateValue(evidence.evidence_date),
         evidenceId: Number(row.evidence_id),
         entries: entries.map((entry) => ({
           id: Number(entry.id),
@@ -475,8 +480,8 @@ export async function buildDataVersion(
       })));
       majorInput.push({
         id: versionMajorId,
-        startsOn: String(row.starts_on),
-        endsOn: String(row.ends_on),
+        startsOn: naturalDateValue(row.starts_on),
+        endsOn: naturalDateValue(row.ends_on),
         evidenceId: Number(row.evidence_id),
         championTeamId: results.find((entry) => Boolean(entry.is_champion))
           ? Number(results.find((entry) => Boolean(entry.is_champion))!.team_id)
@@ -531,13 +536,13 @@ export async function buildDataVersion(
       identityType: row.identity_type,
       externalId: String(row.external_id),
       evidenceId: Number(row.evidence_id),
-      evidenceDate: String(evidenceById.get(Number(row.evidence_id))!.evidence_date),
+      evidenceDate: naturalDateValue(evidenceById.get(Number(row.evidence_id))!.evidence_date),
     }));
     const matchInput: VersionMatchEvidence[] = matchRows.map((row) => ({
       id: Number(row.id),
       playerId: Number(row.player_id),
       externalMatchId: String(row.external_match_id),
-      matchDate: String(row.match_date),
+      matchDate: naturalDateValue(row.match_date),
       gameVersion: row.game_version,
       evidenceId: Number(row.evidence_id),
     }));
@@ -545,8 +550,8 @@ export async function buildDataVersion(
       id: Number(row.id),
       playerId: Number(row.player_id),
       teamId: Number(row.team_id),
-      validFrom: String(row.valid_from),
-      validTo: row.valid_to == null ? null : String(row.valid_to),
+      validFrom: naturalDateValue(row.valid_from),
+      validTo: row.valid_to == null ? null : naturalDateValue(row.valid_to),
       memberRole: row.member_role,
       rosterStatus: row.roster_status,
       contractType: row.contract_type,
@@ -658,8 +663,8 @@ export async function buildDataVersion(
           .filter((membership) => (
             membership.contract_type === 'official'
             && isCurrent(
-              String(membership.valid_from),
-              membership.valid_to == null ? null : String(membership.valid_to),
+              naturalDateValue(membership.valid_from),
+              membership.valid_to == null ? null : naturalDateValue(membership.valid_to),
               cutoffDate
             )
           ))
