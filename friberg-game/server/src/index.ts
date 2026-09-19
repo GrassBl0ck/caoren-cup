@@ -40,6 +40,10 @@ import { rejectMissingClientAsset, setClientAssetCacheHeaders } from './middlewa
 import { injectUmamiScript } from './services/umami';
 import runtimeConfigRoutes from './routes/runtimeConfig';
 import dailyChallengeRoutes from './routes/dailyChallenge';
+import externalQuestionBankRoutes, { externalQuestionBankAuth } from './routes/externalQuestionBank';
+import adminQuestionBankRoutes from './routes/adminQuestionBank';
+import questionBankRoutes from './routes/questionBank';
+import { initQuestionBankCache } from './services/questionBank/cache';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = 'https://static.cloudflareinsights.com';
@@ -93,6 +97,7 @@ async function main() {
   console.log('[server] 数据库结构验证通过');
   const redisReady = await initRedis();
   await initPlayerCache();
+  await initQuestionBankCache();
   const stopMatchWorker = redisReady ? await initMatchResultWorker() : async () => undefined;
 
   const app = express();
@@ -185,12 +190,14 @@ async function main() {
   // It contains only non-secret browser configuration such as the GeeTest ID.
   app.use('/api/runtime-config', runtimeConfigRoutes);
   app.use('/api/external', externalPlayerAuth);
+  app.use('/api/external', externalQuestionBankAuth);
   app.use(
     '/api/external',
     rejectOversizedBody(config.adminImportBodyLimitBytes),
     parseJsonOnce(`${config.adminImportBodyLimitBytes}b`)
   );
   app.use('/api/external', externalPlayerRoutes);
+  app.use('/api/external', externalQuestionBankRoutes);
   app.use('/api', requirePow);
   app.use('/api/admin/players/import', requireAuth, requireAdmin);
   app.use(
@@ -207,6 +214,8 @@ async function main() {
   app.use('/api/stats', statsRoutes);
   app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/announcements', announcementRoutes);
+  app.use('/api/question-bank', questionBankRoutes);
+  app.use('/api/admin/question-bank', adminQuestionBankRoutes);
   app.use('/api/admin', adminRoutes);
 
   // 生产环境托管前端构建产物

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import http from 'http';
 import express from 'express';
 import { AddressInfo } from 'net';
@@ -55,6 +56,7 @@ describe('player change submissions', () => {
     }).returning(['id', 'token_version']);
     const admin = insertedAdmin[0];
     const [playerId] = await db('players').insert({
+      person_uid: crypto.randomUUID(),
       nickname,
       nationality: 'Denmark',
       region: 'Europe',

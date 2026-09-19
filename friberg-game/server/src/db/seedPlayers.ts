@@ -1,7 +1,9 @@
+import crypto from 'crypto';
 import type { Knex } from 'knex';
 import { db } from './knex';
 import playersData from './seeds/players.json';
 import { serializeTeamHistory } from '../services/teamHistory';
+import { normalizePersonAlias } from '../services/questionBank/normalization';
 
 interface SeedPlayer {
   nickname: string;
@@ -35,9 +37,16 @@ export async function insertMissingSeedPlayers(instance: Knex = db): Promise<num
   );
   if (!additions.length) return 0;
 
+  const hasPersonUid = await instance.schema.hasColumn('players', 'person_uid');
+  const hasAliases = await instance.schema.hasTable('person_aliases');
+
   await instance.transaction(async (trx) => {
     const inserted = await trx('players')
       .insert(additions.map((player) => ({
+        ...(hasPersonUid ? {
+          person_uid: crypto.randomUUID(),
+          identity_status: 'candidate',
+        } : {}),
         nickname: player.nickname,
         nationality: player.nationality,
         region: player.region,
@@ -68,6 +77,14 @@ export async function insertMissingSeedPlayers(instance: Knex = db): Promise<num
         .insert(memberships)
         .onConflict(['player_id', 'difficulty_key'])
         .ignore();
+    }
+    if (hasAliases && inserted.length) {
+      await trx('person_aliases').insert(inserted.map((player) => ({
+        player_id: player.id,
+        alias: player.nickname,
+        normalized_alias: normalizePersonAlias(String(player.nickname)),
+        alias_type: 'primary',
+      })));
     }
   });
   return additions.length;

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import type { Knex } from 'knex';
 import { z } from 'zod';
 import { db } from '../db/knex';
@@ -5,6 +6,12 @@ import { isKnownDifficultyKey } from '../difficulties';
 import { HttpError } from '../middleware/common';
 import { invalidatePlayerCache } from './playerCache';
 import { MAX_TEAM_HISTORY_ITEMS, MAX_TEAM_HISTORY_NAME_LENGTH, serializeTeamHistory } from './teamHistory';
+import {
+  normalizePersonAlias,
+  isPersonUidConflict,
+  resolveLegacyImportTarget,
+  setPrimaryNickname,
+} from './questionBank/identity';
 
 const playerRoles = ['Rifler', 'AWPer', 'Coach'] as const;
 const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
@@ -13,7 +20,7 @@ const difficultyListSchema = z.array(difficultyKeySchema)
   .max(20)
   .refine((keys) => new Set(keys).size === keys.length);
 
-export const playerSchema = z.object({
+const playerFieldsSchema = z.object({
   nickname: z.string().trim().min(1).max(64),
   nationality: z.string().trim().min(1).max(64),
   region: z.string().trim().max(32).default(''),
@@ -30,19 +37,32 @@ export const playerSchema = z.object({
   difficulties: difficultyListSchema.optional(),
 });
 
+export const playerSchema = playerFieldsSchema.extend({
+  personUid: z.string().uuid().optional(),
+});
+
 export const importedPlayerSchema = playerSchema.extend({
-  team_history: playerSchema.shape.team_history.optional(),
+  team_history: playerFieldsSchema.shape.team_history.optional(),
   is_enabled: z.boolean().optional(),
 });
 
-export const playerUpdateSchema = playerSchema.partial().strict()
+export const playerUpdateSchema = playerFieldsSchema.partial().strict()
   .refine((values) => Object.keys(values).length > 0);
 
 export const playerImportSchema = z.object({
   players: z.array(importedPlayerSchema)
     .min(1)
     .max(1000)
-    .refine((players) => new Set(players.map((player) => player.nickname)).size === players.length),
+    .superRefine((players, context) => {
+      const personUids = players.flatMap((player) => player.personUid ? [player.personUid] : []);
+      if (new Set(personUids).size !== personUids.length) {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: 'DUPLICATE_PERSON_UID' });
+      }
+      const legacyNicknames = players.flatMap((player) => player.personUid ? [] : [player.nickname]);
+      if (new Set(legacyNicknames).size !== legacyNicknames.length) {
+        context.addIssue({ code: z.ZodIssueCode.custom, message: 'DUPLICATE_LEGACY_NICKNAME' });
+      }
+    }),
 });
 
 export type PlayerInput = z.infer<typeof playerSchema>;
@@ -71,22 +91,38 @@ export async function replacePlayerDifficulties(
 }
 
 export async function createPlayer(input: PlayerInput): Promise<number> {
-  const exists = await db('players').where({ nickname: input.nickname }).first('id');
-  if (exists) throw new HttpError(409, 'NICKNAME_TAKEN');
   const difficulties = input.difficulties ?? ['normal'];
   assertDifficultyKeys(difficulties);
-  const { difficulties: _difficulties, team_history, ...values } = input;
-  const id = await db.transaction(async (trx) => {
-    const [createdId] = await trx('players')
-      .insert({ ...values, team_history: serializeTeamHistory(team_history) })
-      .returning('id')
-      .then((rows) => rows.map((row: unknown) => (
-        typeof row === 'object' && row !== null && 'id' in row ? row.id : row
-      )));
-    const playerId = Number(createdId);
-    await replacePlayerDifficulties(trx, playerId, difficulties);
-    return playerId;
-  });
+  const { personUid, difficulties: _difficulties, team_history, nickname, ...values } = input;
+  let id: number;
+  try {
+    id = await db.transaction(async (trx) => {
+      const [createdId] = await trx('players')
+        .insert({
+          ...values,
+          person_uid: personUid ?? crypto.randomUUID(),
+          nickname,
+          team_history: serializeTeamHistory(team_history),
+          identity_status: 'candidate',
+        })
+        .returning('id')
+        .then((rows) => rows.map((row: unknown) => (
+          typeof row === 'object' && row !== null && 'id' in row ? row.id : row
+        )));
+      const playerId = Number(createdId);
+      await trx('person_aliases').insert({
+        player_id: playerId,
+        alias: nickname,
+        normalized_alias: normalizePersonAlias(nickname),
+        alias_type: 'primary',
+      });
+      await replacePlayerDifficulties(trx, playerId, difficulties);
+      return playerId;
+    });
+  } catch (error) {
+    if (isPersonUidConflict(error)) throw new HttpError(409, 'PERSON_UID_TAKEN');
+    throw error;
+  }
   await invalidatePlayerCache();
   return id;
 }
@@ -105,13 +141,14 @@ export async function applyPlayerUpdate(
   id: number,
   input: PlayerUpdateInput
 ): Promise<void> {
-  const { difficulties, team_history, ...values } = input;
+  const { difficulties, team_history, nickname, ...values } = input;
   if (difficulties) assertDifficultyKeys(difficulties);
   const updates = {
     ...values,
     ...(team_history === undefined ? {} : { team_history: serializeTeamHistory(team_history) }),
   };
   if (Object.keys(updates).length) await executor('players').where({ id }).update(updates);
+  if (nickname !== undefined) await setPrimaryNickname(executor, id, nickname);
   if (difficulties) await replacePlayerDifficulties(executor, id, difficulties);
 }
 
@@ -135,64 +172,62 @@ export async function importPlayers(
   let created = 0;
   let updated = 0;
   await db.transaction(async (trx) => {
-    const nicknames = players.map((player) => player.nickname);
-    const existing = await trx('players')
-      .whereIn('nickname', nicknames)
-      .select('id', 'nickname', 'is_enabled', 'team_history');
-    const existingNames = new Set(existing.map((player) => String(player.nickname)));
-    const existingEnabled = new Map(
-      existing.map((player) => [String(player.nickname), Boolean(player.is_enabled)])
-    );
-    const existingTeamHistory = new Map(
-      existing.map((player) => [String(player.nickname), serializeTeamHistory(player.team_history)])
-    );
-    updated = players.filter((player) => existingNames.has(player.nickname)).length;
-    created = players.length - updated;
-    const desiredDifficulties = new Map<string, string[] | null>();
-    const importedPlayers = players.map((player) => {
-      const { difficulties, team_history, ...values } = player;
-      const desired = difficulties ?? (existingNames.has(player.nickname) ? null : ['normal']);
-      desiredDifficulties.set(player.nickname, desired);
-      return {
-        ...values,
-        team_history: team_history === undefined && existingNames.has(player.nickname)
-          ? existingTeamHistory.get(player.nickname) ?? '[]'
-          : serializeTeamHistory(team_history ?? []),
-        is_enabled: player.is_enabled ?? existingEnabled.get(player.nickname) ?? true,
-      };
-    });
-    assertDifficultyKeys([...new Set(
-      [...desiredDifficulties.values()].flatMap((keys) => keys ?? [])
-    )]);
-    const chunkSize = 200;
-    for (let index = 0; index < importedPlayers.length; index += chunkSize) {
-      await trx('players')
-        .insert(importedPlayers.slice(index, index + chunkSize))
-        .onConflict('nickname')
-        .merge();
-    }
-    const savedPlayers = await trx('players')
-      .whereIn('nickname', nicknames)
-      .select('id', 'nickname');
-    const replacementIds: number[] = [];
-    const replacementMemberships: Array<{ player_id: number; difficulty_key: string }> = [];
-    for (const player of savedPlayers) {
-      const difficulties = desiredDifficulties.get(String(player.nickname));
-      if (!difficulties) continue;
-      const playerId = Number(player.id);
-      replacementIds.push(playerId);
-      replacementMemberships.push(
-        ...[...new Set(difficulties)].map((difficultyKey) => ({
-          player_id: playerId,
-          difficulty_key: difficultyKey,
-        }))
-      );
-    }
-    if (replacementIds.length) {
-      await trx('player_difficulties').whereIn('player_id', replacementIds).del();
-      for (let index = 0; index < replacementMemberships.length; index += 500) {
-        await trx('player_difficulties').insert(replacementMemberships.slice(index, index + 500));
+    const resolved: Array<{ input: ImportedPlayerInput; playerId: number; created: boolean }> = [];
+    const targetedIds = new Set<number>();
+    for (const input of players) {
+      const target = await resolveLegacyImportTarget(input, trx);
+      if (target.kind === 'existing') {
+        if (targetedIds.has(target.playerId)) throw new HttpError(400, 'DUPLICATE_PLAYER_IMPORT_TARGET');
+        targetedIds.add(target.playerId);
+        resolved.push({ input, playerId: target.playerId, created: false });
+        continue;
       }
+      const { personUid, difficulties, team_history, nickname, ...values } = input;
+      const desiredDifficulties = difficulties ?? ['normal'];
+      assertDifficultyKeys(desiredDifficulties);
+      const [createdRow] = await trx('players').insert({
+        ...values,
+        person_uid: personUid ?? crypto.randomUUID(),
+        nickname,
+        team_history: serializeTeamHistory(team_history ?? []),
+        is_enabled: input.is_enabled ?? true,
+        identity_status: 'candidate',
+      }).returning('id');
+      const playerId = Number(
+        typeof createdRow === 'object' && createdRow !== null && 'id' in createdRow
+          ? createdRow.id
+          : createdRow
+      );
+      await trx('person_aliases').insert({
+        player_id: playerId,
+        alias: nickname,
+        normalized_alias: normalizePersonAlias(nickname),
+        alias_type: 'primary',
+      });
+      await replacePlayerDifficulties(trx, playerId, desiredDifficulties);
+      targetedIds.add(playerId);
+      resolved.push({ input, playerId, created: true });
+    }
+    for (const entry of resolved) {
+      if (entry.created) {
+        created += 1;
+        continue;
+      }
+      updated += 1;
+      const current = await trx('players').where({ id: entry.playerId }).first(
+        'is_enabled', 'team_history'
+      );
+      const { personUid: _personUid, difficulties, team_history, nickname, ...values } = entry.input;
+      assertDifficultyKeys(difficulties ?? []);
+      await trx('players').where({ id: entry.playerId }).update({
+        ...values,
+        is_enabled: entry.input.is_enabled ?? Boolean(current.is_enabled),
+        team_history: team_history === undefined
+          ? serializeTeamHistory(current.team_history)
+          : serializeTeamHistory(team_history),
+      });
+      await setPrimaryNickname(trx, entry.playerId, nickname);
+      if (difficulties) await replacePlayerDifficulties(trx, entry.playerId, difficulties);
     }
   });
   await invalidatePlayerCache();

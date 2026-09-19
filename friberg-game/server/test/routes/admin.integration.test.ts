@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import http from 'http';
 import express from 'express';
 import { AddressInfo } from 'net';
@@ -652,6 +653,7 @@ describe('admin user management', () => {
     const user = insertedUsers.find((item) => item.username === userUsername)!;
     const [insertedPlayer] = await db('players')
       .insert({
+        person_uid: crypto.randomUUID(),
         nickname,
         nationality: 'China',
         region: 'Asia',
@@ -678,6 +680,7 @@ describe('admin user management', () => {
       expect(() => playerImportSchema.parse({ players: exported.data })).not.toThrow();
       expect(exported.data.find((player: { nickname: string }) => player.nickname === nickname)).toEqual({
         playerId,
+        personUid: expect.stringMatching(/^[0-9a-f-]{36}$/i),
         nickname,
         nationality: 'China',
         region: 'Asia',

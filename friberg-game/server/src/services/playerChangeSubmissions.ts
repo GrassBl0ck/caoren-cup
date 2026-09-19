@@ -1,3 +1,4 @@
+import type { Knex } from 'knex';
 import { z } from 'zod';
 import { db } from '../db/knex';
 import { HttpError } from '../middleware/common';
@@ -72,10 +73,11 @@ function idFromReturning(value: unknown): number {
 
 export async function createPlayerChangeSubmission(
   input: PlayerChangeSubmissionInput,
-  apiToken: { id: number; name: string }
+  apiToken: { id: number; name: string },
+  instance: Knex = db
 ): Promise<{ submissionId: number | null; submitted: number; unchanged: number }> {
   let unchanged = 0;
-  const result = await db.transaction(async (trx) => {
+  const result = await instance.transaction(async (trx) => {
     const ids = input.players.flatMap((entry) => entry.playerId === undefined ? [] : [entry.playerId]);
     const names = input.players.flatMap((entry) => entry.nickname === undefined ? [] : [entry.nickname]);
     const rows = await trx('players').where((query) => {
@@ -89,12 +91,24 @@ export async function createPlayerChangeSubmission(
       'major_championships', 'major_appearances', 'is_active', 'is_enabled'
     );
     const byId = new Map(rows.map((row) => [Number(row.id), row]));
-    const byName = new Map(rows.map((row) => [String(row.nickname), row]));
+    const byName = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const nickname = String(row.nickname);
+      const matches = byName.get(nickname) ?? [];
+      matches.push(row);
+      byName.set(nickname, matches);
+    }
     const targetIds = new Set<number>();
     const resolved = input.players.map((entry) => {
       if (entry.changes.difficulties) assertDifficultyKeys(entry.changes.difficulties);
       const rowById = entry.playerId === undefined ? undefined : byId.get(entry.playerId);
-      const rowByName = entry.nickname === undefined ? undefined : byName.get(entry.nickname);
+      const nameMatches = entry.nickname === undefined ? [] : byName.get(entry.nickname) ?? [];
+      if (entry.playerId === undefined && nameMatches.length > 1) {
+        throw new HttpError(409, 'AMBIGUOUS_PLAYER_IDENTITY');
+      }
+      const rowByName = entry.playerId === undefined
+        ? nameMatches[0]
+        : nameMatches.find((row) => Number(row.id) === entry.playerId);
       if (!rowById && !rowByName) throw new HttpError(404, 'PLAYER_NOT_FOUND');
       if (
         (entry.playerId !== undefined && entry.nickname !== undefined && (!rowById || !rowByName))
@@ -194,12 +208,13 @@ export async function listPlayerChangeItems(options: {
 export async function reviewPlayerChangeItems(
   itemIds: number[],
   decision: 'approve' | 'reject',
-  handledByUserId: number
+  handledByUserId: number,
+  instance: Knex = db
 ): Promise<{ approved: number; rejected: number; conflict: number; updated: number }> {
   let approved = 0;
   let rejected = 0;
   let conflict = 0;
-  await db.transaction(async (trx) => {
+  await instance.transaction(async (trx) => {
     const items = await trx('player_change_items')
       .whereIn('id', itemIds).where({ status: 'pending' })
       .orderBy('id').forUpdate().select('*');
@@ -240,13 +255,6 @@ export async function reviewPlayerChangeItems(
         continue;
       }
       const newValue = canonical(field, parseJsonValue(item.new_value));
-      if (field === 'nickname') {
-        const duplicate = await trx('players').where({ nickname: newValue }).whereNot({ id: player.id }).first('id');
-        if (duplicate) {
-          await markConflict();
-          continue;
-        }
-      }
       const update = { [field]: newValue } as PlayerUpdateInput;
       if (field === 'difficulties') assertDifficultyKeys(newValue as string[]);
       await applyPlayerUpdate(trx, Number(player.id), update);
@@ -256,6 +264,6 @@ export async function reviewPlayerChangeItems(
       approved += 1;
     }
   });
-  if (approved) await invalidatePlayerCache();
+  if (approved && instance === db) await invalidatePlayerCache();
   return { approved, rejected, conflict, updated: approved + rejected + conflict };
 }

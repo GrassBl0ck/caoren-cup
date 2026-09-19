@@ -4,6 +4,8 @@ import { redis, redisKey, redisPublisher, redisSubscriber } from '../redis';
 import { Player } from '../types';
 import { DIFFICULTY_LEVELS } from '../difficulties';
 import { normalizeTeamHistory } from './teamHistory';
+import { isLegacyGuessReady } from './questionBank/identity';
+import type { LegacyGuessPlayer, PersonRecord } from './questionBank/types';
 
 const INVALIDATE_CHANNEL = redisKey('players:invalidate');
 const VERSION_KEY = redisKey('players:revision');
@@ -11,6 +13,9 @@ const REFRESH_DEBOUNCE_MS = 100;
 
 type PublicPlayer = { id: number; nickname: string };
 type SearchablePlayer = { player: Player; search: string };
+type RawPersonRecord = Omit<PersonRecord, 'team_history'> & { team_history: unknown };
+type HydratedPersonRecord = PersonRecord & { difficulties: string[] };
+type HydratedLegacyPlayer = LegacyGuessPlayer & { difficulties: string[] };
 let playersById = new Map<number, Player>();
 let allPlayers: Player[] = [];
 let playersByDifficulty = new Map<string, Player[]>();
@@ -31,17 +36,34 @@ export async function refreshPlayerCache(): Promise<void> {
     let appliedGeneration = -1;
     while (appliedGeneration !== refreshGeneration) {
       const requestedGeneration = refreshGeneration;
-      const [rows, memberships, storedVersion] = await Promise.all([
-        db<Player>('players').orderBy('nickname'),
+      const [rows, memberships, aliases, storedVersion] = await Promise.all([
+        db<RawPersonRecord>('players').orderBy('nickname').orderBy('id'),
         db('player_difficulties').select('player_id', 'difficulty_key'),
+        db('person_aliases').select('player_id', 'alias'),
         redis()?.get(VERSION_KEY) ?? Promise.resolve(null),
       ]);
-      const hydrated = rows.map((player) => ({
+      const hydrated: HydratedPersonRecord[] = rows.map((player) => ({
         ...player,
-        team_history: normalizeTeamHistory(player.team_history),
+        team_history: player.team_history === null ? null : normalizeTeamHistory(player.team_history),
         difficulties: [] as string[],
       }));
-      const hydratedById = new Map(hydrated.map((player) => [Number(player.id), player]));
+      const invalidEnabled = hydrated.find(
+        (player) => Boolean(player.is_enabled) && !isLegacyGuessReady(player)
+      );
+      if (invalidEnabled) {
+        throw new Error(`ENABLED_PLAYER_NOT_LEGACY_READY:${invalidEnabled.id}`);
+      }
+      const legacyPlayers = hydrated.filter(
+        (player): player is HydratedLegacyPlayer => isLegacyGuessReady(player)
+      );
+      const hydratedById = new Map(legacyPlayers.map((player) => [Number(player.id), player]));
+      const aliasesByPlayer = new Map<number, string[]>();
+      for (const alias of aliases) {
+        const playerId = Number(alias.player_id);
+        const list = aliasesByPlayer.get(playerId) ?? [];
+        list.push(String(alias.alias));
+        aliasesByPlayer.set(playerId, list);
+      }
       playersByDifficulty = new Map(
         DIFFICULTY_LEVELS
           .filter((difficulty) => difficulty.isEnabled)
@@ -54,11 +76,13 @@ export async function refreshPlayerCache(): Promise<void> {
         player.difficulties.push(difficultyKey);
         if (Boolean(player.is_enabled)) playersByDifficulty.get(difficultyKey)?.push(player);
       }
-      allPlayers = hydrated.filter((player) => Boolean(player.is_enabled));
-      playersById = new Map(hydrated.map((player) => [player.id, player]));
+      allPlayers = legacyPlayers.filter((player) => Boolean(player.is_enabled));
+      playersById = new Map(legacyPlayers.map((player) => [player.id, player]));
       searchablePlayers = allPlayers.map((player) => ({
         player,
-        search: normalizeSearch(`${player.nickname}\0${player.team}`),
+        search: normalizeSearch(
+          `${player.nickname}\0${player.team}\0${(aliasesByPlayer.get(player.id) ?? []).join('\0')}`
+        ),
       }));
       publicList = {
         version: pendingVersion || storedVersion || String(Date.now()),

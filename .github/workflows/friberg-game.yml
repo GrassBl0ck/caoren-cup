@@ -29,6 +29,19 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: friberg_test
+          POSTGRES_PASSWORD: friberg_test
+          POSTGRES_DB: friberg_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U friberg_test -d friberg_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     defaults:
       run:
         working-directory: friberg-game
@@ -45,4 +58,8 @@ jobs:
           cache-dependency-path: friberg-game/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
+      - name: Test PostgreSQL migrations and question bank
+        env:
+          TEST_DATABASE_URL: postgresql://friberg_test:friberg_test@127.0.0.1:5432/friberg_test
+        run: pnpm --filter server exec vitest run test/db/migrations.postgres.test.ts test/services/questionBank/postgres.integration.test.ts --no-file-parallelism
       - run: pnpm build

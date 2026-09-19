@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { initRedis, redis, redisKey } from '../../src/redis';
 import { db } from '../../src/db/knex';
@@ -23,6 +24,7 @@ describe('player cache invalidation', () => {
   it('removes a disabled player before invalidation returns and changes the list version', async () => {
     const nickname = `cache-test-${Date.now()}`;
     const [row] = await db('players').insert({
+      person_uid: crypto.randomUUID(),
       nickname,
       nationality: '测试',
       region: '测试',
@@ -51,6 +53,7 @@ describe('player cache invalidation', () => {
   it('refreshes a stale instance before serving the public list', async () => {
     const nickname = `cache-test-cross-instance-${Date.now()}`;
     const [row] = await db('players').insert({
+      person_uid: crypto.randomUUID(),
       nickname,
       nationality: '测试',
       region: '测试',
@@ -76,6 +79,7 @@ describe('player cache invalidation', () => {
   it('serves targets from the beginner difficulty pool', async () => {
     const nickname = `cache-test-beginner-${Date.now()}`;
     const [row] = await db('players').insert({
+      person_uid: crypto.randomUUID(),
       nickname,
       nationality: '测试',
       region: '测试',

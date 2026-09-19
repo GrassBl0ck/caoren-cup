@@ -18,3 +18,9 @@ This directory was imported as a source snapshot, not as a Git submodule or subt
 ## Caoren Cup changes
 
 No functional changes have been applied in the initial snapshot. Future Caoren Cup changes must be documented here by phase and remain available under AGPL-3.0.
+
+## Caoren Cup v1.10 current phase
+
+The v1.10 data-model and question-bank foundation is implemented in the surrounding server integration layer: stable person UIDs, aliases, HLTV player/coach identities, evidence-backed historical facts, annual Top 20 and four cumulative regular pools, version snapshots, review/publication APIs, rollback, cache notification, and external candidate imports.
+
+The upstream `friberg-game/` React/Express/PostgreSQL/Redis component remains an independent pinned snapshot; its source was not modified by this phase. The choice-quiz state machine and UI are not claimed complete. PostgreSQL and Redis 7.4 integration checks are configured in CI but have not been run from this worktree.

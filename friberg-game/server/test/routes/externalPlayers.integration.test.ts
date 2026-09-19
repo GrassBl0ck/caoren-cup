@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import http from 'http';
 import express from 'express';
 import { AddressInfo } from 'net';
@@ -53,6 +54,7 @@ describe('external player API tokens', () => {
     const username = `external-api-admin-${stamp}`;
     const nickA = `external-a-${stamp}`;
     const nickB = `external-b-${stamp}`;
+    const personUidA = crypto.randomUUID();
     const [admin] = await db('users')
       .insert({
         username,
@@ -94,6 +96,7 @@ describe('external player API tokens', () => {
         method: 'POST',
         headers: authorization,
         body: JSON.stringify({
+          personUid: personUidA,
           nickname: nickA,
           nationality: 'Denmark',
           region: 'Europe',
@@ -164,6 +167,7 @@ describe('external player API tokens', () => {
       expect(exported.response.headers.get('content-disposition')).toContain('players.json');
       expect(exported.data.find((player: { nickname: string }) => player.nickname === nickA)).toEqual({
         playerId,
+        personUid: personUidA,
         nickname: nickA,
         nationality: 'Denmark',
         region: 'Europe',
