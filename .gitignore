@@ -65,3 +65,7 @@ release-build/
 release-output/
 runtime/
 web-command-center/runtime/
+
+# Python test/build caches
+__pycache__/
+*.py[cod]
