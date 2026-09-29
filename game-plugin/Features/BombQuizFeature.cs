@@ -230,7 +230,7 @@ public class BombQuizFeature : ICaorenFeature
         {
             if (p != null && p.IsValid && p.TeamNum == (byte)team)
             {
-                CaorenCupUtils.PrintToChat(p, $"{prefix} \u0001{action}: \u0004{question} = ? \u0001(限时 \u0002{Math.Round(remainingTime, 2)}秒\u0001)");
+                p.PrintToChat(CaorenCupUtils.FormatTeamMessage($"{prefix} \u0001{action}: \u0004{question} = ? \u0001(限时 \u0002{Math.Round(remainingTime, 2)}秒\u0001)"));
             }
         }
     }

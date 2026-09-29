@@ -12,7 +12,7 @@ export const resolveWeaponPaintsDataRoot = (cwd: string, configuredRoot?: string
     if (configuredRoot) return path.resolve(cwd, configuredRoot);
     const packagedRoot = path.resolve(cwd, 'weaponpaints-data');
     if (existsSync(packagedRoot)) return packagedRoot;
-    return path.resolve(cwd, '..', 'weaponpaints-plugin', 'data');
+    return path.resolve(cwd, '..', 'game-plugin', 'PluginSplit', 'CaorenCupQOLs', 'CaorenWeaponPaints', 'data');
 };
 
 export class WeaponPaintsRuntime {

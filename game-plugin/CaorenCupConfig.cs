@@ -272,8 +272,8 @@ public class AliasSettings
     public string Permission { get; set; } = "@css/changemap";
 
     // 映射表：
-    // key 是聊天栏输入的别名，不要写 /、!、css_。
-    // value 是服务器控制台可执行命令，不要写 /、!、. 这种聊天触发符。
+    // key 是聊天栏输入的别名，不要写聊天前缀或 css_。
+    // value 是服务器控制台可执行命令，不要写 /、. 这种聊天触发符。
     // 示例：聊天输入 /p1 -> 服务器控制台执行 mp_pause_match
     [JsonPropertyName("CommandMap")]
     public Dictionary<string, string> CommandMap { get; set; } = new(StringComparer.OrdinalIgnoreCase)

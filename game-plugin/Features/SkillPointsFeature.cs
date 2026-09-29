@@ -580,7 +580,7 @@ public class SkillPointsFeature : ICaorenFeature
     {
         foreach (var p in GetTeamPlayers(teamNum))
         {
-            CaorenCupUtils.PrintToChat(p, message);
+            p.PrintToChat(CaorenCupUtils.FormatTeamMessage(message));
         }
     }
 

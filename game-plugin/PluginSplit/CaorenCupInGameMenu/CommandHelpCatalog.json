@@ -1,0 +1,6656 @@
+[
+  {
+    "Name": "/1hp",
+    "Console": "css_1hp",
+    "Module": "特色玩法",
+    "Summary": "转生与死亡自爆",
+    "Permission": "@css/root",
+    "Usage": [
+      "/1hp <t/ct/all/0> <1|2> [值1] [值2] [值3] [值4]"
+    ],
+    "Parameters": [
+      "目标：t=T 方，ct=CT 方，all=双方，0=关闭。",
+      "模式：1=转生，2=死亡自爆。",
+      "模式 1：值1为复活位置（0 原地／1 己方出生点／2 敌方出生点）；值2为等待秒数；值3为复活血量；值4为无敌秒数。",
+      "模式 2：值1为爆炸伤害；值2为爆炸半径；值3、值4不使用。",
+      "省略值1～4保留当前设置；这些参数及模式支持 -。"
+    ],
+    "Examples": [
+      "/1hp t 1 0 2 100 1"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/OneHpFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/1hp"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<1|2>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[值1]",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[值2]",
+          "Parameter": 3
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[值3]",
+          "Parameter": 4
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[值4]",
+          "Parameter": 5
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "：t=T 方，ct=CT 方，all=双方，0=关闭。"
+        }
+      ],
+      [
+        {
+          "Text": "模式",
+          "Parameter": 1
+        },
+        {
+          "Text": "：1=转生，2=死亡自爆。"
+        }
+      ],
+      [
+        {
+          "Text": "模式 1："
+        },
+        {
+          "Text": "值1",
+          "Parameter": 2
+        },
+        {
+          "Text": "为复活位置（0 原地／1 己方出生点／2 敌方出生点）；"
+        },
+        {
+          "Text": "值2",
+          "Parameter": 3
+        },
+        {
+          "Text": "为等待秒数；"
+        },
+        {
+          "Text": "值3",
+          "Parameter": 4
+        },
+        {
+          "Text": "为复活血量；"
+        },
+        {
+          "Text": "值4",
+          "Parameter": 5
+        },
+        {
+          "Text": "为无敌秒数。"
+        }
+      ],
+      [
+        {
+          "Text": "模式 2："
+        },
+        {
+          "Text": "值1",
+          "Parameter": 2
+        },
+        {
+          "Text": "为爆炸伤害；"
+        },
+        {
+          "Text": "值2",
+          "Parameter": 3
+        },
+        {
+          "Text": "为爆炸半径；值3、值4不使用。"
+        }
+      ],
+      [
+        {
+          "Text": "省略值1～4保留当前设置；这些参数及模式支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/1hp"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "t",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "0",
+            "Parameter": 2
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "2",
+            "Parameter": 3
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "100",
+            "Parameter": 4
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 5
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "T 方",
+            "Parameter": 0
+          },
+          {
+            "Text": "开启"
+          },
+          {
+            "Text": "转生模式",
+            "Parameter": 1
+          },
+          {
+            "Text": "：在"
+          },
+          {
+            "Text": "原地",
+            "Parameter": 2
+          },
+          {
+            "Text": "等待"
+          },
+          {
+            "Text": "2 秒",
+            "Parameter": 3
+          },
+          {
+            "Text": "后以"
+          },
+          {
+            "Text": "100 HP",
+            "Parameter": 4
+          },
+          {
+            "Text": "复活，拥有"
+          },
+          {
+            "Text": "1 秒无敌",
+            "Parameter": 5
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/acc",
+    "Console": "css_acc",
+    "Module": "特色玩法",
+    "Summary": "移动精准惩罚与后坐力倍率",
+    "Permission": "@css/root",
+    "Usage": [
+      "/acc <t/ct/all/0> <移动惩罚倍数> <后坐力倍数>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "移动惩罚倍数和后坐力倍数均须 >=0；移动惩罚 1=原版、0.5=减半、0=取消，后坐力 1=原版、0.5=减半、0=取消；两项支持 - 保持当前值。"
+    ],
+    "Examples": [
+      "/acc all 0 0"
+    ],
+    "Notes": [
+      "0/off/disable/disabled/false 均可作为关闭参数。"
+    ],
+    "Sources": [
+      "game-plugin/Features/AccuracyFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/acc"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<移动惩罚倍数>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<后坐力倍数>",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "移动惩罚倍数",
+          "Parameter": 1
+        },
+        {
+          "Text": "和"
+        },
+        {
+          "Text": "后坐力倍数",
+          "Parameter": 2
+        },
+        {
+          "Text": "均须 >=0；"
+        },
+        {
+          "Text": "移动惩罚 1=原版、0.5=减半、0=取消",
+          "Parameter": 1
+        },
+        {
+          "Text": "，"
+        },
+        {
+          "Text": "后坐力 1=原版、0.5=减半、0=取消",
+          "Parameter": 2
+        },
+        {
+          "Text": "；两项支持 - 保持当前值。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/acc"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "0",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "0",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "取消"
+          },
+          {
+            "Text": "移动精准惩罚",
+            "Parameter": 1
+          },
+          {
+            "Text": "和"
+          },
+          {
+            "Text": "后坐力惩罚",
+            "Parameter": 2
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/ammo",
+    "Console": "css_ammo",
+    "Module": "特色玩法",
+    "Summary": "枪械与道具不消耗概率",
+    "Permission": "@css/root",
+    "Usage": [
+      "/ammo <t/ct/all/0> [枪械概率] [道具概率]"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "枪械概率与道具概率单位均为百分比，范围 0～100。枪械概率是开枪不耗弹概率，道具概率是投掷不消耗概率。",
+      "省略概率保留当前值；这里不支持 -，不要用 - 代替省略。"
+    ],
+    "Examples": [
+      "/ammo all 50 25"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/AmmoFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/ammo"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[枪械概率]",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[道具概率]",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "枪械概率",
+          "Parameter": 1
+        },
+        {
+          "Text": "与"
+        },
+        {
+          "Text": "道具概率",
+          "Parameter": 2
+        },
+        {
+          "Text": "单位均为百分比，范围 0～100。"
+        },
+        {
+          "Text": "枪械概率",
+          "Parameter": 1
+        },
+        {
+          "Text": "是开枪不耗弹概率，"
+        },
+        {
+          "Text": "道具概率",
+          "Parameter": 2
+        },
+        {
+          "Text": "是投掷不消耗概率。"
+        }
+      ],
+      [
+        {
+          "Text": "省略概率保留当前值；这里不支持 -，不要用 - 代替省略。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/ammo"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "50",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "25",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置"
+          },
+          {
+            "Text": "50% 枪械不耗弹概率",
+            "Parameter": 1
+          },
+          {
+            "Text": "和"
+          },
+          {
+            "Text": "25% 投掷物不消耗概率",
+            "Parameter": 2
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/armor",
+    "Console": "css_armor",
+    "Module": "特色玩法",
+    "Summary": "购买防弹衣后的护甲耐久",
+    "Permission": "@css/root",
+    "Usage": [
+      "/armor <t/ct/all/0> <耐久值>"
+    ],
+    "Parameters": [
+      "目标：t=T方，ct=CT方，all=双方，0=关闭该模块。",
+      "耐久值为整数，限制到0～1000；支持 - 保持当前值。"
+    ],
+    "Examples": [
+      "/armor ct 150"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/ArmorFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/armor"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<耐久值>",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，"
+        },
+        {
+          "Text": "ct=CT方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，"
+        },
+        {
+          "Text": "all=双方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，0=关闭该模块。"
+        }
+      ],
+      [
+        {
+          "Text": "耐久值",
+          "Parameter": 1
+        },
+        {
+          "Text": "为整数，限制到0～1000；支持 - 保持当前值。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/armor"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "ct",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "150",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "将"
+          },
+          {
+            "Text": "CT 方",
+            "Parameter": 0
+          },
+          {
+            "Text": "购买防弹衣后的护甲耐久设为"
+          },
+          {
+            "Text": "150",
+            "Parameter": 1
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/aura",
+    "Console": "css_aura",
+    "Module": "特色玩法",
+    "Summary": "挥刀远程剑气",
+    "Permission": "@css/root",
+    "Usage": [
+      "/aura <t/ct/all/0> [击退联动1/0] [衰减倍率] [最低伤害]"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "击退联动：1 启用、0 关闭；需要 Kb 已启用。",
+      "衰减倍率 0～1，是每超过一倍原版刀距后的衰减量。最低伤害为至少 1 的整数；低于它的剑气伤害不生效。",
+      "省略保持当前值；各可选项支持 -。"
+    ],
+    "Examples": [
+      "/aura all 1 0.3 5"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/BladeAuraFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/aura"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[击退联动1/0]",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[衰减倍率]",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[最低伤害]",
+          "Parameter": 3
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "击退联动",
+          "Parameter": 1
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "1 启用、0 关闭",
+          "Parameter": 1
+        },
+        {
+          "Text": "；需要 Kb 已启用。"
+        }
+      ],
+      [
+        {
+          "Text": "衰减倍率",
+          "Parameter": 2
+        },
+        {
+          "Text": " 0～1，是每超过一倍原版刀距后的衰减量。"
+        },
+        {
+          "Text": "最低伤害",
+          "Parameter": 3
+        },
+        {
+          "Text": "为至少 1 的整数；低于它的剑气伤害不生效。"
+        }
+      ],
+      [
+        {
+          "Text": "省略保持当前值；各可选项支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/aura"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "0.3",
+            "Parameter": 2
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "5",
+            "Parameter": 3
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "启用剑气，"
+          },
+          {
+            "Text": "开启击退联动",
+            "Parameter": 1
+          },
+          {
+            "Text": "（需要 Kb 已启用），"
+          },
+          {
+            "Text": "衰减倍率 0.3",
+            "Parameter": 2
+          },
+          {
+            "Text": "，"
+          },
+          {
+            "Text": "最低生效伤害 5",
+            "Parameter": 3
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/bleed",
+    "Console": "css_bleed",
+    "Module": "特色玩法",
+    "Summary": "按间隔回血或扣血",
+    "Permission": "@css/root",
+    "Usage": [
+      "/bleed <t/ct/all/0> <间隔秒数> <变动血量>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "间隔秒数须 >0；变动血量为整数，正数回血、负数扣血。",
+      "血量上下限统一用 /hpcap；间隔和血量支持 -。"
+    ],
+    "Examples": [
+      "/bleed all 1 -2"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/BleedFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/bleed"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<间隔秒数>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<变动血量>",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "间隔秒数",
+          "Parameter": 1
+        },
+        {
+          "Text": "须 >0；"
+        },
+        {
+          "Text": "变动血量",
+          "Parameter": 2
+        },
+        {
+          "Text": "为整数，"
+        },
+        {
+          "Text": "正数回血、负数扣血",
+          "Parameter": 2
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "血量上下限统一用 /hpcap；间隔和血量支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/bleed"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "-2",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "启用血量变化，每"
+          },
+          {
+            "Text": "1 秒",
+            "Parameter": 1
+          },
+          {
+            "Text": "扣除 2 HP",
+            "Parameter": 2
+          },
+          {
+            "Text": "；实际扣血受血量下限保护。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/bq",
+    "Console": "css_bq",
+    "Module": "特色玩法",
+    "Summary": "C4 算术攻防题型与时间",
+    "Permission": "@css/root",
+    "Usage": [
+      "/bq <题型组合|0> [强制秒数] [CT延迟秒数]"
+    ],
+    "Parameters": [
+      "题型可组合 1～7，如 123 随机取 1、2、3；0/off/false 关闭。",
+      "1 两位加减；2 两位乘一位；3 三位加减；4 除法；5 大除法；6 两位乘十几；7 一位加一位。",
+      "强制秒数 >0 使用固定时限；0 或省略按题型自动计算。",
+      "CT 延迟 >0 晚收到、<0 提前收到、0 同时收到；省略按动态公式。",
+      "省略时间参数恢复自动时间，不是保留旧设置；不支持 -。"
+    ],
+    "Examples": [
+      "/bq 123 0"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/BombQuizFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/bq"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<题型组合|0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[强制秒数]",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[CT延迟秒数]",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "题型",
+          "Parameter": 0
+        },
+        {
+          "Text": "可组合 1～7，如 "
+        },
+        {
+          "Text": "123 随机取 1、2、3",
+          "Parameter": 0
+        },
+        {
+          "Text": "；"
+        },
+        {
+          "Text": "0/off/false 关闭",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "1 两位加减；2 两位乘一位；3 三位加减；4 除法；5 大除法；6 两位乘十几；7 一位加一位",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "强制秒数",
+          "Parameter": 1
+        },
+        {
+          "Text": " >0 使用固定时限；"
+        },
+        {
+          "Text": "0 或省略按题型自动计算",
+          "Parameter": 1
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "CT 延迟",
+          "Parameter": 2
+        },
+        {
+          "Text": " >0 晚收到、<0 提前收到、0 同时收到；省略按动态公式。"
+        }
+      ],
+      [
+        {
+          "Text": "省略时间参数恢复自动时间，不是保留旧设置；不支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/bq"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "123",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "0",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "开启"
+          },
+          {
+            "Text": "题型 1、2、3 随机出题",
+            "Parameter": 0
+          },
+          {
+            "Text": "，答题时限采用"
+          },
+          {
+            "Text": "自动计算",
+            "Parameter": 1
+          },
+          {
+            "Text": "；省略 CT 延迟也使用动态公式。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/cash",
+    "Console": "css_cash",
+    "Module": "特色玩法",
+    "Summary": "经济奖励倍率",
+    "Permission": "@css/root",
+    "Usage": [
+      "/cash <t/ct/all/0> <倍率> [回合奖励1/0]"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "倍率须 >=0，1 为原奖励、2 为两倍；默认改变击杀奖励。",
+      "回合奖励：1 同时改变胜负回合奖励、0 不改变；省略关闭回合奖励联动。",
+      "倍率和回合奖励均支持 - 保持当前值。"
+    ],
+    "Examples": [
+      "/cash all 2 1"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/MoneyFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/cash"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<倍率>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[回合奖励1/0]",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "倍率",
+          "Parameter": 1
+        },
+        {
+          "Text": "须 >=0，"
+        },
+        {
+          "Text": "1 为原奖励、2 为两倍",
+          "Parameter": 1
+        },
+        {
+          "Text": "；默认改变击杀奖励。"
+        }
+      ],
+      [
+        {
+          "Text": "回合奖励",
+          "Parameter": 2
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "1 同时改变胜负回合奖励、0 不改变",
+          "Parameter": 2
+        },
+        {
+          "Text": "；省略关闭回合奖励联动。"
+        }
+      ],
+      [
+        {
+          "Text": "倍率和回合奖励均支持 - 保持当前值。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/cash"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "2",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置"
+          },
+          {
+            "Text": "2 倍击杀奖励",
+            "Parameter": 1
+          },
+          {
+            "Text": "，并"
+          },
+          {
+            "Text": "同时修改胜负回合奖励",
+            "Parameter": 2
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/dmg",
+    "Console": "css_dmg",
+    "Module": "特色玩法",
+    "Summary": "受伤倍率与时间窗口掉血上限",
+    "Permission": "@css/root",
+    "Usage": [
+      "/dmg <t/ct/all/0> <受伤倍率> <Cap> <窗口秒数>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "受伤倍率须 >=0，1 为正常、2 为两倍；Cap为 >=0 整数，0 表示不限制。",
+      "窗口秒数须 >0；Cap限制该窗口内累计掉血量。三项数值支持 -。"
+    ],
+    "Examples": [
+      "/dmg t 2 50 1.5"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/DamageFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/dmg"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<受伤倍率>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<Cap>",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<窗口秒数>",
+          "Parameter": 3
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "受伤倍率",
+          "Parameter": 1
+        },
+        {
+          "Text": "须 >=0，"
+        },
+        {
+          "Text": "1 为正常、2 为两倍",
+          "Parameter": 1
+        },
+        {
+          "Text": "；"
+        },
+        {
+          "Text": "Cap",
+          "Parameter": 2
+        },
+        {
+          "Text": "为 >=0 整数，"
+        },
+        {
+          "Text": "0 表示不限制",
+          "Parameter": 2
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "窗口秒数",
+          "Parameter": 3
+        },
+        {
+          "Text": "须 >0；"
+        },
+        {
+          "Text": "Cap",
+          "Parameter": 2
+        },
+        {
+          "Text": "限制"
+        },
+        {
+          "Text": "该窗口",
+          "Parameter": 3
+        },
+        {
+          "Text": "内累计掉血量。三项数值支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/dmg"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "t",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "2",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "50",
+            "Parameter": 2
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1.5",
+            "Parameter": 3
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "T 方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置"
+          },
+          {
+            "Text": "2 倍受伤",
+            "Parameter": 1
+          },
+          {
+            "Text": "，每"
+          },
+          {
+            "Text": "1.5 秒窗口",
+            "Parameter": 3
+          },
+          {
+            "Text": "累计掉血上限为"
+          },
+          {
+            "Text": "50 HP",
+            "Parameter": 2
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/dj",
+    "Console": "css_dj",
+    "Module": "特色玩法",
+    "Summary": "空中额外跳跃",
+    "Permission": "@css/root",
+    "Usage": [
+      "/dj <t/ct/all> <次数> [向上速度] [true|false]",
+      "/dj 0"
+    ],
+    "Parameters": [
+      "目标：t=T 方，ct=CT 方，all=双方；/dj 0 关闭。",
+      "次数是总跳跃段数，包含地面跳跃；2=共 2 段，最多 1 次额外空中跳跃。走下边缘也计为第 1 段。",
+      "向上速度默认 300，是上推速度，不是百分比。",
+      "true允许在上升时再次跳跃；false须下降后跳跃，省略为 false。",
+      "该命令不支持 - 保持参数。"
+    ],
+    "Examples": [
+      "/dj t 2 300 true"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/DoubleJumpFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/dj"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<次数>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[向上速度]",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[true|false]",
+          "Parameter": 3
+        }
+      ],
+      [
+        {
+          "Text": "/dj"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "0",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "：t=T 方，ct=CT 方，all=双方；/dj 0 关闭。"
+        }
+      ],
+      [
+        {
+          "Text": "次数",
+          "Parameter": 1
+        },
+        {
+          "Text": "是总跳跃段数，包含地面跳跃；2=共 2 段，最多 1 次额外空中跳跃。走下边缘也计为第 1 段。"
+        }
+      ],
+      [
+        {
+          "Text": "向上速度",
+          "Parameter": 2
+        },
+        {
+          "Text": "默认 300，是上推速度，不是百分比。"
+        }
+      ],
+      [
+        {
+          "Text": "true",
+          "Parameter": 3
+        },
+        {
+          "Text": "允许在上升时再次跳跃；"
+        },
+        {
+          "Text": "false",
+          "Parameter": 3
+        },
+        {
+          "Text": "须下降后跳跃，省略为 false。"
+        }
+      ],
+      [
+        {
+          "Text": "该命令不支持 - 保持参数。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/dj"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "t",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "2",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "300",
+            "Parameter": 2
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "true",
+            "Parameter": 3
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "T 方",
+            "Parameter": 0
+          },
+          {
+            "Text": "启用"
+          },
+          {
+            "Text": "共 2 段跳（1 次额外空中跳跃）",
+            "Parameter": 1
+          },
+          {
+            "Text": "，上推速度为"
+          },
+          {
+            "Text": "300",
+            "Parameter": 2
+          },
+          {
+            "Text": "，"
+          },
+          {
+            "Text": "允许在上升阶段再次跳跃",
+            "Parameter": 3
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/eco",
+    "Console": "css_eco",
+    "Module": "特色玩法",
+    "Summary": "关闭经济竞猜模块",
+    "Permission": "@css/root",
+    "Usage": [
+      "/eco 0"
+    ],
+    "Parameters": [
+      "0关闭经济竞猜；非管理员的金额竞猜用法属于玩家功能，不在这里展开。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/EcoGuessFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/eco"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "0",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "0关闭经济竞猜；非管理员的金额竞猜用法属于玩家功能，不在这里展开。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/esp",
+    "Console": "css_esp",
+    "Module": "特色玩法",
+    "Summary": "指定阵营的透视范围与方式",
+    "Permission": "@css/root",
+    "Usage": [
+      "/esp <t/ct/all/0> [最远距离] [模式]"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "最远距离为游戏世界距离；模式：0 持续透视、1 准星指向时透视。",
+      "省略或 - 保持数值；实现把非 0 模式按准星指向处理，建议只用 0/1。"
+    ],
+    "Examples": [
+      "/esp ct 1500 1"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/EspFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/esp"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[最远距离]",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[模式]",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "最远距离",
+          "Parameter": 1
+        },
+        {
+          "Text": "为游戏世界距离；"
+        },
+        {
+          "Text": "模式",
+          "Parameter": 2
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "0 持续透视、1 准星指向时透视",
+          "Parameter": 2
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "省略或 - 保持数值；实现把非 0 模式按准星指向处理，建议只用 0/1。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/esp"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "ct",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1500",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "CT 方",
+            "Parameter": 0
+          },
+          {
+            "Text": "开启最远"
+          },
+          {
+            "Text": "1500 游戏世界距离",
+            "Parameter": 1
+          },
+          {
+            "Text": "的透视，采用"
+          },
+          {
+            "Text": "准星指向时显示",
+            "Parameter": 2
+          },
+          {
+            "Text": "模式。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/ffire",
+    "Console": "css_ffire",
+    "Module": "特色玩法",
+    "Summary": "友伤倍率与是否允许杀队友",
+    "Permission": "@css/root",
+    "Usage": [
+      "/ffire <t/ct/all/0> <倍率> <1|0>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "倍率：1 为全额队友伤害、负数为队友回血。",
+      "最后一项：1 允许友伤击杀、0 禁止杀死队友；须明确填 1 或 0。",
+      "这两个参数不支持 -。"
+    ],
+    "Examples": [
+      "/ffire all 1 0"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/FriendlyFireFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/ffire"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<倍率>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<1|0>",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "倍率",
+          "Parameter": 1
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "1 为全额队友伤害、负数为队友回血",
+          "Parameter": 1
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "最后一项",
+          "Parameter": 2
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "1 允许友伤击杀、0 禁止杀死队友",
+          "Parameter": 2
+        },
+        {
+          "Text": "；须明确填 1 或 0。"
+        }
+      ],
+      [
+        {
+          "Text": "这两个参数不支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/ffire"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "0",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置"
+          },
+          {
+            "Text": "全额队友伤害",
+            "Parameter": 1
+          },
+          {
+            "Text": "，并"
+          },
+          {
+            "Text": "禁止友伤杀死队友",
+            "Parameter": 2
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/fh",
+    "Console": "css_fh",
+    "Module": "特色玩法",
+    "Summary": "火焰伤害倍率",
+    "Permission": "@css/root",
+    "Usage": [
+      "/fh <t/ct/all/0> <倍率>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "倍率：1 正常、0 免疫、2 双倍、负数火焰回血；支持 -。"
+    ],
+    "Examples": [
+      "/fh all -1"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/FireHealFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/fh"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<倍率>",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "倍率",
+          "Parameter": 1
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "1 正常、0 免疫、2 双倍、负数火焰回血",
+          "Parameter": 1
+        },
+        {
+          "Text": "；支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/fh"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "-1",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "开启"
+          },
+          {
+            "Text": "火焰回血，倍率为 1",
+            "Parameter": 1
+          },
+          {
+            "Text": "；回血受血量上限保护。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/fov",
+    "Console": "css_fov",
+    "Module": "特色玩法",
+    "Summary": "第一人称视野角度",
+    "Permission": "@css/root",
+    "Usage": [
+      "/fov <t/ct/all/0> <30～150>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "角度限制 30～150；90 为正常视野，越大越宽；支持 -。",
+      "关闭后恢复默认 90 视野。"
+    ],
+    "Examples": [
+      "/fov all 110"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/FOVFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/fov"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<30～150>",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "角度",
+          "Parameter": 1
+        },
+        {
+          "Text": "限制 30～150；"
+        },
+        {
+          "Text": "90 为正常视野，越大越宽",
+          "Parameter": 1
+        },
+        {
+          "Text": "；支持 -。"
+        }
+      ],
+      [
+        {
+          "Text": "关闭后恢复默认 90 视野。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/fov"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "110",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置"
+          },
+          {
+            "Text": "110 度视野",
+            "Parameter": 1
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/incdmg",
+    "Console": "css_incdmg",
+    "Module": "特色玩法",
+    "Summary": "每5秒变化的受伤倍率",
+    "Permission": "@css/root",
+    "Usage": [
+      "/incdmg <t/ct/all/0> [递增倍率]"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "每满 5 秒增加一次增伤倍率；0.01 是每 5 秒增加原伤害的 1%、-0.01 是减少 1%。",
+      "省略或 - 保留当前倍率；不足 5 秒不改变伤害。"
+    ],
+    "Examples": [
+      "/incdmg all 0.01"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/IncDmgFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/incdmg"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[递增倍率]",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "每满 5 秒增加一次"
+        },
+        {
+          "Text": "增伤倍率",
+          "Parameter": 1
+        },
+        {
+          "Text": "；"
+        },
+        {
+          "Text": "0.01 是每 5 秒增加原伤害的 1%、-0.01 是减少 1%",
+          "Parameter": 1
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "省略或 - 保留当前倍率；不足 5 秒不改变伤害。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/incdmg"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "0.01",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "开启时间增伤，每满 5 秒额外增加"
+          },
+          {
+            "Text": "原伤害的 1%",
+            "Parameter": 1
+          },
+          {
+            "Text": "，实际结果按代码取整并受血量保护。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/kb",
+    "Console": "css_kb",
+    "Module": "特色玩法",
+    "Summary": "伤害击退参数",
+    "Permission": "@css/root",
+    "Usage": [
+      "/kb <t/ct/all/0> [水平力] [垂直力] [友军1/0] [伤害倍数]"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "目标是击退发起阵营。水平力、垂直力决定推力；伤害倍数是击退计算中的伤害系数。",
+      "友军：1 允许击退队友、0 不对队友生效。省略保留当前值，各项支持 -。"
+    ],
+    "Examples": [
+      "/kb all 50 20 0 1"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/KbFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/kb"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[水平力]",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[垂直力]",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[友军1/0]",
+          "Parameter": 3
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[伤害倍数]",
+          "Parameter": 4
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "目标是击退发起阵营。"
+        },
+        {
+          "Text": "水平力",
+          "Parameter": 1
+        },
+        {
+          "Text": "、"
+        },
+        {
+          "Text": "垂直力",
+          "Parameter": 2
+        },
+        {
+          "Text": "决定推力；"
+        },
+        {
+          "Text": "伤害倍数",
+          "Parameter": 4
+        },
+        {
+          "Text": "是击退计算中的伤害系数。"
+        }
+      ],
+      [
+        {
+          "Text": "友军",
+          "Parameter": 3
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "1 允许击退队友、0 不对队友生效",
+          "Parameter": 3
+        },
+        {
+          "Text": "。省略保留当前值，各项支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/kb"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "50",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "20",
+            "Parameter": 2
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "0",
+            "Parameter": 3
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 4
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方的攻击者",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置击退："
+          },
+          {
+            "Text": "水平力 50",
+            "Parameter": 1
+          },
+          {
+            "Text": "、"
+          },
+          {
+            "Text": "垂直力 20",
+            "Parameter": 2
+          },
+          {
+            "Text": "、"
+          },
+          {
+            "Text": "不击退队友",
+            "Parameter": 3
+          },
+          {
+            "Text": "、"
+          },
+          {
+            "Text": "伤害系数 1",
+            "Parameter": 4
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/kh",
+    "Console": "css_kh",
+    "Module": "特色玩法",
+    "Summary": "击杀后的血量变化",
+    "Permission": "@css/root",
+    "Usage": [
+      "/kh <t/ct/all/vip/0> [变动血量]"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "vip表示满足配置 VipFlag 权限的玩家。",
+      "变动血量为整数，正数回血、负数扣血；省略或 - 保持当前值。",
+      "血量上下限由 /hpcap 控制；未启用时默认回血上限 100、扣血下限 1。"
+    ],
+    "Examples": [
+      "/kh all 25"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/KillHealFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/kh"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/vip/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[变动血量]",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "vip",
+          "Parameter": 0
+        },
+        {
+          "Text": "表示满足配置 VipFlag 权限的玩家。"
+        }
+      ],
+      [
+        {
+          "Text": "变动血量",
+          "Parameter": 1
+        },
+        {
+          "Text": "为整数，"
+        },
+        {
+          "Text": "正数回血、负数扣血",
+          "Parameter": 1
+        },
+        {
+          "Text": "；省略或 - 保持当前值。"
+        }
+      ],
+      [
+        {
+          "Text": "血量上下限由 /hpcap 控制；未启用时默认回血上限 100、扣血下限 1。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/kh"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "25",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置击杀后"
+          },
+          {
+            "Text": "恢复 25 HP",
+            "Parameter": 1
+          },
+          {
+            "Text": "，受回血上限保护。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/lhimm",
+    "Console": "css_lhimm",
+    "Module": "特色玩法",
+    "Summary": "致命伤后的短暂无敌",
+    "Permission": "@css/root",
+    "Usage": [
+      "/lhimm <t/ct/all/0> <无敌秒数> <额外速度百分比>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "无敌时长限制 0～60 秒；额外速度限制 0～500%，50 表示增加 50%。",
+      "每人每回合只触发一次；两个数值不支持 -。"
+    ],
+    "Examples": [
+      "/lhimm all 2 50"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/LhImmFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/lhimm"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<无敌秒数>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<额外速度百分比>",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "无敌时长",
+          "Parameter": 1
+        },
+        {
+          "Text": "限制 0～60 秒；"
+        },
+        {
+          "Text": "额外速度",
+          "Parameter": 2
+        },
+        {
+          "Text": "限制 0～500%，"
+        },
+        {
+          "Text": "50 表示增加 50%",
+          "Parameter": 2
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "每人每回合只触发一次；两个数值不支持 -。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/lhimm"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "2",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "50",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置最后一滴血触发"
+          },
+          {
+            "Text": "2 秒无敌",
+            "Parameter": 1
+          },
+          {
+            "Text": "与"
+          },
+          {
+            "Text": "额外 50% 移速",
+            "Parameter": 2
+          },
+          {
+            "Text": "，每人每回合最多触发一次。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/magic",
+    "Console": "css_magic",
+    "Module": "特色玩法",
+    "Summary": "弹道吸附范围与单次伤害",
+    "Permission": "@css/root",
+    "Usage": [
+      "/magic <t/ct/all/0> [吸附半径] [单次伤害]"
+    ],
+    "Parameters": [
+      "目标：t=T方，ct=CT方，all=双方，0=关闭该模块。",
+      "吸附半径为判定范围，单次伤害为整数。省略保留当前值，支持 -。",
+      "魔法伤害通常最低保留目标1HP，最后1点需要正常命中。"
+    ],
+    "Examples": [
+      "/magic all 60 10"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/MagicFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/magic"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[吸附半径]",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[单次伤害]",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，"
+        },
+        {
+          "Text": "ct=CT方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，"
+        },
+        {
+          "Text": "all=双方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，0=关闭该模块。"
+        }
+      ],
+      [
+        {
+          "Text": "吸附半径",
+          "Parameter": 1
+        },
+        {
+          "Text": "为判定范围，"
+        },
+        {
+          "Text": "单次伤害",
+          "Parameter": 2
+        },
+        {
+          "Text": "为整数。省略保留当前值，支持 -。"
+        }
+      ],
+      [
+        {
+          "Text": "魔法伤害通常最低保留"
+        },
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "1HP，最后1点需要正常命中。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/magic"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "60",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "10",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "启用魔法吸附，"
+          },
+          {
+            "Text": "判定半径 60",
+            "Parameter": 1
+          },
+          {
+            "Text": "，"
+          },
+          {
+            "Text": "单次伤害 10",
+            "Parameter": 2
+          },
+          {
+            "Text": "；实际扣血受下限保护。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/smoke",
+    "Console": "css_smoke",
+    "Module": "特色玩法",
+    "Summary": "烟雾持续时间与烟内血量变化",
+    "Permission": "@css/root",
+    "Usage": [
+      "/smoke <t/ct/all/0> <持续秒数> <每秒血量变化>"
+    ],
+    "Parameters": [
+      "目标：t=T方，ct=CT方，all=双方，0=关闭该模块。",
+      "持续秒数须>0；每秒血量变化为整数，正数回血、负数扣血、0无血量变化。",
+      "两项数值支持 - 保持当前值。"
+    ],
+    "Examples": [
+      "/smoke all 20 -2"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/SmokeFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/smoke"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<持续秒数>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<每秒血量变化>",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，"
+        },
+        {
+          "Text": "ct=CT方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，"
+        },
+        {
+          "Text": "all=双方",
+          "Parameter": 0
+        },
+        {
+          "Text": "，0=关闭该模块。"
+        }
+      ],
+      [
+        {
+          "Text": "持续秒数",
+          "Parameter": 1
+        },
+        {
+          "Text": "须>0；"
+        },
+        {
+          "Text": "每秒血量变化",
+          "Parameter": 2
+        },
+        {
+          "Text": "为整数，正数回血、负数扣血、0无血量变化。"
+        }
+      ],
+      [
+        {
+          "Text": "两项数值支持 - 保持当前值。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/smoke"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "20",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "-2",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置"
+          },
+          {
+            "Text": "持续 20 秒",
+            "Parameter": 1
+          },
+          {
+            "Text": "的烟雾效果，"
+          },
+          {
+            "Text": "每秒扣除 2 HP",
+            "Parameter": 2
+          },
+          {
+            "Text": "，受血量下限保护。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/sp",
+    "Console": "css_sp",
+    "Module": "特色玩法",
+    "Summary": "管理员技能点控制",
+    "Permission": "@css/root",
+    "Usage": [
+      "/sp <t/ct/all> <整数或+增量/-减量>",
+      "/sp swap",
+      "/sp <0|off|false|1|on|true>"
+    ],
+    "Parameters": [
+      "t/ct/all选择修改队伍；50 直接设为 50、+10 加 10、-5 扣 5，最低为 0。",
+      "swap交换双方技能点并清理本回合使用／购买状态。",
+      "0/off/false禁用并清空点数；1/on/true启用。",
+      "玩家 .sp 和 /sp buy 属于玩家操作，不在管理员参数中展开。"
+    ],
+    "Examples": [
+      "/sp ct +10"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/SkillPointsFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/sp"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<整数或+增量/-减量>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/sp"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "swap",
+          "Parameter": 0
+        }
+      ],
+      [
+        {
+          "Text": "/sp"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<0|off|false|1|on|true>",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "t/ct/all",
+          "Parameter": 0
+        },
+        {
+          "Text": "选择修改队伍；"
+        },
+        {
+          "Text": "50 直接设为 50、+10 加 10、-5 扣 5",
+          "Parameter": 1
+        },
+        {
+          "Text": "，最低为 0。"
+        }
+      ],
+      [
+        {
+          "Text": "swap",
+          "Parameter": 0
+        },
+        {
+          "Text": "交换双方技能点并清理本回合使用／购买状态。"
+        }
+      ],
+      [
+        {
+          "Text": "0/off/false",
+          "Parameter": 0
+        },
+        {
+          "Text": "禁用并清空点数；"
+        },
+        {
+          "Text": "1/on/true",
+          "Parameter": 0
+        },
+        {
+          "Text": "启用。"
+        }
+      ],
+      [
+        {
+          "Text": "玩家 .sp 和 /sp buy 属于玩家操作，不在管理员参数中展开。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/sp"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "ct",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "+10",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "将"
+          },
+          {
+            "Text": "CT 方",
+            "Parameter": 0
+          },
+          {
+            "Text": "的技能点"
+          },
+          {
+            "Text": "增加 10",
+            "Parameter": 1
+          },
+          {
+            "Text": "，不是直接设为 10。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/tag",
+    "Console": "css_tag",
+    "Module": "特色玩法",
+    "Summary": "受击减速倍率",
+    "Permission": "@css/root",
+    "Usage": [
+      "/tag <t/ct/all/0> <0～1|df>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "减速倍率：0 表示中弹明显停顿、1 表示不受中弹减速；数字限制到 0～1。",
+      "df取消该阵营的自定义倍率，恢复引擎默认减速。"
+    ],
+    "Examples": [
+      "/tag all 1"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/TaggingControlFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/tag"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<0～1|df>",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "减速倍率",
+          "Parameter": 1
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "0 表示中弹明显停顿、1 表示不受中弹减速",
+          "Parameter": 1
+        },
+        {
+          "Text": "；数字限制到 0～1。"
+        }
+      ],
+      [
+        {
+          "Text": "df",
+          "Parameter": 1
+        },
+        {
+          "Text": "取消该阵营的自定义倍率，恢复引擎默认减速。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/tag"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置"
+          },
+          {
+            "Text": "不受中弹减速",
+            "Parameter": 1
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/wspd",
+    "Console": "css_wspd",
+    "Module": "特色玩法",
+    "Summary": "切枪与射击速度百分比",
+    "Permission": "@css/root",
+    "Usage": [
+      "/wspd <t/ct/all/0> <切枪速度> <射击速度>"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "切枪速度、射击速度均为百分比，限制 10～500；切枪 100 原版、200 两倍、50 半速，射击 100 原版、200 两倍、50 半速；均支持 -。",
+      "换弹速度参数已经移除，额外的第三个速度参数会被忽略。"
+    ],
+    "Examples": [
+      "/wspd all 100 200"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/WeaponSpeedFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/wspd"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<切枪速度>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<射击速度>",
+          "Parameter": 2
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "切枪速度",
+          "Parameter": 1
+        },
+        {
+          "Text": "、"
+        },
+        {
+          "Text": "射击速度",
+          "Parameter": 2
+        },
+        {
+          "Text": "均为百分比，限制 10～500；"
+        },
+        {
+          "Text": "切枪 100 原版、200 两倍、50 半速",
+          "Parameter": 1
+        },
+        {
+          "Text": "，"
+        },
+        {
+          "Text": "射击 100 原版、200 两倍、50 半速",
+          "Parameter": 2
+        },
+        {
+          "Text": "；均支持 -。"
+        }
+      ],
+      [
+        {
+          "Text": "换弹速度参数已经移除，额外的第三个速度参数会被忽略。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/wspd"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "100",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "200",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "设置"
+          },
+          {
+            "Text": "原版切枪速度",
+            "Parameter": 1
+          },
+          {
+            "Text": "与"
+          },
+          {
+            "Text": "2 倍射击速度",
+            "Parameter": 2
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/move",
+    "Console": "css_move",
+    "Module": "特色玩法",
+    "Summary": "全局移动与物理规则",
+    "Permission": "@css/root",
+    "Usage": [
+      "/move gravity|jump|fall|friction|speed <值>",
+      "/move bhop <0|1>",
+      "/move reset"
+    ],
+    "Parameters": [
+      "gravity=重力，原默认 800；jump=起跳上推速度，默认 301.9933；fall=落地伤害倍率，默认 1。",
+      "friction=地面摩擦，默认 5.2；speed=全局最大速度，默认 320。这些值直接写入原生变量。",
+      "bhop：1 开启连跳并取消跳跃／落地体力消耗、0 关闭并恢复默认体力。",
+      "reset 恢复该模块变量，兼容 0/off/disable；全局生效，不按阵营划分。"
+    ],
+    "Examples": [
+      "/move gravity 400"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/MovementRulesFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/move"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "gravity|jump|fall|friction|speed",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<值>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/move"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "bhop",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<0|1>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/move"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "reset",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "gravity",
+          "Parameter": 0
+        },
+        {
+          "Text": "=重力，"
+        },
+        {
+          "Text": "原默认 800",
+          "Parameter": 1
+        },
+        {
+          "Text": "；"
+        },
+        {
+          "Text": "jump",
+          "Parameter": 0
+        },
+        {
+          "Text": "=起跳上推速度，"
+        },
+        {
+          "Text": "默认 301.9933",
+          "Parameter": 1
+        },
+        {
+          "Text": "；"
+        },
+        {
+          "Text": "fall",
+          "Parameter": 0
+        },
+        {
+          "Text": "=落地伤害倍率，"
+        },
+        {
+          "Text": "默认 1",
+          "Parameter": 1
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "friction",
+          "Parameter": 0
+        },
+        {
+          "Text": "=地面摩擦，"
+        },
+        {
+          "Text": "默认 5.2",
+          "Parameter": 1
+        },
+        {
+          "Text": "；"
+        },
+        {
+          "Text": "speed",
+          "Parameter": 0
+        },
+        {
+          "Text": "=全局最大速度，"
+        },
+        {
+          "Text": "默认 320",
+          "Parameter": 1
+        },
+        {
+          "Text": "。这些值直接写入原生变量。"
+        }
+      ],
+      [
+        {
+          "Text": "bhop",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "1 开启连跳并取消跳跃／落地体力消耗、0 关闭并恢复默认体力",
+          "Parameter": 1
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "reset 恢复该模块变量，兼容 0/off/disable；全局生效，不按阵营划分。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/move"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "gravity",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "400",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "将全局"
+          },
+          {
+            "Text": "重力",
+            "Parameter": 0
+          },
+          {
+            "Text": "写为"
+          },
+          {
+            "Text": "400",
+            "Parameter": 1
+          },
+          {
+            "Text": "；不是 400%。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/mod",
+    "Console": "css_mod",
+    "Module": "特色玩法",
+    "Summary": "全局命中部位、吸血与自伤规则",
+    "Permission": "@css/root",
+    "Usage": [
+      "/mod hit-scale <t/ct/all/0> <头部倍率> <身体倍率>",
+      "/mod headshot <0|1>",
+      "/mod vampire <比例>",
+      "/mod selfdamage <比例>",
+      "/mod he-damage <倍率>",
+      "/mod reset"
+    ],
+    "Parameters": [
+      "hit-scale：目标 t/ct/all/0；头部倍率、身体倍率分别改变对应命中伤害，hitscale 为别名。",
+      "headshot：1只允许爆头伤害；0关闭限制。",
+      "vampire：比例 0 关闭、0.1 将伤害的 10% 转为回血。",
+      "selfdamage：比例为攻击落空时对攻击者的最大伤害比例，0 关闭。",
+      "he-damage：倍率只改变高爆伤害；hedamage、grenade-damage 为别名。",
+      "reset 恢复变量；damage、drain 子命令已停用。"
+    ],
+    "Examples": [
+      "/mod he-damage 2"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/ModifierFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/mod"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "hit-scale",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<头部倍率>",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<身体倍率>",
+          "Parameter": 3
+        }
+      ],
+      [
+        {
+          "Text": "/mod"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "headshot",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<0|1>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/mod"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "vampire",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<比例>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/mod"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "selfdamage",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<比例>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/mod"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "he-damage",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<倍率>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/mod"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "reset",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "hit-scale",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "目标",
+          "Parameter": 1
+        },
+        {
+          "Text": " t/ct/all/0；"
+        },
+        {
+          "Text": "头部倍率",
+          "Parameter": 2
+        },
+        {
+          "Text": "、"
+        },
+        {
+          "Text": "身体倍率",
+          "Parameter": 3
+        },
+        {
+          "Text": "分别改变对应命中伤害，hitscale 为别名。"
+        }
+      ],
+      [
+        {
+          "Text": "headshot",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "1",
+          "Parameter": 1
+        },
+        {
+          "Text": "只允许爆头伤害；"
+        },
+        {
+          "Text": "0",
+          "Parameter": 1
+        },
+        {
+          "Text": "关闭限制。"
+        }
+      ],
+      [
+        {
+          "Text": "vampire",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "比例",
+          "Parameter": 1
+        },
+        {
+          "Text": " 0 关闭、0.1 将伤害的 10% 转为回血。"
+        }
+      ],
+      [
+        {
+          "Text": "selfdamage",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "比例",
+          "Parameter": 1
+        },
+        {
+          "Text": "为攻击落空时对攻击者的最大伤害比例，0 关闭。"
+        }
+      ],
+      [
+        {
+          "Text": "he-damage",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "倍率",
+          "Parameter": 1
+        },
+        {
+          "Text": "只改变高爆伤害；hedamage、grenade-damage 为别名。"
+        }
+      ],
+      [
+        {
+          "Text": "reset 恢复变量；damage、drain 子命令已停用。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/mod"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "he-damage",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "2",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "将"
+          },
+          {
+            "Text": "高爆手雷伤害倍率",
+            "Parameter": 0
+          },
+          {
+            "Text": "设为"
+          },
+          {
+            "Text": "2 倍",
+            "Parameter": 1
+          },
+          {
+            "Text": "，不改变其他伤害。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/loadout",
+    "Console": "css_loadout",
+    "Module": "特色玩法",
+    "Summary": "默认装备、购买规则与治疗针",
+    "Permission": "@css/root",
+    "Usage": [
+      "/loadout weapon <t/ct/all/0> <primary|secondary> <武器名|none>",
+      "/loadout grenade <t/ct/all/0> <投掷物列表|none>",
+      "/loadout armor <all|0> <0|1|2>",
+      "/loadout buy <秒数> <0|1>",
+      "/loadout allow <heavy> <pistols> <rifles> <smgs> <zeus>",
+      "/loadout healthshot <t/ct/all/0> <heal|regen|immune|resist>",
+      "/loadout reset"
+    ],
+    "Parameters": [
+      "weapon：目标 t/ct/all/0；槽位 primary=主武器、secondary=副武器；武器填内部名，none 不发装备。",
+      "grenade：目标 t/ct/all/0；投掷物列表用空格分隔，none 不发。",
+      "armor：目标只接受 all 或 0；护甲值 0 不免费发、1 防弹衣、2 防弹衣和头盔。",
+      "buy：秒数是购买时限；开关 1 任何地点可买、0 仅购买区。",
+      "allow：heavy、pistols、rifles、smgs的 -1=双方、0=禁止、2仅T、3仅CT；zeus是每回合次数，0 禁止、-1 不限。",
+      "healthshot：目标 t/ct/all/0；效果 heal 快速回血、regen 强化回血、immune 短暂无伤、resist 减伤。属性变量是全局设置。",
+      "reset 恢复本模块变量，兼容 0/off/disable；不使用 - 保持参数。"
+    ],
+    "Examples": [
+      "/loadout weapon ct primary weapon_m4a1",
+      "/loadout armor all 2"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/LoadoutFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/loadout"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "weapon",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<primary|secondary>",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<武器名|none>",
+          "Parameter": 3
+        }
+      ],
+      [
+        {
+          "Text": "/loadout"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "grenade",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<投掷物列表|none>",
+          "Parameter": 2
+        }
+      ],
+      [
+        {
+          "Text": "/loadout"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "armor",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<all|0>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<0|1|2>",
+          "Parameter": 2
+        }
+      ],
+      [
+        {
+          "Text": "/loadout"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "buy",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<秒数>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<0|1>",
+          "Parameter": 2
+        }
+      ],
+      [
+        {
+          "Text": "/loadout"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "allow",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<heavy>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<pistols>",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<rifles>",
+          "Parameter": 3
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<smgs>",
+          "Parameter": 4
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<zeus>",
+          "Parameter": 5
+        }
+      ],
+      [
+        {
+          "Text": "/loadout"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "healthshot",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all/0>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<heal|regen|immune|resist>",
+          "Parameter": 2
+        }
+      ],
+      [
+        {
+          "Text": "/loadout"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "reset",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "weapon",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "目标",
+          "Parameter": 1
+        },
+        {
+          "Text": " t/ct/all/0；"
+        },
+        {
+          "Text": "槽位",
+          "Parameter": 2
+        },
+        {
+          "Text": " primary=主武器、secondary=副武器；"
+        },
+        {
+          "Text": "武器",
+          "Parameter": 3
+        },
+        {
+          "Text": "填内部名，none 不发装备。"
+        }
+      ],
+      [
+        {
+          "Text": "grenade",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "目标",
+          "Parameter": 1
+        },
+        {
+          "Text": " t/ct/all/0；"
+        },
+        {
+          "Text": "投掷物列表",
+          "Parameter": 2
+        },
+        {
+          "Text": "用空格分隔，none 不发。"
+        }
+      ],
+      [
+        {
+          "Text": "armor",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "目标",
+          "Parameter": 1
+        },
+        {
+          "Text": "只接受 all 或 0；"
+        },
+        {
+          "Text": "护甲值",
+          "Parameter": 2
+        },
+        {
+          "Text": " 0 不免费发、1 防弹衣、2 防弹衣和头盔。"
+        }
+      ],
+      [
+        {
+          "Text": "buy",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "秒数",
+          "Parameter": 1
+        },
+        {
+          "Text": "是购买时限；"
+        },
+        {
+          "Text": "开关",
+          "Parameter": 2
+        },
+        {
+          "Text": " 1 任何地点可买、0 仅购买区。"
+        }
+      ],
+      [
+        {
+          "Text": "allow",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "heavy",
+          "Parameter": 1
+        },
+        {
+          "Text": "、"
+        },
+        {
+          "Text": "pistols",
+          "Parameter": 2
+        },
+        {
+          "Text": "、"
+        },
+        {
+          "Text": "rifles",
+          "Parameter": 3
+        },
+        {
+          "Text": "、"
+        },
+        {
+          "Text": "smgs",
+          "Parameter": 4
+        },
+        {
+          "Text": "的 -1=双方、0=禁止、2仅T、3仅CT；"
+        },
+        {
+          "Text": "zeus",
+          "Parameter": 5
+        },
+        {
+          "Text": "是每回合次数，0 禁止、-1 不限。"
+        }
+      ],
+      [
+        {
+          "Text": "healthshot",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "目标",
+          "Parameter": 1
+        },
+        {
+          "Text": " t/ct/all/0；"
+        },
+        {
+          "Text": "效果",
+          "Parameter": 2
+        },
+        {
+          "Text": " heal 快速回血、regen 强化回血、immune 短暂无伤、resist 减伤。属性变量是全局设置。"
+        }
+      ],
+      [
+        {
+          "Text": "reset 恢复本模块变量，兼容 0/off/disable；不使用 - 保持参数。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/loadout"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "weapon",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "ct",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "primary",
+            "Parameter": 2
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "weapon_m4a1",
+            "Parameter": 3
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "配置"
+          },
+          {
+            "Text": "发枪规则",
+            "Parameter": 0
+          },
+          {
+            "Text": "：对"
+          },
+          {
+            "Text": "CT 方",
+            "Parameter": 1
+          },
+          {
+            "Text": "的"
+          },
+          {
+            "Text": "主武器槽",
+            "Parameter": 2
+          },
+          {
+            "Text": "发放"
+          },
+          {
+            "Text": "weapon_m4a1",
+            "Parameter": 3
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      },
+      {
+        "Command": [
+          {
+            "Text": "/loadout"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "armor",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "2",
+            "Parameter": 2
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "配置"
+          },
+          {
+            "Text": "免费护甲规则",
+            "Parameter": 0
+          },
+          {
+            "Text": "：对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 1
+          },
+          {
+            "Text": "发放"
+          },
+          {
+            "Text": "防弹衣和头盔",
+            "Parameter": 2
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/preset",
+    "Console": "css_preset",
+    "Module": "特色玩法",
+    "Summary": "预设列表、信息与应用",
+    "Permission": "按预设配置；reload需@css/root",
+    "Usage": [
+      "/preset list [all]",
+      "/preset info <名称>",
+      "/preset <名称>",
+      "/preset reset",
+      "/preset reload"
+    ],
+    "Parameters": [
+      "list只列活动预设；加all列出全部；info查看指定预设说明。",
+      "名称必须来自当前预设库；archived 只展示不执行，迁移到 Feature 的预设提示替代指令。",
+      "reset 重置变量并执行 reset-base；reload 从文件重载预设库。",
+      "应用／重置按预设权限判断，playable 默认 changemap，restricted 默认 root；reload 固定 root。"
+    ],
+    "Examples": [
+      "/preset list all"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/Features/PresetFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/preset"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "list",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[all]",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/preset"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "info",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<名称>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/preset"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<名称>",
+          "Parameter": 0
+        }
+      ],
+      [
+        {
+          "Text": "/preset"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "reset",
+          "Parameter": 0
+        }
+      ],
+      [
+        {
+          "Text": "/preset"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "reload",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "list",
+          "Parameter": 0
+        },
+        {
+          "Text": "只列活动预设；加"
+        },
+        {
+          "Text": "all",
+          "Parameter": 1
+        },
+        {
+          "Text": "列出全部；"
+        },
+        {
+          "Text": "info",
+          "Parameter": 0
+        },
+        {
+          "Text": "查看"
+        },
+        {
+          "Text": "指定预设",
+          "Parameter": 1
+        },
+        {
+          "Text": "说明。"
+        }
+      ],
+      [
+        {
+          "Text": "名称",
+          "Parameter": 0
+        },
+        {
+          "Text": "必须来自当前预设库；archived 只展示不执行，迁移到 Feature 的预设提示替代指令。"
+        }
+      ],
+      [
+        {
+          "Text": "reset 重置变量并执行 reset-base；reload 从文件重载预设库。"
+        }
+      ],
+      [
+        {
+          "Text": "应用／重置按预设权限判断，playable 默认 changemap，restricted 默认 root；reload 固定 root。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/preset"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "list",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "列出",
+            "Parameter": 0
+          },
+          {
+            "Text": "预设库中的"
+          },
+          {
+            "Text": "全部预设",
+            "Parameter": 1
+          },
+          {
+            "Text": "（包含非活动项），只查询，不执行预设。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/hpcap",
+    "Console": "hpcap",
+    "Module": "全局管理",
+    "Summary": "模块血量全局上下限",
+    "Permission": "@css/root",
+    "Usage": [
+      "/hpcap <最小血量> <最大血量>",
+      "/hpcap 0"
+    ],
+    "Parameters": [
+      "最小值>=0、最大值>=1，且最大值>=最小值，均为整数。",
+      "0/off/disable关闭全局保护；不改变原版基础伤害，只约束模块血量变动。"
+    ],
+    "Examples": [],
+    "Notes": [
+      "当前实现第一参数为0时直接禁用，即使还有最大值；设置范围时请使用正整数最小值。"
+    ],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupCore/CaorenCupCoreCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/hpcap"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<最小血量>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<最大血量>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/hpcap"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "0",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "最小值>=0、最大值>=1，且最大值>=最小值，均为整数。"
+        }
+      ],
+      [
+        {
+          "Text": "0/off/disable关闭全局保护；不改变原版基础伤害，只约束模块血量变动。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/info_cast",
+    "Console": "info_cast",
+    "Module": "全局管理",
+    "Summary": "全服广播玩法说明",
+    "Permission": "@css/root",
+    "Usage": [
+      "/info_cast <模块名>"
+    ],
+    "Parameters": [
+      "模块名取自已加载草人杯模块，向所有玩家广播该模块的玩法说明。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupCore/CaorenCupCoreCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/info_cast"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<模块名>",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "模块名",
+          "Parameter": 0
+        },
+        {
+          "Text": "取自已加载草人杯模块，向所有玩家广播该模块的玩法说明。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/reset_plu",
+    "Console": "reset_plu",
+    "Module": "全局管理",
+    "Summary": "恢复娱乐模块与托管变量",
+    "Permission": "聊天入口需@css/root；当前css_reset_plu控制台入口未做相同校验",
+    "Usage": [
+      "/reset_plu"
+    ],
+    "Parameters": [
+      "无参数。重置托管变量、执行各模块的重置回调并保存配置。"
+    ],
+    "Examples": [],
+    "Notes": [
+      "会影响全服，投票/菜单等模块也可能被禁用；谨慎执行。"
+    ],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupCore/CaorenCupCoreCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/reset_plu"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数。重置托管变量、执行各模块的重置回调并保存配置。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/save_plu",
+    "Console": "save_plu",
+    "Module": "全局管理",
+    "Summary": "保存当前模块配置",
+    "Permission": "@css/root",
+    "Usage": [
+      "/save_plu"
+    ],
+    "Parameters": [
+      "无参数。将当前模块设置保存到配置文件。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupCore/CaorenCupCoreCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/save_plu"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数。将当前模块设置保存到配置文件。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/sv_noclip",
+    "Console": "sv_noclip",
+    "Module": "全局管理",
+    "Summary": "允许或禁止玩家 noclip",
+    "Permission": "@css/root",
+    "Usage": [
+      "/sv_noclip <1|0|status>"
+    ],
+    "Parameters": [
+      "1允许玩家使用noclip，0禁止，status只查询当前状态；禁止时会清理已开启的noclip。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupCore/CaorenCupCoreCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/sv_noclip"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<1|0|status>",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "1允许玩家使用noclip，0禁止，"
+        },
+        {
+          "Text": "status",
+          "Parameter": 0
+        },
+        {
+          "Text": "只查询当前状态；禁止时会清理已开启的noclip。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/duel",
+    "Console": "css_duel",
+    "Module": "单挑",
+    "Summary": "单挑配置与比赛管理",
+    "Permission": "@css/root",
+    "Usage": [
+      "/duel help|status|reset|start|pause|resume|stop|maps",
+      "/duel rounds <手枪回合> <步枪回合> <狙击回合>",
+      "/duel time <分钟>",
+      "/duel nades <none|random1|random2|random3|full>",
+      "/duel map <序号|地图名|创意工坊ID>"
+    ],
+    "Parameters": [
+      "help/status/reset/start/pause/resume/stop/maps分别查看帮助、状态、重置、开赛、暂停、恢复、停止、列地图。",
+      "rounds：步枪回合、手枪回合、狙击回合均非负，总和至少 1。",
+      "time：分钟 0.25～5；0.25=15秒。",
+      "nades：模式 none 无道具、random1/2/3 随机对应件数、full 全道具。",
+      "map：目标可填列表序号、地图名或工坊 ID；切图影响全服。"
+    ],
+    "Examples": [
+      "/duel rounds 3 3 3",
+      "/duel time 1"
+    ],
+    "Notes": [],
+    "Sources": [
+      "duel-plugin/CaorenDuelPlugin.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/duel"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "help|status|reset|start|pause|resume|stop|maps",
+          "Parameter": 0
+        }
+      ],
+      [
+        {
+          "Text": "/duel"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "rounds",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<手枪回合>",
+          "Parameter": 1
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<步枪回合>",
+          "Parameter": 2
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<狙击回合>",
+          "Parameter": 3
+        }
+      ],
+      [
+        {
+          "Text": "/duel"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "time",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<分钟>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/duel"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "nades",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<none|random1|random2|random3|full>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/duel"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "map",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<序号|地图名|创意工坊ID>",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "help/status/reset/start/pause/resume/stop/maps",
+          "Parameter": 0
+        },
+        {
+          "Text": "分别查看帮助、状态、重置、开赛、暂停、恢复、停止、列地图。"
+        }
+      ],
+      [
+        {
+          "Text": "rounds",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "步枪回合",
+          "Parameter": 1
+        },
+        {
+          "Text": "、"
+        },
+        {
+          "Text": "手枪回合",
+          "Parameter": 2
+        },
+        {
+          "Text": "、"
+        },
+        {
+          "Text": "狙击回合",
+          "Parameter": 3
+        },
+        {
+          "Text": "均非负，总和至少 1。"
+        }
+      ],
+      [
+        {
+          "Text": "time",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "分钟",
+          "Parameter": 1
+        },
+        {
+          "Text": " 0.25～5；0.25=15秒。"
+        }
+      ],
+      [
+        {
+          "Text": "nades",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "模式",
+          "Parameter": 1
+        },
+        {
+          "Text": " none 无道具、random1/2/3 随机对应件数、full 全道具。"
+        }
+      ],
+      [
+        {
+          "Text": "map",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "目标",
+          "Parameter": 1
+        },
+        {
+          "Text": "可填列表序号、地图名或工坊 ID；切图影响全服。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/duel"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "rounds",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "3",
+            "Parameter": 1
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "3",
+            "Parameter": 2
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "3",
+            "Parameter": 3
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "配置"
+          },
+          {
+            "Text": "武器阶段回合数",
+            "Parameter": 0
+          },
+          {
+            "Text": "："
+          },
+          {
+            "Text": "步枪 3 回合",
+            "Parameter": 1
+          },
+          {
+            "Text": "、"
+          },
+          {
+            "Text": "手枪 3 回合",
+            "Parameter": 2
+          },
+          {
+            "Text": "、"
+          },
+          {
+            "Text": "狙击 3 回合",
+            "Parameter": 3
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      },
+      {
+        "Command": [
+          {
+            "Text": "/duel"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "time",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "将"
+          },
+          {
+            "Text": "单回合时限",
+            "Parameter": 0
+          },
+          {
+            "Text": "设为"
+          },
+          {
+            "Text": "1 分钟（60 秒）",
+            "Parameter": 1
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/dp",
+    "Console": "css_dp",
+    "Module": "单挑",
+    "Summary": "暂停单挑",
+    "Permission": "@css/root",
+    "Usage": [
+      "/dp"
+    ],
+    "Parameters": [
+      "无参数，等同 /duel pause。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "duel-plugin/CaorenDuelPlugin.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/dp"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数，等同 /duel pause。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/dr",
+    "Console": "css_dr",
+    "Module": "单挑",
+    "Summary": "恢复单挑",
+    "Permission": "@css/root",
+    "Usage": [
+      "/dr"
+    ],
+    "Parameters": [
+      "无参数，等同 /duel resume。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "duel-plugin/CaorenDuelPlugin.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/dr"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数，等同 /duel resume。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/duel_map",
+    "Console": "css_duel_map",
+    "Module": "单挑",
+    "Summary": "切换单挑地图",
+    "Permission": "@css/root",
+    "Usage": [
+      "/duel_map <序号|地图名|创意工坊ID>"
+    ],
+    "Parameters": [
+      "参数与 /duel map 相同；会切换全服地图。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "duel-plugin/CaorenDuelPlugin.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/duel_map"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<序号|地图名|创意工坊ID>",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "参数与 /duel map 相同；会切换全服地图。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/duel_maps",
+    "Console": "css_duel_maps",
+    "Module": "单挑",
+    "Summary": "单挑地图列表",
+    "Permission": "@css/root",
+    "Usage": [
+      "/duel_maps"
+    ],
+    "Parameters": [
+      "无参数，查看可切换地图及序号。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "duel-plugin/CaorenDuelPlugin.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/duel_maps"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数，查看可切换地图及序号。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/competitive",
+    "Console": "css_competitive",
+    "Module": "比赛模式",
+    "Summary": "切换默认竞技模式",
+    "Permission": "@css/root",
+    "Usage": [
+      "/competitive"
+    ],
+    "Parameters": [
+      "无参数，切换草人杯默认竞技模式。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupGamemode_Competitive/CompetitivePlugin.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/competitive"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数，切换草人杯默认竞技模式。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/rush",
+    "Console": "css_rush",
+    "Module": "比赛模式",
+    "Summary": "RUSH 模式启动",
+    "Permission": "@css/root",
+    "Usage": [
+      "/rush start"
+    ],
+    "Parameters": [
+      "start切换rush_001地图，进入RUSH，并在换图后应用官方RUSH配置。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupGamemode_RUSH/RushFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/rush"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "start",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "start",
+          "Parameter": 0
+        },
+        {
+          "Text": "切换rush_001地图，进入RUSH，并在换图后应用官方RUSH配置。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/hp_set",
+    "Console": "css_hp_set",
+    "Module": "伤害查询",
+    "Summary": "伤害查询的阵营与死亡条件",
+    "Permission": "@css/root",
+    "Usage": [
+      "/hp_set <t/ct/all> [1|0]",
+      "/hp_set 0"
+    ],
+    "Parameters": [
+      "目标：t=T方、ct=CT方、all=双方、0=关闭该模块。",
+      "1 必须死亡后查询、0 随时可查；省略默认 1。"
+    ],
+    "Examples": [
+      "/hp_set all 1"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOL_SimpleHP/SimpleHpFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/hp_set"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<t/ct/all>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[1|0]",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/hp_set"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "0",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "目标",
+          "Parameter": 0
+        },
+        {
+          "Text": "："
+        },
+        {
+          "Text": "t=T方、ct=CT方、all=双方、0=关闭该模块",
+          "Parameter": 0
+        },
+        {
+          "Text": "。"
+        }
+      ],
+      [
+        {
+          "Text": "1 必须死亡后查询、0 随时可查",
+          "Parameter": 1
+        },
+        {
+          "Text": "；省略默认 1。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/hp_set"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "1",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "对"
+          },
+          {
+            "Text": "双方",
+            "Parameter": 0
+          },
+          {
+            "Text": "启用血量查询，"
+          },
+          {
+            "Text": "必须死亡后才能查询",
+            "Parameter": 1
+          },
+          {
+            "Text": "。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/ps",
+    "Console": "css_ps",
+    "Module": "音效广播",
+    "Summary": "向全服播放音效",
+    "Permission": "@css/root",
+    "Usage": [
+      "/ps <文件名|别名|完整路径>",
+      "/ps 0"
+    ],
+    "Parameters": [
+      "0禁用音效广播模块。文件名使用配置前缀，别名来自SoundMap，完整路径按插件规则处理。",
+      "解析多个词时按完整参数字符串匹配音效；音效播放影响全服。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOL_PlaySound/PlaySoundFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/ps"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<文件名|别名|完整路径>",
+          "Parameter": 0
+        }
+      ],
+      [
+        {
+          "Text": "/ps"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "0",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "0禁用音效广播模块。"
+        },
+        {
+          "Text": "文件名",
+          "Parameter": 0
+        },
+        {
+          "Text": "使用配置前缀，"
+        },
+        {
+          "Text": "别名",
+          "Parameter": 0
+        },
+        {
+          "Text": "来自SoundMap，"
+        },
+        {
+          "Text": "完整路径",
+          "Parameter": 0
+        },
+        {
+          "Text": "按插件规则处理。"
+        }
+      ],
+      [
+        {
+          "Text": "解析多个词时按完整参数字符串匹配音效；音效播放影响全服。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/alias_reload",
+    "Console": "css_alias_reload",
+    "Module": "指令别名",
+    "Summary": "重载指令别名配置",
+    "Permission": "@css/root",
+    "Usage": [
+      "/alias_reload"
+    ],
+    "Parameters": [
+      "无参数，仅重新读取和注册Alias别名，不重载其他模块。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOL_Alias/AliasFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/alias_reload"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数，仅重新读取和注册Alias别名，不重载其他模块。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/p1",
+    "Console": "css_p1",
+    "Module": "指令别名",
+    "Summary": "暂停比赛的当前配置别名",
+    "Permission": "Alias.Permission，当前为@css/changemap",
+    "Usage": [
+      "/p1"
+    ],
+    "Parameters": [
+      "当前配置映射mp_pause_match，无参数；如修改Alias配置，以 /alias_list 的实时映射为准。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOL_Alias/AliasFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/p1"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "当前配置映射mp_pause_match，无参数；如修改Alias配置，以 /alias_list 的实时映射为准。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/un",
+    "Console": "css_un",
+    "Module": "指令别名",
+    "Summary": "恢复比赛的当前配置别名",
+    "Permission": "Alias.Permission，当前为@css/changemap",
+    "Usage": [
+      "/un"
+    ],
+    "Parameters": [
+      "当前配置映射mp_unpause_match，无参数；如修改Alias配置，以 /alias_list 的实时映射为准。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOL_Alias/AliasFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/un"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "当前配置映射mp_unpause_match，无参数；如修改Alias配置，以 /alias_list 的实时映射为准。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/skinstatus",
+    "Console": "css_skinstatus",
+    "Module": "换肤",
+    "Summary": "换肤插件健康状态",
+    "Permission": "换肤插件Config.AdminPermission",
+    "Usage": [
+      "/skinstatus"
+    ],
+    "Parameters": [
+      "无参数，查看物品数据、数据库、游戏数据和菜单等组件是否就绪。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/PluginRuntime.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/skinstatus"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数，查看物品数据、数据库、游戏数据和菜单等组件是否就绪。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/wp_refresh",
+    "Console": "wp_refresh",
+    "Module": "换肤",
+    "Summary": "管理员重载并刷新换肤",
+    "Permission": "换肤插件Config.AdminPermission",
+    "Usage": [
+      "/wp_refresh <SteamID64|all> [safe]"
+    ],
+    "Parameters": [
+      "SteamID64指定在线玩家，all处理所有有效在线玩家。",
+      "safe是安全刷新，正式回合存活玩家等下次出生应用；省略为强制刷新。",
+      "只有 safe 被识别为安全模式，其他第二参数仍为强制处理。"
+    ],
+    "Examples": [
+      "/wp_refresh all safe"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/PluginRuntime.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/wp_refresh"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<SteamID64|all>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[safe]",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "SteamID64",
+          "Parameter": 0
+        },
+        {
+          "Text": "指定在线玩家，"
+        },
+        {
+          "Text": "all",
+          "Parameter": 0
+        },
+        {
+          "Text": "处理所有有效在线玩家。"
+        }
+      ],
+      [
+        {
+          "Text": "safe",
+          "Parameter": 1
+        },
+        {
+          "Text": "是安全刷新，正式回合存活玩家等下次出生应用；省略为强制刷新。"
+        }
+      ],
+      [
+        {
+          "Text": "只有 safe 被识别为安全模式，其他第二参数仍为强制处理。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/wp_refresh"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "safe",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "刷新"
+          },
+          {
+            "Text": "所有有效在线玩家",
+            "Parameter": 0
+          },
+          {
+            "Text": "，使用"
+          },
+          {
+            "Text": "安全模式",
+            "Parameter": 1
+          },
+          {
+            "Text": "；正式回合存活玩家等下次出生再应用。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/notice",
+    "Console": "css_notice",
+    "Module": "网页桥接",
+    "Summary": "向网页身份组发送醒目提示",
+    "Permission": "@css/root",
+    "Usage": [
+      "/notice <all|undercover|und|detective|det|task|nor> [内容]"
+    ],
+    "Parameters": [
+      "all 全体、undercover/und 卧底、detective/det 侦探、task/nor 任务人员；受众按网页身份组决定。",
+      "内容是发送的提示文本，省略时由网页端按身份提示逻辑处理。"
+    ],
+    "Examples": [
+      "/notice all 请准备"
+    ],
+    "Notes": [],
+    "Sources": [
+      "web-command-center/CaorenCupPlugin/CaorenCupPlugin.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/notice"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<all|undercover|und|detective|det|task|nor>",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[内容]",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "all 全体、undercover/und 卧底、detective/det 侦探、task/nor 任务人员",
+          "Parameter": 0
+        },
+        {
+          "Text": "；受众按网页身份组决定。"
+        }
+      ],
+      [
+        {
+          "Text": "内容",
+          "Parameter": 1
+        },
+        {
+          "Text": "是发送的提示文本，省略时由网页端按身份提示逻辑处理。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/notice"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "all",
+            "Parameter": 0
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "请准备",
+            "Parameter": 1
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "向"
+          },
+          {
+            "Text": "全体玩家",
+            "Parameter": 0
+          },
+          {
+            "Text": "发送"
+          },
+          {
+            "Text": "“请准备”",
+            "Parameter": 1
+          },
+          {
+            "Text": "提醒。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/lobbyreminder",
+    "Console": "css_lobbyreminder",
+    "Module": "网页桥接",
+    "Summary": "大厅验证提醒开关",
+    "Permission": "@css/root",
+    "Usage": [
+      "/lobbyreminder <on|off|1|0>"
+    ],
+    "Parameters": [
+      "on/1开启；off/0关闭；无参数查询状态。",
+      "必须由游戏内真人管理员执行，服务器控制台不支持此入口。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "web-command-center/CaorenCupPlugin/CaorenCupPlugin.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/lobbyreminder"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<on|off|1|0>",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "on/1开启；off/0关闭；无参数查询状态。"
+        }
+      ],
+      [
+        {
+          "Text": "必须由游戏内真人管理员执行，服务器控制台不支持此入口。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/crcmenu_admin",
+    "Console": "css_crcmenu_admin",
+    "Module": "菜单",
+    "Summary": "管理员菜单入口；简写 /ca",
+    "Permission": "@css/root",
+    "Usage": [
+      "/crcmenu_admin"
+    ],
+    "Parameters": [
+      "无参数；打开管理员菜单，已打开时再次调用关闭。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupInGameMenu/InGameMenuFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/crcmenu_admin"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数；打开管理员菜单，已打开时再次调用关闭。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/crcvote_admin",
+    "Console": "css_crcvote_admin",
+    "Module": "投票",
+    "Summary": "投票创建、确认和取消",
+    "Permission": "@css/root",
+    "Usage": [
+      "/crcvote_admin",
+      "/crcvote_admin create|start|cancel|discard"
+    ],
+    "Parameters": [
+      "无参数打开管理页；create开始聊天填写，start提交已完成的草稿。",
+      "cancel取消全服当前投票，不产生胜出项；discard丢弃自己的草稿。",
+      "问题、2～4选项通过聊天填写；30秒时限；结果展示10秒结束前不能开始下一轮。"
+    ],
+    "Examples": [],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupInGameMenu/VotingFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/crcvote_admin"
+        }
+      ],
+      [
+        {
+          "Text": "/crcvote_admin"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "create|start|cancel|discard",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数打开管理页；"
+        },
+        {
+          "Text": "create",
+          "Parameter": 0
+        },
+        {
+          "Text": "开始聊天填写，"
+        },
+        {
+          "Text": "start",
+          "Parameter": 0
+        },
+        {
+          "Text": "提交已完成的草稿。"
+        }
+      ],
+      [
+        {
+          "Text": "cancel",
+          "Parameter": 0
+        },
+        {
+          "Text": "取消全服当前投票，不产生胜出项；"
+        },
+        {
+          "Text": "discard",
+          "Parameter": 0
+        },
+        {
+          "Text": "丢弃自己的草稿。"
+        }
+      ],
+      [
+        {
+          "Text": "问题、2～4选项通过聊天填写；30秒时限；结果展示10秒结束前不能开始下一轮。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  },
+  {
+    "Name": "/radarcolor",
+    "Console": "css_radarcolor",
+    "Module": "小地图颜色",
+    "Summary": "查询或重新分配队友颜色",
+    "Permission": "@css/root",
+    "Usage": [
+      "/radarcolor [status|apply]"
+    ],
+    "Parameters": [
+      "省略或status查询状态；apply/fix重新分配当前玩家颜色。",
+      "颜色修复常开。0/off/disable不会关闭，只重新应用并提示常开；1/on/enable同样重新应用。"
+    ],
+    "Examples": [
+      "/radarcolor apply"
+    ],
+    "Notes": [],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOL_RadarColor/RadarColorFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/radarcolor"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "[status|apply]",
+          "Parameter": 0
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "省略或"
+        },
+        {
+          "Text": "status",
+          "Parameter": 0
+        },
+        {
+          "Text": "查询状态；"
+        },
+        {
+          "Text": "apply/fix",
+          "Parameter": 0
+        },
+        {
+          "Text": "重新分配当前玩家颜色。"
+        }
+      ],
+      [
+        {
+          "Text": "颜色修复常开。"
+        },
+        {
+          "Text": "0/off/disable",
+          "Parameter": 0
+        },
+        {
+          "Text": "不会关闭，只重新应用并提示常开；"
+        },
+        {
+          "Text": "1/on/enable",
+          "Parameter": 0
+        },
+        {
+          "Text": "同样重新应用。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": "/radarcolor"
+          },
+          {
+            "Text": " "
+          },
+          {
+            "Text": "apply",
+            "Parameter": 0
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "重新分配当前玩家颜色",
+            "Parameter": 0
+          },
+          {
+            "Text": "，颜色修复仍保持常开。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": "/caudio",
+    "Console": "css_caudio",
+    "Module": "统一音频服务",
+    "Summary": "按事件播放与查询音频能力",
+    "Permission": "@css/root",
+    "Usage": [
+      "/caudio status",
+      "/caudio play <事件ID>",
+      "/caudio pause|resume|stop|loopon|loopoff <music|broadcast>"
+    ],
+    "Parameters": [
+      "影响范围：全服。status 查询事件及能力；play 按稳定事件 ID 请求播放。",
+      "长音频控制尚未通过宿主验证；当前后端拒绝控制，不改变音频状态。"
+    ],
+    "Examples": [],
+    "Notes": [
+      "普通玩家只调整自己的总音量；/ps 保留旧的一次性播放方式。"
+    ],
+    "Sources": [
+      "game-plugin/PluginSplit/CaorenCupQOL_PlaySound/PlaySoundFeature.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": "/caudio"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "status",
+          "Parameter": 0
+        }
+      ],
+      [
+        {
+          "Text": "/caudio"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "play",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<事件ID>",
+          "Parameter": 1
+        }
+      ],
+      [
+        {
+          "Text": "/caudio"
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "pause|resume|stop|loopon|loopoff",
+          "Parameter": 0
+        },
+        {
+          "Text": " "
+        },
+        {
+          "Text": "<music|broadcast>",
+          "Parameter": 1
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "影响范围：全服。"
+        },
+        {
+          "Text": "status",
+          "Parameter": 0
+        },
+        {
+          "Text": " 查询事件及能力；"
+        },
+        {
+          "Text": "play",
+          "Parameter": 0
+        },
+        {
+          "Text": " 按稳定事件 ID 请求播放。"
+        }
+      ],
+      [
+        {
+          "Text": "长音频控制尚未通过宿主验证；当前后端拒绝控制，不改变音频状态。"
+        }
+      ]
+    ],
+    "WorkedExamples": []
+  }
+]

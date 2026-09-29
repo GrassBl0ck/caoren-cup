@@ -126,7 +126,7 @@ namespace CaorenCup.Features
                 SetEnabled(false);
                 string msg = "DoubleJump: \x02已禁用\x01";
                 if (player != null) CaorenCupUtils.PrintToChat(player, msg);
-                else info.ReplyToCommand($"[草人杯] {msg}");
+                else info.ReplyToCommand($"{CaorenCupUtils.Tag} {msg}");
                 return;
             }
 
@@ -145,11 +145,11 @@ namespace CaorenCup.Features
                 else
                 {
                     // 控制台输出备用格式
-                    info.ReplyToCommand("=== DoubleJump 指令说明 ===");
-                    info.ReplyToCommand(" css_dj 0 : 一键禁用");
-                    info.ReplyToCommand(" css_dj <t/ct/all> <跳跃次数> <高度力度> <上升期起跳(true/false)>");
-                    info.ReplyToCommand("示例: css_dj t 2 300 true (T阵营2段跳，力度300，允许上升期连跳)");
-                    info.ReplyToCommand($"当前状态: {GetStatusInfo().Replace("\x04", "").Replace("\x02", "").Replace("\x01", "")}"); // 控制台去除颜色代码
+                    info.ReplyToCommand($"{CaorenCupUtils.Tag} === DoubleJump 指令说明 ===");
+                    info.ReplyToCommand($"{CaorenCupUtils.Tag} css_dj 0 : 一键禁用");
+                    info.ReplyToCommand($"{CaorenCupUtils.Tag} css_dj <t/ct/all> <跳跃次数> <高度力度> <上升期起跳(true/false)>");
+                    info.ReplyToCommand($"{CaorenCupUtils.Tag} 示例: css_dj t 2 300 true (T阵营2段跳，力度300，允许上升期连跳)");
+                    info.ReplyToCommand($"{CaorenCupUtils.Tag} 当前状态: {GetStatusInfo().Replace("\x04", "").Replace("\x02", "").Replace("\x01", "")}"); // 控制台去除颜色代码
                 }
                 return;
             }
@@ -180,7 +180,7 @@ namespace CaorenCup.Features
 
             string reply = $"DoubleJump: \x04已更新\x01! 目标:\x04{target.ToUpper()}\x01 次数:\x04{jumps}\x01 力度:\x04{velocity}\x01";
             if (player != null) CaorenCupUtils.PrintToChat(player, reply);
-            else info.ReplyToCommand($"[草人杯] {reply}");
+            else info.ReplyToCommand($"{CaorenCupUtils.Tag} {reply}");
         }
 
         // ==================== 核心逻辑 ====================
