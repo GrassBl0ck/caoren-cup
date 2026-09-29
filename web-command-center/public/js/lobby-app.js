@@ -2031,6 +2031,18 @@ if (window._caorenModifiersEnabled !== true) {
             return text.replace(/1N/g, 'N');
         }
 
+        function formatNRangeLabel(cell) {
+            if (!cell || !cell.nType || cell.nType === 'none') return '';
+            const maxN = Number(cell.nMax || 0);
+            if (!Number.isFinite(maxN) || maxN < 1) return '';
+            if (maxN <= 6) {
+                const values = [];
+                for (let i = 1; i <= maxN; i++) values.push(i);
+                return `N={${values.join(',')}}`;
+            }
+            return `N={1,2,3,...,${maxN}}`;
+        }
+
         function getTaskStatusBadge(status) {
             const map = {
                 Complete: { text: '已完成', className: 'complete' },
@@ -2065,10 +2077,11 @@ if (window._caorenModifiersEnabled !== true) {
             const entries = (Array.isArray(taskActionLog) ? taskActionLog : [])
                 .filter(entry => entry.cellId === cellId)
                 .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
-                .slice(0, 6);
-            if (!entries.length) return '';
-            const rows = entries.map(entry => `<li><strong>第 ${Number(entry.round || 0)} 回合 · ${htmlEscape(taskActionLabel(entry.action))}</strong><span>${htmlEscape(formatTaskLogChange(entry))}</span><small>${htmlEscape(formatTaskLogTime(entry.timestamp))}</small></li>`).join('');
-            return `<span class="task-history-shell"><button type="button" class="task-history-trigger" aria-label="查看格子 ${cellId} 的操作历史" onclick="toggleTaskHistory(event, '${cellId}')">◷</button><span class="task-history-popover" role="tooltip"><b>格子 ${cellId} 操作历史</b><ol>${rows}</ol></span></span>`;
+                .slice(0, 10);
+            const rows = entries.length
+                ? entries.map(entry => `<li><strong>第 ${Number(entry.round || 0)} 回合，做出了「${htmlEscape(taskActionLabel(entry.action))}」操作</strong><span>${htmlEscape(formatTaskLogChange(entry))}</span><small>${htmlEscape(formatTaskLogTime(entry.timestamp))}</small></li>`).join('')
+                : '<li class="task-history-empty">暂无操作记录</li>';
+            return `<span class="task-history-shell"><button type="button" class="task-history-trigger" aria-label="查看格子 ${cellId} 的操作记录" onclick="toggleTaskHistory(event, '${cellId}')">◷</button><span class="task-history-popover" role="tooltip"><b>格子 ${cellId} 操作记录</b><ol>${rows}</ol></span></span>`;
         }
 
         function toggleTaskHistory(event, cellId) {
@@ -2090,31 +2103,57 @@ if (window._caorenModifiersEnabled !== true) {
             renderTaskPresetOptions();
         });
 
+        function cornerStatusParts(cell) {
+            const nValue = Number(cell.nValue || 0);
+            const nMax = Number(cell.nMax || 0);
+            let mainText = '未完成';
+            let mainClass = 'st-incomplete';
+            let mainNote = '任务尚未完成。';
+            if (cell.status === 'Complete') { mainText = '已完成'; mainClass = 'st-complete'; mainNote = cell.completedRound ? `在第 ${cell.completedRound} 回合完成。` : '任务已完成。'; }
+            else if (cell.status === 'Abandoned') { mainText = '已放弃'; mainClass = 'st-abandoned'; mainNote = '任务已放弃。'; }
+            else if (cell.nType !== 'none' && nValue > 0) {
+                mainText = `已部分完成（N=${nValue}${nMax > 0 ? `/${nMax}` : ''}）`;
+                mainClass = 'st-progress';
+                mainNote = `当前 N = ${nValue}${nMax > 0 ? `，最大 ${nMax}` : ''}。`;
+            }
+            const parts = [{ strong: mainText, span: mainNote }];
+            if (cell.isReplaced) parts.push({ strong: '已被替换', span: '此任务已被备用任务替换。' });
+            if (cell.isHintUsed) parts.push({ strong: '已获取提示', span: '提示内容已显示在格子内。' });
+            return { mainClass, parts };
+        }
+
+        function cornerStatusHtml(cellId, cell) {
+            if (!cell) return '';
+            const { mainClass, parts } = cornerStatusParts(cell);
+            const rows = parts.map(p => `<li><strong>${htmlEscape(p.strong)}</strong><span>${htmlEscape(p.span)}</span></li>`).join('');
+            return `<span class="task-status-shell"><button type="button" class="task-status-trigger ${mainClass}" aria-label="查看格子 ${cellId} 的当前状态">ⓘ</button><span class="task-status-popover" role="tooltip"><b>格子 ${cellId} 当前状态</b><ul>${rows}</ul></span></span>`;
+        }
+
         function renderTaskCell(cellId, cell, options = {}) {
             const clickable = options.clickable === true;
             const compact = options.compact === true;
             const stateClass = taskStateClass(cell);
             const borderHistory = Array.isArray(cell?.borderHistory) ? cell.borderHistory : [];
-            const specialClass = `${borderHistory.includes('blue') ? ' task-special-blue' : ''}${borderHistory.includes('purple') ? ' task-special-purple' : ''}`;
+            const hintAvailable = !!String(cell?.hint || '').trim();
+            const hintPending = hintAvailable && !cell?.isHintUsed;
+            const specialClass = `${hintPending ? ' task-special-blue' : ''}${borderHistory.includes('purple') ? ' task-special-purple' : ''}`;
             let titleHtml = '';
             if (cell && cell.levelLabel) {
                 const displayLabel = formatNDisplayText(cell.levelLabel, cell);
                 const color = getLevelColor(displayLabel);
-                titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color}; font-size:${compact ? '13px' : '16px'};">【${htmlEscape(displayLabel)}】</div>`;
+                const nRange = formatNRangeLabel(cell);
+                const nRangeHtml = nRange ? `<span style="font-size:${compact ? '11px' : '13px'}; color:#555; font-weight:normal; margin-left:4px;">${nRange}</span>` : '';
+                titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color}; font-size:${compact ? '13px' : '16px'};">【${htmlEscape(displayLabel)}】${nRangeHtml}</div>`;
             }
             const desc = cell ? renderSafeTaskRichText(formatNDisplayText(cell.description, cell)) : '无';
             const hasN = cell && cell.nType !== 'none' && Number(cell.nValue || 0) > 0;
             const nInfo = hasN ? `<div class="task-n-progress" style="font-size:${compact ? '12px' : '15px'};">当前 N = ${cell.nValue}</div>` : '';
             const roundInfo = cell?.completedRound ? `<div class="task-round-note">完成回合：第 ${cell.completedRound} 回合</div>` : '';
-            const displayStatus = cell?.status === 'Incomplete' && Number(cell?.nValue || 0) > 0 ? 'Partial' : (cell?.status || 'Incomplete');
-            const status = cell ? `<div class="task-status-wrap">${getTaskStatusBadge(displayStatus)}</div>` : '';
-            const hintAvailable = !!String(cell?.hint || '').trim();
-            const hintBadge = hintAvailable ? `<span class="task-hint-availability${cell?.isHintUsed ? ' used' : ''}">${cell?.isHintUsed ? '提示已查看' : '有提示'}</span>` : '';
             const hintText = hintAvailable && cell?.isHintUsed ? `<div class="task-hint-text"><b>提示：</b>${htmlEscape(String(cell.hint))}</div>` : '';
             const history = renderTaskHistory(cellId, options.taskActionLog);
             const selectedClass = clickable && window.selectedCellId === cellId ? ' selected' : '';
             const click = clickable ? ` id="cell-${cellId}" onclick="handleCellClick('${cellId}')"` : '';
-            return `<div class="task-cell ${stateClass}${specialClass}${selectedClass}" ${click}>${hintBadge}${history}${titleHtml}<div class="task-desc" style="font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${hintText}${nInfo}${status}${roundInfo}</div>`;
+            return `<div class="task-cell ${stateClass}${specialClass}${selectedClass}" ${click}>${cornerStatusHtml(cellId, cell)}${history}${titleHtml}<div class="task-desc" style="font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${hintText}${nInfo}${roundInfo}</div>`;
         }
 
         function renderTaskGrid(taskGrid, options = {}) {
@@ -3154,16 +3193,15 @@ if (window._caorenModifiersEnabled !== true) {
                 let titleHtml = '';
                 if (cell.levelLabel) {
                     const color = getLevelColor(cell.levelLabel);
-                    titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color};font-size:16px;">【${htmlEscape(cell.levelLabel)}】</div>`;
+                    const nRange = formatNRangeLabel(cell);
+                    const nRangeHtml = nRange ? `<span style="font-size:13px; color:#555; font-weight:normal; margin-left:4px;">${nRange}</span>` : '';
+                    titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color};font-size:16px;">【${htmlEscape(cell.levelLabel)}】${nRangeHtml}</div>`;
                 }
-                const nInfo = (cell.nType && cell.nType !== 'none') ? `<div style="color:#d32f2f; font-size:14px; margin-top:8px; font-weight:bold;">[带N任务体系]</div>` : '';
-                const hintInfo = String(cell.hint || '').trim() ? '<span class="task-hint-availability">有提示</span>' : '';
+                const hasHint = !!String(cell.hint || '').trim();
 
-                html += `<div class="task-cell" style="${border} position:relative;" onclick="selectTplCell('${id}')">
-                                ${hintInfo}
+                html += `<div class="task-cell${hasHint ? ' task-special-blue' : ''}" style="${border} position:relative;" onclick="selectTplCell('${id}')">
                                 ${titleHtml}
                                 <div class="task-desc" style="flex:1; display:flex; align-items:center;"><div>${renderSafeTaskRichText(cell.description || '')}</div></div>
-                                ${nInfo}
                                 <div style="position:absolute; top:2px; left:5px; font-size:12px; color:#aaa; font-weight:bold;">${htmlEscape(id)}</div>
                              </div>`;
             });
@@ -3428,7 +3466,7 @@ if (window._caorenModifiersEnabled !== true) {
                     '3. 格子状态说明：<br/>' +
                     ' - <b style="color:green">淡绿色底色</b>：已完成 / N值已达成<br/>' +
                     ' - <b style="color:orange">淡橙色底色</b>：N任务正在推进（N ≥ 1 即可参与连线）<br/>' +
-                    ' - <b style="color:blue">蓝色包边</b>：已查看提示<br/>' +
+                    ' - <b style="color:blue">蓝色包边</b>：该任务有可查看的提示（查看后蓝框消失，并显示提示内容）<br/>' +
                     ' - <b style="color:purple">紫色包边</b>：已使用替换任务<br/>' +
                     ' - 灰暗底色：该任务已放弃',
                     '<b style="color:#d32f2f;font-size:20px;">【卧底说明 2/2】</b><br/><br/>' +

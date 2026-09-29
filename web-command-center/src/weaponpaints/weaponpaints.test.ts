@@ -13,7 +13,7 @@ import { executeWeaponPaintsAction } from './socket-api';
 import { resolveWeaponPaintsDataRoot } from './runtime';
 import { parseSelectedPaints } from './http-routes';
 
-const dataRoot = path.resolve(process.cwd(), '..', 'weaponpaints-plugin', 'data');
+const dataRoot = path.resolve(process.cwd(), '..', 'game-plugin', 'PluginSplit', 'CaorenCupQOLs', 'CaorenWeaponPaints', 'data');
 
 test('本地目录能够提供完整分类，并拒绝目录外的物品 ID', async () => {
     const catalog = await WeaponPaintsCatalog.load(dataRoot);
@@ -126,7 +126,7 @@ test('发布版优先读取网页包内目录，开发环境回退到仓库目�
         assert.equal(resolveWeaponPaintsDataRoot(runtimeRoot), path.join(runtimeRoot, 'weaponpaints-data'));
         assert.equal(
             resolveWeaponPaintsDataRoot(path.join(runtimeRoot, 'without-package')),
-            path.resolve(runtimeRoot, 'weaponpaints-plugin', 'data'),
+            path.resolve(runtimeRoot, 'game-plugin', 'PluginSplit', 'CaorenCupQOLs', 'CaorenWeaponPaints', 'data'),
         );
         assert.equal(
             resolveWeaponPaintsDataRoot(runtimeRoot, './configured-data'),

@@ -185,7 +185,7 @@ public sealed class FinalReviewFixTests
     [Fact]
     public async Task Web_command_parsed_before_duel_start_cannot_apply_after_the_duel_starts()
     {
-        var dispatcherType = typeof(DuelGameSession).Assembly
+        var dispatcherType = typeof(PluginCommand).Assembly
             .GetType("CaorenCupPlugin.WebCommandGameThreadDispatcher");
         Assert.NotNull(dispatcherType);
         var scheduleMethod = dispatcherType!.GetMethod(
@@ -193,7 +193,9 @@ public sealed class FinalReviewFixTests
             BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
         Assert.NotNull(scheduleMethod);
 
-        var session = new DuelGameSession();
+        // 单挑拆分后桥接不再持有单挑会话；这里用可变 controlMode 模拟
+        // “命令解析于单挑开始前、应用时单挑隔离已激活”的时序。
+        var controlMode = DuelControlMode.None;
         using var payloadDocument = JsonDocument.Parse("{}");
         var command = new PluginCommand
         {
@@ -208,16 +210,10 @@ public sealed class FinalReviewFixTests
 
         var scheduledTask = Assert.IsType<Task<bool>>(scheduleMethod!.Invoke(
             null,
-            [schedule, command, (Func<DuelControlMode>)(() => session.ControlMode), apply]));
+            [schedule, command, (Func<DuelControlMode>)(() => controlMode), apply]));
 
         Assert.False(scheduledTask.IsCompleted);
-        Assert.True(session.TryStart(
-            [
-                new DuelParticipant("t1", "T玩家", DuelTeam.Terrorist),
-                new DuelParticipant("ct1", "CT玩家", DuelTeam.CounterTerrorist)
-            ],
-            false,
-            out _));
+        controlMode = DuelControlMode.GameManaged;
 
         Assert.NotNull(scheduledApplication);
         scheduledApplication!();
@@ -229,7 +225,7 @@ public sealed class FinalReviewFixTests
     [Fact]
     public void Production_game_thread_scheduler_runs_during_server_hibernation()
     {
-        var schedulerType = typeof(DuelGameSession).Assembly
+        var schedulerType = typeof(PluginCommand).Assembly
             .GetType("CaorenCupPlugin.GameThreadApplicationScheduler");
         Assert.NotNull(schedulerType);
         var property = schedulerType!.GetProperty(
@@ -316,7 +312,7 @@ public sealed class FinalReviewFixTests
     [Fact]
     public async Task Rejected_heartbeat_state_still_awaits_its_command_processor()
     {
-        var processorType = typeof(DuelGameSession).Assembly
+        var processorType = typeof(PluginCommand).Assembly
             .GetType("CaorenCupPlugin.HeartbeatResponseProcessor");
         Assert.NotNull(processorType);
         var processMethod = processorType!.GetMethod(
@@ -932,7 +928,7 @@ public sealed class FinalReviewFixTests
     public async Task Immediate_mp_restart_parsed_before_duel_start_is_blocked_at_application_time()
     {
         var scheduleMethod = GetDispatcherMethod("ScheduleAsync");
-        var session = new DuelGameSession();
+        var controlMode = DuelControlMode.None;
         var command = CreateServerCommand("mp_restartgame 1");
         Action? scheduledApplication = null;
         var applicationCalled = false;
@@ -942,17 +938,11 @@ public sealed class FinalReviewFixTests
             [
                 (Action<Action>)(callback => scheduledApplication = callback),
                 command,
-                (Func<DuelControlMode>)(() => session.ControlMode),
+                (Func<DuelControlMode>)(() => controlMode),
                 (Action<PluginCommand>)(_ => applicationCalled = true)
             ]));
 
-        Assert.True(session.TryStart(
-            [
-                new DuelParticipant("t1", "T玩家", DuelTeam.Terrorist),
-                new DuelParticipant("ct1", "CT玩家", DuelTeam.CounterTerrorist)
-            ],
-            false,
-            out _));
+        controlMode = DuelControlMode.GameManaged;
         Assert.NotNull(scheduledApplication);
         scheduledApplication!();
 
@@ -1026,26 +1016,20 @@ public sealed class FinalReviewFixTests
     public void Delayed_match_control_callback_rechecks_game_managed_mode_before_execution()
     {
         var tryExecuteMethod = GetDispatcherMethod("TryExecuteServerCommand");
-        var session = new DuelGameSession();
+        var controlMode = DuelControlMode.None;
         var executed = false;
         bool? executionResult = null;
         Action delayedCallback = () => executionResult = Assert.IsType<bool>(tryExecuteMethod.Invoke(
             null,
             [
                 "sv_showimpacts_time 4",
-                (Func<DuelControlMode>)(() => session.ControlMode),
+                (Func<DuelControlMode>)(() => controlMode),
                 (Func<bool>)(() => false),
                 (Func<bool>)(() => false),
                 (Action)(() => executed = true)
             ]));
 
-        Assert.True(session.TryStart(
-            [
-                new DuelParticipant("t1", "T玩家", DuelTeam.Terrorist),
-                new DuelParticipant("ct1", "CT玩家", DuelTeam.CounterTerrorist)
-            ],
-            false,
-            out _));
+        controlMode = DuelControlMode.GameManaged;
         delayedCallback();
 
         Assert.False(executionResult);
@@ -1108,298 +1092,6 @@ public sealed class FinalReviewFixTests
     }
 
     [Fact]
-    public void Failed_cvar_restore_remains_pending_and_retry_skips_already_restored_entries()
-    {
-        var constructor = typeof(DuelServerCvarScope).GetConstructor(
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(Func<string, string, string>), typeof(Action<string>)],
-            modifiers: null);
-        Assert.NotNull(constructor);
-
-        var executedCommands = new List<string>();
-        var failMaxRoundsRestoreOnce = true;
-        Action<string> execute = serverCommand =>
-        {
-            executedCommands.Add(serverCommand);
-            if (serverCommand == "mp_maxrounds 24" && failMaxRoundsRestoreOnce)
-            {
-                failMaxRoundsRestoreOnce = false;
-                throw new InvalidOperationException("transient restore failure");
-            }
-        };
-        var scope = Assert.IsType<DuelServerCvarScope>(constructor!.Invoke(
-            [
-                (Func<string, string, string>)((name, fallback) => name == "mp_maxrounds" ? "24" : "0"),
-                execute
-            ]));
-        scope.Set("mp_maxrounds", "36", "24");
-        scope.Set("mp_winlimit", "1", "0");
-
-        Assert.Throws<AggregateException>(scope.RestoreAll);
-
-        Assert.Equal(1, ReadInt(scope, "PendingRestoreCount"));
-        Assert.Contains("mp_maxrounds", ReadStringCollection(scope, "PendingRestoreNames"));
-        Assert.DoesNotContain("mp_winlimit", ReadStringCollection(scope, "PendingRestoreNames"));
-
-        scope.RestoreAll();
-
-        Assert.Equal(0, ReadInt(scope, "PendingRestoreCount"));
-        Assert.Equal(2, executedCommands.Count(command => command == "mp_maxrounds 24"));
-        Assert.Equal(1, executedCommands.Count(command => command == "mp_winlimit 0"));
-    }
-
-    [Fact]
-    public void Duel_runtime_cvars_are_applied_and_restored_as_one_scope()
-    {
-        var executed = new List<string>();
-        var scope = CreateCvarScope((name, fallback) => name switch
-        {
-            "mp_weapons_allow_map_placed" => "1",
-            "mp_death_drop_gun" => "1",
-            "mp_maxrounds" => "24",
-            "sv_showimpacts" => "1",
-            "sv_showimpacts_time" => "4",
-            "mp_endmatch_votenextmap" => "1",
-            "mp_match_end_restart" => "0",
-            _ => fallback
-        }, executed.Add);
-
-        scope.Apply(DuelRuntimePolicy.BuildCvarPlan(new DuelGameConfig()));
-        Assert.Contains("mp_maxrounds 36", executed);
-        Assert.Contains("mp_weapons_allow_map_placed 0", executed);
-        Assert.Contains("mp_death_drop_gun 0", executed);
-        Assert.Contains("sv_showimpacts 0", executed);
-        Assert.Contains("sv_showimpacts_time 0", executed);
-        Assert.Contains("mp_endmatch_votenextmap 0", executed);
-        Assert.Contains("mp_match_end_restart 1", executed);
-
-        scope.RestoreAll();
-        Assert.Contains("mp_maxrounds 24", executed);
-        Assert.Contains("mp_weapons_allow_map_placed 1", executed);
-        Assert.Contains("mp_death_drop_gun 1", executed);
-        Assert.Contains("sv_showimpacts 1", executed);
-        Assert.Contains("sv_showimpacts_time 4", executed);
-        Assert.Contains("mp_endmatch_votenextmap 1", executed);
-        Assert.Contains("mp_match_end_restart 0", executed);
-    }
-
-    [Fact]
-    public void Duel_runtime_uses_the_game_managed_activation_path()
-    {
-        var source = ReadPluginSource();
-        Assert.Contains("private void ActivateDuelRuntime(DuelGameConfig config)", source);
-        Assert.DoesNotContain("DuelRuntimePolicy.BuildWebManagedCvarPlan(config)", source);
-        Assert.Contains("DuelRuntimePolicy.BuildCvarPlan(config)", source);
-        Assert.DoesNotContain("ReadPayloadDouble(payload, \"roundTimeMinutes\", 1)", source);
-        Assert.DoesNotContain("_duelSession.EnterWebManaged(config);", source);
-        Assert.DoesNotContain(
-            "_duelServerCvars.Set(\"mp_maxrounds\", config.TotalRounds.ToString()",
-            source);
-    }
-
-    [Fact]
-    public void Duel_weapon_rules_avoid_direct_entity_removal_and_use_delayed_retry()
-    {
-        var source = ReadPluginSource();
-        Assert.Contains("AddCommandListener(\"drop\", OnDuelDropCommand, HookMode.Pre)", source);
-        Assert.DoesNotContain("RemoveUnexpectedDuelFirearms", source);
-        Assert.DoesNotContain("weapon.Remove()", source);
-        Assert.Contains("QueuePreferredDuelWeapon(player, plan.Rule)", source);
-        Assert.Contains("AddTimer(0.2f", source);
-        Assert.Contains("FindDuelPlayer(plan.SteamId)", source);
-        Assert.Contains("AddTimer(0.1f", source);
-        Assert.Contains("allowRetry: false", source);
-    }
-
-    [Fact]
-    public void Duel_kevlar_only_marks_networked_armor_state_changed()
-    {
-        var source = ReadPluginSource();
-        var giveKevlar = SliceSource(
-            source,
-            "private static void GivePlayerKevlar(",
-            "private static bool IsDuelSniperWeapon(");
-        Assert.Contains("ItemServices?.As<CCSPlayer_ItemServices>()", giveKevlar);
-        Assert.Contains("itemServices.HasHelmet = false", giveKevlar);
-        Assert.Contains("player.PawnHasHelmet = false", giveKevlar);
-        Assert.Contains("Utilities.SetStateChanged(player, \"CCSPlayerController\", \"m_bPawnHasHelmet\")", giveKevlar);
-        Assert.Contains("Utilities.SetStateChanged(pawn, \"CCSPlayerPawn\", \"m_ArmorValue\")", giveKevlar);
-        Assert.DoesNotContain("m_bHasHelmet", giveKevlar);
-    }
-
-    [Fact]
-    public void Duel_final_round_waits_for_native_same_map_restart_then_cleans_up()
-    {
-        var source = ReadPluginSource();
-        var roundEnd = SliceSource(source, "public HookResult OnRoundEnd(", "private void FinishGameManagedDuel(");
-        var finalEventIndex = roundEnd.IndexOf("QueueEvent(\"round_end\"", StringComparison.Ordinal);
-        var finalSnapshotIndex = roundEnd.IndexOf("QueueSnapshot()", StringComparison.Ordinal);
-        var webCleanupIndex = roundEnd.IndexOf(
-            "BeginDuelCleanup(DuelControlMode.WebManaged)",
-            StringComparison.Ordinal);
-        Assert.True(finalEventIndex >= 0);
-        Assert.True(finalSnapshotIndex > finalEventIndex);
-        Assert.True(webCleanupIndex > finalSnapshotIndex);
-        Assert.Contains("if (wasGameManaged) return HookResult.Continue;", roundEnd);
-        Assert.DoesNotContain("RestoreGameManagedDuelCvarsWithRetry", roundEnd);
-
-        var finishGameManaged = SliceSource(
-            source,
-            "private void FinishGameManagedDuel(",
-            "private void AbortGameManagedDuel(");
-        Assert.Contains(
-            "BeginDuelCleanup(DuelControlMode.GameManaged, waitForEngineRestart: true)",
-            finishGameManaged);
-
-        var beginCleanup = SliceSource(source, "private void BeginDuelCleanup(", "private void CompleteDuelCleanupAfterRestart(");
-        Assert.Contains("if (waitForEngineRestart) return;", beginCleanup);
-        Assert.Contains("Server.ExecuteCommand(\"mp_restartgame 1\")", beginCleanup);
-        Assert.DoesNotContain("RestoreGameManagedDuelCvarsWithRetry", beginCleanup);
-
-        var roundStart = SliceSource(source, "public HookResult OnRoundStart(", "public HookResult OnPlayerDeath(");
-        Assert.True(
-            roundStart.IndexOf("CompleteDuelCleanupAfterRestart(cleanupMode)", StringComparison.Ordinal) <
-            roundStart.IndexOf("_currentRound++", StringComparison.Ordinal));
-
-        var completeCleanup = SliceSource(
-            source,
-            "private void CompleteDuelCleanupAfterRestart(",
-            "private void RestoreGameManagedDuelCvarsWithRetry(");
-        Assert.Contains("RestoreGameManagedDuelCvarsWithRetry()", completeCleanup);
-
-        var unload = SliceSource(source, "public override void Unload(", "private void StopTimers(");
-        Assert.Contains("CleanupDuelImmediately()", unload);
-        var mapStart = SliceSource(source, "private void OnMapStart(", "private void ClearLobbyReminderState(");
-        Assert.Contains("immediateRestore: true", mapStart);
-        Assert.Contains("CleanupDuelImmediately(DuelControlMode.WebManaged)", mapStart);
-    }
-
-    [Fact]
-    public void Cvar_cleanup_retry_is_bounded_and_keeps_unresolved_entries_pending()
-    {
-        var constructor = typeof(DuelServerCvarScope).GetConstructor(
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(Func<string, string, string>), typeof(Action<string>)],
-            modifiers: null);
-        Assert.NotNull(constructor);
-
-        var restoreAttempts = 0;
-        Action<string> execute = serverCommand =>
-        {
-            if (serverCommand == "mp_maxrounds 24")
-            {
-                restoreAttempts++;
-                throw new InvalidOperationException("persistent restore failure");
-            }
-        };
-        var scope = Assert.IsType<DuelServerCvarScope>(constructor!.Invoke(
-            [
-                (Func<string, string, string>)((_, _) => "24"),
-                execute
-            ]));
-        scope.Set("mp_maxrounds", "36", "24");
-        var failures = new List<AggregateException>();
-        var retryMethod = typeof(DuelServerCvarScope).GetMethod("TryRestoreAll");
-        Assert.NotNull(retryMethod);
-
-        var restored = Assert.IsType<bool>(retryMethod!.Invoke(
-            scope,
-            [3, (Action<AggregateException>)(failure => failures.Add(failure))]));
-
-        Assert.False(restored);
-        Assert.Equal(3, restoreAttempts);
-        Assert.Equal(3, failures.Count);
-        Assert.Equal(1, ReadInt(scope, "PendingRestoreCount"));
-    }
-
-    [Fact]
-    public void Periodic_safe_point_retries_cvars_after_bounded_cleanup_attempts()
-    {
-        var constructor = typeof(DuelServerCvarScope).GetConstructor(
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(Func<string, string, string>), typeof(Action<string>)],
-            modifiers: null);
-        Assert.NotNull(constructor);
-
-        var restoreAttempts = 0;
-        Action<string> execute = serverCommand =>
-        {
-            if (serverCommand != "mp_maxrounds 24") return;
-            restoreAttempts++;
-            if (restoreAttempts <= 3)
-            {
-                throw new InvalidOperationException("cleanup-frame restore failure");
-            }
-        };
-        var scope = Assert.IsType<DuelServerCvarScope>(constructor!.Invoke(
-            [
-                (Func<string, string, string>)((_, _) => "24"),
-                execute
-            ]));
-        scope.Set("mp_maxrounds", "36", "24");
-
-        Assert.False(scope.TryRestoreAll(3));
-        Assert.False(scope.IsReadyForNewDuel);
-
-        Assert.True(scope.RetryPendingAtSafePoint());
-
-        Assert.True(scope.IsReadyForNewDuel);
-        Assert.Equal(4, restoreAttempts);
-        Assert.Equal(0, scope.PendingRestoreCount);
-    }
-
-    [Fact]
-    public void Active_duel_cvar_scope_is_not_treated_as_cleanup_restore_work()
-    {
-        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
-            "ShouldRetryPendingDuelCvars",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        Assert.False(Assert.IsType<bool>(method!.Invoke(null, [true, true])));
-        Assert.True(Assert.IsType<bool>(method.Invoke(null, [false, true])));
-        Assert.False(Assert.IsType<bool>(method.Invoke(null, [false, false])));
-    }
-
-    [Fact]
-    public void New_duel_remains_blocked_until_every_pending_cvar_is_restored()
-    {
-        var constructor = typeof(DuelServerCvarScope).GetConstructor(
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(Func<string, string, string>), typeof(Action<string>)],
-            modifiers: null);
-        Assert.NotNull(constructor);
-
-        var restoreMaySucceed = false;
-        Action<string> execute = serverCommand =>
-        {
-            if (serverCommand == "mp_maxrounds 24" && !restoreMaySucceed)
-            {
-                throw new InvalidOperationException("restore still unavailable");
-            }
-        };
-        var scope = Assert.IsType<DuelServerCvarScope>(constructor!.Invoke(
-            [
-                (Func<string, string, string>)((_, _) => "24"),
-                execute
-            ]));
-        scope.Set("mp_maxrounds", "36", "24");
-        Assert.False(scope.TryRestoreAll(3));
-
-        Assert.False(scope.IsReadyForNewDuel);
-        Assert.False(scope.RetryPendingAtSafePoint());
-        Assert.False(scope.IsReadyForNewDuel);
-
-        restoreMaySucceed = true;
-        Assert.True(scope.RetryPendingAtSafePoint());
-        Assert.True(scope.IsReadyForNewDuel);
-    }
-
-    [Fact]
     public void Pending_cvar_restore_blocks_new_web_match_configuration_and_restart()
     {
         var method = GetDispatcherMethod("IsBlockedByPendingCvarRestore");
@@ -1418,104 +1110,6 @@ public sealed class FinalReviewFixTests
         Assert.False(Assert.IsType<bool>(method.Invoke(null, [restart, false])));
     }
 
-    [Fact]
-    public void Pending_cvar_restore_blocks_game_admin_map_change()
-    {
-        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
-            "IsDuelMapChangeBlocked",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        Assert.True(Assert.IsType<bool>(method!.Invoke(
-            null,
-            [DuelControlMode.None, DuelLifecycle.Idle, true, false])));
-        Assert.True(Assert.IsType<bool>(method.Invoke(
-            null,
-            [DuelControlMode.GameManaged, DuelLifecycle.Running, false, false])));
-        Assert.False(Assert.IsType<bool>(method.Invoke(
-            null,
-            [DuelControlMode.None, DuelLifecycle.Idle, false, false])));
-    }
-
-    [Fact]
-    public void Cleanup_pending_blocks_new_game_admin_start()
-    {
-        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
-            "IsDuelStartBlocked",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        Assert.True(Assert.IsType<bool>(method!.Invoke(null, [true, true])));
-        Assert.True(Assert.IsType<bool>(method.Invoke(null, [false, false])));
-        Assert.False(Assert.IsType<bool>(method.Invoke(null, [false, true])));
-    }
-
-    [Fact]
-    public void Cleanup_pending_blocks_game_admin_map_change()
-    {
-        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
-            "IsDuelMapChangeBlocked",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        Assert.True(Assert.IsType<bool>(method!.Invoke(
-            null,
-            [DuelControlMode.None, DuelLifecycle.Idle, false, true])));
-        Assert.False(Assert.IsType<bool>(method.Invoke(
-            null,
-            [DuelControlMode.None, DuelLifecycle.Idle, false, false])));
-    }
-
-    [Fact]
-    public void Game_managed_status_includes_participants_stage_and_remaining_rounds()
-    {
-        var session = new DuelGameSession(new DuelGameConfig(1, 1, 28, 1, "none"));
-        Assert.True(session.TryStart(
-            [
-                new DuelParticipant("t1", "T甲", DuelTeam.Terrorist),
-                new DuelParticipant("t2", "T乙", DuelTeam.Terrorist),
-                new DuelParticipant("ct1", "CT丙", DuelTeam.CounterTerrorist)
-            ],
-            false,
-            out _));
-        session.MarkRoundStarted();
-        session.RecordRoundEnd(DuelTeam.Terrorist);
-        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
-            "BuildGameManagedDuelStatusLines",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        var lines = Assert.IsAssignableFrom<IReadOnlyCollection<string>>(method!.Invoke(null, [session]));
-        var output = string.Join("\n", lines);
-
-        Assert.Contains("T 参赛者（2）：T甲、T乙", output);
-        Assert.Contains("CT 参赛者（1）：CT丙", output);
-        Assert.Contains("当前阶段：步枪", output);
-        Assert.Contains("剩余 29 回合", output);
-    }
-
-    [Fact]
-    public void Admin_help_states_the_recommended_setup_order_without_web_takeover()
-    {
-        var method = typeof(global::CaorenCupPlugin.CaorenCupPlugin).GetMethod(
-            "BuildDuelAdminHelpLines",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(method);
-        var lines = Assert.IsAssignableFrom<IReadOnlyCollection<string>>(method!.Invoke(null, null));
-        var output = string.Join("\n", lines);
-
-        var mapIndex = output.IndexOf("先切换地图", StringComparison.Ordinal);
-        var reconnectIndex = output.IndexOf("等待玩家重连并选择 T/CT", StringComparison.Ordinal);
-        var configureIndex = output.IndexOf("再配置", StringComparison.Ordinal);
-        var startIndex = output.IndexOf("最后 /duel start", StringComparison.Ordinal);
-        Assert.True(mapIndex >= 0);
-        Assert.True(reconnectIndex > mapIndex);
-        Assert.True(configureIndex > reconnectIndex);
-        Assert.True(startIndex > configureIndex);
-        Assert.DoesNotContain("/duel start confirm", output);
-        Assert.DoesNotContain("替换现有网页管理状态", output);
-    }
-
     private static PluginCommand CreateServerCommand(
         string serverCommand,
         string commandId = "server-command") => new()
@@ -1525,48 +1119,9 @@ public sealed class FinalReviewFixTests
         Payload = JsonSerializer.SerializeToElement(new { command = serverCommand })
     };
 
-    private static DuelServerCvarScope CreateCvarScope(
-        Func<string, string, string> read,
-        Action<string> execute)
-    {
-        var constructor = typeof(DuelServerCvarScope).GetConstructor(
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            [typeof(Func<string, string, string>), typeof(Action<string>)],
-            modifiers: null);
-        Assert.NotNull(constructor);
-        return Assert.IsType<DuelServerCvarScope>(constructor!.Invoke([read, execute]));
-    }
-
-    private static string ReadPluginSource()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            var candidate = Path.Combine(
-                directory.FullName,
-                "CaorenCupPlugin",
-                "CaorenCupPlugin.cs");
-            if (File.Exists(candidate)) return File.ReadAllText(candidate);
-        }
-
-        throw new FileNotFoundException(
-            "Could not locate CaorenCupPlugin.cs from the test output directory.");
-    }
-
-    private static string SliceSource(string source, string startMarker, string endMarker)
-    {
-        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
-        Assert.True(start >= 0, $"Missing source marker: {startMarker}");
-        var end = source.IndexOf(endMarker, start + startMarker.Length, StringComparison.Ordinal);
-        Assert.True(end > start, $"Missing source marker after {startMarker}: {endMarker}");
-        return source[start..end];
-    }
-
     private static MethodInfo GetDispatcherMethod(string methodName)
     {
-        var type = typeof(DuelGameSession).Assembly.GetType("CaorenCupPlugin.WebCommandGameThreadDispatcher");
+        var type = typeof(PluginCommand).Assembly.GetType("CaorenCupPlugin.WebCommandGameThreadDispatcher");
         Assert.NotNull(type);
         var method = type!.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
         Assert.NotNull(method);
@@ -1575,7 +1130,7 @@ public sealed class FinalReviewFixTests
 
     private static object CreateTelemetryIsolationState()
     {
-        var type = typeof(DuelGameSession).Assembly.GetType("CaorenCupPlugin.DuelTelemetryIsolationState");
+        var type = typeof(PluginCommand).Assembly.GetType("CaorenCupPlugin.DuelTelemetryIsolationState");
         Assert.NotNull(type);
         var instance = Activator.CreateInstance(type!);
         Assert.NotNull(instance);
@@ -1584,7 +1139,7 @@ public sealed class FinalReviewFixTests
 
     private static object CreateHeartbeatResponseOrder()
     {
-        var type = typeof(DuelGameSession).Assembly.GetType("CaorenCupPlugin.HeartbeatResponseOrder");
+        var type = typeof(PluginCommand).Assembly.GetType("CaorenCupPlugin.HeartbeatResponseOrder");
         Assert.NotNull(type);
         var instance = Activator.CreateInstance(type!);
         Assert.NotNull(instance);
@@ -1593,7 +1148,7 @@ public sealed class FinalReviewFixTests
 
     private static object CreateHeartbeatCommandTransactionGate()
     {
-        var type = typeof(DuelGameSession).Assembly
+        var type = typeof(PluginCommand).Assembly
             .GetType("CaorenCupPlugin.HeartbeatCommandTransactionGate");
         Assert.NotNull(type);
         var instance = Activator.CreateInstance(type!);
@@ -1603,7 +1158,7 @@ public sealed class FinalReviewFixTests
 
     private static object ReadEnum(string typeName, string value)
     {
-        var type = typeof(DuelGameSession).Assembly.GetType(typeName);
+        var type = typeof(PluginCommand).Assembly.GetType(typeName);
         Assert.NotNull(type);
         return Enum.Parse(type!, value);
     }
@@ -1663,13 +1218,6 @@ public sealed class FinalReviewFixTests
         var property = target.GetType().GetProperty(propertyName);
         Assert.NotNull(property);
         return Assert.IsType<int>(property.GetValue(target));
-    }
-
-    private static IReadOnlyCollection<string> ReadStringCollection(object target, string propertyName)
-    {
-        var property = target.GetType().GetProperty(propertyName);
-        Assert.NotNull(property);
-        return Assert.IsAssignableFrom<IReadOnlyCollection<string>>(property.GetValue(target));
     }
 
     private static object? ReadProperty(object target, string propertyName)

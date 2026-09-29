@@ -56,7 +56,7 @@ export const v1333IssueGameLoginCode = (steamIdRaw: unknown, nameRaw: unknown): 
     return ticket;
 };
 
-// !cclogin 的单次游戏码只允许由账号开户/恢复 HTTP 接口消费。
+// /cclogin 的单次游戏码只允许由账号开户/恢复 HTTP 接口消费。
 export const v1333ConsumeGameLoginTicket = (codeRaw: unknown): GameLoginTicket | undefined => {
     v1333CleanupGameLoginTickets();
     const code = normalizeLoginText(codeRaw).toUpperCase();

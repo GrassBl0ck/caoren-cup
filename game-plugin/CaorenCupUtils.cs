@@ -8,7 +8,23 @@ namespace CaorenCup;
 
 public static class CaorenCupUtils
 {
-    public const string Tag = " [草人杯] ";
+    public const string Tag = "[草人杯]";
+
+    private static string FormatChatMessage(string message, string color)
+    {
+        string body = message.Replace(Tag, string.Empty, StringComparison.Ordinal)
+            .Trim();
+        return $" {color}{Tag}{ChatColors.Default} {body}";
+    }
+
+    public static string FormatPrivateMessage(string message) =>
+        FormatChatMessage(message, ChatColors.Green.ToString());
+
+    public static string FormatTeamMessage(string message) =>
+        FormatChatMessage(message, ChatColors.Yellow.ToString());
+
+    public static string FormatGlobalMessage(string message) =>
+        FormatChatMessage(message, ChatColors.Red.ToString());
 
     public static bool TryParseOptionalFloat(string raw, float current, out float value)
     {
@@ -25,7 +41,7 @@ public static class CaorenCupUtils
     // 统一发送消息到所有玩家
     public static void PrintToChatAll(string message)
     {
-        Server.PrintToChatAll($" {ChatColors.Green}{Tag}{ChatColors.Default}{message}");
+        Server.PrintToChatAll(FormatGlobalMessage(message));
     }
 
     // 统一发送消息给指定玩家
@@ -33,14 +49,14 @@ public static class CaorenCupUtils
     {
         if (player.IsValid)
         {
-            player.PrintToChat($" {ChatColors.Green}{Tag}{ChatColors.Default}{message}");
+            player.PrintToChat(FormatPrivateMessage(message));
         }
     }
 
     public static string FormatHelpMenuLine(string message)
     {
         string cleanMessage = StripChatColors(message).Trim();
-        return $" {ChatColors.Green}{cleanMessage}{ChatColors.Default}";
+        return FormatPrivateMessage(cleanMessage);
     }
 
     private static string StripChatColors(string message)

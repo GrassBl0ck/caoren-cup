@@ -1012,8 +1012,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 case 'REQUEST_HINT':
                     if (cell.status === 'Complete' || cell.status === 'Abandoned' || cell.isHintUsed || !String(cell.hint || '').trim()) return;
                     cell.isHintUsed = true;
-                    if (!cell.borderHistory) cell.borderHistory = [];
-                    if (!cell.borderHistory.includes('blue')) cell.borderHistory.push('blue');
+                    if (cell.borderHistory) cell.borderHistory = cell.borderHistory.filter(color => color !== 'blue');
                     break;
                 case 'REPLACE': {
                     if (cell.status === 'Complete' || cell.status === 'Abandoned') return;

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>CaorenCupQOL_PlaySound</AssemblyName>
+    <EnableAudioCapabilityProbe Condition="'$(EnableAudioCapabilityProbe)' == ''">false</EnableAudioCapabilityProbe>
+    <DefineConstants Condition="'$(EnableAudioCapabilityProbe)' == 'true'">$(DefineConstants);CRC_AUDIO_PROBE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(EnableAudioCapabilityProbe)' != 'true'">
+    <Compile Remove="AudioCapabilityProbe.cs" />
+    <Compile Remove="AudioGroupProbe.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.374" />
+    <ProjectReference Include="..\CaorenCupContracts\CaorenCupContracts.csproj" />
+  </ItemGroup>
+</Project>

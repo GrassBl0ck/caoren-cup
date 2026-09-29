@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -23,7 +23,7 @@ jobs:
 
       - name: Typecheck web
         working-directory: web-command-center
-        run: npm run typecheck
+        run: npm run check
 
   dotnet-build:
     runs-on: ubuntu-latest
@@ -33,7 +33,9 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Restore game plugin
         working-directory: game-plugin
@@ -50,6 +52,15 @@ jobs:
       - name: Build bridge plugin
         working-directory: web-command-center/CaorenCupPlugin
         run: dotnet build -c Release --no-restore
+
+      - name: Test split game plugins
+        run: dotnet test game-plugin/CaorenCup.sln -c Release --no-restore
+      - name: Test independent duel
+        run: dotnet test duel-plugin.Tests/CaorenDuel.Tests.csproj -c Release
+      - name: Test bridge
+        run: dotnet test web-command-center/CaorenCupPlugin.Tests/CaorenCupPlugin.Tests.csproj -c Release
+      - name: Test WeaponPaints
+        run: dotnet test game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/tests/CaorenWeaponPaints.Tests.csproj -c Release
 
   minigames-test:
     runs-on: ubuntu-latest

@@ -631,7 +631,7 @@
             border-radius: 6px;
             padding: 15px;
             box-sizing: border-box;
-            overflow-y: auto;
+            overflow: visible;
             word-break: break-word;
             line-height: 1.4;
             transition: transform 0.1s, box-shadow 0.1s;
@@ -2576,7 +2576,7 @@
             background: #dc2626;
         }
 
-    
+
 /* CAOREN_V1_3_2_HIDE_DISABLED_MOD_PANEL_PATCH: 未启用 CaorenCup 修改时，强制隐藏所有模块配置内容，只保留状态提示 */
 body.caoren-modifiers-disabled #caoren-mod-panel .caoren-mod-grid,
 body.caoren-modifiers-disabled #caoren-mod-panel .caoren-unified-mod-shell,
@@ -2639,6 +2639,7 @@ body[data-theme="dark"] .modal-content {
 
 .task-cell .task-desc {
     flex: 1;
+    min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2701,19 +2702,6 @@ body[data-theme="dark"] .task-status-progress { background:#3a2a10; border-color
 body[data-theme="dark"] .task-status-incomplete { background:#3b1820; border-color:#fb7185; color:#fecdd3; }
 body[data-theme="dark"] .task-status-abandoned { background:#29313f; border-color:#64748b; color:#cbd5e1; }
 
-.task-hint-availability {
-    position: absolute;
-    top: 7px;
-    right: 38px;
-    padding: 3px 7px;
-    border: 1px solid color-mix(in srgb, var(--task-hint-ring) 55%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--task-hint-ring) 16%, var(--surface));
-    color: var(--task-hint-ring);
-    font-size: 11px;
-    font-weight: 800;
-}
-.task-hint-availability.used { opacity: .78; }
 .task-hint-text {
     width: 100%;
     margin-top: 8px;
@@ -2726,6 +2714,37 @@ body[data-theme="dark"] .task-status-abandoned { background:#29313f; border-colo
     line-height: 1.55;
     text-align: left;
 }
+
+.task-status-shell { position: absolute; top: 6px; left: 7px; z-index: 24; }
+.task-status-trigger {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0;
+    border-color: var(--border-subtle);
+    border-radius: 50%;
+    background: var(--surface);
+    font-size: 14px;
+    font-weight: 800;
+}
+.task-status-trigger.st-complete { color: #166534; border-color: #86efac; background: #dcfce7; }
+.task-status-trigger.st-progress { color: #92400e; border-color: #fcd34d; background: #fef3c7; }
+.task-status-trigger.st-incomplete { color: #9f1239; border-color: #fda4af; background: #ffe4e6; }
+.task-status-trigger.st-abandoned { color: #4b5563; border-color: #9ca3af; background: #e5e7eb; }
+body[data-theme="dark"] .task-status-trigger.st-complete { color: #bbf7d0; border-color: #4ade80; background: #12351f; }
+body[data-theme="dark"] .task-status-trigger.st-progress { color: #fde68a; border-color: #fbbf24; background: #3a2a10; }
+body[data-theme="dark"] .task-status-trigger.st-incomplete { color: #fecdd3; border-color: #fb7185; background: #3b1820; }
+body[data-theme="dark"] .task-status-trigger.st-abandoned { color: #cbd5e1; border-color: #64748b; background: #29313f; }
+.task-status-popover { left: 0; right: auto; }
+.task-status-popover > b { color: var(--text-strong); font-size: 15px; }
+.task-status-popover ul { list-style: none; margin: 9px 0 0; padding: 0; display: grid; gap: 7px; }
+.task-status-popover li { padding-bottom: 7px; border-bottom: 1px solid var(--border-subtle); }
+.task-status-popover li:last-child { padding-bottom: 0; border-bottom: 0; }
+.task-status-popover li strong { display: block; color: var(--text-strong); font-size: 14px; }
+.task-status-popover li span { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+.task-cell { padding-top: 32px; }
+.compact-task-grid .task-cell { padding-top: 28px; }
 
 .task-history-shell { position: absolute; top: 6px; right: 7px; z-index: 24; }
 .task-history-trigger {
@@ -2740,24 +2759,31 @@ body[data-theme="dark"] .task-status-abandoned { background:#29313f; border-colo
     color: var(--text-muted);
     font-size: 15px;
 }
-.task-history-popover {
+.task-history-popover, .task-status-popover {
     position: absolute;
     top: 32px;
     right: 0;
     display: none;
-    width: min(300px, 78vw);
-    padding: 12px;
+    width: min(430px, 88vw);
+    max-height: min(460px, 62vh);
+    overflow-y: auto;
+    padding: 16px;
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
     background: var(--surface);
     color: var(--text-default);
     box-shadow: var(--shadow);
     text-align: left;
+    font-size: 13px;
 }
+.task-history-popover li strong { font-size: 14px; color: var(--text-strong); }
+.task-history-popover .task-history-empty { color: var(--text-muted); }
 .task-history-shell:hover .task-history-popover,
 .task-history-shell:focus-within .task-history-popover,
-.task-history-shell.open .task-history-popover { display: block; }
-.task-history-popover > b { color: var(--text-strong); }
+.task-history-shell.open .task-history-popover,
+.task-status-shell:hover .task-status-popover,
+.task-status-shell:focus-within .task-status-popover { display: block; }
+.task-history-popover > b { color: var(--text-strong); font-size: 15px; }
 .task-history-popover ol { display:grid; gap:8px; margin:9px 0 0; padding-left:20px; }
 .task-history-popover li { padding-bottom:7px; border-bottom:1px solid var(--border-subtle); }
 .task-history-popover li:last-child { padding-bottom:0; border-bottom:0; }

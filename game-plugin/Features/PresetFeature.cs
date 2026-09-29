@@ -381,7 +381,7 @@ public class PresetFeature : ICaorenFeature
         EnsureSettings();
         _presets.Clear();
 
-        string path = Path.Combine(_plugin.ModuleDirectory, "module-configs", _settings.PresetFileName);
+        string path = Path.Combine(_plugin.ConfigModulesDirectory, _settings.PresetFileName);
         if (!File.Exists(path))
         {
             Console.WriteLine($"[CaorenCup][Preset] Preset file not found: {path}");

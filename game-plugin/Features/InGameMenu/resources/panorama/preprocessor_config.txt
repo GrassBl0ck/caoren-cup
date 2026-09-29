@@ -1,0 +1,6 @@
+"PanzipCfg"
+{
+    "BlockDefs"
+    {
+    }
+}

@@ -204,17 +204,17 @@
       if (result.ok) return establishSession(result.sessionBootstrapTicket, 'desktop-device');
       var messages = {
         not_found: '',
-        revoked: '此设备的登录已撤销，请使用账号密码或 !cclogin 登录。',
-        expired: '此设备登录已过期，请使用账号密码或 !cclogin 登录。',
+        revoked: '此设备的登录已撤销，请使用账号密码或 /cclogin 登录。',
+        expired: '此设备登录已过期，请使用账号密码或 /cclogin 登录。',
         account_disabled: '账号已禁用，请联系管理员。',
-        password_state_invalid: '账号密码状态异常，请使用 !cclogin 恢复。',
-        account_unavailable: '账号尚未建立，请使用 !cclogin 创建账号。',
+        password_state_invalid: '账号密码状态异常，请使用 /cclogin 恢复。',
+        account_unavailable: '账号尚未建立，请使用 /cclogin 创建账号。',
         network_error: '网络暂时不可用，设备凭据已保留，可稍后重试。',
         credential_corrupt: '本机设备凭据无法解密，已回到账号登录。',
         safe_storage_unavailable: 'Windows 安全凭据存储不可用，请使用账号密码登录。',
         rate_limited: '自动登录尝试过多，请稍后重试。'
       };
-      showEntry(messages[result.reason] || '设备自动登录失败，请使用账号密码或 !cclogin 登录。');
+      showEntry(messages[result.reason] || '设备自动登录失败，请使用账号密码或 /cclogin 登录。');
       return false;
     } finally {
       desktopAutoLoginInFlight = false;
@@ -223,7 +223,7 @@
 
   async function submitGameCode() {
     var gameCode = String(byId('player-center-game-code')?.value || '').trim();
-    if (!gameCode) return setEntryError('请输入 !cclogin 返回的一次性游戏码。');
+    if (!gameCode) return setEntryError('请输入 /cclogin 返回的一次性游戏码。');
     setEntryError('正在验证游戏码...');
     var result = await requestJson('/api/account-recovery/game-code', jsonOptions('POST', { gameCode: gameCode }));
     if (!result.ok) return setEntryError(result.data.error === 'account_disabled' ? '账号已禁用，请联系管理员。' : '游戏码无效或已过期。');

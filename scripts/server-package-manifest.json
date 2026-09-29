@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "workshopId": "3810054981",
+  "plugins": [
+    { "name": "CaorenCupCore", "project": "game-plugin/PluginSplit/CaorenCupCore/CaorenCupCore.csproj", "directory": "CaorenCupCore" },
+    { "name": "CaorenCupFunCommands", "project": "game-plugin/CaorenCup.csproj", "directory": "CaorenCupFunCommands" },
+    { "name": "CaorenCupInGameMenu", "project": "game-plugin/PluginSplit/CaorenCupInGameMenu/CaorenCupInGameMenu.csproj", "directory": "CaorenCupInGameMenu" },
+    { "name": "CaorenCupGamemode_Competitive", "project": "game-plugin/PluginSplit/CaorenCupGamemode_Competitive/CaorenCupGamemode_Competitive.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_Competitive" },
+    { "name": "CaorenCupGamemode_RUSH", "project": "game-plugin/PluginSplit/CaorenCupGamemode_RUSH/CaorenCupGamemode_RUSH.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_RUSH" },
+    { "name": "CaorenDuel", "project": "duel-plugin/CaorenDuel.csproj", "directory": "CaorenCupGamemodes/CaorenCupSolos/CaorenDuel" },
+    { "name": "CaorenCupQOL_Alias", "project": "game-plugin/PluginSplit/CaorenCupQOL_Alias/CaorenCupQOL_Alias.csproj", "directory": "CaorenCupQOLs/CaorenCupQOL_Alias" },
+    { "name": "CaorenCupQOL_PlaySound", "project": "game-plugin/PluginSplit/CaorenCupQOL_PlaySound/CaorenCupQOL_PlaySound.csproj", "directory": "CaorenCupQOLs/CaorenCupQOL_PlaySound" },
+    { "name": "CaorenCupQOL_RadarColor", "project": "game-plugin/PluginSplit/CaorenCupQOL_RadarColor/CaorenCupQOL_RadarColor.csproj", "directory": "CaorenCupQOLs/CaorenCupQOL_RadarColor" },
+    { "name": "CaorenCupQOL_SimpleHP", "project": "game-plugin/PluginSplit/CaorenCupQOL_SimpleHP/CaorenCupQOL_SimpleHP.csproj", "directory": "CaorenCupQOLs/CaorenCupQOL_SimpleHP" },
+    { "name": "CaorenWeaponPaints", "project": "game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/CaorenWeaponPaints.csproj", "directory": "CaorenCupQOLs/CaorenWeaponPaints" },
+    { "name": "CaorenCupPlugin", "project": "web-command-center/CaorenCupPlugin/CaorenCupPlugin.csproj", "directory": "CaorenCupWebBridge/CaorenCupPlugin" },
+    { "name": "CS2MiniGames", "project": "mini-games-plugin/src/CS2MiniGames/CS2MiniGames.csproj", "directory": "CaorenCupMiniGames/CS2MiniGames" }
+  ],
+  "contracts": {
+    "name": "CaorenCupContracts",
+    "project": "game-plugin/PluginSplit/CaorenCupContracts/CaorenCupContracts.csproj"
+  },
+  "externalComponents": [
+    { "name": "CS2Snake", "status": "not-bundled-pending-source-and-redistribution-review", "directory": "CaorenCupMiniGames/CS2Snake" },
+    { "name": "CounterStrikeSharp", "status": "prerequisite-not-bundled" },
+    { "name": "MetaMod", "status": "prerequisite-not-bundled" },
+    { "name": "MultiAddonManager", "status": "prerequisite-not-bundled" },
+    { "name": "MatchZy", "status": "prerequisite-not-bundled" }
+  ],
+  "excludedComponents": [
+    "friberg-game", "ParticleMenu", "Diagnostics", "CaorenCupInterfaceProbe", "Wingman", "Ultimates"
+  ]
+}

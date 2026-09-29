@@ -2,12 +2,14 @@
 
 Caoren Cup 是一个面向 CS2 自定义娱乐赛的赛事系统。
 
-项目包含四部分：
+项目包含四个已发布组件：
 
 1. **CS2 娱乐玩法插件**
 2. **网页赛事指挥台 / 网页端**
 3. **CS2 与网页后端通信的桥接插件**
 4. **CS2 小游戏插件**
+
+弗一把和网站登录升级不进入 1.10；前者暂停等待授权，后者延后至 1.11。
 
 适用于 CS2 自定义娱乐赛、队长选人、地图 Ban/Pick、阵营选择、卧底玩法、赛后指认、战绩同步和积分结算等场景。
 
@@ -26,9 +28,9 @@ https://github.com/GrassBl0ck/caoren-cup
 ```text
 caoren-cup/
 ├─ game-plugin/
-│  └─ CS2 娱乐玩法插件本体
-├─ weaponpaints-plugin/
-│  └─ 独立 GPL-3.0 游戏内皮肤与饰品插件
+│  ├─ CS2 娱乐玩法插件本体
+│  └─ PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/
+│     └─ 独立 GPL-3.0 游戏内皮肤与饰品插件
 │
 ├─ web-command-center/
 │  ├─ src/
@@ -66,7 +68,7 @@ game-plugin/
 Release 包名：
 
 ```text
-CaorenCup-修改插件本体-vX.X.X.zip
+CaorenCupServer-服务器插件合集-vX.X.X.zip
 ```
 
 部署目录：
@@ -146,13 +148,13 @@ web-command-center/CaorenCupPlugin/
 Release 包名：
 
 ```text
-CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
+CaorenCupServer-服务器插件合集-vX.X.X.zip
 ```
 
 部署目录：
 
 ```text
-<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
+<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/CaorenCupWebBridge/CaorenCupPlugin/
 ```
 
 该插件负责把 CS2 游戏服务器内的数据同步到网页赛事指挥台。
@@ -173,7 +175,7 @@ CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
 没有账号或忘记账号、密码时，在 CS2 服务器使用唯一开户/恢复命令：
 
 ```text
-!cclogin
+/cclogin
 ```
 
 游戏码成功验证后立即失效。登录玩家中心不会自动参赛；玩家需要明确点击“加入本场比赛”。管理员密码登录是独立流程，也不会自动参赛。
@@ -355,6 +357,8 @@ dotnet build -c Release
 dotnet publish -c Release -o ./publish
 ```
 
+此命令只构建该项目的 CaorenCupFunCommands，不是整个服务器插件合集。统一版本包使用下文的 package-caoren-server.ps1。
+
 发布产物位于：
 
 ```text
@@ -480,9 +484,10 @@ EnableDebugLog
 对应部署目录：
 
 ```text
-<plugins>/CaorenCup/        CS2 娱乐玩法插件本体
-<plugins>/CaorenCupPlugin/  CS2 网页端服务器插件 / 桥接插件
-<web-command-center>/       网页赛事指挥台
+<plugins>/CaorenCup/                                   草人杯服务器插件分类根目录
+<plugins>/CaorenCup/CaorenCupWebBridge/CaorenCupPlugin/  网页桥接插件
+<plugins>/CaorenCup/CaorenCupMiniGames/CS2MiniGames/     小游戏插件
+<web-command-center>/                                  网页赛事指挥台
 ```
 
 你可以选择任意适合自己环境的部署方式，例如直接在服务器上构建，或在本地打包后上传到服务器。无论采用哪种方式，都建议先备份旧版本，再覆盖新版本，并保留生产环境真实配置文件。
@@ -760,7 +765,7 @@ caoren_config.example.json
 
 Release 包和源码仓库是两回事：
 
-- `game-plugin/` 中有源码，不代表 Release 里有可直接部署的 `CaorenCup.dll`
+- `game-plugin/` 中有源码，不代表已有可部署的服务器插件合集
 - 如果要给别人直接部署 CS2 插件，必须先执行 `dotnet publish`，再单独打插件包
 - GitHub Release 不会因为 `main` 分支更新而自动更新
 - 更新代码后，如果要发版，需要创建新的 tag 和 Release，例如 `v1.1.1`、`v1.1.2`
@@ -769,179 +774,68 @@ Release 包和源码仓库是两回事：
 
 ## Release 包命名规则
 
-项目 Release 拆成四个包：
+统一版本从 1.10 起使用两个主包：
 
-```text
-CaorenCup-修改插件本体-vX.X.X.zip
-CaorenCupWeb-网页端-vX.X.X.zip
-CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
-CS2MiniGames-小游戏插件-vX.X.X.zip
-```
+    CaorenCupServer-服务器插件合集-vX.X.X.zip
+    CaorenCupWeb-网页端-vX.X.X.zip
 
-不要再使用以下旧名称：
+服务器插件合集按安装对象组装，DLL 仍保持独立。桥接、单挑、小游戏和换肤均放在服务器主包的对应分类下，共享契约仅保留一份。局部更新按需另发，以 CaorenCupUpdate-<模块>-局部更新-vX.X.X.zip 明确命名；桌面客户端仅在壳本身变更时单独发包。
 
-```text
-CaorenCup-EntertainmentPlugin
-CaorenCup-WebBridgePlugin
-caoren-cup-source
-CaorenCup-game-plugin-vX.X.X.zip
-CaorenCup-web-bridge-plugin-vX.X.X.zip
-CaorenCup-web-command-center-vX.X.X.zip
-CaorenCup-all-in-one-vX.X.X.zip
-```
+## 两个 Release 包说明
 
----
+### 1. 服务器插件合集
 
-## 四个 Release 包说明
+    addons/counterstrikesharp/
+    ├─ plugins/CaorenCup/
+    │  ├─ CaorenCupCore/
+    │  ├─ CaorenCupFunCommands/
+    │  ├─ CaorenCupInGameMenu/
+    │  ├─ CaorenCupGamemodes/
+    │  ├─ CaorenCupMiniGames/
+    │  ├─ CaorenCupQOLs/
+    │  └─ CaorenCupWebBridge/
+    ├─ shared/CaorenCupContracts/
+    └─ gamedata/weaponpaints.json
 
-### 1. CS2 娱乐插件本体
+明确清单见 scripts/server-package-manifest.json，目前有 13 个可从仓库构建的主插件，包含单挑、桥接、CS2MiniGames 和换肤。CS2Snake 的公开分发来源／许可尚待核对，暂列外部组件；其他框架及 MatchZy/MAM 不随包自动安装。运行服务器有 14 个草人杯插件，不意味着 ZIP 可直接复制这 14 个生产目录。
 
-包名：
+只检查清单，不构建或创建 ZIP：
 
-```text
-CaorenCup-修改插件本体-vX.X.X.zip
-```
+    .\scripts\package-caoren-server.ps1 -Version vX.X.X -ValidateOnly
 
-来源目录：
+用户确认保留既有性能调用后，提供来自同一次已核对资源构建的两份完整音频清单：
 
-```text
-game-plugin/
-```
+    .\scripts\package-caoren-server.ps1 -Version vX.X.X -RetainPerformanceCalls -AudioEventsPath <audio-events.json路径> -AudioAssetsPath <audio-assets.json路径>
 
-打包方式：
+脚本使用 dotnet publish --no-restore，不自动安装依赖、提交、上传、部署或清理旧文件。清单中的每个插件保留其同名目录；包内文件清单记录相对路径、大小和 SHA256。示例预设放 examples/，已有配置、偏好、身份、数据库及排行榜必须保留。
 
-```bash
-dotnet publish -c Release
-```
+菜单和音频资源通过[工坊项目 3810054981](https://steamcommunity.com/sharedfiles/filedetails/?id=3810054981)分发，ZIP 提供[安装说明](docs/release-installation.md)。RUSH 附补丁生成工具和校验步骤，原版 Valve 脚本和生成 VPK 不进入公开包。
 
-包内应包含：
+换肤与小游戏保留各自 GPL-3.0 许可证、上游说明及对应版本源码获取方式。共享契约不是运行插件，不能在每个插件目录各放一份。
 
-```text
-CaorenCup.dll
-CaorenCup.deps.json
-CaorenCup.pdb
-CaorenCup.json
-以及运行所需依赖文件
-```
+### 2. 网页端
 
-部署目标：
+    CaorenCupWeb-网页端-vX.X.X.zip
 
-```text
-<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/
-```
+来源为 web-command-center/，包含运行源码、public/、package.json、package-lock.json、tsconfig.json、示例配置和独立 weaponpaints-data/。不包含桥接 DLL、node_modules、真实环境变量、身份或比赛数据。打包后按包内 INSTALL.md 安装并运行 npm start。
 
----
+    .\scripts\package-caoren-web.ps1 -Version vX.X.X -ValidateOnly
+    .\scripts\package-caoren-web.ps1 -Version vX.X.X
 
-### 2. 网页端 / 网页指挥台
+1.10 的登录升级延期至 1.11；打包脚本检测到未隔离的 Steam/OpenID 入口或身份变更时拒绝创建 1.10 网页包，不能用过滤文件名伪装已完成版本隔离。本发布分支已保留主线账号登录，延期源码在开发树中保留。
 
-包名：
+### 3. 局部更新与发布范围
 
-```text
-CaorenCupWeb-网页端-vX.X.X.zip
-```
+    .\scripts\package-caoren-server.ps1 -Version vX.X.X -Modules CaorenDuel
+    .\scripts\package-caoren-minigames.ps1 -Version vX.X.X -ValidateOnly
 
-来源目录：
+第二条是旧小游戏入口的兼容检查，实际构建转到新服务器打包器，生成明确标注的 CS2MiniGames 局部更新包，保留当前多层安装路径。局部包可能需要匹配的共享契约或音频清单，部署仅覆盖清单中明确变更的组件。
 
-```text
-web-command-center/
-```
+弗一把、ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 不进入 1.10；已验收的试听素材仍按完整资源清单保留。工坊发布与源码 ZIP 分开维护；完整 OGG 源素材、生产配置与运行备份不得从运维目录直接混入公开包。
 
-包内应包含：
+两包构建规则和包内容以确认的发布清单为准。加载成功、测试通过及真人验收分别记录；ZIP 生成成功不表示已提交、发布、部署或完成游戏内验收。
 
-```text
-public/
-src/
-package.json
-package-lock.json
-tsconfig.json
-ecosystem.config.cjs.example
-其他网页端运行所需源码文件
-```
-
-不应包含：
-
-```text
-node_modules/
-.env
-ecosystem.config.cjs
-真实 token
-真实密码配置
-```
-
-部署目标：
-
-```text
-<web-command-center>/
-```
-
----
-
-### 3. CS2 网页端服务器插件 / 桥接插件
-
-包名：
-
-```text
-CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
-```
-
-来源目录：
-
-```text
-web-command-center/CaorenCupPlugin/
-```
-
-打包方式：
-
-```bash
-dotnet publish -c Release
-```
-
-包内应包含：
-
-```text
-CaorenCupPlugin.dll
-CaorenCupPlugin.deps.json
-Tomlyn.dll
-Serilog.dll
-Microsoft.Extensions.*.dll
-以及运行所需依赖文件
-```
-
-部署目标：
-
-```text
-<CS2>/game/csgo/addons/counterstrikesharp/plugins/CaorenCupPlugin/
-```
-
----
-
-### 4. CS2 小游戏插件
-
-包名：
-
-```text
-CS2MiniGames-小游戏插件-vX.X.X.zip
-```
-
-来源目录：
-
-```text
-mini-games-plugin/
-```
-
-本地打包：
-
-```powershell
-.\scripts\package-caoren-minigames.ps1 -Version vX.X.X
-```
-
-部署目标：
-
-```text
-<CS2>/game/csgo/addons/counterstrikesharp/plugins/CS2MiniGames/
-```
-
-小游戏插件内部版本独立管理；ZIP 文件名使用草人杯统一 Release 版本。运行数据库和服务器配置不属于公开包。
+打包器回归检查入口为 scripts/test-release-packaging.ps1，测试仅在忽略的 release-build/ 下创建隔离夹具，不发布测试包。
 
 ---
 
@@ -1065,15 +959,13 @@ Tag: vX.X.X
 Title: Caoren Cup vX.X.X
 ```
 
-统一上传四个包；服务器只部署实际改动组件。
+统一上传两个主包；服务器只部署实际改动组件，局部包按需另行附加。
 
-上传四个 zip：
+上传两个主包：
 
 ```text
-CaorenCup-修改插件本体-vX.X.X.zip
+CaorenCupServer-服务器插件合集-vX.X.X.zip
 CaorenCupWeb-网页端-vX.X.X.zip
-CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip
-CS2MiniGames-小游戏插件-vX.X.X.zip
 ```
 
 然后点击发布。
@@ -1124,7 +1016,9 @@ curl -I http://127.0.0.1:3000/assets/audio/manifest.json
 
 草人杯仓库主体使用 MIT License。
 
-许可证例外：`weaponpaints-plugin/` 基于 GPL-3.0 上游项目改造，该目录及其修改使用 GPL-3.0，不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `weaponpaints-plugin/UPSTREAM.md`。
+许可证例外：`game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/` 基于 GPL-3.0 上游项目改造，该目录及其修改使用 GPL-3.0，不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/UPSTREAM.md`。
+
+许可证例外：`friberg-game/` 基于 `shnlfriberg/csgofriberg` 的固定源码快照改造，该目录及其修改使用 GNU Affero General Public License v3.0（AGPL-3.0），不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `friberg-game/UPSTREAM.md`。通过网络向用户提供修改版服务时，必须按 AGPL-3.0 向相应用户提供对应源码获取方式。
 
 `mini-games-plugin/` 作为独立组件使用 GNU General Public License v3.0（GPL-3.0），其复制、修改和分发以该目录内的 `LICENSE` 为准。发布或再分发小游戏插件二进制时必须保留对应许可证与源码获取方式。
 
@@ -1154,9 +1048,9 @@ CaorenCup 游戏内娱乐插件支持在 `CaorenCup.json` 的 `Alias.CommandMap`
       }
     }
 
-玩家在聊天栏输入 `/p1` 或 `!p1` 后，插件会以服务器控制台身份执行 `mp_pause_match`。
+玩家在聊天栏输入 `/p1` 后，插件会以服务器控制台身份执行 `mp_pause_match`。
 
-注意：`CommandMap` 的 key 不要带 `/`、`!`、`.` 或 `css_`；value 必须是服务器控制台可执行命令，不要写聊天触发符。
+注意：`CommandMap` 的 key 不要带聊天前缀或 `css_`；value 必须是服务器控制台可执行命令，不要写聊天触发符。
 
 ## 娱乐插件本体分模块配置
 
@@ -1230,9 +1124,9 @@ module-configs/*.json
 部署时至少需要更新：
 
 - `CaorenCupWeb-网页端-vX.X.X.zip`
-- `CaorenCupWebPlugin-网页端服务器插件-vX.X.X.zip`
+- `CaorenCupServer-服务器插件合集-vX.X.X.zip`
 
-如果本次没有改动 `game-plugin/`，服务器本地部署可以不覆盖娱乐插件本体；GitHub Release 仍按统一版本号上传四个包；服务器只部署实际改动组件。
+统一 Release 按确认清单生成两个主包；局部更新单独标注。服务器仅部署实际改动组件，不因取得合集就覆盖所有插件或数据。
 
 ## Credits / Third-party Code / 第三方代码说明
 
@@ -1276,7 +1170,7 @@ CaorenCup 项目中的部分功能参考、改写或使用了以下第三方项�
 
 If any attribution is incomplete or inaccurate, please contact the maintainer and it will be corrected as soon as possible.
 
-> 以下 v1.3.x 小节是历史版本记录，不代表当前登录方式。当前玩家入口以本文前面的“账号密码 + `!cclogin` 开户/恢复 + 明确加入比赛”为准。
+> 以下 v1.3.x 小节是历史版本记录，不代表当前登录方式。当前玩家入口以本文前面的“账号密码 + `/cclogin` 开户/恢复 + 明确加入比赛”为准。
 
 ## v1.3.3 game-code-login
 

@@ -28,6 +28,7 @@ dist/
 build/
 coverage/
 *.out
+vpk_stage/
 web-command-center/public/postmatch-mock-test.html
 desktop-client/dist/
 desktop-client/out/
@@ -64,3 +65,7 @@ release-build/
 release-output/
 runtime/
 web-command-center/runtime/
+
+# Python test/build caches
+__pycache__/
+*.py[cod]
