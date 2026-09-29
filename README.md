@@ -477,7 +477,8 @@ EnableDebugLog
 
 ```text
 <CS2>                 CS2 服务器根目录
-<plugins>             <CS2>/game/csgo/addons/counterstrikesharp/plugins
+<css>                 <CS2>/game/csgo/addons/counterstrikesharp
+<plugins>             <css>/plugins
 <web-command-center>  网页端实际部署目录
 ```
 
@@ -487,10 +488,13 @@ EnableDebugLog
 <plugins>/CaorenCup/                                   草人杯服务器插件分类根目录
 <plugins>/CaorenCup/CaorenCupWebBridge/CaorenCupPlugin/  网页桥接插件
 <plugins>/CaorenCup/CaorenCupMiniGames/CS2MiniGames/     小游戏插件
+<css>/shared/CaorenCupContracts/                        跨插件共享契约
 <web-command-center>/                                  网页赛事指挥台
 ```
 
-你可以选择任意适合自己环境的部署方式，例如直接在服务器上构建，或在本地打包后上传到服务器。无论采用哪种方式，都建议先备份旧版本，再覆盖新版本，并保留生产环境真实配置文件。
+两个主包的解压根目录不同：CaorenCupServer ZIP 内从 addons/counterstrikesharp/ 开始，应合并至 <CS2>/game/csgo/；CaorenCupWeb ZIP 内从 public/、src/、package.json 等开始，应合并至 <web-command-center>/。先对照包内 package-manifest.json 核对文件，再安装到正确目录。详细步骤见[发布包安装说明](docs/release-installation.md)。
+
+升级前备份旧版，保留现有配置、账号身份、偏好、数据库、排行榜和换肤数据。合并包内实际改动的组件，不用压缩包删除整个插件分类目录。
 
 ---
 
@@ -501,9 +505,9 @@ EnableDebugLog
 ```text
 准备 Release 包或本地构建产物
 → 备份当前线上目录
-→ 覆盖对应部署目录
+→ 按包内路径合并实际改动组件
 → 安装或更新网页端依赖
-→ 重启网页服务和 CS2 插件
+→ 仅重启本次改动影响的服务或插件
 → 检查网页端、桥接插件和游戏内插件是否正常
 ```
 
@@ -512,6 +516,8 @@ EnableDebugLog
 - 不要覆盖生产环境真实 `.env`、`ecosystem.config.cjs` 和 `caoren_config.json`。
 - 如果使用 Git 部署，请确认服务器能稳定访问远程仓库，并在更新前检查当前分支和本地修改。
 - 如果使用压缩包部署，请确认解压后的文件直接位于对应目录内，不要多套一层目录。
+- 旧版 CaorenCup/CaorenCup.dll 若留在分类根目录，会阻止拆分后的子插件被自动发现。单独核对、备份并迁移它，避免误删其他文件。
+- 预设示例位于 ZIP 的 examples/module-configs/，不应覆盖现有的 module-configs/。菜单与音频另由工坊项目 3810054981 分发。
 
 ---
 
@@ -979,9 +985,9 @@ CaorenCupWeb-网页端-vX.X.X.zip
 ```text
 准备 Release zip 或服务器本地构建产物
 → 备份旧版本目录
-→ 覆盖对应部署目录
+→ 按包内路径合并实际改动组件
 → 保留生产环境真实配置
-→ 重启网页服务或 CS2 服务器
+→ 按变更范围重启对应服务或插件
 → 执行验证命令
 ```
 
@@ -1034,11 +1040,11 @@ curl -I http://127.0.0.1:3000/assets/audio/manifest.json
 
 ## 游戏内插件：Alias 指令别名
 
-CaorenCup 游戏内娱乐插件支持在 `CaorenCup.json` 的 `Alias.CommandMap` 中配置聊天别名到服务器控制台命令的映射。
+CaorenCup 的指令别名配置位于 `plugins/CaorenCup/module-configs/Alias.json` 中的 `CommandMap`。旧版 `CaorenCup.json` 只作为迁移种子。
 
 示例配置：
 
-    "Alias": {
+    {
       "Enabled": true,
       "Permission": "@css/changemap",
       "CommandMap": {
@@ -1056,13 +1062,13 @@ CaorenCup 游戏内娱乐插件支持在 `CaorenCup.json` 的 `Alias.CommandMap`
 
 娱乐插件本体不再把全部模块配置都写进一个 `CaorenCup.json`。
 
-插件加载时仍会兼容读取 DLL 旁边的旧版：
+CaorenCupCore 加载时仍会兼容读取分类根目录的旧版：
 
 ```text
 CaorenCup.json
 ```
 
-然后会在 DLL 旁边创建新的分模块配置目录：
+然后在 CaorenCup 分类根目录创建新的分模块配置目录：
 
 ```text
 module-configs/
@@ -1086,7 +1092,7 @@ module-configs/*.json
 > 插件默认值
 ```
 
-升级老服务器时不用立刻手动拆旧配置。首次运行新版插件后，旧 `CaorenCup.json` 会作为迁移种子，缺失的模块文件会自动创建；之后请优先修改 `module-configs/` 下的模块文件。
+升级老服务器时不用立刻手动拆旧配置。首次运行新 Core 后，旧 `CaorenCup.json` 会作为迁移种子；之后请优先修改分类根目录 `module-configs/` 下的模块文件，保留该目录的生产数据。
 
 部署后的实际目录示例：
 
@@ -1121,7 +1127,7 @@ module-configs/*.json
 4. 游戏内原有指令仍然保留，网页面板只是更方便的赛前管理入口。
 5. 当前网页按钮只允许在 `Lobby` 或 `PreGameSetup` 阶段下发，避免正式比赛中误操作。
 
-部署时至少需要更新：
+本功能可能涉及以下两个主包；按实际改动选择部署的组件：
 
 - `CaorenCupWeb-网页端-vX.X.X.zip`
 - `CaorenCupServer-服务器插件合集-vX.X.X.zip`
