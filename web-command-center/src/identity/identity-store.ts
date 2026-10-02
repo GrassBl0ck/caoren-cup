@@ -113,7 +113,7 @@ const validateCurrentData = (parsed: Record<string, unknown>): IdentityStoreData
         const loginName = validateLoginName(accountValue.loginName);
         if (loginNames.has(loginName)) throw new Error('login account name is duplicated');
         loginNames.add(loginName);
-        if (accountValue.passwordState === 'recovery_required') {
+        if (accountValue.passwordState === 'recovery_required' || accountValue.passwordState === 'steam_only') {
             if (accountValue.password !== undefined) throw new Error('recovery-required account must not have a password');
         } else if (accountValue.passwordState === 'active' && isRecord(accountValue.password)) {
             validatePasswordCredential(accountValue.password);

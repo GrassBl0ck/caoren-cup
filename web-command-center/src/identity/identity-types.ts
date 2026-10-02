@@ -12,7 +12,7 @@ export interface IdentityRecord {
     updatedAt: number;
 }
 
-export type LoginAccountPasswordState = 'active' | 'recovery_required';
+export type LoginAccountPasswordState = 'active' | 'recovery_required' | 'steam_only';
 
 export interface LoginAccountRecord {
     identityId: string;

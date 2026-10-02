@@ -79,7 +79,8 @@ export class LobbyIdentityService {
         return this.store.mutate((data) => {
             const identity = data.identities[identityId];
             const account = data.accounts[identityId];
-            if (!identity || !account || !account.enabled || account.passwordState !== 'active' || !account.password) {
+            if (!identity || !account || !account.enabled ||
+                (account.passwordState === 'active' && !account.password)) {
                 return { ok: false as const, reason: 'account_unavailable' as const };
             }
             const memberships = Object.values(data.memberships).filter((membership) =>
@@ -156,6 +157,58 @@ export class LobbyIdentityService {
             return undefined;
         }
         return Object.values(this.store.snapshot().accounts).find((account) => account.loginName === loginName);
+    }
+
+    async findOrCreateSteamAccount(steamIdRaw: unknown) {
+        const steamId = strictSteamId(steamIdRaw);
+        if (!steamId) throw new Error('steam_id_invalid');
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const matches = Object.values(data.identities).filter((identity) => identity.steamId === steamId);
+            if (matches.length > 1) throw new Error('steam_identity_conflict');
+            let identity = matches[0];
+            if (!identity) {
+                const identityId = this.makeId(16);
+                identity = {
+                    identityId,
+                    displayName: `Steam ${steamId.slice(-6)}`,
+                    steamId,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                data.identities[identityId] = identity;
+            }
+            let account = data.accounts[identity.identityId];
+            if (account && !account.enabled) throw new Error('account_disabled');
+            if (!account) {
+                account = {
+                    identityId: identity.identityId,
+                    loginName: generateRandomLoginName(
+                        new Set(Object.values(data.accounts).map((candidate) => candidate.loginName)),
+                        this.randomBytes,
+                    ),
+                    enabled: true,
+                    passwordState: 'steam_only',
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                data.accounts[identity.identityId] = account;
+            }
+            return { identity, account };
+        });
+    }
+
+    async setSteamBackupPassword(identityId: string, newPassword: unknown) {
+        const password = await hashAccountPassword(newPassword, { now: this.now, randomBytes: this.randomBytes });
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const account = data.accounts[identityId];
+            if (!account?.enabled || account.passwordState !== 'steam_only') throw new Error('backup_password_unavailable');
+            account.passwordState = 'active';
+            account.password = password;
+            account.updatedAt = now;
+            return account;
+        });
     }
 
     async authenticateLoginAccount(input: LoginAccountAuthenticationInput) {
@@ -412,7 +465,7 @@ export class LobbyIdentityService {
             const account = data.accounts[token.identityId];
             if (!account) return { ok: false as const, reason: 'account_unavailable' };
             if (!account.enabled) return { ok: false as const, reason: 'account_disabled' };
-            if (account.passwordState !== 'active' || !account.password) {
+            if (account.passwordState === 'active' && !account.password) {
                 return { ok: false as const, reason: 'password_state_invalid' };
             }
 

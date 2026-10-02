@@ -27,8 +27,8 @@ export const bindPlayerCenterSocketIdentity = async (input: {
     const session = await input.sessionStore.use(rawToken);
     const account = session ? input.service.getLoginAccount(session.identityId) : undefined;
     const identity = session ? input.service.getIdentity(session.identityId) : undefined;
-    if (!session || !account || !identity || !account.enabled || account.passwordState !== 'active' ||
-        !account.password || account.updatedAt !== session.accountUpdatedAt) {
+    if (!session || !account || !identity || !account.enabled ||
+        (account.passwordState === 'active' && !account.password) || account.updatedAt !== session.accountUpdatedAt) {
         await input.sessionStore.revokeCurrent(rawToken);
         delete input.socketData.identityId;
         delete input.socketData.playerCenterSessionId;

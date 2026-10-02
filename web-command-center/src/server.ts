@@ -40,8 +40,9 @@ import {
 import { ADMIN_PASSWORD } from './game-constants';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds, normalizeDuelMap, normalizeDuelRoundTimeMinutes, normalizeDuelRounds, normalizeDuelUtilityMode, normalizeDuelWorkshopId } from './duel-config';
 import { registerIdentityAuthRoutes } from './identity/auth-routes';
+import { registerSteamAuthRoutes } from './identity/steam-auth-routes';
 import { normalizeUnbalancedRosterOptions } from './unbalanced-roster';
-import { initializeIdentityRuntime, lobbyIdentityService, playerCenterMatchSocketTickets, playerCenterSessionStore } from './identity/identity-runtime';
+import { initializeIdentityRuntime, lobbyIdentityService, playerCenterBootstrapTickets, playerCenterMatchSocketTickets, playerCenterSessionStore } from './identity/identity-runtime';
 import { bindPlayerCenterSocketIdentity } from './identity/player-center-socket';
 import { attachMembershipToSession, detachMatchMembershipsForScoreboard, removeIdentityFromSession } from './identity/session-integration';
 import { registerWeaponPaintsHttpRoutes } from './weaponpaints/http-routes';
@@ -201,6 +202,12 @@ registerIdentityAuthRoutes(app, {
             saveSessionSnapshotNow();
         }
     },
+});
+registerSteamAuthRoutes(app, {
+    service: lobbyIdentityService,
+    sessions: playerCenterSessionStore,
+    bootstrapTickets: playerCenterBootstrapTickets,
+    publicBaseUrl: process.env.STEAM_AUTH_PUBLIC_BASE_URL,
 });
 
 const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {

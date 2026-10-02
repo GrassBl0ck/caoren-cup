@@ -1,7 +1,7 @@
 ﻿// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { CellStatus, GamePhase, GameSession, LiveGameData, Player, RosterTeam, TaskCell, WsEvents } from './types';
+import { CellStatus, GamePhase, GameSession, LiveGameData, Player, PlayerRole, RosterTeam, TaskCell, WsEvents } from './types';
 import { getSession, resetSessionWithAdmins, terminateAndClear } from './session-manager';
 import {
     findPlayerById,
@@ -31,7 +31,7 @@ import {
     resumeRestoredPregameFlow,
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
-import { ADMIN_PASSWORD } from './game-constants';
+import { ADMIN_PASSWORD, DEV_PLAYER_LOGIN_ENABLED } from './game-constants';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import { assignTaskGridToPlayer } from './task-system';
 import { loadTaskPresets, createTaskPreset, renameTaskPreset, deleteTaskPreset } from './task-preset-store';
@@ -271,8 +271,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             ) : undefined;
             if (!ticket || !identityId || ticket.identityId !== identityId || ticket.sessionId !== session.sessionId ||
                 !membership || membership.sessionId !== session.sessionId || membership.identityId !== identityId ||
-                membership.leftAt || membership.blockedAt || !account?.enabled || account.passwordState !== 'active' ||
-                !account.password || !identity || !player) {
+                membership.leftAt || membership.blockedAt || !account?.enabled ||
+                (account.passwordState === 'active' && !account.password) || !identity || !player) {
                 socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '比赛登录票据无效或已过期，请回到玩家中心重试。' });
                 return;
             }
@@ -326,14 +326,17 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
 
         socket.on(WsEvents.LOGIN, (data: { name: string; extraParam?: string }) => {
             const session = getSession();
-            const name = String(data?.name || '').trim() || 'Admin';
+            const rawName = String(data?.name || '').trim();
             const extraParam = String(data?.extraParam || '').trim();
             if (extraParam !== ADMIN_PASSWORD) {
                 socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员密码错误。' });
                 return;
             }
+            const isDevPlayer = DEV_PLAYER_LOGIN_ENABLED && rawName.startsWith('P:');
+            const name = (isDevPlayer ? rawName.slice(2).trim() : rawName) || (isDevPlayer ? 'DevPlayer' : 'Admin');
+            const role: PlayerRole = isDevPlayer ? 'Player' : 'Admin';
             const existingByName = Object.values(session.players).find((player) =>
-                player.role === 'Admin' && player.name === name,
+                player.role === role && player.name === name,
             );
             const existing = existingByName;
 
@@ -354,7 +357,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
 
             const playerId = uuidv4();
             const bindCode = generateBindCode();
-            const newPlayer: Player = { playerId, name, role: 'Admin', bindCode, isReady: true, isOnline: true };
+            const newPlayer: Player = { playerId, name, role, bindCode, isReady: !isDevPlayer, isOnline: true };
             session.players[playerId] = newPlayer;
             session.playerOrder.push(playerId);
             socket.data.playerId = playerId;
@@ -363,7 +366,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 success: true,
                 playerId,
                 bindCode,
-                message: `管理员 ${name} 登录成功。`,
+                message: isDevPlayer ? `开发测试玩家 ${name} 登录成功。` : `管理员 ${name} 登录成功。`,
             });
             sendPrivateData(socket.id, playerId);
             broadcastState();
