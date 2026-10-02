@@ -31,7 +31,7 @@ RUSH 的 DLL 与资源补丁是两个交付环节。tools/rush/ 只包含补丁�
 
 ## 发布范围与许可
 
-1.10 不纳入延期至 1.11 的登录升级；保留现有登录方式。弗一把、ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 不随本包发布。已验收的试听素材属于资源清单内容，不因排除能力探针代码而自动删除。
+1.10 不纳入延期至 1.11 的登录升级；保留现有登录方式。弗一把目前已归档并半永久暂停，不随本包发布；ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 也不随本包发布。弗一把未来是否恢复需要重新确认，不应从本发布说明推断其仍在开发。已验收的试听素材属于资源清单内容，不因排除能力探针代码而自动删除。
 
 CaorenCup 主体许可证见 licenses/CaorenCup-MIT.txt。CS2MiniGames 和 CaorenWeaponPaints 保留各自 GPL-3.0 许可证及上游说明，不能把它们整体标为 MIT；分发二进制时同时提供可获得的对应版本源码，位置见 SOURCE.md。
 
