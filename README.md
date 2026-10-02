@@ -2,14 +2,13 @@
 
 Caoren Cup 是一个面向 CS2 自定义娱乐赛的赛事系统。
 
-项目包含四个已发布组件：
+当前项目包含四个运行中的部分，另保留一个已归档项目：
 
 1. **CS2 娱乐玩法插件**
 2. **网页赛事指挥台 / 网页端**
 3. **CS2 与网页后端通信的桥接插件**
 4. **CS2 小游戏插件**
-
-弗一把和网站登录升级不进入 1.10；前者暂停等待授权，后者延后至 1.11。
+5. **弗一把选手猜测游戏（已归档，半永久暂停）**
 
 适用于 CS2 自定义娱乐赛、队长选人、地图 Ban/Pick、阵营选择、卧底玩法、赛后指认、战绩同步和积分结算等场景。
 
@@ -40,6 +39,9 @@ caoren-cup/
 │
 ├─ mini-games-plugin/
 │  └─ CS2 小游戏插件
+│
+├─ archive/friberg-v1.11-paused-20261002/friberg-game/
+│  └─ 独立 AGPL-3.0 选手猜测游戏（已归档，半永久暂停）
 │
 ├─ docs/
 │  └─ 项目文档
@@ -822,7 +824,7 @@ Release 包和源码仓库是两回事：
     .\scripts\package-caoren-web.ps1 -Version vX.X.X -ValidateOnly
     .\scripts\package-caoren-web.ps1 -Version vX.X.X
 
-1.10 的登录升级延期至 1.11；打包脚本检测到未隔离的 Steam/OpenID 入口或身份变更时拒绝创建 1.10 网页包，不能用过滤文件名伪装已完成版本隔离。本发布分支已保留主线账号登录，延期源码在开发树中保留。
+1.10 的登录升级延期至 1.11；打包脚本检测到未隔离的 Steam/OpenID 入口或身份变更时拒绝创建 1.10 网页包，不能用过滤文件名伪装已完成版本隔离。保留现有账号登录方式，鉴权源码的隔离需独立处理和验证。
 
 ### 3. 局部更新与发布范围
 
@@ -831,7 +833,7 @@ Release 包和源码仓库是两回事：
 
 第二条是旧小游戏入口的兼容检查，实际构建转到新服务器打包器，生成明确标注的 CS2MiniGames 局部更新包，保留当前多层安装路径。局部包可能需要匹配的共享契约或音频清单，部署仅覆盖清单中明确变更的组件。
 
-弗一把、ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 不进入 1.10；已验收的试听素材仍按完整资源清单保留。工坊发布与源码 ZIP 分开维护；完整 OGG 源素材、生产配置与运行备份不得从运维目录直接混入公开包。
+弗一把 v1.11 已于 2026-10-02 进入半永久暂停状态，完整实现和相关文档已归档到 `archive/friberg-v1.11-paused-20261002/`，不纳入当前版本、发布、部署或生产验收。未来仍可能在重新确认时间成本、资料审核和发布范围后恢复，但目前不应把它视为进行中的功能。其授权数据署名为 `hltv.org`，允许公开展示但不得进入公开代码仓库；真实资料仍只保存在受控环境。ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 不进入 1.10；已验收的试听素材仍按完整资源清单保留。工坊发布与源码 ZIP 分开维护；完整 OGG 源素材、生产配置与运行备份不得从运维目录直接混入公开包。
 
 两包构建规则和包内容以确认的发布清单为准。加载成功、测试通过及真人验收分别记录；ZIP 生成成功不表示已提交、发布、部署或完成游戏内验收。
 
@@ -1018,7 +1020,7 @@ curl -I http://127.0.0.1:3000/assets/audio/manifest.json
 
 许可证例外：`game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/` 基于 GPL-3.0 上游项目改造，该目录及其修改使用 GPL-3.0，不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/UPSTREAM.md`。
 
-许可证例外：`friberg-game/` 基于 `shnlfriberg/csgofriberg` 的固定源码快照改造，该目录及其修改使用 GNU Affero General Public License v3.0（AGPL-3.0），不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `friberg-game/UPSTREAM.md`。通过网络向用户提供修改版服务时，必须按 AGPL-3.0 向相应用户提供对应源码获取方式。
+许可证例外：归档目录 `archive/friberg-v1.11-paused-20261002/friberg-game/` 基于 `shnlfriberg/csgofriberg` 的固定源码快照改造，该目录及其修改使用 GNU Affero General Public License v3.0（AGPL-3.0），不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见归档目录中的 `UPSTREAM.md`。通过网络向用户提供修改版服务时，必须按 AGPL-3.0 向相应用户提供对应源码获取方式；当前项目处于暂停状态，未作为当前发布组件提供。
 
 `mini-games-plugin/` 作为独立组件使用 GNU General Public License v3.0（GPL-3.0），其复制、修改和分发以该目录内的 `LICENSE` 为准。发布或再分发小游戏插件二进制时必须保留对应许可证与源码获取方式。
 
