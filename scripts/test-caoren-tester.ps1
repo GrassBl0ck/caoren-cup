@@ -46,8 +46,10 @@ foreach ($hadVpk in @($false,$true)) {
     if ($hadVpk) {
         [IO.File]::AppendAllText($info,"// later external edit`r`n")
         $changed=(Get-FileHash -LiteralPath $info -Algorithm SHA256).Hash
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner (Join-Path $package 'Restore-TestResources.ps1') $root 2> (Join-Path $fixture 'expected-restore-refusal.txt')
-        if ($LASTEXITCODE -eq 0 -or (Get-FileHash -LiteralPath $info -Algorithm SHA256).Hash -ne $changed) { throw 'Restore failed to protect external edit' }
+        $refusalError = Join-Path $fixture 'expected-restore-refusal.txt'
+        $refusalOutput = Join-Path $fixture 'expected-restore-refusal.stdout.txt'
+        $refusal = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $runner, (Join-Path $package 'Restore-TestResources.ps1'), $root) -Wait -PassThru -WindowStyle Hidden -RedirectStandardError $refusalError -RedirectStandardOutput $refusalOutput
+        if ($refusal.ExitCode -eq 0 -or (Get-FileHash -LiteralPath $info -Algorithm SHA256).Hash -ne $changed) { throw 'Restore failed to protect external edit' }
         [IO.File]::WriteAllText($info,$after,(New-Object Text.UTF8Encoding($false)))
     }
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $runner (Join-Path $package 'Restore-TestResources.ps1') $root
