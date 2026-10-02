@@ -1,5 +1,5 @@
 ﻿# 草人杯管理员菜单 Panorama 资源编译打包脚本
-# 历史单菜单资源编译流程；当前完整菜单与音频包请使用 scripts/build-caoren-menu-audio.ps1。
+# 流程依据 D:\OpenSourcework\hud-click-probe\README.md 第三节(已实测可复现):
 #   resources 源文件 -> 本机 CS2 content 树 -> resourcecompiler 编译 -> VPKEdit 打包 -> dist/caoren_admin_menu.vpk
 #
 # 用法:
