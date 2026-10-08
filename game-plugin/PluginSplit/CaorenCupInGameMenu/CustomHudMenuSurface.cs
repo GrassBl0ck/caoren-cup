@@ -86,8 +86,8 @@ public sealed class CustomHudMenuSurface : IMenuHudSurface
 
     internal static bool IsBusinessButton(string id) => id is
         "admin_home_tab" or "admin_help_open_tab" or "admin_settings_open" or "admin_back" or "admin_exit" or "admin_vote_open" or "menu_btn_0" or
-        "player_commands_open" or "player_vote_open" or "player_settings_open" or "player_guide_open" or "player_back" or "player_exit" or
-        "player_cmd_prev" or "player_cmd_next" or "player_detail_prev" or "player_detail_next" or
+        "player_commands_open" or "player_vote_open" or "player_stats_open" or "player_settings_open" or "player_guide_open" or "player_back" or "player_exit" or
+        "player_cmd_prev" or "player_cmd_next" or "player_detail_prev" or "player_detail_next" or "player_stats_prev" or "player_stats_next" or
         "guide_prev" or "guide_next" or "guide_detail_prev" or "guide_detail_next" or
         "vote_create" or "vote_cancel" or "vote_start" or "vote_discard" or "vote_cancel_confirm" or "vote_back" or "vote_exit"
         || id.StartsWith("settings_", StringComparison.Ordinal)

@@ -43,7 +43,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
 
     public string? GetPublicConfigInfo() => null;
 
-    public string GetFeatureDescription() => "CS2 风格管理菜单、玩家投票页及左侧结果提示；投票目前只公布结果，不执行后续操作。";
+    public string GetFeatureDescription() => "CS2 风格管理菜单、玩家投票页、地图内趣味数据及左侧结果提示；投票目前只公布结果，不执行后续操作。";
 
     private void SetEnabled(bool enabled)
     {
@@ -61,8 +61,9 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         AddCommand("css_crcmenu_admin", "打开管理员游戏内菜单", OnMenuCommand);
         AddCommand("css_ca", "打开管理员游戏内菜单", OnMenuCommand);
         RegisterVotingHooks();
+        RegisterPlayerStatsHooks();
         RegisterListener<Listeners.OnCustomHudClicked>(OnHudClicked);
-        RegisterListener<Listeners.OnMapStart>(_ => CloseAllMenus());
+        RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
         RegisterEventHandler<EventPlayerChat>(OnPlayerChat);
         CaorenCupModuleRegistry.Register(new CaorenCupModuleDescriptor(
@@ -227,6 +228,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         var steamId = @event.Xuid != 0 ? @event.Xuid.ToString()
             : player?.IsValid == true ? player.SteamID.ToString() : string.Empty;
         if (steamId.Length == 0) return HookResult.Continue;
+        TrackDisconnectedPlayer(steamId);
         OnVotingPlayerDisconnected(steamId);
         _navigator.Close(steamId);
         if (player?.IsValid == true)
@@ -250,7 +252,11 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         return HookResult.Continue;
     }
 
-    private void OnMapStart(string mapName) => CloseAllMenus();
+    private void OnMapStart(string mapName)
+    {
+        ResetPlayerStatsForMap();
+        CloseAllMenus();
+    }
 
     // === 聊天接力输入 ===
 

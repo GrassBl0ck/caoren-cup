@@ -102,3 +102,13 @@
 .CaorenSettings.MenuVolume98 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover98"; }
 .CaorenSettings.MenuVolume99 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover99"; }
 .CaorenSettings.MenuVolume100 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover100"; }
+
+/* 当前地图玩家趣味数据表。列分页由服务器控制，保持玩家行位置稳定。 */
+.CaorenStatsTable { width: 100%; flow-children: down; margin-top: 8px; }
+.CaorenStatsHeader, .CaorenStatsRow { width: 100%; flow-children: right; }
+.CaorenStatsHeader { min-height: 42px; background-color: #ffffff18; border-bottom: 1px solid #82D8FF66; }
+.CaorenStatsRow { min-height: 42px; border-bottom: 1px solid #ffffff19; }
+.CaorenStatsName { width: 28%; padding-left: 12px; vertical-align: center; text-align: left; color: #ffffffff; font-size: 17px; }
+.CaorenStatsHeaderName { color: #82D8FF; font-size: 16px; }
+.CaorenStatsHeaderCell, .CaorenStatsValue { width: 18%; padding: 0px 4px; vertical-align: center; text-align: center; color: #ffffffff; font-size: 16px; }
+.CaorenStatsHeaderCell { color: #82D8FF; font-size: 15px; }
