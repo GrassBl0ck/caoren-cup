@@ -189,13 +189,17 @@ test('bootstrap ticket creates an HttpOnly browser session and current identity 
     const current = await requestJson(`${runtime.baseUrl}/api/player-center/me`, 'GET', undefined, opened.cookie);
     assert.deepEqual(current.body, {
         success: true,
-        profile: { steamNickname: identity.steamNickname || identity.displayName, loginName: account.loginName },
+        profile: {
+            steamNickname: identity.steamNickname || identity.displayName,
+            loginName: account.loginName,
+            hasBackupPassword: true,
+        },
         matchStatus: 'started',
         joinAvailable: false,
         leaveAvailable: false,
         joined: false,
     });
-    assert.equal(JSON.stringify(current.body).match(/steamId|identityId|password|token|membership|players|score/i), null);
+    assert.equal(JSON.stringify(current.body).match(/"(?:steamId|identityId|password|token|membership|players|score)"\s*:/i), null);
     assert.equal(Object.keys(runtime.sessionStore.snapshot().sessions).length, 1);
 });
 
@@ -244,7 +248,11 @@ test('login-name change verifies the current password, keeps this session, and r
     assert.equal(changed.status, 200);
     assert.deepEqual(changed.body, {
         success: true,
-        profile: { steamNickname: identity.steamNickname || identity.displayName, loginName: 'Renamed_Player' },
+        profile: {
+            steamNickname: identity.steamNickname || identity.displayName,
+            loginName: 'Renamed_Player',
+            hasBackupPassword: true,
+        },
         revocation: {
             revokeOtherPlayerCenterSessions: true,
             otherWebSessionsRevoked: 1,

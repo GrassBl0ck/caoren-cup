@@ -24,7 +24,7 @@ for (const token of [
   'task-state-progress',
   'task-state-abandoned',
   'task-level-strong',
-  'task-hint-availability',
+  'task-special-blue',
   '提示已查看',
   '此任务无提示',
   'task-history-trigger',

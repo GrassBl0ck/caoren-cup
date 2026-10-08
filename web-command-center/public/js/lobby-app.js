@@ -209,7 +209,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
 
 
         function isUndercoverModeEnabledFromState(state) {
-            return state?.matchOptions?.undercoverModeEnabled !== false;
+            return state?.matchOptions?.gameModeId === 'undercover';
         }
 
         function canEditTaskTemplate(state) {
@@ -234,7 +234,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
         }
 
         function nextPhaseForState(state) {
-            const isDuel = state?.matchOptions?.matchMode === 'duel';
+            const isDuel = state?.matchOptions?.gameModeId === 'duel' || state?.matchOptions?.matchMode === 'duel';
             switch (state?.phase) {
                 case 'Lobby': return isDuel ? 'PreGameSetup' : 'CaptainSelection';
                 case 'CaptainSelection': return isDuel ? 'PreGameSetup' : 'Roll';
@@ -315,11 +315,14 @@ document.addEventListener('caoren:terminate-confirmed', () => {
                     : phaseDisplayName(nextPhaseValue);
             }
             if (advanceButton) {
+                const gamemodeOwnsLaunch = state.phase === 'PreGameSetup';
                 advanceButton.textContent = state.phase === 'Scoreboard'
                     ? '开启新一轮'
-                    : (nextPhaseValue ? `推进到：${phaseDisplayName(nextPhaseValue)}` : '当前阶段无法推进');
-                advanceButton.disabled = !nextPhaseValue;
-                advanceButton.title = nextPhaseValue ? advanceButton.textContent : '当前阶段无法继续推进';
+                    : (gamemodeOwnsLaunch ? '请使用“开始 Warmup”' : (nextPhaseValue ? `推进到：${phaseDisplayName(nextPhaseValue)}` : '当前阶段无法推进'));
+                advanceButton.disabled = !nextPhaseValue || gamemodeOwnsLaunch;
+                advanceButton.title = gamemodeOwnsLaunch
+                    ? '正式比赛由 Gamemode 启动，请使用“开始 Warmup”或 /gamemode start'
+                    : (nextPhaseValue ? advanceButton.textContent : '当前阶段无法继续推进');
             }
             if (count) count.textContent = String(status.count || 0);
             if (latest) {
@@ -355,10 +358,26 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             return Number.isFinite(round) && round > 0 ? round : 0;
         }
 
+        function getRoundLimitForState(state, live = state?.liveGameData || {}) {
+            const publishedLimit = Math.floor(Number(live?.roundLimit || 0));
+            if (publishedLimit > 0) return publishedLimit;
+            const modeId = state?.matchOptions?.gameModeId || 'competitive';
+            if (modeId === 'duel') {
+                const rounds = state?.matchOptions?.duelRounds || { pistol: 8, rifle: 16, sniper: 12 };
+                return Math.max(1, Number(rounds.pistol || 0) + Number(rounds.rifle || 0) + Number(rounds.sniper || 0));
+            }
+            return modeId === 'rush' ? 15 : 24;
+        }
+
         function getTeamASideForState(state) {
             const selectedSide = state?.selectedSide;
             if (selectedSide !== 'CT' && selectedSide !== 'T') return null;
-            return getFormalRoundFromState(state) >= 13 ? oppositeSide(selectedSide) : selectedSide;
+            if (state?.matchOptions?.gameModeId === 'duel' || state?.matchOptions?.matchMode === 'duel') return selectedSide;
+            const live = state?.liveGameData || {};
+            if (live.halftimeEnabled === false) return selectedSide;
+            const roundLimit = getRoundLimitForState(state, live);
+            const halftimeRound = Math.floor(Number(live.halftimeRound || Math.ceil(roundLimit / 2) + 1));
+            return getFormalRoundFromState(state) >= halftimeRound ? oppositeSide(selectedSide) : selectedSide;
         }
 
         function getExpectedSide(player, state) {
@@ -395,15 +414,20 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             return ack ? base + '<br>' + ack : base;
         }
 
-        function isCompetitiveMatchzyState(state) {
-            const options = state?.matchOptions || {};
-            return options.matchMode !== 'duel';
+        function getGameModeLifecycle(state) {
+            const lifecycle = state?.gameModeRuntime?.lifecycle;
+            if (typeof lifecycle === 'string') return lifecycle;
+            return state?.phase === 'LiveGame' ? 'Live' : 'Lobby';
         }
 
-        function renderMatchStartTag(player, state) {
+        function renderGameModeStatusTag(player, state) {
             if (player?.role === 'Admin' || player?.role === 'Spectator') return '<span class="tag tag-gray">-</span>';
-            if (state?.phase === 'LiveGame') return '<span class="tag tag-green">比赛中</span>';
-            return '<span class="tag tag-orange">等待 .start</span>';
+            const lifecycle = getGameModeLifecycle(state);
+            if (lifecycle === 'Live' || state?.phase === 'LiveGame') return '<span class="tag tag-green">比赛中</span>';
+            if (lifecycle === 'Warmup') return '<span class="tag tag-orange">热身倒计时</span>';
+            if (lifecycle === 'Error') return '<span class="tag tag-red">模式启动失败</span>';
+            if (lifecycle === 'Stopped') return '<span class="tag tag-gray">已停止</span>';
+            return '<span class="tag tag-gray">等待 Gamemode</span>';
         }
 
         function renderUndercoverAckControl(player) {
@@ -614,18 +638,24 @@ document.addEventListener('caoren:terminate-confirmed', () => {
                     ? pendingMatchOptions[key]
                     : fallback;
 
+            const gameModeId = optionValue('gameModeId', serverOptions.gameModeId || 'competitive');
+            const gameModeWarmupSeconds = optionValue('gameModeWarmupSeconds', serverOptions.gameModeWarmupSeconds || 15);
             const duelEnabled = optionValue('matchMode', serverOptions.matchMode || 'competitive') === 'duel';
-            const undercoverEnabled = duelEnabled ? false : optionValue('undercoverModeEnabled', isUndercoverModeEnabledFromState(state));
+            const undercoverEnabled = gameModeId === 'undercover';
             const caorenEnabled = optionValue('caorenModifiersEnabled', serverOptions.caorenModifiersEnabled === true) === true;
             const duelMap = optionValue('duelMap', serverOptions.duelMap || DUEL_DEFAULT_MAP);
             const duelRoundTime = optionValue('duelRoundTimeMinutes', serverOptions.duelRoundTimeMinutes || 1);
             const duelRounds = optionValue('duelRounds', serverOptions.duelRounds || { pistol: 8, rifle: 16, sniper: 12 });
             const duelUtilityMode = optionValue('duelUtilityMode', serverOptions.duelUtilityMode || 'none');
-            const unbalancedEnabled = optionValue('unbalancedModeEnabled', serverOptions.unbalancedModeEnabled === true) === true;
+            const unbalancedEnabled = gameModeId === 'unbalanced';
             const teamASize = optionValue('unbalancedTeamASize', serverOptions.unbalancedTeamASize || 3);
             const teamBSize = optionValue('unbalancedTeamBSize', serverOptions.unbalancedTeamBSize || 5);
 
             const status = document.getElementById('match-options-status');
+            const gameModeInput = document.getElementById('game-mode-id');
+            const gameModeWarmupInput = document.getElementById('game-mode-warmup-seconds');
+            const startModeBtn = document.getElementById('start-game-mode-btn');
+            const stopModeBtn = document.getElementById('stop-game-mode-btn');
             const duelInput = document.getElementById('match-option-duel');
             const duelRow = document.getElementById('duel-options-row');
             const testBotsRow = document.getElementById('match-option-test-bots-row');
@@ -647,6 +677,26 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             const optionsWarning = document.querySelector('#match-options-panel .match-options-warning');
 
             // 网页单挑已归档，仅保留游戏内 /duel；旧缓存状态也不得重新打开网页入口。
+            if (gameModeInput) {
+                gameModeInput.value = gameModeId;
+                gameModeInput.disabled = !editable;
+                gameModeInput.onchange = () => {
+                    setPendingMatchOption('gameModeId', gameModeInput.value);
+                    setPendingMatchOption('undercoverModeEnabled', gameModeInput.value === 'undercover');
+                    setPendingMatchOption('unbalancedModeEnabled', gameModeInput.value === 'unbalanced');
+                    scheduleMatchOptionsAutosave(100);
+                };
+            }
+            if (gameModeWarmupInput) {
+                gameModeWarmupInput.value = String(gameModeWarmupSeconds);
+                gameModeWarmupInput.disabled = !editable;
+                gameModeWarmupInput.onchange = () => {
+                    setPendingMatchOption('gameModeWarmupSeconds', Math.max(1, Math.min(300, Number(gameModeWarmupInput.value || 15))));
+                    scheduleMatchOptionsAutosave(100);
+                };
+            }
+            if (startModeBtn) startModeBtn.disabled = !editable;
+            if (stopModeBtn) stopModeBtn.disabled = false;
             if (duelInput) {
                 duelInput.checked = false;
                 duelInput.disabled = true;
@@ -735,7 +785,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
                 undercoverInput.checked = undercoverEnabled;
                 undercoverInput.disabled = !editable || duelEnabled;
                 undercoverInput.onchange = () => {
-                    setPendingMatchOption('undercoverModeEnabled', undercoverInput.checked === true);
+                    setPendingMatchOption('gameModeId', undercoverInput.checked ? 'undercover' : 'competitive');
                     scheduleMatchOptionsAutosave(100);
                 };
             }
@@ -786,11 +836,15 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             if (!isLoggedInAdmin && !adminPassword) return;
 
             const duelEnabled = false;
+            const selectedGameMode = document.getElementById('game-mode-id')?.value || 'competitive';
             const matchOptions = {
+                gameModeId: selectedGameMode,
+                gameModeWarmupSeconds: Math.max(1, Math.min(300, Number(document.getElementById('game-mode-warmup-seconds')?.value || 15))),
+                gameModeCvarOverrides: {},
                 matchMode: duelEnabled ? 'duel' : 'competitive',
-                undercoverModeEnabled: duelEnabled ? false : !!document.getElementById('match-option-undercover')?.checked,
+                undercoverModeEnabled: selectedGameMode === 'undercover',
                 caorenModifiersEnabled: !!document.getElementById('match-option-caoren')?.checked,
-                unbalancedModeEnabled: document.getElementById('match-option-unbalanced')?.value === 'true',
+                unbalancedModeEnabled: selectedGameMode === 'unbalanced',
                 unbalancedTeamASize: Math.max(1, Math.floor(Number(document.getElementById('match-option-team-a-size')?.value || 3))),
                 unbalancedTeamBSize: Math.max(1, Math.floor(Number(document.getElementById('match-option-team-b-size')?.value || 5))),
                 duelMap: document.getElementById('match-option-duel-map')?.value || DUEL_DEFAULT_MAP,
@@ -811,10 +865,19 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             if (silent && status) status.innerHTML = '\u672c\u5c40\u6a21\u5f0f\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58\u2026\u2026';
 
             try {
-                const res = await fetch('/api/admin/match-options', {
+                const res = await fetch('/api/admin/game-mode', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ playerId: myPlayerId, adminPassword, matchOptions })
+                    body: JSON.stringify({
+                        playerId: myPlayerId,
+                        adminPassword,
+                        matchOptions,
+                        gameMode: {
+                            gameModeId: matchOptions.gameModeId,
+                            warmupSeconds: matchOptions.gameModeWarmupSeconds,
+                            cvarOverrides: matchOptions.gameModeCvarOverrides,
+                        },
+                    })
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
@@ -827,6 +890,42 @@ document.addEventListener('caoren:terminate-confirmed', () => {
                 else showLobbyNotice(err.message || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25', 'error');
             }
         }
+        async function startSelectedGameMode() {
+            const isLoggedInAdmin = window._currentPlayer?.role === 'Admin';
+            const adminPassword = isLoggedInAdmin ? '' : await getAdminPasswordForRequest();
+            if (!isLoggedInAdmin && !adminPassword) return;
+            try {
+                const res = await fetch('/api/admin/game-mode/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ playerId: myPlayerId, adminPassword }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || '启动游戏模式失败');
+                showLobbyNotice('Gamemode 已进入 Warmup。', 'success');
+            } catch (err) {
+                showLobbyNotice(err.message || '启动游戏模式失败', 'error');
+            }
+        }
+
+        async function stopSelectedGameMode() {
+            const isLoggedInAdmin = window._currentPlayer?.role === 'Admin';
+            const adminPassword = isLoggedInAdmin ? '' : await getAdminPasswordForRequest();
+            if (!isLoggedInAdmin && !adminPassword) return;
+            try {
+                const res = await fetch('/api/admin/game-mode/stop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ playerId: myPlayerId, adminPassword }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || '停止游戏模式失败');
+                showLobbyNotice('Gamemode 已停止。', 'success');
+            } catch (err) {
+                showLobbyNotice(err.message || '停止游戏模式失败', 'error');
+            }
+        }
+
         function setCaorenModContentVisibility(caorenEnabled) {
             const visible = caorenEnabled === true;
             window._caorenModifiersEnabled = visible;
@@ -1111,7 +1210,7 @@ if (window._caorenModifiersEnabled !== true) {
             const currentPlayer = state.players[myPlayerId];
             window._currentPlayer = currentPlayer || null;
             const isAdmin = currentPlayer?.role === 'Admin';
-            const isDuel = state?.matchOptions?.matchMode === 'duel';
+            const isDuel = state?.matchOptions?.gameModeId === 'duel' || state?.matchOptions?.matchMode === 'duel';
             const undercoverEnabled = isUndercoverModeEnabledFromState(state);
             const live = state.liveGameData || window._liveGameData || {};
             renderPregameReadinessCard(state, currentPlayer);
@@ -1157,8 +1256,7 @@ if (window._caorenModifiersEnabled !== true) {
                 .sort((a, b) => (teamSortWeight(a) - teamSortWeight(b)) || String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
             let playerTable = renderPublicDuelWorkshopNotice(state, currentPlayer);
             playerTable += '<h3 style="margin-top:0;">当前房间玩家</h3>';
-            const useMatchZyStartStatus = isCompetitiveMatchzyState(state);
-            const readyHeader = useMatchZyStartStatus ? '开赛状态' : '准备';
+            const readyHeader = 'Gamemode 状态';
             playerTable += '<div class="cc-table-wrap"><table class="cc-table"><thead><tr>' +
                 '<th>#</th><th>玩家名</th><th>比赛队伍</th>' + (isDuel ? '' : '<th>当前边</th><th>应在边</th>') + '<th>绑定状态</th><th>身份</th><th>' + readyHeader + '</th>' + (isAdmin ? '<th>操作</th>' : '') +
                 '</tr></thead><tbody>';
@@ -1170,7 +1268,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const expectedSide = renderExpectedSideTag(p, state);
                 const bind = p.steamIdBound ? '<span class="tag tag-green">已绑定</span>' : '<span class="tag tag-red">未绑定</span>';
                 const roleText = p.role === 'Admin' ? '<span class="tag tag-purple">管理员</span>' : (p.gameRole ? `<span class="tag tag-gray">${p.gameRole}</span>` : '<span class="tag tag-gray">未分配</span>');
-                const ready = useMatchZyStartStatus ? renderMatchStartTag(p, state) : renderReadyTag(p);
+                const ready = renderGameModeStatusTag(p, state);
                 const canDuelAssign = isDuel && isAdmin && p.role !== 'Admin' && p.role !== 'Spectator' && ['PreGameSetup', 'LiveGame'].includes(state.phase) && (state.phase !== 'LiveGame' || live?.duelWaitingForPlayers);
                 const duelAssignOps = canDuelAssign ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;"><button onclick="adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;padding:4px 9px;">分到A</button><button onclick="adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;padding:4px 9px;">分到B</button>${p.rosterTeam ? `<button onclick="adminUnassignTeam('${p.playerId}')" style="background:#64748b;color:#fff;padding:4px 9px;">撤销分队</button>` : ''}</div>` : '';
                 const kickOp = isAdmin && p.role !== 'Admin' ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
@@ -1485,20 +1583,20 @@ if (window._caorenModifiersEnabled !== true) {
 
                 if (!undercoverEnabled) {
                     if (isAdmin) {
-                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">标准竞技不再要求网页准备；请确认玩家已绑定、分队无误，然后由管理员在游戏内输入 MatchZy <code>.start</code> 开始比赛。</p></div><hr>';
+                        html += '<div style="background:#e8f5e9; padding:15px; border:1px solid #a5d6a7; border-radius:8px;"><h4 style="margin-top:0;color:#2e7d32;">普通比赛模式</h4><p>卧底模式已关闭。本局不会分配卧底/侦探身份，不需要发放身份，也不会生成卧底任务。</p><p style="margin-bottom:0;">本局不需要玩家准备；请确认玩家已绑定、分队无误，然后由管理员点击“开始 Warmup”或在游戏内输入 <code>/gamemode start</code>。</p></div><hr>';
                     }
 
                     html += '<h3 style="text-align:center; color:#2e7d32;">本局为普通比赛模式</h3>';
-                    html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；玩家绑定并站到对应队伍后，等待管理员在游戏内使用 MatchZy <code>.start</code> 开赛。</p>';
+                    html += '<p style="text-align:center; color:#607086;">不会出现卧底任务、侦探问答或赛后指认；玩家绑定并站到对应队伍后，等待管理员启动 Gamemode 的 Warmup。</p>';
 
                     html += '<div style="text-align:center; margin-top:30px; border-top:1px dashed #ccc; padding-top:20px;">';
                     if (currentPlayer?.role !== 'Admin' && currentPlayer?.role !== 'Spectator') {
-                        html += '<h3 style="color:#1565c0;">请回到游戏内等待管理员开赛</h3>';
+                        html += '<h3 style="color:#1565c0;">请等待管理员启动 Gamemode</h3>';
                         html += '<p style="color:#64748b;">不需要输入 <code>.r</code>，也不需要点击网页准备。</p>';
                     } else {
-                        html += '<h3 style="color:#4caf50;">确认无误后，在游戏内输入 <code>.start</code></h3>';
+                        html += '<h3 style="color:#4caf50;">确认无误后，点击“开始 Warmup”或输入 <code>/gamemode start</code></h3>';
                     }
-                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">比赛开始后，网页会自动进入正式比赛阶段。</p></div>';
+                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">15 秒 Warmup 倒计时结束后，网页会自动进入正式比赛阶段。</p></div>';
                     extraDiv.innerHTML = html;
                 } else {
                     if (isAdmin) {
@@ -2031,6 +2129,18 @@ if (window._caorenModifiersEnabled !== true) {
             return text.replace(/1N/g, 'N');
         }
 
+        function formatNRangeLabel(cell) {
+            if (!cell || !cell.nType || cell.nType === 'none') return '';
+            const maxN = Number(cell.nMax || 0);
+            if (!Number.isFinite(maxN) || maxN < 1) return '';
+            if (maxN <= 6) {
+                const values = [];
+                for (let i = 1; i <= maxN; i++) values.push(i);
+                return `N={${values.join(',')}}`;
+            }
+            return `N={1,2,3,...,${maxN}}`;
+        }
+
         function getTaskStatusBadge(status) {
             const map = {
                 Complete: { text: '已完成', className: 'complete' },
@@ -2065,10 +2175,11 @@ if (window._caorenModifiersEnabled !== true) {
             const entries = (Array.isArray(taskActionLog) ? taskActionLog : [])
                 .filter(entry => entry.cellId === cellId)
                 .sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0))
-                .slice(0, 6);
-            if (!entries.length) return '';
-            const rows = entries.map(entry => `<li><strong>第 ${Number(entry.round || 0)} 回合 · ${htmlEscape(taskActionLabel(entry.action))}</strong><span>${htmlEscape(formatTaskLogChange(entry))}</span><small>${htmlEscape(formatTaskLogTime(entry.timestamp))}</small></li>`).join('');
-            return `<span class="task-history-shell"><button type="button" class="task-history-trigger" aria-label="查看格子 ${cellId} 的操作历史" onclick="toggleTaskHistory(event, '${cellId}')">◷</button><span class="task-history-popover" role="tooltip"><b>格子 ${cellId} 操作历史</b><ol>${rows}</ol></span></span>`;
+                .slice(0, 10);
+            const rows = entries.length
+                ? entries.map(entry => `<li><strong>第 ${Number(entry.round || 0)} 回合，做出了「${htmlEscape(taskActionLabel(entry.action))}」操作</strong><span>${htmlEscape(formatTaskLogChange(entry))}</span><small>${htmlEscape(formatTaskLogTime(entry.timestamp))}</small></li>`).join('')
+                : '<li class="task-history-empty">暂无操作记录</li>';
+            return `<span class="task-history-shell"><button type="button" class="task-history-trigger" aria-label="查看格子 ${cellId} 的操作记录" onclick="toggleTaskHistory(event, '${cellId}')">◷</button><span class="task-history-popover" role="tooltip"><b>格子 ${cellId} 操作记录</b><ol>${rows}</ol></span></span>`;
         }
 
         function toggleTaskHistory(event, cellId) {
@@ -2090,31 +2201,57 @@ if (window._caorenModifiersEnabled !== true) {
             renderTaskPresetOptions();
         });
 
+        function cornerStatusParts(cell) {
+            const nValue = Number(cell.nValue || 0);
+            const nMax = Number(cell.nMax || 0);
+            let mainText = '未完成';
+            let mainClass = 'st-incomplete';
+            let mainNote = '任务尚未完成。';
+            if (cell.status === 'Complete') { mainText = '已完成'; mainClass = 'st-complete'; mainNote = cell.completedRound ? `在第 ${cell.completedRound} 回合完成。` : '任务已完成。'; }
+            else if (cell.status === 'Abandoned') { mainText = '已放弃'; mainClass = 'st-abandoned'; mainNote = '任务已放弃。'; }
+            else if (cell.nType !== 'none' && nValue > 0) {
+                mainText = `已部分完成（N=${nValue}${nMax > 0 ? `/${nMax}` : ''}）`;
+                mainClass = 'st-progress';
+                mainNote = `当前 N = ${nValue}${nMax > 0 ? `，最大 ${nMax}` : ''}。`;
+            }
+            const parts = [{ strong: mainText, span: mainNote }];
+            if (cell.isReplaced) parts.push({ strong: '已被替换', span: '此任务已被备用任务替换。' });
+            if (cell.isHintUsed) parts.push({ strong: '已获取提示', span: '提示内容已显示在格子内。' });
+            return { mainClass, parts };
+        }
+
+        function cornerStatusHtml(cellId, cell) {
+            if (!cell) return '';
+            const { mainClass, parts } = cornerStatusParts(cell);
+            const rows = parts.map(p => `<li><strong>${htmlEscape(p.strong)}</strong><span>${htmlEscape(p.span)}</span></li>`).join('');
+            return `<span class="task-status-shell"><button type="button" class="task-status-trigger ${mainClass}" aria-label="查看格子 ${cellId} 的当前状态">ⓘ</button><span class="task-status-popover" role="tooltip"><b>格子 ${cellId} 当前状态</b><ul>${rows}</ul></span></span>`;
+        }
+
         function renderTaskCell(cellId, cell, options = {}) {
             const clickable = options.clickable === true;
             const compact = options.compact === true;
             const stateClass = taskStateClass(cell);
             const borderHistory = Array.isArray(cell?.borderHistory) ? cell.borderHistory : [];
-            const specialClass = `${borderHistory.includes('blue') ? ' task-special-blue' : ''}${borderHistory.includes('purple') ? ' task-special-purple' : ''}`;
+            const hintAvailable = !!String(cell?.hint || '').trim();
+            const hintPending = hintAvailable && !cell?.isHintUsed;
+            const specialClass = `${hintPending ? ' task-special-blue' : ''}${borderHistory.includes('purple') ? ' task-special-purple' : ''}`;
             let titleHtml = '';
             if (cell && cell.levelLabel) {
                 const displayLabel = formatNDisplayText(cell.levelLabel, cell);
                 const color = getLevelColor(displayLabel);
-                titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color}; font-size:${compact ? '13px' : '16px'};">【${htmlEscape(displayLabel)}】</div>`;
+                const nRange = formatNRangeLabel(cell);
+                const nRangeHtml = nRange ? `<span style="font-size:${compact ? '11px' : '13px'}; color:#555; font-weight:normal; margin-left:4px;">${nRange}</span>` : '';
+                titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color}; font-size:${compact ? '13px' : '16px'};">【${htmlEscape(displayLabel)}】${nRangeHtml}</div>`;
             }
             const desc = cell ? renderSafeTaskRichText(formatNDisplayText(cell.description, cell)) : '无';
             const hasN = cell && cell.nType !== 'none' && Number(cell.nValue || 0) > 0;
             const nInfo = hasN ? `<div class="task-n-progress" style="font-size:${compact ? '12px' : '15px'};">当前 N = ${cell.nValue}</div>` : '';
             const roundInfo = cell?.completedRound ? `<div class="task-round-note">完成回合：第 ${cell.completedRound} 回合</div>` : '';
-            const displayStatus = cell?.status === 'Incomplete' && Number(cell?.nValue || 0) > 0 ? 'Partial' : (cell?.status || 'Incomplete');
-            const status = cell ? `<div class="task-status-wrap">${getTaskStatusBadge(displayStatus)}</div>` : '';
-            const hintAvailable = !!String(cell?.hint || '').trim();
-            const hintBadge = hintAvailable ? `<span class="task-hint-availability${cell?.isHintUsed ? ' used' : ''}">${cell?.isHintUsed ? '提示已查看' : '有提示'}</span>` : '';
             const hintText = hintAvailable && cell?.isHintUsed ? `<div class="task-hint-text"><b>提示：</b>${htmlEscape(String(cell.hint))}</div>` : '';
             const history = renderTaskHistory(cellId, options.taskActionLog);
             const selectedClass = clickable && window.selectedCellId === cellId ? ' selected' : '';
             const click = clickable ? ` id="cell-${cellId}" onclick="handleCellClick('${cellId}')"` : '';
-            return `<div class="task-cell ${stateClass}${specialClass}${selectedClass}" ${click}>${hintBadge}${history}${titleHtml}<div class="task-desc" style="font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${hintText}${nInfo}${status}${roundInfo}</div>`;
+            return `<div class="task-cell ${stateClass}${specialClass}${selectedClass}" ${click}>${cornerStatusHtml(cellId, cell)}${history}${titleHtml}<div class="task-desc" style="font-size:${compact ? '12px' : '15px'};"><div>${desc}</div></div>${hintText}${nInfo}${roundInfo}</div>`;
         }
 
         function renderTaskGrid(taskGrid, options = {}) {
@@ -2671,16 +2808,8 @@ if (window._caorenModifiersEnabled !== true) {
 
         function liveDisplayRound(live) {
             if (live?.duelWaitingForPlayers) return 0;
-            const toInt = value => {
-                const n = Math.floor(Number(value || 0));
-                return Number.isFinite(n) ? Math.max(0, n) : 0;
-            };
-            const currentRound = toInt(live?.currentRound);
-            const completedByCtT = toInt(live?.scoreCT) + toInt(live?.scoreT);
-            const completedByRoster = toInt(live?.scoreA) + toInt(live?.scoreB);
-            const completedRounds = Math.max(completedByCtT, completedByRoster, toInt(live?.lastScoredRound));
-            if (completedRounds <= 0) return currentRound;
-            return Math.max(currentRound, completedRounds);
+            const currentRound = Math.floor(Number(live?.currentRound || 0));
+            return Number.isFinite(currentRound) && currentRound > 0 ? currentRound : 0;
         }
 
 
@@ -2690,12 +2819,15 @@ if (window._caorenModifiersEnabled !== true) {
             const currentPlayer = window._currentPlayer;
             const undercoverEnabled = isUndercoverModeEnabledFromState(state);
             const displayRound = liveDisplayRound(live);
-            const isDuel = state?.matchOptions?.matchMode === 'duel';
+            const isDuel = state?.matchOptions?.gameModeId === 'duel' || state?.matchOptions?.matchMode === 'duel';
             const scoreA = isDuel ? Number(live.scoreCT || 0) : Number(live.scoreA || 0);
             const scoreB = isDuel ? Number(live.scoreT || 0) : Number(live.scoreB || 0);
+            const roundLimit = getRoundLimitForState(state, live);
             const liveRoundText = live.duelWaitingForPlayers
                 ? '等待开赛'
-                : '第 ' + (displayRound || 0) + ' 回合｜目标 ' + (live.winTarget || 13) + ' 分';
+                : (isDuel
+                    ? '第 ' + (displayRound || 0) + ' / ' + roundLimit + ' 回合｜单挑强制打满'
+                    : '第 ' + (displayRound || 0) + ' / ' + roundLimit + ' 回合｜胜局目标 ' + (live.winTarget || Math.floor(roundLimit / 2) + 1) + ' 分');
             let html = '<div class="live-header" style="background:#263238; color:#fff;">' +
                 '<span style="font-size:24px;">赛况：A队 <span style="color:#64b5f6;">' + scoreA + '</span> - <span style="color:#ffb74d;">' + scoreB + '</span> B队</span> ' +
                 (isDuel ? '<span style="font-size:16px; color:#b0bec5;">CT=A队，T=B队</span> ' : '<span style="font-size:16px; color:#b0bec5;">CT/T参考：' + (live.scoreCT || 0) + ':' + (live.scoreT || 0) + '</span> ') +
@@ -2828,6 +2960,9 @@ if (window._caorenModifiersEnabled !== true) {
 
         // ===== 全局交互函数 =====
         async function advancePhase() {
+            if (window._currentGamePhase === 'PreGameSetup') {
+                return showLobbyNotice('正式比赛由 Gamemode 启动，请使用网页“开始 Warmup”或游戏内 /gamemode start。', 'error');
+            }
             const isDuelMode = window._currentGameState?.matchOptions?.matchMode === 'duel';
             if ((window._currentGamePhase === 'Lobby' || window._currentGamePhase === 'PreGameSetup') && isDuelMode) {
                 const select = document.getElementById('duel-live-map') || document.getElementById('match-option-duel-map');
@@ -3154,16 +3289,15 @@ if (window._caorenModifiersEnabled !== true) {
                 let titleHtml = '';
                 if (cell.levelLabel) {
                     const color = getLevelColor(cell.levelLabel);
-                    titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color};font-size:16px;">【${htmlEscape(cell.levelLabel)}】</div>`;
+                    const nRange = formatNRangeLabel(cell);
+                    const nRangeHtml = nRange ? `<span style="font-size:13px; color:#555; font-weight:normal; margin-left:4px;">${nRange}</span>` : '';
+                    titleHtml = `<div class="task-level-title${taskLevelClass(cell)}" style="color:${color};font-size:16px;">【${htmlEscape(cell.levelLabel)}】${nRangeHtml}</div>`;
                 }
-                const nInfo = (cell.nType && cell.nType !== 'none') ? `<div style="color:#d32f2f; font-size:14px; margin-top:8px; font-weight:bold;">[带N任务体系]</div>` : '';
-                const hintInfo = String(cell.hint || '').trim() ? '<span class="task-hint-availability">有提示</span>' : '';
+                const hasHint = !!String(cell.hint || '').trim();
 
-                html += `<div class="task-cell" style="${border} position:relative;" onclick="selectTplCell('${id}')">
-                                ${hintInfo}
+                html += `<div class="task-cell${hasHint ? ' task-special-blue' : ''}" style="${border} position:relative;" onclick="selectTplCell('${id}')">
                                 ${titleHtml}
                                 <div class="task-desc" style="flex:1; display:flex; align-items:center;"><div>${renderSafeTaskRichText(cell.description || '')}</div></div>
-                                ${nInfo}
                                 <div style="position:absolute; top:2px; left:5px; font-size:12px; color:#aaa; font-weight:bold;">${htmlEscape(id)}</div>
                              </div>`;
             });
@@ -3428,7 +3562,7 @@ if (window._caorenModifiersEnabled !== true) {
                     '3. 格子状态说明：<br/>' +
                     ' - <b style="color:green">淡绿色底色</b>：已完成 / N值已达成<br/>' +
                     ' - <b style="color:orange">淡橙色底色</b>：N任务正在推进（N ≥ 1 即可参与连线）<br/>' +
-                    ' - <b style="color:blue">蓝色包边</b>：已查看提示<br/>' +
+                    ' - <b style="color:blue">蓝色包边</b>：该任务有可查看的提示（查看后蓝框消失，并显示提示内容）<br/>' +
                     ' - <b style="color:purple">紫色包边</b>：已使用替换任务<br/>' +
                     ' - 灰暗底色：该任务已放弃',
                     '<b style="color:#d32f2f;font-size:20px;">【卧底说明 2/2】</b><br/><br/>' +

@@ -8,11 +8,13 @@ export interface IdentityRecord {
     displayName: string;
     steamId?: string;
     steamNickname?: string;
+    // 仅由可信 CS2 桥接路径写入；账号密码登录要求该标记存在。
+    gameBoundAt?: number;
     createdAt: number;
     updatedAt: number;
 }
 
-export type LoginAccountPasswordState = 'active' | 'recovery_required';
+export type LoginAccountPasswordState = 'active' | 'recovery_required' | 'steam_only';
 
 export interface LoginAccountRecord {
     identityId: string;

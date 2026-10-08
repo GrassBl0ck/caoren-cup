@@ -203,7 +203,7 @@ public class BladeAuraFeature : ICaorenFeature
             newHp = minHp;
         }
         CaorenCupUtils.ApplyModuleHealth(_plugin, victimPawn, newHp);
-        victimPawn.EmitSound("Player.Damage");
+        CaorenCup.Contracts.CaorenCupAudioAccess.Play("gameplay.blade.damage", source: victimPawn);
     }
 
     private void ApplyLinkedKnockback(CCSPlayerPawn victimPawn, CCSPlayerPawn attackerPawn, int damage)

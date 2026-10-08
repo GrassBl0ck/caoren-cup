@@ -12,7 +12,7 @@ for (const id of ['rules-join', 'rules-modes', 'rules-cs2', 'rules-conduct', 'ru
 }
 for (const text of [
   '账号密码登录',
-  '使用 <code>!cclogin</code>',
+  '使用 <code>/cclogin</code>',
   '没有账号或忘记凭据',
   '不平衡竞技',
   '卧底模式',

@@ -1,3 +1,4 @@
+// Load these stateful CommonJS modules through one loader after the test environment is set.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -52,9 +53,9 @@ test.after(() => fs.rmSync(runtimeDir, { recursive: true, force: true }));
 
 test('match socket ticket binds playerId only to the same authenticated identity and current session', async () => {
     const [socketModule, identityRuntime, sessionManager] = await Promise.all([
-        import('../socket-handlers.js'),
-        import('./identity-runtime.js'),
-        import('../session-manager.js'),
+        (require('../socket-handlers') as typeof import('../socket-handlers')),
+        (require('./identity-runtime') as typeof import('./identity-runtime')),
+        (require('../session-manager') as typeof import('../session-manager')),
     ]);
     await identityRuntime.initializeIdentityRuntime();
     const session = sessionManager.createInitialSession();
@@ -107,9 +108,9 @@ test('match socket ticket binds playerId only to the same authenticated identity
 
 test('disabled account cannot consume a match ticket', async () => {
     const [socketModule, identityRuntime, sessionManager] = await Promise.all([
-        import('../socket-handlers.js'),
-        import('./identity-runtime.js'),
-        import('../session-manager.js'),
+        (require('../socket-handlers') as typeof import('../socket-handlers')),
+        (require('./identity-runtime') as typeof import('./identity-runtime')),
+        (require('../session-manager') as typeof import('../session-manager')),
     ]);
     const session = sessionManager.createInitialSession();
     sessionManager.setSession(session);
@@ -139,9 +140,9 @@ test('disabled account cannot consume a match ticket', async () => {
 
 test('scoreboard new-round action clears all players and leaves every old-session membership', async () => {
     const [socketModule, identityRuntime, sessionManager] = await Promise.all([
-        import('../socket-handlers.js'),
-        import('./identity-runtime.js'),
-        import('../session-manager.js'),
+        (require('../socket-handlers') as typeof import('../socket-handlers')),
+        (require('./identity-runtime') as typeof import('./identity-runtime')),
+        (require('../session-manager') as typeof import('../session-manager')),
     ]);
     const session = sessionManager.createInitialSession();
     session.phase = GamePhase.Scoreboard;
@@ -181,9 +182,9 @@ test('scoreboard new-round action clears all players and leaves every old-sessio
 
 test('administrator login never restores a normal match player with the same name', async () => {
     const [socketModule, sessionManager, constants] = await Promise.all([
-        import('../socket-handlers.js'),
-        import('../session-manager.js'),
-        import('../game-constants.js'),
+        (require('../socket-handlers') as typeof import('../socket-handlers')),
+        (require('../session-manager') as typeof import('../session-manager')),
+        (require('../game-constants') as typeof import('../game-constants')),
     ]);
     const session = sessionManager.createInitialSession();
     session.players.player = { playerId: 'player', name: 'Same Name', role: 'Player', isReady: false };
@@ -205,8 +206,8 @@ test('administrator login never restores a normal match player with the same nam
 
 test('disconnecting one tab keeps the shared player online while another authenticated tab remains', async () => {
     const [socketModule, sessionManager] = await Promise.all([
-        import('../socket-handlers.js'),
-        import('../session-manager.js'),
+        (require('../socket-handlers') as typeof import('../socket-handlers')),
+        (require('../session-manager') as typeof import('../session-manager')),
     ]);
     const session = sessionManager.createInitialSession();
     session.players.player = { playerId: 'player', name: 'Multi Tab', role: 'Player', isReady: false, isOnline: true };

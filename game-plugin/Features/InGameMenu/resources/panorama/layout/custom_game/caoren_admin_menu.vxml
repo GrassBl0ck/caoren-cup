@@ -1,0 +1,780 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/csgostyles.vcss_c" />
+        <include src="s2r://panorama/styles/mainmenu.vcss_c" />
+        <include src="s2r://panorama/styles/settings/settings.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_admin_menu.vcss_c" />
+    </styles>
+    <Panel class="CaorenAdminRoot" hittest="false">
+        <Panel id="dialog" class="CaorenSettings UserAlpha10 Hidden" hittest="true">
+            <Panel class="CaorenMenuBody">
+                <Panel class="content-navbar__tabs CaorenPrimaryNav">
+                    <Panel class="content-navbar__tabs__center-container">
+                        <Panel id="admin_home_tab_host" class="CaorenButtonHost CaorenNavHost">
+                            <Button class="CaorenNavTab CaorenTabSelected CaorenMenuButton" id="admin_home_tab">
+                                <Label text="快捷指令" />
+                            </Button>
+                            <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                <Label class="CaorenHoverHintText" text="打开快捷指令" />
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_help_open_tab_host" class="CaorenButtonHost CaorenNavHost">
+                            <Button class="CaorenNavTab CaorenMenuButton" id="admin_help_open_tab">
+                                <Label text="指令帮助" />
+                            </Button>
+                            <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                <Label class="CaorenHoverHintText" text="查看管理员指令" />
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_settings_open_host" class="CaorenButtonHost CaorenNavHost">
+                            <Button class="CaorenNavTab CaorenMenuButton" id="admin_settings_open">
+                                <Label text="个人设置" />
+                            </Button>
+                            <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                <Label class="CaorenHoverHintText" text="调整自己的菜单和音量" />
+                            </Panel>
+                        </Panel>
+                    </Panel>
+                </Panel>
+                <Panel class="content-navbar__tabs content-navbar__tabs--dark CaorenSecondaryNav">
+                    <Panel class="content-navbar__tabs__center-container">
+                        <Panel class="content-navbar__tabs__btn CaorenTabSelected">
+                            <Label text="{s:subsection}" />
+                        </Panel>
+                    </Panel>
+                </Panel>
+                <Panel class="SettingsMenuTab Active CaorenSettingsPage">
+                    <Panel class="SettingsBackground CaorenSettingsContent">
+                        <Panel id="admin_home" class="CaorenMenuSection">
+                            <Panel class="SettingsSectionTitleContianer CaorenSectionHeader">
+                                <Label class="SettingsSectionTitleLabel" text="广播" />
+                            </Panel>
+                            <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
+                                <Panel class="CaorenSettingDescription">
+                                    <Label class="CaorenSettingName" text="全服广播" />
+                                    <Label class="CaorenSettingScope" text="{s:status}" />
+                                </Panel>
+                                <Panel id="menu_btn_0_host" class="CaorenButtonHost CaorenActionHost">
+                                    <Button id="menu_btn_0" class="CaorenSettingAction CaorenMenuButton">
+                                        <Label text="{s:btn0}" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="向全服发送广播" />
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                            <Panel class="content-navbar__seperator CaorenRowSeparator" />
+                            <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
+                                <Panel class="CaorenSettingDescription">
+                                    <Label class="CaorenSettingName" text="投票系统" />
+                                    <Label class="CaorenSettingScope" text="影响范围：全服 · 管理员专属" />
+                                </Panel>
+                                <Panel id="admin_vote_open_host" class="CaorenButtonHost CaorenActionHost">
+                                    <Button id="admin_vote_open" class="CaorenSettingAction CaorenMenuButton">
+                                        <Label class="" text="管理投票" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="管理全服投票" />
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+<Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
+<Panel class="CaorenSettingDescription"><Label class="CaorenSettingName" text="音乐与音频广播" />
+<Label class="CaorenSettingScope" text="影响范围：全服 · 管理员控制" /></Panel><Panel id="admin_audio_open_host" class="CaorenButtonHost CaorenActionHost">
+<Button id="admin_audio_open" class="CaorenMenuButton"><Label text="管理音频" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="管理音乐和音频广播" /></Panel>
+</Panel></Panel>
+                        </Panel>
+                        <Panel id="admin_audio" class="CaorenMenuSection Hidden">
+<Label class="SettingsSectionTitleLabel" text="音乐与音频广播" />
+<Label class="CaorenSettingScope" text="影响范围：全服 · 两通道独立 · 个人音量只影响自己" />
+<Label class="CaorenSettingName" text="音乐" />
+<Label class="CaorenSettingScope" text="{s:audio_music_state}" />
+<Label class="CaorenSettingScope" text="{s:audio_music_cycle}" />
+<Panel class="CaorenAudioControls">
+<Panel id="audio_music_pause_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_music_pause" class="CaorenMenuButton"><Label text="暂停" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="暂停当前通道" /></Panel>
+</Panel>
+<Panel id="audio_music_resume_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_music_resume" class="CaorenMenuButton"><Label text="恢复" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="从原进度恢复" /></Panel>
+</Panel>
+<Panel id="audio_music_stop_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_music_stop" class="CaorenMenuButton"><Label text="停止" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="停止当前通道" /></Panel>
+</Panel>
+<Panel id="audio_music_loop_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_music_loop" class="CaorenMenuButton"><Label text="{s:audio_music_loop_label}" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="切换循环，关闭后本轮播完停止" /></Panel>
+</Panel>
+</Panel>
+<Label class="CaorenSettingName" text="广播" />
+<Label class="CaorenSettingScope" text="{s:audio_broadcast_state}" />
+<Label class="CaorenSettingScope" text="{s:audio_broadcast_cycle}" />
+<Panel class="CaorenAudioControls">
+<Panel id="audio_broadcast_pause_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_broadcast_pause" class="CaorenMenuButton"><Label text="暂停" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="暂停当前通道" /></Panel>
+</Panel>
+<Panel id="audio_broadcast_resume_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_broadcast_resume" class="CaorenMenuButton"><Label text="恢复" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="从原进度恢复" /></Panel>
+</Panel>
+<Panel id="audio_broadcast_stop_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_broadcast_stop" class="CaorenMenuButton"><Label text="停止" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="停止当前通道" /></Panel>
+</Panel>
+<Panel id="audio_broadcast_loop_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_broadcast_loop" class="CaorenMenuButton"><Label text="{s:audio_broadcast_loop_label}" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="切换循环，关闭后本轮播完停止" /></Panel>
+</Panel>
+</Panel>
+<Label class="CaorenSettingScope" text="{s:audio_library_page}" />
+<Panel id="audio_item_0_host" class="CaorenButtonHost CaorenAudioItem">
+<Button id="audio_item_0" class="CaorenMenuButton"><Label text="{s:audio_name0}" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="播放到该素材登记的通道" /></Panel>
+</Panel>
+<Panel id="audio_item_1_host" class="CaorenButtonHost CaorenAudioItem">
+<Button id="audio_item_1" class="CaorenMenuButton"><Label text="{s:audio_name1}" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="播放到该素材登记的通道" /></Panel>
+</Panel>
+<Panel id="audio_item_2_host" class="CaorenButtonHost CaorenAudioItem">
+<Button id="audio_item_2" class="CaorenMenuButton"><Label text="{s:audio_name2}" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="播放到该素材登记的通道" /></Panel>
+</Panel>
+<Panel id="audio_item_3_host" class="CaorenButtonHost CaorenAudioItem">
+<Button id="audio_item_3" class="CaorenMenuButton"><Label text="{s:audio_name3}" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="播放到该素材登记的通道" /></Panel>
+</Panel>
+<Panel id="audio_item_4_host" class="CaorenButtonHost CaorenAudioItem">
+<Button id="audio_item_4" class="CaorenMenuButton"><Label text="{s:audio_name4}" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="播放到该素材登记的通道" /></Panel>
+</Panel>
+<Panel id="audio_item_5_host" class="CaorenButtonHost CaorenAudioItem">
+<Button id="audio_item_5" class="CaorenMenuButton"><Label text="{s:audio_name5}" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="播放到该素材登记的通道" /></Panel>
+</Panel>
+<Panel class="CaorenAudioControls">
+<Panel id="audio_prev_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_prev" class="CaorenMenuButton"><Label text="上一页" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="查看上一页素材" /></Panel>
+</Panel>
+<Panel id="audio_next_host" class="CaorenButtonHost CaorenAudioButton">
+<Button id="audio_next" class="CaorenMenuButton"><Label text="下一页" /></Button>
+<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="查看下一页素材" /></Panel>
+</Panel>
+</Panel>
+</Panel>
+<Panel id="admin_vote_management" class="CaorenMenuSection Hidden">
+                            <Label class="SettingsSectionTitleLabel" text="投票管理" />
+                            <Label class="CaorenVoteQuestion" text="{s:vote_admin_question}" />
+                            <Label class="CaorenVoteState" text="{s:vote_admin_state}" />
+                            <Label class="CaorenSettingScope" text="影响范围：全服 · 30 秒 · 非管理员真人投票" />
+                            <Panel class="CaorenVoteActions">
+                                <Panel id="vote_create_host" class="CaorenButtonHost CaorenActionHost">
+                                    <Button id="vote_create" class="CaorenMenuButton">
+                                        <Label class="" text="{s:vote_create_label}" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="填写投票问题和选项" />
+                                    </Panel>
+                                </Panel>
+                                <Panel id="vote_cancel_host" class="CaorenButtonHost CaorenActionHost">
+                                    <Button id="vote_cancel" class="Negative CaorenMenuButton">
+                                        <Label class="" text="取消当前投票" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="取消正在进行的投票" />
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_vote_preview" class="CaorenMenuSection Hidden">
+                            <Label class="SettingsSectionTitleLabel" text="确认发起投票" />
+                            <Label class="CaorenVoteQuestion" text="{s:vote_draft_question}" />
+                            <Label class="CaorenVoteChoice" text="{s:vote_draft_option0}" id="vote_draft_option0" />
+                            <Label class="CaorenVoteChoice" text="{s:vote_draft_option1}" id="vote_draft_option1" />
+                            <Label class="CaorenVoteChoice" text="{s:vote_draft_option2}" id="vote_draft_option2" />
+                            <Label class="CaorenVoteChoice" text="{s:vote_draft_option3}" id="vote_draft_option3" />
+                            <Label class="CaorenSettingScope" text="影响范围：全服 · 确认后立即开始，持续 30 秒" />
+                            <Panel class="CaorenVoteActions">
+                                <Panel id="vote_start_host" class="CaorenButtonHost CaorenActionHost">
+                                    <Button id="vote_start" class="CaorenMenuButton">
+                                        <Label class="" text="确认发起" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="向全服发起投票" />
+                                    </Panel>
+                                </Panel>
+                                <Panel id="vote_discard_host" class="CaorenButtonHost CaorenActionHost">
+                                    <Button id="vote_discard" class="CaorenMenuButton">
+                                        <Label class="" text="丢弃草稿" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="丢弃这份投票草稿" />
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_vote_cancel" class="CaorenMenuSection Hidden">
+                            <Label class="SettingsSectionTitleLabel" text="确认取消投票" />
+                            <Label class="CaorenVoteQuestion" text="{s:vote_cancel_question}" />
+                            <Label class="CaorenVoteState" text="确认取消本轮投票？取消后不产生胜出选项。" />
+                            <Panel class="CaorenVoteActions">
+                                <Panel id="vote_cancel_confirm_host" class="CaorenButtonHost CaorenActionHost">
+                                    <Button id="vote_cancel_confirm" class="Negative CaorenMenuButton">
+                                        <Label class="" text="确认取消" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="确认取消当前投票" />
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_help_list" class="CaorenMenuSection Hidden">
+                            <Label class="SettingsSectionTitleLabel" text="指令帮助" />
+                            <Label class="CaorenGuidePage" text="{s:guide_page}" />
+                            <Panel id="guide_item_0_host" class="CaorenButtonHost CaorenGuideHost">
+                                <Button id="guide_item_0" class="CaorenGuideItem CaorenMenuButton">
+                                    <Label class="CaorenGuideName" text="{s:guide_name0}" />
+                                    <Label class="CaorenGuideSummary" text="{s:guide_summary0}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看指令用法和示例" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="guide_item_1_host" class="CaorenButtonHost CaorenGuideHost">
+                                <Button id="guide_item_1" class="CaorenGuideItem CaorenMenuButton">
+                                    <Label class="CaorenGuideName" text="{s:guide_name1}" />
+                                    <Label class="CaorenGuideSummary" text="{s:guide_summary1}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看指令用法和示例" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="guide_item_2_host" class="CaorenButtonHost CaorenGuideHost">
+                                <Button id="guide_item_2" class="CaorenGuideItem CaorenMenuButton">
+                                    <Label class="CaorenGuideName" text="{s:guide_name2}" />
+                                    <Label class="CaorenGuideSummary" text="{s:guide_summary2}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看指令用法和示例" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="guide_item_3_host" class="CaorenButtonHost CaorenGuideHost">
+                                <Button id="guide_item_3" class="CaorenGuideItem CaorenMenuButton">
+                                    <Label class="CaorenGuideName" text="{s:guide_name3}" />
+                                    <Label class="CaorenGuideSummary" text="{s:guide_summary3}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看指令用法和示例" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="guide_item_4_host" class="CaorenButtonHost CaorenGuideHost">
+                                <Button id="guide_item_4" class="CaorenGuideItem CaorenMenuButton">
+                                    <Label class="CaorenGuideName" text="{s:guide_name4}" />
+                                    <Label class="CaorenGuideSummary" text="{s:guide_summary4}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看指令用法和示例" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="guide_item_5_host" class="CaorenButtonHost CaorenGuideHost">
+                                <Button id="guide_item_5" class="CaorenGuideItem CaorenMenuButton">
+                                    <Label class="CaorenGuideName" text="{s:guide_name5}" />
+                                    <Label class="CaorenGuideSummary" text="{s:guide_summary5}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看指令用法和示例" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="guide_item_6_host" class="CaorenButtonHost CaorenGuideHost">
+                                <Button id="guide_item_6" class="CaorenGuideItem CaorenMenuButton">
+                                    <Label class="CaorenGuideName" text="{s:guide_name6}" />
+                                    <Label class="CaorenGuideSummary" text="{s:guide_summary6}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看指令用法和示例" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="guide_item_7_host" class="CaorenButtonHost CaorenGuideHost">
+                                <Button id="guide_item_7" class="CaorenGuideItem CaorenMenuButton">
+                                    <Label class="CaorenGuideName" text="{s:guide_name7}" />
+                                    <Label class="CaorenGuideSummary" text="{s:guide_summary7}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看指令用法和示例" />
+                                </Panel>
+                            </Panel>
+                            <Panel class="CaorenVoteActions">
+                                <Panel id="guide_prev_host" class="CaorenButtonHost CaorenPageHost">
+                                    <Button id="guide_prev" class="CaorenMenuButton">
+                                        <Label class="" text="上一页" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="查看上一页" />
+                                    </Panel>
+                                </Panel>
+                                <Panel id="guide_next_host" class="CaorenButtonHost CaorenPageHost">
+                                    <Button id="guide_next" class="CaorenMenuButton">
+                                        <Label class="" text="下一页" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="查看下一页" />
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_help_detail" class="CaorenMenuSection Hidden">
+                            <Label class="SettingsSectionTitleLabel" text="{s:guide_detail_name}" />
+                            <Label class="CaorenVoteQuestion" text="{s:guide_detail_summary}" />
+                            <Label class="CaorenGuideMeta" text="{s:guide_detail_meta}" />
+                            <Panel class="CaorenDetailRows" hittest="false">
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_0">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_0" text="{s:guide_help_0_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_1" text="{s:guide_help_0_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_2" text="{s:guide_help_0_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_3" text="{s:guide_help_0_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_4" text="{s:guide_help_0_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_5" text="{s:guide_help_0_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_6" text="{s:guide_help_0_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_7" text="{s:guide_help_0_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_8" text="{s:guide_help_0_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_9" text="{s:guide_help_0_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_10" text="{s:guide_help_0_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_11" text="{s:guide_help_0_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_12" text="{s:guide_help_0_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_13" text="{s:guide_help_0_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_14" text="{s:guide_help_0_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_15" text="{s:guide_help_0_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_16" text="{s:guide_help_0_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_17" text="{s:guide_help_0_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_18" text="{s:guide_help_0_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_19" text="{s:guide_help_0_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_20" text="{s:guide_help_0_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_21" text="{s:guide_help_0_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_22" text="{s:guide_help_0_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_0_23" text="{s:guide_help_0_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_1">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_0" text="{s:guide_help_1_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_1" text="{s:guide_help_1_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_2" text="{s:guide_help_1_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_3" text="{s:guide_help_1_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_4" text="{s:guide_help_1_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_5" text="{s:guide_help_1_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_6" text="{s:guide_help_1_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_7" text="{s:guide_help_1_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_8" text="{s:guide_help_1_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_9" text="{s:guide_help_1_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_10" text="{s:guide_help_1_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_11" text="{s:guide_help_1_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_12" text="{s:guide_help_1_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_13" text="{s:guide_help_1_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_14" text="{s:guide_help_1_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_15" text="{s:guide_help_1_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_16" text="{s:guide_help_1_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_17" text="{s:guide_help_1_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_18" text="{s:guide_help_1_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_19" text="{s:guide_help_1_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_20" text="{s:guide_help_1_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_21" text="{s:guide_help_1_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_22" text="{s:guide_help_1_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_1_23" text="{s:guide_help_1_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_2">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_0" text="{s:guide_help_2_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_1" text="{s:guide_help_2_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_2" text="{s:guide_help_2_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_3" text="{s:guide_help_2_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_4" text="{s:guide_help_2_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_5" text="{s:guide_help_2_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_6" text="{s:guide_help_2_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_7" text="{s:guide_help_2_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_8" text="{s:guide_help_2_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_9" text="{s:guide_help_2_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_10" text="{s:guide_help_2_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_11" text="{s:guide_help_2_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_12" text="{s:guide_help_2_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_13" text="{s:guide_help_2_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_14" text="{s:guide_help_2_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_15" text="{s:guide_help_2_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_16" text="{s:guide_help_2_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_17" text="{s:guide_help_2_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_18" text="{s:guide_help_2_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_19" text="{s:guide_help_2_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_20" text="{s:guide_help_2_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_21" text="{s:guide_help_2_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_22" text="{s:guide_help_2_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_2_23" text="{s:guide_help_2_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_3">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_0" text="{s:guide_help_3_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_1" text="{s:guide_help_3_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_2" text="{s:guide_help_3_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_3" text="{s:guide_help_3_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_4" text="{s:guide_help_3_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_5" text="{s:guide_help_3_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_6" text="{s:guide_help_3_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_7" text="{s:guide_help_3_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_8" text="{s:guide_help_3_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_9" text="{s:guide_help_3_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_10" text="{s:guide_help_3_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_11" text="{s:guide_help_3_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_12" text="{s:guide_help_3_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_13" text="{s:guide_help_3_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_14" text="{s:guide_help_3_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_15" text="{s:guide_help_3_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_16" text="{s:guide_help_3_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_17" text="{s:guide_help_3_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_18" text="{s:guide_help_3_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_19" text="{s:guide_help_3_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_20" text="{s:guide_help_3_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_21" text="{s:guide_help_3_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_22" text="{s:guide_help_3_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_3_23" text="{s:guide_help_3_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_4">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_0" text="{s:guide_help_4_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_1" text="{s:guide_help_4_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_2" text="{s:guide_help_4_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_3" text="{s:guide_help_4_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_4" text="{s:guide_help_4_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_5" text="{s:guide_help_4_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_6" text="{s:guide_help_4_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_7" text="{s:guide_help_4_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_8" text="{s:guide_help_4_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_9" text="{s:guide_help_4_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_10" text="{s:guide_help_4_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_11" text="{s:guide_help_4_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_12" text="{s:guide_help_4_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_13" text="{s:guide_help_4_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_14" text="{s:guide_help_4_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_15" text="{s:guide_help_4_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_16" text="{s:guide_help_4_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_17" text="{s:guide_help_4_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_18" text="{s:guide_help_4_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_19" text="{s:guide_help_4_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_20" text="{s:guide_help_4_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_21" text="{s:guide_help_4_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_22" text="{s:guide_help_4_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_4_23" text="{s:guide_help_4_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_5">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_0" text="{s:guide_help_5_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_1" text="{s:guide_help_5_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_2" text="{s:guide_help_5_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_3" text="{s:guide_help_5_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_4" text="{s:guide_help_5_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_5" text="{s:guide_help_5_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_6" text="{s:guide_help_5_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_7" text="{s:guide_help_5_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_8" text="{s:guide_help_5_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_9" text="{s:guide_help_5_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_10" text="{s:guide_help_5_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_11" text="{s:guide_help_5_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_12" text="{s:guide_help_5_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_13" text="{s:guide_help_5_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_14" text="{s:guide_help_5_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_15" text="{s:guide_help_5_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_16" text="{s:guide_help_5_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_17" text="{s:guide_help_5_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_18" text="{s:guide_help_5_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_19" text="{s:guide_help_5_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_20" text="{s:guide_help_5_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_21" text="{s:guide_help_5_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_22" text="{s:guide_help_5_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_5_23" text="{s:guide_help_5_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_6">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_0" text="{s:guide_help_6_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_1" text="{s:guide_help_6_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_2" text="{s:guide_help_6_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_3" text="{s:guide_help_6_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_4" text="{s:guide_help_6_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_5" text="{s:guide_help_6_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_6" text="{s:guide_help_6_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_7" text="{s:guide_help_6_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_8" text="{s:guide_help_6_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_9" text="{s:guide_help_6_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_10" text="{s:guide_help_6_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_11" text="{s:guide_help_6_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_12" text="{s:guide_help_6_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_13" text="{s:guide_help_6_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_14" text="{s:guide_help_6_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_15" text="{s:guide_help_6_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_16" text="{s:guide_help_6_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_17" text="{s:guide_help_6_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_18" text="{s:guide_help_6_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_19" text="{s:guide_help_6_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_20" text="{s:guide_help_6_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_21" text="{s:guide_help_6_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_22" text="{s:guide_help_6_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_6_23" text="{s:guide_help_6_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_7">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_0" text="{s:guide_help_7_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_1" text="{s:guide_help_7_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_2" text="{s:guide_help_7_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_3" text="{s:guide_help_7_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_4" text="{s:guide_help_7_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_5" text="{s:guide_help_7_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_6" text="{s:guide_help_7_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_7" text="{s:guide_help_7_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_8" text="{s:guide_help_7_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_9" text="{s:guide_help_7_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_10" text="{s:guide_help_7_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_11" text="{s:guide_help_7_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_12" text="{s:guide_help_7_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_13" text="{s:guide_help_7_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_14" text="{s:guide_help_7_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_15" text="{s:guide_help_7_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_16" text="{s:guide_help_7_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_17" text="{s:guide_help_7_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_18" text="{s:guide_help_7_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_19" text="{s:guide_help_7_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_20" text="{s:guide_help_7_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_21" text="{s:guide_help_7_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_22" text="{s:guide_help_7_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_7_23" text="{s:guide_help_7_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_8">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_0" text="{s:guide_help_8_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_1" text="{s:guide_help_8_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_2" text="{s:guide_help_8_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_3" text="{s:guide_help_8_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_4" text="{s:guide_help_8_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_5" text="{s:guide_help_8_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_6" text="{s:guide_help_8_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_7" text="{s:guide_help_8_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_8" text="{s:guide_help_8_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_9" text="{s:guide_help_8_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_10" text="{s:guide_help_8_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_11" text="{s:guide_help_8_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_12" text="{s:guide_help_8_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_13" text="{s:guide_help_8_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_14" text="{s:guide_help_8_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_15" text="{s:guide_help_8_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_16" text="{s:guide_help_8_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_17" text="{s:guide_help_8_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_18" text="{s:guide_help_8_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_19" text="{s:guide_help_8_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_20" text="{s:guide_help_8_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_21" text="{s:guide_help_8_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_22" text="{s:guide_help_8_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_8_23" text="{s:guide_help_8_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_9">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_0" text="{s:guide_help_9_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_1" text="{s:guide_help_9_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_2" text="{s:guide_help_9_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_3" text="{s:guide_help_9_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_4" text="{s:guide_help_9_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_5" text="{s:guide_help_9_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_6" text="{s:guide_help_9_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_7" text="{s:guide_help_9_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_8" text="{s:guide_help_9_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_9" text="{s:guide_help_9_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_10" text="{s:guide_help_9_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_11" text="{s:guide_help_9_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_12" text="{s:guide_help_9_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_13" text="{s:guide_help_9_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_14" text="{s:guide_help_9_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_15" text="{s:guide_help_9_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_16" text="{s:guide_help_9_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_17" text="{s:guide_help_9_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_18" text="{s:guide_help_9_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_19" text="{s:guide_help_9_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_20" text="{s:guide_help_9_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_21" text="{s:guide_help_9_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_22" text="{s:guide_help_9_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_9_23" text="{s:guide_help_9_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_10">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_0" text="{s:guide_help_10_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_1" text="{s:guide_help_10_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_2" text="{s:guide_help_10_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_3" text="{s:guide_help_10_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_4" text="{s:guide_help_10_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_5" text="{s:guide_help_10_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_6" text="{s:guide_help_10_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_7" text="{s:guide_help_10_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_8" text="{s:guide_help_10_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_9" text="{s:guide_help_10_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_10" text="{s:guide_help_10_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_11" text="{s:guide_help_10_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_12" text="{s:guide_help_10_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_13" text="{s:guide_help_10_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_14" text="{s:guide_help_10_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_15" text="{s:guide_help_10_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_16" text="{s:guide_help_10_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_17" text="{s:guide_help_10_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_18" text="{s:guide_help_10_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_19" text="{s:guide_help_10_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_20" text="{s:guide_help_10_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_21" text="{s:guide_help_10_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_22" text="{s:guide_help_10_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_10_23" text="{s:guide_help_10_23}" />
+                                </Panel>
+                                <Panel class="CaorenDetailLine Hidden" hittest="false" id="guide_help_line_11">
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_0" text="{s:guide_help_11_0}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_1" text="{s:guide_help_11_1}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_2" text="{s:guide_help_11_2}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_3" text="{s:guide_help_11_3}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_4" text="{s:guide_help_11_4}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_5" text="{s:guide_help_11_5}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_6" text="{s:guide_help_11_6}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_7" text="{s:guide_help_11_7}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_8" text="{s:guide_help_11_8}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_9" text="{s:guide_help_11_9}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_10" text="{s:guide_help_11_10}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_11" text="{s:guide_help_11_11}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_12" text="{s:guide_help_11_12}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_13" text="{s:guide_help_11_13}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_14" text="{s:guide_help_11_14}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_15" text="{s:guide_help_11_15}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_16" text="{s:guide_help_11_16}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_17" text="{s:guide_help_11_17}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_18" text="{s:guide_help_11_18}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_19" text="{s:guide_help_11_19}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_20" text="{s:guide_help_11_20}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_21" text="{s:guide_help_11_21}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_22" text="{s:guide_help_11_22}" />
+                                    <Label class="CaorenDetailFragment Hidden" id="guide_help_part_11_23" text="{s:guide_help_11_23}" />
+                                </Panel>
+                            </Panel>
+                            <Label class="CaorenGuidePage" text="{s:guide_detail_page}" />
+                            <Panel class="CaorenVoteActions">
+                                <Panel id="guide_detail_prev_host" class="CaorenButtonHost CaorenPageHost">
+                                    <Button id="guide_detail_prev" class="CaorenMenuButton">
+                                        <Label class="" text="上一页" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="查看上一页" />
+                                    </Panel>
+                                </Panel>
+                                <Panel id="guide_detail_next_host" class="CaorenButtonHost CaorenPageHost">
+                                    <Button id="guide_detail_next" class="CaorenMenuButton">
+                                        <Label class="" text="下一页" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="查看下一页" />
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_settings" class="CaorenMenuSection Hidden">
+                            <Label text="个人设置" class="SettingsSectionTitleLabel" />
+                            <Label text="仅影响自己的菜单；两个入口共用并自动保存。 影响范围：自己。" class="CaorenGuidePage" />
+                            <Panel class="CaorenPreferencesRow">
+                                <Panel class="CaorenPreferenceDescription">
+                                    <Label text="背景透明度" class="CaorenSettingName" />
+                                    <Label text="0% 完全不透明，100% 完全透明；文字不受影响。" class="CaorenSettingScope" />
+                                </Panel>
+                                <Panel class="CaorenNumberSteps">
+                                    <Panel id="settings_alpha_minus5_host" class="CaorenButtonHost CaorenNumberHost CaorenNumberSlotMinus5">
+                                        <Button class="CaorenNumberStep CaorenMenuButton" id="settings_alpha_minus5">
+                                            <Label text="−5" />
+                                        </Button>
+                                        <Panel class="CaorenHoverHint" hittest="false">
+                                            <Label class="CaorenHoverHintText" text="减少透明度5%" />
+                                        </Panel>
+                                    </Panel>
+                                    <Panel id="settings_alpha_minus1_host" class="CaorenButtonHost CaorenNumberHost CaorenNumberSlotMinus1">
+                                        <Button class="CaorenNumberStep CaorenMenuButton" id="settings_alpha_minus1">
+                                            <Label text="−1" />
+                                        </Button>
+                                        <Panel class="CaorenHoverHint" hittest="false">
+                                            <Label class="CaorenHoverHintText" text="减少透明度1%" />
+                                        </Panel>
+                                    </Panel>
+                                    <Label class="CaorenPreferenceValue CaorenNumberCurrent" text="{s:settings_alpha}" />
+                                    <Panel id="settings_alpha_plus1_host" class="CaorenButtonHost CaorenNumberHost CaorenNumberSlotPlus1">
+                                        <Button class="CaorenNumberStep CaorenMenuButton" id="settings_alpha_plus1">
+                                            <Label text="+1" />
+                                        </Button>
+                                        <Panel class="CaorenHoverHint" hittest="false">
+                                            <Label class="CaorenHoverHintText" text="增加透明度1%" />
+                                        </Panel>
+                                    </Panel>
+                                    <Panel id="settings_alpha_plus5_host" class="CaorenButtonHost CaorenNumberHost CaorenNumberSlotPlus5">
+                                        <Button class="CaorenNumberStep CaorenMenuButton" id="settings_alpha_plus5">
+                                            <Label text="+5" />
+                                        </Button>
+                                        <Panel class="CaorenHoverHint" hittest="false">
+                                            <Label class="CaorenHoverHintText" text="增加透明度5%" />
+                                        </Panel>
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                            <Panel class="CaorenPreferencesRow">
+                                <Panel class="CaorenPreferenceDescription">
+                                    <Label text="草人杯音量" class="CaorenSettingName" />
+                                    <Label text="控制已接入统一音频服务的草人杯声音。" class="CaorenSettingScope" />
+                                </Panel>
+                                <Panel class="CaorenNumberSteps">
+                                    <Panel id="settings_volume_minus5_host" class="CaorenButtonHost CaorenNumberHost CaorenNumberSlotMinus5">
+                                        <Button class="CaorenNumberStep CaorenMenuButton" id="settings_volume_minus5">
+                                            <Label text="−5" />
+                                        </Button>
+                                        <Panel class="CaorenHoverHint" hittest="false">
+                                            <Label class="CaorenHoverHintText" text="减少草人杯音量5%" />
+                                        </Panel>
+                                    </Panel>
+                                    <Panel id="settings_volume_minus1_host" class="CaorenButtonHost CaorenNumberHost CaorenNumberSlotMinus1">
+                                        <Button class="CaorenNumberStep CaorenMenuButton" id="settings_volume_minus1">
+                                            <Label text="−1" />
+                                        </Button>
+                                        <Panel class="CaorenHoverHint" hittest="false">
+                                            <Label class="CaorenHoverHintText" text="减少草人杯音量1%" />
+                                        </Panel>
+                                    </Panel>
+                                    <Label class="CaorenPreferenceValue CaorenNumberCurrent" text="{s:settings_volume}" />
+                                    <Panel id="settings_volume_plus1_host" class="CaorenButtonHost CaorenNumberHost CaorenNumberSlotPlus1">
+                                        <Button class="CaorenNumberStep CaorenMenuButton" id="settings_volume_plus1">
+                                            <Label text="+1" />
+                                        </Button>
+                                        <Panel class="CaorenHoverHint" hittest="false">
+                                            <Label class="CaorenHoverHintText" text="增加草人杯音量1%" />
+                                        </Panel>
+                                    </Panel>
+                                    <Panel id="settings_volume_plus5_host" class="CaorenButtonHost CaorenNumberHost CaorenNumberSlotPlus5">
+                                        <Button class="CaorenNumberStep CaorenMenuButton" id="settings_volume_plus5">
+                                            <Label text="+5" />
+                                        </Button>
+                                        <Panel class="CaorenHoverHint" hittest="false">
+                                            <Label class="CaorenHoverHintText" text="增加草人杯音量5%" />
+                                        </Panel>
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                    </Panel>
+                </Panel>
+            </Panel>
+            <Panel class="CaorenNavigationOverlay" hittest="false">
+                <Panel id="admin_back_host" class="CaorenButtonHost CaorenBackHost Hidden">
+                    <Button id="admin_back" class="CaorenBackArrow Hidden CaorenMenuButton">
+                        <Panel class="CaorenBackContent" hittest="false">
+                            <Label class="CaorenBackSymbol" text="‹" />
+                            <Label class="CaorenBackText" text="返回" />
+                        </Panel>
+                    </Button>
+                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                        <Label class="CaorenHoverHintText" text="返回上一级" />
+                    </Panel>
+                </Panel>
+                <Panel id="admin_exit_host" class="CaorenButtonHost CaorenExitHost">
+                    <Button id="admin_exit" class="CaorenExitButton CaorenMenuButton">
+                        <Label text="X" class="CaorenExitGlyph" />
+                    </Button>
+                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                        <Label class="CaorenHoverHintText" text="退出菜单，返回游戏" />
+                    </Panel>
+                </Panel>
+                <Label class="CaorenBottomBrand" text="CAORENCUP · 管理员" />
+            </Panel>
+        </Panel>
+    </Panel>
+</root>

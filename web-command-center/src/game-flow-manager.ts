@@ -39,7 +39,6 @@ import {
     DUEL_DEFAULT_MAP,
     DUEL_DEFAULT_ROUND_TIME_MINUTES,
     DUEL_DEFAULT_WORKSHOP_ID,
-    getDuelTotalRounds,
     normalizeDuelMap,
     normalizeDuelRoundTimeMinutes,
     normalizeDuelRounds,
@@ -47,6 +46,8 @@ import {
     resolveDuelMapConfig,
 } from './duel-config';
 import { normalizeUnbalancedRosterOptions, validateUnbalancedRoster, validateUnbalancedRosterForTeamLock } from './unbalanced-roster';
+import { GAME_MODE_MANIFESTS, normalizeGameModeId, normalizeGameModeOverrides, modeUsesUndercoverFlow, modeUsesUnbalancedRoster } from './game-mode';
+import { getGameModeRoundRules } from './game-mode-rounds';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import {
     clearFlowUndoHistory,
@@ -444,7 +445,10 @@ const createEmptyLiveGameData = (): LiveGameData => ({
     pluginConnected: false,
     winnerTeam: null,
     matchFinished: false,
-    winTarget: 13,
+    winTarget: 0,
+    roundLimit: 0,
+    halftimeEnabled: false,
+    halftimeRound: 0,
     lastScoredRound: 0,
     rawPluginRound: 0,
     roundBaseOffset: undefined,
@@ -581,37 +585,32 @@ const updateMatchFinishState = () => {
     if (!session.liveGameData) return;
     const scoreA = session.liveGameData.scoreA || 0;
     const scoreB = session.liveGameData.scoreB || 0;
-    const winTarget = getRequiredWinTarget(scoreA, scoreB);
+    const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
+    const winTarget = rules.winTarget;
     const winner = getMatchWinner(scoreA, scoreB);
+    syncCurrentRoundFromScores(session.liveGameData);
+    const completedRound = nonNegativeInt(session.liveGameData.lastScoredRound);
+    session.liveGameData.roundLimit = rules.maxRounds;
+    session.liveGameData.halftimeEnabled = rules.halftimeEnabled;
+    session.liveGameData.halftimeRound = rules.halftimeRound;
     session.liveGameData.winTarget = winTarget;
     session.liveGameData.winnerTeam = winner;
-    session.liveGameData.matchFinished = session.matchOptions?.matchMode === 'duel'
-        ? (session.liveGameData.scoreA + session.liveGameData.scoreB) >= winTarget
-        : !!winner;
-    syncCurrentRoundFromScores(session.liveGameData);
-};
-
-const getRequiredWinTarget = (scoreA: number, scoreB: number): number => {
-    const session = getSession();
-    if (session.matchOptions?.matchMode === 'duel') {
-        return getDuelTotalRounds(session.matchOptions.duelRounds);
-    }
-    const minScore = Math.min(scoreA, scoreB);
-    if (minScore < 12) return 13;
-    return 16 + Math.floor((minScore - 12) / 3) * 3;
+    session.liveGameData.matchFinished = rules.isDuel
+        ? (scoreA + scoreB) >= rules.maxRounds
+        : !!winner || completedRound >= rules.maxRounds;
 };
 
 const getMatchWinner = (scoreA: number, scoreB: number): RosterTeam | null => {
-    const target = getRequiredWinTarget(scoreA, scoreB);
     const session = getSession();
-    if (session.matchOptions?.matchMode === 'duel') {
-        if (scoreA + scoreB < target) return null;
+    const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
+    if (rules.isDuel) {
+        if (scoreA + scoreB < rules.maxRounds) return null;
         if (scoreA > scoreB) return 'A';
         if (scoreB > scoreA) return 'B';
         return null;
     }
-    if (scoreA >= target && scoreA > scoreB) return 'A';
-    if (scoreB >= target && scoreB > scoreA) return 'B';
+    if (scoreA >= rules.winTarget && scoreA > scoreB) return 'A';
+    if (scoreB >= rules.winTarget && scoreB > scoreA) return 'B';
     return null;
 };
 
@@ -619,13 +618,16 @@ const resolveRosterTeamByInitialSide = (side: Team, roundNumber?: number): Roste
     const session = getSession();
     if (!session.selectedSide) return null;
     let teamASide: Team = session.selectedSide;
-    if (session.matchOptions?.matchMode === 'duel') {
+    const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
+    if (rules.isDuel) {
         if (side === 'CT') return 'A';
         if (side === 'T') return 'B';
         return null;
     }
     const round = Number(roundNumber || session.liveGameData?.currentRound || 0);
-    if (round >= 13 && round <= 24) teamASide = oppositeSide(teamASide);
+    if (rules.halftimeEnabled && round >= rules.halftimeRound && round <= rules.maxRounds) {
+        teamASide = oppositeSide(teamASide);
+    }
     return side === teamASide ? 'A' : 'B';
 };
 const setupDuelFromLobby = (): boolean => {
@@ -997,20 +999,23 @@ const advancePhase = (
     return true;
 };
 
-export const markStandardMatchLiveFromMatchZy = (): boolean => {
+export const markGameModeLiveFromRuntime = (modeId: string): boolean => {
     const session = getSession();
-    if (session.phase !== GamePhase.PreGameSetup) return false;
-    if (session.matchOptions?.matchMode === 'duel') return false;
+    if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return false;
+    const expectedModeId = normalizeGameModeId(session.matchOptions?.gameModeId, session.matchOptions);
+    if (expectedModeId !== modeId) return false;
+
     const rosterCheck = validateUnbalancedRosterForTeamLock(session);
     if (!rosterCheck.valid) {
-        notifyMessage?.(`MatchZy 开赛被阻止：${rosterCheck.blockers.join(' ')}`);
+        notifyMessage?.(`Gamemode 开局被阻止：${rosterCheck.blockers.join(' ')}`);
         return false;
     }
 
     session.phase = GamePhase.LiveGame;
+    if (session.liveGameData) session.liveGameData.matchController = 'caoren';
     performPhaseTransition(GamePhase.LiveGame);
     broadcast?.();
-    notifyMessage?.('MatchZy 已由管理员 .start 开赛，网页已自动进入正式比赛阶段。');
+    notifyMessage?.(`Gamemode ${modeId} 已进入正式比赛阶段。`);
     return true;
 };
 
@@ -1132,8 +1137,12 @@ const performPhaseTransition = (to: GamePhase) => {
                 if (!ue || p.gameRole !== 'Undercover') delete p.taskGrid;
             });
             session.liveGameData = createEmptyLiveGameData();
+            const roundRules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
+            session.liveGameData.roundLimit = roundRules.maxRounds;
+            session.liveGameData.winTarget = roundRules.winTarget;
+            session.liveGameData.halftimeEnabled = roundRules.halftimeEnabled;
+            session.liveGameData.halftimeRound = roundRules.halftimeRound;
             if (isDuelMode()) {
-                session.liveGameData.winTarget = getDuelTotalRounds(session.matchOptions?.duelRounds);
                 session.liveGameData.duelWaitingForPlayers = true;
                 session.liveGameData.duelWaitSeconds = DUEL_READY_WAIT_SECONDS;
                 session.timerEndAt = Date.now() + DUEL_READY_WAIT_SECONDS * 1000;
@@ -1143,8 +1152,8 @@ const performPhaseTransition = (to: GamePhase) => {
                 setTimeout(() => beginDuelFormalMatch(matchId), DUEL_READY_WAIT_SECONDS * 1000);
                 notifyMessage?.(`单挑准备等待 ${DUEL_READY_WAIT_SECONDS} 秒：玩家可以在这段时间进出服务器。时间到后双方都在才正式重启开赛。`);
             } else {
-                session.liveGameData.matchController = 'matchzy';
-                notifyMessage?.('网页流程已完成。标准竞技比赛由 MatchZy 接管，请管理员在游戏内使用 .start 开始比赛。');
+                session.liveGameData.matchController = 'caoren';
+                notifyMessage?.('等待 Gamemode Warmup 完成后自动进入正式比赛。');
             }
             break;
         case GamePhase.MidGameQA:
@@ -1214,17 +1223,28 @@ const forceSkipUndercoverOnlyPhaseIfNeeded = () => {
 
 const applyMatchOptions = (rawOptions: unknown) => {
     const session = getSession();
+    const raw = (rawOptions || {}) as Record<string, unknown>;
+    const gameModeId = normalizeGameModeId(raw.gameModeId, raw as any);
+    const manifest = GAME_MODE_MANIFESTS[gameModeId];
+    const undercoverEnabled = modeUsesUndercoverFlow(gameModeId);
+    const unbalancedEnabled = modeUsesUnbalancedRoster(gameModeId);
     session.matchOptions = {
-        matchMode: (rawOptions as any)?.matchMode === 'duel' ? 'duel' : 'competitive',
-        matchController: (rawOptions as any)?.matchMode === 'duel' ? 'caoren' : 'matchzy',
-        undercoverModeEnabled: (rawOptions as any)?.undercoverModeEnabled !== false,
-        caorenModifiersEnabled: (rawOptions as any)?.caorenModifiersEnabled === true,
-        duelMap: resolveDuelMapConfig((rawOptions as any)?.duelMap || DUEL_DEFAULT_MAP, (rawOptions as any)?.duelMapWorkshopId).name,
-        duelMapWorkshopId: resolveDuelMapConfig((rawOptions as any)?.duelMap || DUEL_DEFAULT_MAP, (rawOptions as any)?.duelMapWorkshopId).workshopId,
-        duelRoundTimeMinutes: normalizeDuelRoundTimeMinutes((rawOptions as any)?.duelRoundTimeMinutes || DUEL_DEFAULT_ROUND_TIME_MINUTES),
-        duelRounds: normalizeDuelRounds((rawOptions as any)?.duelRounds),
-        duelUtilityMode: normalizeDuelUtilityMode((rawOptions as any)?.duelUtilityMode),
-        ...normalizeUnbalancedRosterOptions(rawOptions as any),
+        gameModeId,
+        gameModeWarmupSeconds: Math.max(1, Math.min(300, Math.floor(Number(raw.gameModeWarmupSeconds || manifest.defaultWarmupSeconds)))),
+        gameModeCvarOverrides: normalizeGameModeOverrides(gameModeId, raw.gameModeCvarOverrides),
+        matchMode: raw.matchMode === 'duel' ? 'duel' : 'competitive',
+        matchController: 'caoren',
+        undercoverModeEnabled: undercoverEnabled,
+        caorenModifiersEnabled: raw.caorenModifiersEnabled === true,
+        duelMap: resolveDuelMapConfig(String(raw.duelMap || DUEL_DEFAULT_MAP), raw.duelMapWorkshopId).name,
+        duelMapWorkshopId: resolveDuelMapConfig(String(raw.duelMap || DUEL_DEFAULT_MAP), raw.duelMapWorkshopId).workshopId,
+        duelRoundTimeMinutes: normalizeDuelRoundTimeMinutes(raw.duelRoundTimeMinutes || DUEL_DEFAULT_ROUND_TIME_MINUTES),
+        duelRounds: normalizeDuelRounds(raw.duelRounds),
+        duelUtilityMode: normalizeDuelUtilityMode(raw.duelUtilityMode),
+        ...normalizeUnbalancedRosterOptions({
+            ...raw,
+            unbalancedModeEnabled: unbalancedEnabled,
+        } as any),
     };
     if (session.matchOptions.matchMode === 'duel') {
         session.matchOptions.undercoverModeEnabled = false;

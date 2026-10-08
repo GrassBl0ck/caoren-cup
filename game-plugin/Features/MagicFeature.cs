@@ -189,7 +189,7 @@ public class MagicFeature : ICaorenFeature
         CaorenCupUtils.ApplyModuleHealth(_plugin, victimPawn, newHealth);
 
         // 播放受击音效增强反馈
-        victimPawn.EmitSound("Player.Damage");
+        CaorenCup.Contracts.CaorenCupAudioAccess.Play("gameplay.magic.damage", source: victimPawn);
     }
 
     // --- 数学算法：点到三维线段的最短距离 ---

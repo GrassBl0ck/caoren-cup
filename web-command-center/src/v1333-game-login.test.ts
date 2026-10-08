@@ -1,3 +1,4 @@
+// Load these stateful CommonJS modules through one loader after the test environment is set.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -43,10 +44,10 @@ test('GAME_CODE_LOGIN cannot consume player recovery codes while administrator l
     process.env.IDENTITY_STORE_PATH = path.join(runtimeDir, 'identity-store.json');
 
     const [{ registerGameCodeLogin, v1333ConsumeGameLoginTicket, v1333IssueGameLoginCode }, identityRuntime, sessionManager, constants] = await Promise.all([
-        import('./v1333-game-login.js'),
-        import('./identity/identity-runtime.js'),
-        import('./session-manager.js'),
-        import('./game-constants.js'),
+        (require('./v1333-game-login') as typeof import('./v1333-game-login')),
+        (require('./identity/identity-runtime') as typeof import('./identity/identity-runtime')),
+        (require('./session-manager') as typeof import('./session-manager')),
+        (require('./game-constants') as typeof import('./game-constants')),
     ]);
     await identityRuntime.initializeIdentityRuntime();
     const session = sessionManager.createInitialSession();

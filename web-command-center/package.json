@@ -6,7 +6,7 @@
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx src/server.ts",
-    "check": "npm run typecheck && npm run test:caoren-modules && npm run test:postmatch-fun-stats && npm run test:plugin-telemetry && npm run test:modern-dialog-ui && npm run test:undercover-logic && npm run test:undercover-task-ui && npm run test:match-command-policy && npm run test:duel-runtime && npm run test:duel-admin-only && npm run test:player-center-ui && npm run test:legacy-login-removed && npm run test:lobby-identity && npm run test:weaponpaints && npm run test:rules-content && npm run test:rules-pdf && npm run test:rules-guide && npm run test:update-announcements && npm run test:update-announcement-ui && npm run test:phase-rollback && npm run test:game-inactivity",
+    "check": "npm run typecheck && npm run test:game-mode && npm run test:caoren-modules && npm run test:postmatch-fun-stats && npm run test:plugin-telemetry && npm run test:modern-dialog-ui && npm run test:undercover-logic && npm run test:undercover-task-ui && npm run test:match-command-policy && npm run test:duel-runtime && npm run test:duel-admin-only && npm run test:player-center-ui && npm run test:legacy-login-removed && npm run test:lobby-identity && npm run test:weaponpaints && npm run test:rules-content && npm run test:rules-pdf && npm run test:rules-guide && npm run test:update-announcements && npm run test:update-announcement-ui && npm run test:phase-rollback && npm run test:game-inactivity",
     "typecheck": "tsc --noEmit",
     "test:caoren-modules": "node scripts/check-caoren-modules.cjs",
     "test:postmatch-fun-stats": "node scripts/check-postmatch-fun-stats.cjs",
@@ -30,7 +30,8 @@
     "test:flow-undo-ui": "node scripts/check-flow-undo-ui.cjs",
     "test:flow-undo": "tsx --test src/flow-undo-manager.test.ts src/session-persistence.test.ts src/flow-runtime.test.ts src/flow-undo-integration.test.ts src/flow-undo-visibility.test.ts",
     "test:phase-rollback": "npm run test:flow-undo && npm run test:flow-undo-ui",
-    "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts"
+    "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts",
+    "test:game-mode": "tsx --test src/game-mode.test.ts"
   },
   "dependencies": {
     "express": "^4.18.3",

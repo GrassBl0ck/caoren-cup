@@ -1,0 +1,65 @@
+[
+  {
+    "Id": "probe.timeline",
+    "DisplayName": "30秒五阶段音频探针",
+    "Source": "caorencup.audio.probe.timeline",
+    "NativeEvent": true,
+    "DefaultVolume": 1.0,
+    "Channel": "Effect",
+    "Loop": false
+  },
+  {
+    "Id": "custom.51fb76b976c2",
+    "DisplayName": "原有1秒测试音",
+    "Source": "caorencup.audio.custom.51fb76b976c2",
+    "NativeEvent": true,
+    "DefaultVolume": 1.0,
+    "Channel": "Effect",
+    "Loop": false
+  },
+  {
+    "Id": "probe.lufs18",
+    "DisplayName": "-18 LUFS 试听",
+    "Source": "caorencup.audio.probe.lufs18",
+    "NativeEvent": true,
+    "DefaultVolume": 1.0,
+    "Channel": "Effect",
+    "Loop": false
+  },
+  {
+    "Id": "probe.lufs16",
+    "DisplayName": "广播 · -16 LUFS 试听",
+    "Source": "caorencup.audio.probe.lufs16",
+    "NativeEvent": true,
+    "DefaultVolume": 1.0,
+    "Channel": "Broadcast",
+    "Loop": false
+  },
+  {
+    "Id": "probe.lufs12",
+    "DisplayName": "音乐 · -12 LUFS 试听",
+    "Source": "caorencup.audio.probe.lufs12",
+    "NativeEvent": true,
+    "DefaultVolume": 1.0,
+    "Channel": "Music",
+    "Loop": false
+  },
+  {
+    "Id": "probe.lufs10",
+    "DisplayName": "-10 LUFS 试听",
+    "Source": "caorencup.audio.probe.lufs10",
+    "NativeEvent": true,
+    "DefaultVolume": 1.0,
+    "Channel": "Effect",
+    "Loop": false
+  },
+  {
+    "Id": "probe.loop12",
+    "DisplayName": "音乐 · 整段循环 -12 LUFS",
+    "Source": "caorencup.audio.probe.loop12",
+    "NativeEvent": true,
+    "DefaultVolume": 1.0,
+    "Channel": "Music",
+    "Loop": true
+  }
+]

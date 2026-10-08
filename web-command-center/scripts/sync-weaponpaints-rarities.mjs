@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const SOURCE_COMMIT = '0501ac099994f3df291e67730b2acb0a494d77b8';
 const SOURCE_URL = `https://raw.githubusercontent.com/ByMykel/CSGO-API/${SOURCE_COMMIT}/public/api/en/skins.json`;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const dataRoot = path.join(repoRoot, 'weaponpaints-plugin', 'data');
+const dataRoot = path.join(repoRoot, 'game-plugin', 'PluginSplit', 'CaorenCupQOLs', 'CaorenWeaponPaints', 'data');
 const catalogPath = path.join(dataRoot, 'en', 'skins.json');
 const outputPath = path.join(dataRoot, 'skin-rarities.json');
 

@@ -68,7 +68,7 @@ if (quitHandlerStart < 0 || quitHandler.includes('confirmName') || quitHandler.i
   throw new Error('server match-leave handler must not require a nickname confirmation');
 }
 
-for (const text of ['玩家中心', '账号密码登录', '!cclogin', '加入本场比赛', '管理员登录']) {
+for (const text of ['玩家中心', '账号密码登录', '/cclogin', '加入本场比赛', '管理员登录']) {
   if (!html.includes(text)) throw new Error(`missing player-center copy: ${text}`);
 }
 if (!/<details id="player-center-security"[^>]*>[\s\S]*<summary>账号与安全<\/summary>/.test(html)) {

@@ -1,6 +1,7 @@
 // scoring.ts
 import { GameSession, Player, MatchStats, RosterTeam } from './types';
 import { findPlayerById, getGamePlayers, toNumber, parseCsvLine, getTeamPlayers } from './player-utils';
+import { getGameModeRoundRules } from './game-mode-rounds';
 
 // ========== CSV 类型和解析 ==========
 
@@ -84,7 +85,7 @@ export const calculateScores = (session: GameSession): void => {
     const live = liveGameData;
     const scoreA = live?.scoreA ?? 0;
     const scoreB = live?.scoreB ?? 0;
-    const winnerRoster = live?.winnerTeam ?? getMatchWinner(scoreA, scoreB);
+    const winnerRoster = live?.winnerTeam ?? getMatchWinner(session, scoreA, scoreB);
 
     const getRoundRecord = (player: Player): { won: number; lost: number } => {
         if (player.rosterTeam === 'A') return { won: scoreA, lost: scoreB };
@@ -233,15 +234,10 @@ export const calculateScores = (session: GameSession): void => {
 };
 
 // 工具函数
-const getRequiredWinTarget = (scoreA: number, scoreB: number): number => {
-    const minScore = Math.min(scoreA, scoreB);
-    if (minScore < 12) return 13;
-    return 16 + Math.floor((minScore - 12) / 3) * 3;
-};
-
-const getMatchWinner = (scoreA: number, scoreB: number): RosterTeam | null => {
-    const target = getRequiredWinTarget(scoreA, scoreB);
-    if (scoreA >= target && scoreA > scoreB) return 'A';
-    if (scoreB >= target && scoreB > scoreA) return 'B';
+const getMatchWinner = (session: GameSession, scoreA: number, scoreB: number): RosterTeam | null => {
+    const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
+    if (rules.isDuel && scoreA + scoreB < rules.maxRounds) return null;
+    if (scoreA >= rules.winTarget && scoreA > scoreB) return 'A';
+    if (scoreB >= rules.winTarget && scoreB > scoreA) return 'B';
     return null;
 };

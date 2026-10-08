@@ -1,0 +1,79 @@
+[
+  {
+    "Id": "probe.timeline",
+    "DurationSeconds": 30.0,
+    "SoundEvent": "caorencup.audio.probe.timeline",
+    "LoopSoundEvent": "caorencup.audio.probe.timeline.loop",
+    "Resources": [
+      "sounds/caorencup/probe_timeline.vsnd",
+      "sounds/caorencup/probe_timeline_loop.vsnd"
+    ],
+    "SourceFile": "timeline.ogg"
+  },
+  {
+    "Id": "custom.51fb76b976c2",
+    "DurationSeconds": 1.0,
+    "SoundEvent": "caorencup.audio.custom.51fb76b976c2",
+    "LoopSoundEvent": "caorencup.audio.custom.51fb76b976c2.loop",
+    "Resources": [
+      "sounds/caorencup/custom_51fb76b976c2.vsnd",
+      "sounds/caorencup/custom_51fb76b976c2_loop.vsnd"
+    ],
+    "SourceFile": "test-tone.ogg"
+  },
+  {
+    "Id": "probe.lufs18",
+    "DurationSeconds": 30.0,
+    "SoundEvent": "caorencup.audio.probe.lufs18",
+    "LoopSoundEvent": "caorencup.audio.probe.lufs18.loop",
+    "Resources": [
+      "sounds/caorencup/probe_lufs18.vsnd",
+      "sounds/caorencup/probe_lufs18_loop.vsnd"
+    ],
+    "SourceFile": "lufs18.ogg"
+  },
+  {
+    "Id": "probe.lufs16",
+    "DurationSeconds": 30.0,
+    "SoundEvent": "caorencup.audio.probe.lufs16",
+    "LoopSoundEvent": "caorencup.audio.probe.lufs16.loop",
+    "Resources": [
+      "sounds/caorencup/probe_lufs16.vsnd",
+      "sounds/caorencup/probe_lufs16_loop.vsnd"
+    ],
+    "SourceFile": "lufs16.ogg"
+  },
+  {
+    "Id": "probe.lufs12",
+    "DurationSeconds": 30.0,
+    "SoundEvent": "caorencup.audio.probe.lufs12",
+    "LoopSoundEvent": "caorencup.audio.probe.lufs12.loop",
+    "Resources": [
+      "sounds/caorencup/probe_lufs12.vsnd",
+      "sounds/caorencup/probe_lufs12_loop.vsnd"
+    ],
+    "SourceFile": "lufs12.ogg"
+  },
+  {
+    "Id": "probe.lufs10",
+    "DurationSeconds": 30.0,
+    "SoundEvent": "caorencup.audio.probe.lufs10",
+    "LoopSoundEvent": "caorencup.audio.probe.lufs10.loop",
+    "Resources": [
+      "sounds/caorencup/probe_lufs10.vsnd",
+      "sounds/caorencup/probe_lufs10_loop.vsnd"
+    ],
+    "SourceFile": "lufs10.ogg"
+  },
+  {
+    "Id": "probe.loop12",
+    "DurationSeconds": 30.0,
+    "SoundEvent": "caorencup.audio.probe.loop12",
+    "LoopSoundEvent": "caorencup.audio.probe.loop12.loop",
+    "Resources": [
+      "sounds/caorencup/probe_loop12_once.vsnd",
+      "sounds/caorencup/probe_loop12.vsnd"
+    ],
+    "SourceFile": "loop12.ogg"
+  }
+]

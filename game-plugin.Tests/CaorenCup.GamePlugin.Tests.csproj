@@ -27,6 +27,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 单独链接纯逻辑验证隔离/权限；正式插件不包含此文件。 -->
+    <Compile Include="..\game-plugin\PluginSplit\CaorenCupInGameMenu\DevelopmentMenuTransparency.cs" Link="DevelopmentMenuTransparency.cs" />
     <ProjectReference Include="..\game-plugin\CaorenCup.csproj" />
+    <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupContracts\CaorenCupContracts.csproj" />
+    <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupCore\CaorenCupCore.csproj" />
+    <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupInGameMenu\CaorenCupInGameMenu.csproj" />
+    <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupQOL_PlaySound\CaorenCupQOL_PlaySound.csproj" />
+    <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupGamemode_RUSH\CaorenCupGamemode_RUSH.csproj" />
+    <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupGamemode_Competitive\CaorenCupGamemode_Competitive.csproj" />
   </ItemGroup>
 </Project>

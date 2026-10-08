@@ -135,12 +135,12 @@ public class BleedFeature : ICaorenFeature
     {
         if (player == null) return;
         CaorenCupUtils.PrintToChat(player, "=== Bleed/Regen 指令说明 ===");
-        player.PrintToChat($" {ChatColors.Green}/bleed 0{ChatColors.Default} : 一键禁用");
-        player.PrintToChat($" {ChatColors.Green}/bleed <t/ct/all> <秒> <正回负扣>{ChatColors.Default}");
-        player.PrintToChat($" 血量上下限统一使用 {ChatColors.Green}/hpcap <min> <max>{ChatColors.Default} 设置");
-        player.PrintToChat($" 示例: /hpcap 1 100；/bleed t 1 -5 (T每秒扣5血，最低剩1血)");
-        player.PrintToChat($" 示例: /hpcap 1 150；/bleed all 2 10 (全体每2秒回10血，最高150血)");
-        player.PrintToChat($" 当前状态: {GetStatusInfo()}");
+        CaorenCupUtils.PrintToChat(player, $" {ChatColors.Green}/bleed 0{ChatColors.Default} : 一键禁用");
+        CaorenCupUtils.PrintToChat(player, $" {ChatColors.Green}/bleed <t/ct/all> <秒> <正回负扣>{ChatColors.Default}");
+        CaorenCupUtils.PrintToChat(player, $" 血量上下限统一使用 {ChatColors.Green}/hpcap <min> <max>{ChatColors.Default} 设置");
+        CaorenCupUtils.PrintToChat(player, $" 示例: /hpcap 1 100；/bleed t 1 -5 (T每秒扣5血，最低剩1血)");
+        CaorenCupUtils.PrintToChat(player, $" 示例: /hpcap 1 150；/bleed all 2 10 (全体每2秒回10血，最高150血)");
+        CaorenCupUtils.PrintToChat(player, $" 当前状态: {GetStatusInfo()}");
     }
 
     // --- 游戏逻辑 ---
@@ -251,7 +251,7 @@ public class BleedFeature : ICaorenFeature
             // 播放受伤音效
             if (_settings.PlaySound && delta < 0)
             {
-                try { player.ExecuteClientCommand($"play {PainSoundPath}"); } catch { }
+                CaorenCup.Contracts.CaorenCupAudioAccess.Play("gameplay.bleed.pain", [player]);
             }
         }
     }

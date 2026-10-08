@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>CaorenCupInGameMenu</AssemblyName>
+    <!-- 开发控件必须显式开启；普通 Debug/Release 构建都默认关闭。 -->
+    <EnableMenuDevelopmentControls Condition="'$(EnableMenuDevelopmentControls)' == ''">false</EnableMenuDevelopmentControls>
+    <DefineConstants Condition="'$(EnableMenuDevelopmentControls)' == 'true'">$(DefineConstants);CRC_MENU_DEVELOPMENT</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(EnableMenuDevelopmentControls)' != 'true'">
+    <Compile Remove="DevelopmentMenuTransparency.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="CommandHelpCatalog.json" LogicalName="CaorenCup.InGameMenu.CommandHelpCatalog.json" />
+    <EmbeddedResource Include="PlayerCommandHelpCatalog.json" LogicalName="CaorenCup.InGameMenu.PlayerCommandHelpCatalog.json" />
+    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.374" />
+    <ProjectReference Include="..\CaorenCupContracts\CaorenCupContracts.csproj" />
+    <Content Include="..\..\Features\InGameMenu\resources\**\*" Exclude="..\..\Features\InGameMenu\resources\development\**\*">
+      <Link>resources\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

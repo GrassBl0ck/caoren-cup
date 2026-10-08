@@ -1,0 +1,213 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/csgostyles.vcss_c" />
+        <include src="s2r://panorama/styles/mainmenu.vcss_c" />
+        <include src="s2r://panorama/styles/settings/settings.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_admin_menu.vcss_c" />
+    </styles>
+    <Panel class="CaorenAdminRoot" hittest="false">
+        <Panel id="dialog" class="mainmenu-content__container CaorenSettings Hidden" hittest="true">
+            <Panel class="content-navbar__tabs CaorenPrimaryNav">
+                <Label class="content-navbar__title CaorenBrand" text="{s:title}" />
+                <Panel class="content-navbar__tabs__center-container">
+                    <Panel class="content-navbar__tabs__btn CaorenTabSelected">
+                        <Label text="{s:navsection}" />
+                    </Panel>
+                    <Button id="admin_help_open_tab" class="PopupButton CaorenHelpTab">
+                        <Label class="" text="指令帮助" />
+                    </Button>
+                </Panel>
+            </Panel>
+            <Panel class="content-navbar__tabs content-navbar__tabs--dark CaorenSecondaryNav">
+                <Panel class="content-navbar__tabs__center-container">
+                    <Panel class="content-navbar__tabs__btn CaorenTabSelected">
+                        <Label text="{s:subsection}" />
+                    </Panel>
+                </Panel>
+            </Panel>
+            <Panel class="SettingsMenuTab Active CaorenSettingsPage">
+                <Panel class="SettingsBackground CaorenSettingsContent">
+                    <Panel id="admin_home" class="CaorenMenuSection">
+                        <Panel class="SettingsSectionTitleContianer CaorenSectionHeader">
+                            <Label class="SettingsSectionTitleLabel" text="广播" />
+                        </Panel>
+                        <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
+                            <Panel class="CaorenSettingDescription">
+                                <Label class="CaorenSettingName" text="全服广播" />
+                                <Label class="CaorenSettingScope" text="{s:status}" />
+                            </Panel>
+                            <Button id="menu_btn_0" class="PopupButton CaorenSettingAction">
+                                <Label text="{s:btn0}" />
+                            </Button>
+                        </Panel>
+                        <Panel class="content-navbar__seperator CaorenRowSeparator" />
+                        <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
+                            <Panel class="CaorenSettingDescription CaorenDevDescription">
+                                <Label class="CaorenSettingName" text="背景透明度" />
+                                <Label class="CaorenSettingScope" text="开发测试 · 仅当前菜单有效" />
+                            </Panel>
+                            <Panel class="CaorenDevSliderControl">
+                                <Panel id="dev_slider" class="CaorenDevSlider" hittest="true">
+                                    <Panel class="CaorenDevSliderRail" hittest="false" />
+                                    <Panel id="dev_slider_progress" class="CaorenDevSliderProgress" hittest="false" />
+                                    <Panel class="CaorenDevSliderSegments">
+                                        <Button id="dev_transparency_0" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_1" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_2" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_3" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_4" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_5" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_6" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_7" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_8" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_9" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_10" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_11" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_12" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_13" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_14" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_15" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_16" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_17" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_18" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_19" class="CaorenDevSliderSegment" />
+                                        <Button id="dev_transparency_20" class="CaorenDevSliderSegment" />
+                                    </Panel>
+                                    <Panel id="dev_slider_thumb" class="CaorenDevSliderThumb" hittest="false" />
+                                </Panel>
+                                <Label class="CaorenDevSliderValue" text="{s:dev_transparency}" />
+                            </Panel>
+                        </Panel>
+                        <Panel class="content-navbar__seperator CaorenRowSeparator" />
+                        <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
+                            <Panel class="CaorenSettingDescription">
+                                <Label class="CaorenSettingName" text="投票系统" />
+                                <Label class="CaorenSettingScope" text="影响范围：全服 · 管理员专属" />
+                            </Panel>
+                            <Button id="admin_vote_open" class="PopupButton CaorenSettingAction">
+                                <Label class="" text="管理投票" />
+                            </Button>
+                        </Panel>
+                        <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
+                            <Panel class="CaorenSettingDescription">
+                                <Label class="CaorenSettingName" text="指令帮助" />
+                                <Label class="CaorenSettingScope" text="草人杯管理员指令 · 按字母顺序浏览" />
+                            </Panel>
+                            <Button id="admin_help_open" class="PopupButton CaorenSettingAction">
+                                <Label class="" text="查看指令" />
+                            </Button>
+                        </Panel>
+                    </Panel>
+                    <Panel id="admin_vote_management" class="CaorenMenuSection Hidden">
+                        <Label class="SettingsSectionTitleLabel" text="投票管理" />
+                        <Label class="CaorenVoteQuestion" text="{s:vote_admin_question}" />
+                        <Label class="CaorenVoteState" text="{s:vote_admin_state}" />
+                        <Label class="CaorenSettingScope" text="影响范围：全服 · 30 秒 · 非管理员真人投票" />
+                        <Panel class="CaorenVoteActions">
+                            <Button id="vote_create" class="PopupButton">
+                                <Label class="" text="{s:vote_create_label}" />
+                            </Button>
+                            <Button id="vote_cancel" class="PopupButton Negative">
+                                <Label class="" text="取消当前投票" />
+                            </Button>
+                        </Panel>
+                    </Panel>
+                    <Panel id="admin_vote_preview" class="CaorenMenuSection Hidden">
+                        <Label class="SettingsSectionTitleLabel" text="确认发起投票" />
+                        <Label class="CaorenVoteQuestion" text="{s:vote_draft_question}" />
+                        <Label class="CaorenVoteChoice" text="{s:vote_draft_option0}" id="vote_draft_option0" />
+                        <Label class="CaorenVoteChoice" text="{s:vote_draft_option1}" id="vote_draft_option1" />
+                        <Label class="CaorenVoteChoice" text="{s:vote_draft_option2}" id="vote_draft_option2" />
+                        <Label class="CaorenVoteChoice" text="{s:vote_draft_option3}" id="vote_draft_option3" />
+                        <Label class="CaorenSettingScope" text="影响范围：全服 · 确认后立即开始，持续 30 秒" />
+                        <Panel class="CaorenVoteActions">
+                            <Button id="vote_start" class="PopupButton">
+                                <Label class="" text="确认发起" />
+                            </Button>
+                            <Button id="vote_discard" class="PopupButton">
+                                <Label class="" text="丢弃草稿" />
+                            </Button>
+                        </Panel>
+                    </Panel>
+                    <Panel id="admin_vote_cancel" class="CaorenMenuSection Hidden">
+                        <Label class="SettingsSectionTitleLabel" text="确认取消投票" />
+                        <Label class="CaorenVoteQuestion" text="{s:vote_cancel_question}" />
+                        <Label class="CaorenVoteState" text="确认取消本轮投票？取消后不产生胜出选项。" />
+                        <Panel class="CaorenVoteActions">
+                            <Button id="vote_cancel_confirm" class="PopupButton Negative">
+                                <Label class="" text="确认取消" />
+                            </Button>
+                        </Panel>
+                    </Panel>
+                    <Panel id="admin_help_list" class="CaorenMenuSection Hidden">
+                        <Label class="SettingsSectionTitleLabel" text="指令帮助" />
+                        <Label class="CaorenGuidePage" text="{s:guide_page}" />
+                        <Button id="guide_item_0" class="PopupButton CaorenGuideItem">
+                            <Label class="CaorenGuideName" text="{s:guide_name0}" />
+                            <Label class="CaorenGuideSummary" text="{s:guide_summary0}" />
+                        </Button>
+                        <Button id="guide_item_1" class="PopupButton CaorenGuideItem">
+                            <Label class="CaorenGuideName" text="{s:guide_name1}" />
+                            <Label class="CaorenGuideSummary" text="{s:guide_summary1}" />
+                        </Button>
+                        <Button id="guide_item_2" class="PopupButton CaorenGuideItem">
+                            <Label class="CaorenGuideName" text="{s:guide_name2}" />
+                            <Label class="CaorenGuideSummary" text="{s:guide_summary2}" />
+                        </Button>
+                        <Button id="guide_item_3" class="PopupButton CaorenGuideItem">
+                            <Label class="CaorenGuideName" text="{s:guide_name3}" />
+                            <Label class="CaorenGuideSummary" text="{s:guide_summary3}" />
+                        </Button>
+                        <Button id="guide_item_4" class="PopupButton CaorenGuideItem">
+                            <Label class="CaorenGuideName" text="{s:guide_name4}" />
+                            <Label class="CaorenGuideSummary" text="{s:guide_summary4}" />
+                        </Button>
+                        <Button id="guide_item_5" class="PopupButton CaorenGuideItem">
+                            <Label class="CaorenGuideName" text="{s:guide_name5}" />
+                            <Label class="CaorenGuideSummary" text="{s:guide_summary5}" />
+                        </Button>
+                        <Button id="guide_item_6" class="PopupButton CaorenGuideItem">
+                            <Label class="CaorenGuideName" text="{s:guide_name6}" />
+                            <Label class="CaorenGuideSummary" text="{s:guide_summary6}" />
+                        </Button>
+                        <Button id="guide_item_7" class="PopupButton CaorenGuideItem">
+                            <Label class="CaorenGuideName" text="{s:guide_name7}" />
+                            <Label class="CaorenGuideSummary" text="{s:guide_summary7}" />
+                        </Button>
+                        <Panel class="CaorenVoteActions">
+                            <Button id="guide_prev" class="PopupButton">
+                                <Label class="" text="上一页" />
+                            </Button>
+                            <Button id="guide_next" class="PopupButton">
+                                <Label class="" text="下一页" />
+                            </Button>
+                        </Panel>
+                    </Panel>
+                    <Panel id="admin_help_detail" class="CaorenMenuSection Hidden">
+                        <Label class="SettingsSectionTitleLabel" text="{s:guide_detail_name}" />
+                        <Label class="CaorenVoteQuestion" text="{s:guide_detail_summary}" />
+                        <Label class="CaorenGuideMeta" text="{s:guide_detail_meta}" />
+                        <Label class="CaorenGuideDetail" text="{s:guide_detail_text}" />
+                        <Label class="CaorenGuidePage" text="{s:guide_detail_page}" />
+                        <Panel class="CaorenVoteActions">
+                            <Button id="guide_detail_prev" class="PopupButton">
+                                <Label class="" text="上一页" />
+                            </Button>
+                            <Button id="guide_detail_next" class="PopupButton">
+                                <Label class="" text="下一页" />
+                            </Button>
+                        </Panel>
+                    </Panel>
+                </Panel>
+            </Panel>
+            <Panel class="CaorenSettingsFooter">
+                <Button id="admin_back" class="PopupButton">
+                    <Label class="" text="{s:admin_back_label}" />
+                </Button>
+                <Button id="admin_exit" class="PopupButton">
+                    <Label class="" text="退出" />
+                </Button>
+            </Panel>
+        </Panel>
+    </Panel>
+</root>

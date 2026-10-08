@@ -286,7 +286,7 @@ public class SmokeFeature : ICaorenFeature
             // 只有扣血(change < 0)时才播放受伤音效
             if (change < 0 && _settings.PlaySound)
             {
-                try { player.ExecuteClientCommand($"play {PainSoundPath}"); } catch { }
+                CaorenCup.Contracts.CaorenCupAudioAccess.Play("gameplay.smoke.pain", [player]);
             }
         }
     }

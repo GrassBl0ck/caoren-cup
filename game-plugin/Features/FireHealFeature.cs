@@ -112,13 +112,13 @@ public class FireHealFeature : ICaorenFeature
     {
         if (player == null) return;
         CaorenCupUtils.PrintToChat(player, "=== FireHeal 指令说明 ===");
-        player.PrintToChat($" {ChatColors.Green}/fh 0{ChatColors.Default} : 一键禁用此模块");
-        player.PrintToChat($" {ChatColors.Green}/fh <t/ct/all> <倍率>{ChatColors.Default}");
-        player.PrintToChat($"   倍率 0 : 踩火免疫伤害");
-        player.PrintToChat($"   倍率 1 : 正常受到伤害");
-        player.PrintToChat($"   倍率 -1: 正常伤害转为回血");
-        player.PrintToChat($"   倍率 2 : 受到双倍伤害 (类似可推 -2 为双倍回血)");
-        player.PrintToChat($" 当前状态: {GetStatusInfo()}");
+        CaorenCupUtils.PrintToChat(player, $" {ChatColors.Green}/fh 0{ChatColors.Default} : 一键禁用此模块");
+        CaorenCupUtils.PrintToChat(player, $" {ChatColors.Green}/fh <t/ct/all> <倍率>{ChatColors.Default}");
+        CaorenCupUtils.PrintToChat(player, $"   倍率 0 : 踩火免疫伤害");
+        CaorenCupUtils.PrintToChat(player, $"   倍率 1 : 正常受到伤害");
+        CaorenCupUtils.PrintToChat(player, $"   倍率 -1: 正常伤害转为回血");
+        CaorenCupUtils.PrintToChat(player, $"   倍率 2 : 受到双倍伤害 (类似可推 -2 为双倍回血)");
+        CaorenCupUtils.PrintToChat(player, $" 当前状态: {GetStatusInfo()}");
     }
 
     // --- 游戏逻辑 (严格受击补偿计算) ---

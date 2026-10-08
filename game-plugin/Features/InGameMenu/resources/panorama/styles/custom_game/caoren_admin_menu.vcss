@@ -1,0 +1,440 @@
+/* 原生视觉来源（本机 pak01_dir.vpk 已提取核对）：
+   csgostyles.vcss_c：字体、PopupButton、悬停与点击音效。
+   mainmenu.vcss_c：全屏半透明底色、bluedots 底纹、顶部导航、选中颜色。
+   settings/settings.vcss_c：设置页内容宽度、设置行、分区标题。
+   不替换游戏原有资源。此文件补充自定义布局尺寸和当前分类的选中状态。
+   实时地图模糊未接入；不使用未经验证的 CSS 属性或客户端脚本。 */
+
+.CaorenAdminRoot
+{
+    width: 100%;
+    height: 100%;
+}
+
+.CaorenSettings
+{
+    width: 100%;
+    height: 100%;
+    flow-children: down;
+    padding-top: 0px;
+    /* 默认背景透明度 10%，只调整背景，不降低文字和按钮的不透明度。 */
+    background-color: rgba(20, 20, 20, 0.90);
+    opacity: 1;
+}
+
+.CaorenSettings.Hidden
+{
+    visibility: collapse;
+    opacity: 0;
+}
+
+.CaorenPrimaryNav
+{
+    height: 64px;
+    flow-children: none;
+}
+
+.CaorenBrand
+{
+    horizontal-align: left;
+    font-size: 24px;
+    margin-left: 32px;
+}
+
+.CaorenSecondaryNav
+{
+    height: 48px;
+}
+
+/* 对应 mainmenu.vcss_c 中原生导航 :selected 的底色与文字色。 */
+.CaorenTabSelected
+{
+    background-color: #82d7ff1a;
+}
+
+.CaorenTabSelected Label
+{
+    color: #82D8FF;
+}
+
+.CaorenSettingsPage
+{
+    height: fill-parent-flow(1);
+}
+
+.CaorenSettingsContent
+{
+    margin-top: 32px;
+}
+
+.CaorenSectionHeader
+{
+    margin-bottom: 24px;
+}
+
+.CaorenSettingsRow
+{
+    min-height: 80px;
+    flow-children: none;
+}
+
+.CaorenSettingDescription
+{
+    width: 60%;
+    vertical-align: center;
+    flow-children: down;
+}
+
+.CaorenSettingName
+{
+    font-size: 20px;
+    color: #ccccccff;
+}
+
+.CaorenSettingScope
+{
+    margin-top: 4px;
+    font-size: 14px;
+    color: rgba(222, 222, 222, 0.4);
+}
+
+.CaorenSettingAction
+{
+    horizontal-align: right;
+    vertical-align: center;
+}
+
+.CaorenRowSeparator
+{
+    opacity: 0.10;
+}
+
+/* 投票管理页与返回/退出；不改变普通构建的开发控件排除规则。 */
+Panel.Hidden, Label.Hidden, Button.Hidden { visibility: collapse; }
+.CaorenMenuSection { width: 100%; flow-children: down; }
+.CaorenVoteQuestion { width: 100%; font-size: 24px; color: #ccccccff; margin-top: 24px; margin-bottom: 12px; }
+.CaorenVoteState { width: 100%; font-size: 18px; color: #ccccccff; margin-bottom: 16px; }
+.CaorenVoteChoice { width: 100%; font-size: 20px; color: #ccccccff; margin-bottom: 12px; }
+.CaorenVoteActions { flow-children: right; horizontal-align: right; margin-top: 24px; }
+.CaorenSettingsFooter { width: fit-children; height: 64px; horizontal-align: right; flow-children: right; margin-right: 64px; margin-bottom: 16px; }
+
+/* 指令帮助只读列表与详情页，使用原生 PopupButton/字体。 */
+.CaorenHelpTab { margin-left: 24px; }
+.CaorenHelpTab Label { font-size: 16px; }
+.CaorenGuidePage { width: 100%; color: #ccccccff; font-size: 16px; margin-top: 12px; margin-bottom: 12px; }
+.CaorenGuideItem { width: 100%; height: 54px; margin: 0px; flow-children: right; border-bottom: 1px solid #ffffff19; }
+.CaorenGuideItem .CaorenGuideName { width: 32%; horizontal-align: left; text-align: left; font-size: 20px; }
+.CaorenGuideItem .CaorenGuideSummary { width: 65%; horizontal-align: left; text-align: left; font-size: 16px; }
+.CaorenGuideMeta { width: 100%; color: #ccccccff; font-size: 16px; margin-bottom: 16px; }
+.CaorenGuideDetail { width: 100%; color: #ccccccff; font-size: 18px; line-height: 24px; }
+
+/* 生产个人设置：背景透明度和本插件提示音音量。 */
+.CaorenPreferencesRow { width: 100%; height: 112px; flow-children: none; border-bottom: 1px solid #ffffff19; }
+.CaorenPreferenceDescription { width: 55%; vertical-align: center; flow-children: down; }
+.CaorenPreferencesRow .CaorenSettingScope { color: #bbbbbbff; font-size: 14px; }
+/* 数值按钮和固定导航。边界按钮仍由服务器 clamp，CSS 不拦截整体菜单输入。 */
+.CaorenNumberSteps { width: 360px; height: 48px; horizontal-align: right; vertical-align: center; flow-children: none; }
+.CaorenNumberStep { width: 56px; height: 48px; margin: 0px; padding: 0px; border: 1px solid #ffffff33; }
+.CaorenNumberStep Label { horizontal-align: center; vertical-align: center; font-size: 18px; }
+.CaorenNumberStep.AtBoundary { opacity: 0.35; }
+.CaorenPreferenceValue { width: 96px; height: 48px; vertical-align: center; text-align: center; font-size: 20px; color: #ccccccff; padding-top: 10px; }
+.CaorenNavTab { min-width: 120px; height: 64px; }
+.CaorenNavTab Label { vertical-align: center; horizontal-align: center; }
+.CaorenGuideDetail { margin-top: 8px; line-height: 28px; }
+/* 悬浮提示的容器固定占位，提示在 none 布局层内绘制，不参与按钮的尺寸计算。
+   正式按钮暂未配置提示。开发用例显式选择方向，所有提示层都禁用 hittest。 */
+.CaorenTooltipHost { width: 240px; height: 48px; flow-children: none; overflow: noclip; }
+.CaorenTooltipAnchor { width: 240px; height: 48px; }
+.CaorenTooltip { visibility: collapse; opacity: 0; width: 340px; flow-children: down; background-color: #202020fa; border: 1px solid #ffffff33; padding: 12px; z-index: 100; }
+.CaorenTooltipHost:hover .CaorenTooltip { visibility: visible; opacity: 1; }
+.TooltipAbove .CaorenTooltip { vertical-align: bottom; margin-bottom: 60px; }
+.TooltipBelow .CaorenTooltip { position: 0px 60px 0px; }
+.TooltipLeft .CaorenTooltip { position: -352px 0px 0px; }
+.TooltipRight .CaorenTooltip { position: 252px 0px 0px; }
+.CaorenTooltipText { width: 100%; font-size: 16px; color: #ccccccff; }
+.CaorenTooltipImage { width: 280px; height: 80px; margin-top: 8px; }
+.CaorenSettings.UserAlpha0 { background-color: #141414ff; }
+.CaorenSettings.UserAlpha1 { background-color: #141414fc; }
+.CaorenSettings.UserAlpha2 { background-color: #141414fa; }
+.CaorenSettings.UserAlpha3 { background-color: #141414f7; }
+.CaorenSettings.UserAlpha4 { background-color: #141414f5; }
+.CaorenSettings.UserAlpha5 { background-color: #141414f2; }
+.CaorenSettings.UserAlpha6 { background-color: #141414f0; }
+.CaorenSettings.UserAlpha7 { background-color: #141414ed; }
+.CaorenSettings.UserAlpha8 { background-color: #141414eb; }
+.CaorenSettings.UserAlpha9 { background-color: #141414e8; }
+.CaorenSettings.UserAlpha10 { background-color: #141414e6; }
+.CaorenSettings.UserAlpha11 { background-color: #141414e3; }
+.CaorenSettings.UserAlpha12 { background-color: #141414e0; }
+.CaorenSettings.UserAlpha13 { background-color: #141414de; }
+.CaorenSettings.UserAlpha14 { background-color: #141414db; }
+.CaorenSettings.UserAlpha15 { background-color: #141414d9; }
+.CaorenSettings.UserAlpha16 { background-color: #141414d6; }
+.CaorenSettings.UserAlpha17 { background-color: #141414d4; }
+.CaorenSettings.UserAlpha18 { background-color: #141414d1; }
+.CaorenSettings.UserAlpha19 { background-color: #141414cf; }
+.CaorenSettings.UserAlpha20 { background-color: #141414cc; }
+.CaorenSettings.UserAlpha21 { background-color: #141414c9; }
+.CaorenSettings.UserAlpha22 { background-color: #141414c7; }
+.CaorenSettings.UserAlpha23 { background-color: #141414c4; }
+.CaorenSettings.UserAlpha24 { background-color: #141414c2; }
+.CaorenSettings.UserAlpha25 { background-color: #141414bf; }
+.CaorenSettings.UserAlpha26 { background-color: #141414bd; }
+.CaorenSettings.UserAlpha27 { background-color: #141414ba; }
+.CaorenSettings.UserAlpha28 { background-color: #141414b8; }
+.CaorenSettings.UserAlpha29 { background-color: #141414b5; }
+.CaorenSettings.UserAlpha30 { background-color: #141414b2; }
+.CaorenSettings.UserAlpha31 { background-color: #141414b0; }
+.CaorenSettings.UserAlpha32 { background-color: #141414ad; }
+.CaorenSettings.UserAlpha33 { background-color: #141414ab; }
+.CaorenSettings.UserAlpha34 { background-color: #141414a8; }
+.CaorenSettings.UserAlpha35 { background-color: #141414a6; }
+.CaorenSettings.UserAlpha36 { background-color: #141414a3; }
+.CaorenSettings.UserAlpha37 { background-color: #141414a1; }
+.CaorenSettings.UserAlpha38 { background-color: #1414149e; }
+.CaorenSettings.UserAlpha39 { background-color: #1414149c; }
+.CaorenSettings.UserAlpha40 { background-color: #14141499; }
+.CaorenSettings.UserAlpha41 { background-color: #14141496; }
+.CaorenSettings.UserAlpha42 { background-color: #14141494; }
+.CaorenSettings.UserAlpha43 { background-color: #14141491; }
+.CaorenSettings.UserAlpha44 { background-color: #1414148f; }
+.CaorenSettings.UserAlpha45 { background-color: #1414148c; }
+.CaorenSettings.UserAlpha46 { background-color: #1414148a; }
+.CaorenSettings.UserAlpha47 { background-color: #14141487; }
+.CaorenSettings.UserAlpha48 { background-color: #14141485; }
+.CaorenSettings.UserAlpha49 { background-color: #14141482; }
+.CaorenSettings.UserAlpha50 { background-color: #14141480; }
+.CaorenSettings.UserAlpha51 { background-color: #1414147d; }
+.CaorenSettings.UserAlpha52 { background-color: #1414147a; }
+.CaorenSettings.UserAlpha53 { background-color: #14141478; }
+.CaorenSettings.UserAlpha54 { background-color: #14141475; }
+.CaorenSettings.UserAlpha55 { background-color: #14141473; }
+.CaorenSettings.UserAlpha56 { background-color: #14141470; }
+.CaorenSettings.UserAlpha57 { background-color: #1414146e; }
+.CaorenSettings.UserAlpha58 { background-color: #1414146b; }
+.CaorenSettings.UserAlpha59 { background-color: #14141469; }
+.CaorenSettings.UserAlpha60 { background-color: #14141466; }
+.CaorenSettings.UserAlpha61 { background-color: #14141463; }
+.CaorenSettings.UserAlpha62 { background-color: #14141461; }
+.CaorenSettings.UserAlpha63 { background-color: #1414145e; }
+.CaorenSettings.UserAlpha64 { background-color: #1414145c; }
+.CaorenSettings.UserAlpha65 { background-color: #14141459; }
+.CaorenSettings.UserAlpha66 { background-color: #14141457; }
+.CaorenSettings.UserAlpha67 { background-color: #14141454; }
+.CaorenSettings.UserAlpha68 { background-color: #14141452; }
+.CaorenSettings.UserAlpha69 { background-color: #1414144f; }
+.CaorenSettings.UserAlpha70 { background-color: #1414144c; }
+.CaorenSettings.UserAlpha71 { background-color: #1414144a; }
+.CaorenSettings.UserAlpha72 { background-color: #14141447; }
+.CaorenSettings.UserAlpha73 { background-color: #14141445; }
+.CaorenSettings.UserAlpha74 { background-color: #14141442; }
+.CaorenSettings.UserAlpha75 { background-color: #14141440; }
+.CaorenSettings.UserAlpha76 { background-color: #1414143d; }
+.CaorenSettings.UserAlpha77 { background-color: #1414143b; }
+.CaorenSettings.UserAlpha78 { background-color: #14141438; }
+.CaorenSettings.UserAlpha79 { background-color: #14141436; }
+.CaorenSettings.UserAlpha80 { background-color: #14141433; }
+.CaorenSettings.UserAlpha81 { background-color: #14141430; }
+.CaorenSettings.UserAlpha82 { background-color: #1414142e; }
+.CaorenSettings.UserAlpha83 { background-color: #1414142b; }
+.CaorenSettings.UserAlpha84 { background-color: #14141429; }
+.CaorenSettings.UserAlpha85 { background-color: #14141426; }
+.CaorenSettings.UserAlpha86 { background-color: #14141424; }
+.CaorenSettings.UserAlpha87 { background-color: #14141421; }
+.CaorenSettings.UserAlpha88 { background-color: #1414141f; }
+.CaorenSettings.UserAlpha89 { background-color: #1414141c; }
+.CaorenSettings.UserAlpha90 { background-color: #1414141a; }
+.CaorenSettings.UserAlpha91 { background-color: #14141417; }
+.CaorenSettings.UserAlpha92 { background-color: #14141414; }
+.CaorenSettings.UserAlpha93 { background-color: #14141412; }
+.CaorenSettings.UserAlpha94 { background-color: #1414140f; }
+.CaorenSettings.UserAlpha95 { background-color: #1414140d; }
+.CaorenSettings.UserAlpha96 { background-color: #1414140a; }
+.CaorenSettings.UserAlpha97 { background-color: #14141408; }
+.CaorenSettings.UserAlpha98 { background-color: #14141405; }
+.CaorenSettings.UserAlpha99 { background-color: #14141403; }
+.CaorenSettings.UserAlpha100 { background-color: #14141400; }
+
+/* Custom HUD 不允许 html 属性，使用独立 Label 保留参数色和标题粗体。 */
+.CaorenDetailRows { width: 100%; flow-children: down; margin-top: 8px; }
+.CaorenDetailLine { width: 100%; height: 28px; flow-children: right; }
+.CaorenDetailFragment { width: fit-children; height: 28px; font-size: 18px; line-height: 28px; color: #ccccccff; }
+.CaorenDetailLine.HelpHeading .CaorenDetailFragment { font-weight: bold; }
+.CaorenDetailFragment.HelpParam0 { color: #82D8FF; }
+.CaorenDetailFragment.HelpParam1 { color: #FFC776; }
+.CaorenDetailFragment.HelpParam2 { color: #B5E48C; }
+.CaorenDetailFragment.HelpParam3 { color: #D7A8FF; }
+.CaorenDetailFragment.HelpParam4 { color: #FF9EAA; }
+.CaorenDetailFragment.HelpParam5 { color: #80E0CF; }
+.CaorenDetailFragment.HelpParam6 { color: #F2E58C; }
+.CaorenDetailFragment.HelpParam7 { color: #A8B8FF; }
+
+
+/* 背景根容器无流布局，主体与导航都是从左上角开始的独立层。 */
+.CaorenSettings { flow-children: none; background-image: none; transition-duration: 0s; }
+.CaorenMenuBody { width: 100%; height: 100%; flow-children: down; }
+.CaorenNavigationOverlay { width: 100%; height: 100%; position: 0px 0px 0px; flow-children: none; z-index: 20; }
+.CaorenBottomBrand { horizontal-align: left; vertical-align: bottom; margin: 24px 32px; font-size: 22px; font-weight: bold; color: #ccccccff; }
+.CaorenButtonHost { width: 200px; height: 56px; margin: 4px; horizontal-align: right; vertical-align: center; flow-children: none; overflow: noclip; }
+.CaorenNumberHost { width: 56px; height: 48px; margin: 0px; horizontal-align: left; }
+.CaorenNavHost { width: 120px; height: 64px; margin: 0px; }
+.CaorenGuideHost { width: 100%; height: 54px; margin: 0px; }
+.CaorenVoteHost { width: 100%; height: 80px; margin: 0px; }
+.CaorenPageHost { width: 120px; height: 48px; }
+.CaorenBackHost { width: 120px; height: 56px; margin: 4px 24px; horizontal-align: left; vertical-align: top; }
+.CaorenExitHost { width: 64px; height: 56px; margin: 4px 24px; horizontal-align: right; vertical-align: top; }
+
+/* 业务按钮使用自己的静态视觉样式，不挂原生 PopupButton 的自动声音。 */
+.CaorenMenuButton { width: 100%; height: 100%; min-width: 0px; min-height: 0px; margin: 0px; padding: 0px; flow-children: none; background-color: #ffffff00; border-radius: 3px; transition-property: background-color; transition-duration: .1s; }
+.CaorenMenuButton:hover { background-color: #ffffff22; }
+.CaorenMenuButton Label { margin: 0px; font-family: Stratum2, "Arial Unicode MS"; font-size: 20px; font-weight: medium; text-transform: none; color: #ffffffff; horizontal-align: center; vertical-align: center; text-align: center; }
+.CaorenMenuButton.CaorenNavTab { min-width: 0px; }
+.CaorenNavTab Label { font-size: 16px; }
+.CaorenTabSelected Label { color: #82D8FF; }
+.CaorenNumberStep Label { width: fit-children; height: fit-children; padding: 0px; font-size: 18px; }
+.CaorenPreferenceValue { width: 96px; height: 48px; margin: 0px; padding-top: 10px; }
+.CaorenMenuButton.Negative { background-color: #a83c3c66; }
+.CaorenMenuButton.Negative:hover { background-color: #bd444499; }
+.CaorenBackArrow, .CaorenExitButton { background-color: #ffffff18; border: 1px solid #ffffff55; }
+.CaorenBackContent { width: fit-children; height: fit-children; flow-children: right; horizontal-align: center; vertical-align: center; }
+.CaorenBackContent .CaorenBackSymbol { font-size: 34px; margin-right: 6px; color: #ffffffff; }
+.CaorenBackContent .CaorenBackText { font-size: 24px; color: #ffffffff; }
+.CaorenExitButton .CaorenExitGlyph { width: 100%; height: fit-children; font-size: 40px; font-weight: bold; color: #ff6262ff; text-align: center; horizontal-align: center; vertical-align: center; }
+.CaorenGuideItem { flow-children: right; }
+.CaorenGuideItem .CaorenGuideName { width: 32%; text-align: left; horizontal-align: left; font-size: 20px; }
+.CaorenGuideItem .CaorenGuideSummary { width: 65%; text-align: left; horizontal-align: left; font-size: 16px; }
+/* 提示与按钮互为兄弟，不继承 PopupButton Label 的字体、边距和占位。 */
+.CaorenHoverHint { visibility: collapse; width: 240px; height: 36px; padding: 8px 12px; position: 0px -40px 0px; background-color: #202020ff; border: 1px solid #ffffff55; z-index: 100; }
+.CaorenHoverHintText { width: 100%; height: 20px; color: #eeeeeeff; font-size: 16px; margin: 0px; text-transform: none; }
+.CaorenButtonHost:hover { z-index: 100; }
+.CaorenButtonHost:hover .CaorenHoverHint { visibility: visible; }
+.CaorenHoverHint.HintBelow { position: 0px 68px 0px; }
+.CaorenExitHost .CaorenHoverHint { horizontal-align: right; position: 0px 60px 0px; }
+.CaorenSettingsPage, .CaorenSettingsContent, .CaorenMenuSection, .CaorenVoteActions, .CaorenNumberSteps, .CaorenPrimaryNav { overflow: noclip; }
+/* 菜单自加音效由服务器音频服务按个人音量播放，取消原生 CSS 自动播放。 */
+.CaorenSettings Button.CaorenMenuButton:hover, .CaorenSettings Button.CaorenMenuButton:enabled:hover,
+.CaorenSettings Button.CaorenMenuButton:active, .CaorenSettings Button.CaorenMenuButton.Activated { sound: ""; }
+.CaorenSettings Button.CaorenMenuButton Label,
+.CaorenSettings Button.CaorenMenuButton:selected Label { sound: ""; }
+/* 临时回退：划过用游戏原生声音，0% 不启用此类；非零比例尚未验证。 */
+
+
+/* 内容区域不沿用原生 SettingsBackground 的内边距，避免百分比子项越过可用区域。 */
+.CaorenSettingsContent { width: 946px; padding: 0px; margin-top: 74px; }
+/* 五个槽位均相对自己的固定面板定位，右端另留 16px，不依赖流式裁剪边界。 */
+.CaorenNumberHost { horizontal-align: left; vertical-align: top; }
+.CaorenNumberSlotMinus5 { position: 0px 0px 0px; }
+.CaorenNumberSlotMinus1 { position: 62px 0px 0px; }
+.CaorenNumberCurrent { position: 124px 0px 0px; horizontal-align: left; vertical-align: top; }
+.CaorenNumberSlotPlus1 { position: 226px 0px 0px; }
+.CaorenNumberSlotPlus5 { position: 288px 0px 0px; }
+
+/* 音频管理沿用已验收的静态按钮，悬停不修改文字或尺寸。 */
+.CaorenAudioControls { flow-children: right; width: 100%; height: 50px; margin: 6px 0px 12px 0px; overflow: noclip; }
+.CaorenAudioButton { width: 140px; height: 44px; margin-right: 12px; }
+.CaorenAudioItem { width: 100%; height: 42px; margin: 3px 0px; }
+.CaorenAudioItem .CaorenMenuButton { background-color: #ffffff12; }
+.CaorenAudioItem .CaorenMenuButton:hover { background-color: #ffffff28; }
+.CaorenAudioItem .CaorenMenuButton Label { font-size: 18px; }
+
+/* 个人悬停声音分档，0% 保持无声；原生素材不写入资源包。 */
+.CaorenSettings.MenuVolume1 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover1"; }
+.CaorenSettings.MenuVolume2 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover2"; }
+.CaorenSettings.MenuVolume3 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover3"; }
+.CaorenSettings.MenuVolume4 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover4"; }
+.CaorenSettings.MenuVolume5 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover5"; }
+.CaorenSettings.MenuVolume6 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover6"; }
+.CaorenSettings.MenuVolume7 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover7"; }
+.CaorenSettings.MenuVolume8 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover8"; }
+.CaorenSettings.MenuVolume9 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover9"; }
+.CaorenSettings.MenuVolume10 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover10"; }
+.CaorenSettings.MenuVolume11 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover11"; }
+.CaorenSettings.MenuVolume12 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover12"; }
+.CaorenSettings.MenuVolume13 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover13"; }
+.CaorenSettings.MenuVolume14 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover14"; }
+.CaorenSettings.MenuVolume15 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover15"; }
+.CaorenSettings.MenuVolume16 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover16"; }
+.CaorenSettings.MenuVolume17 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover17"; }
+.CaorenSettings.MenuVolume18 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover18"; }
+.CaorenSettings.MenuVolume19 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover19"; }
+.CaorenSettings.MenuVolume20 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover20"; }
+.CaorenSettings.MenuVolume21 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover21"; }
+.CaorenSettings.MenuVolume22 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover22"; }
+.CaorenSettings.MenuVolume23 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover23"; }
+.CaorenSettings.MenuVolume24 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover24"; }
+.CaorenSettings.MenuVolume25 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover25"; }
+.CaorenSettings.MenuVolume26 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover26"; }
+.CaorenSettings.MenuVolume27 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover27"; }
+.CaorenSettings.MenuVolume28 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover28"; }
+.CaorenSettings.MenuVolume29 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover29"; }
+.CaorenSettings.MenuVolume30 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover30"; }
+.CaorenSettings.MenuVolume31 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover31"; }
+.CaorenSettings.MenuVolume32 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover32"; }
+.CaorenSettings.MenuVolume33 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover33"; }
+.CaorenSettings.MenuVolume34 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover34"; }
+.CaorenSettings.MenuVolume35 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover35"; }
+.CaorenSettings.MenuVolume36 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover36"; }
+.CaorenSettings.MenuVolume37 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover37"; }
+.CaorenSettings.MenuVolume38 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover38"; }
+.CaorenSettings.MenuVolume39 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover39"; }
+.CaorenSettings.MenuVolume40 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover40"; }
+.CaorenSettings.MenuVolume41 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover41"; }
+.CaorenSettings.MenuVolume42 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover42"; }
+.CaorenSettings.MenuVolume43 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover43"; }
+.CaorenSettings.MenuVolume44 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover44"; }
+.CaorenSettings.MenuVolume45 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover45"; }
+.CaorenSettings.MenuVolume46 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover46"; }
+.CaorenSettings.MenuVolume47 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover47"; }
+.CaorenSettings.MenuVolume48 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover48"; }
+.CaorenSettings.MenuVolume49 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover49"; }
+.CaorenSettings.MenuVolume50 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover50"; }
+.CaorenSettings.MenuVolume51 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover51"; }
+.CaorenSettings.MenuVolume52 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover52"; }
+.CaorenSettings.MenuVolume53 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover53"; }
+.CaorenSettings.MenuVolume54 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover54"; }
+.CaorenSettings.MenuVolume55 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover55"; }
+.CaorenSettings.MenuVolume56 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover56"; }
+.CaorenSettings.MenuVolume57 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover57"; }
+.CaorenSettings.MenuVolume58 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover58"; }
+.CaorenSettings.MenuVolume59 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover59"; }
+.CaorenSettings.MenuVolume60 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover60"; }
+.CaorenSettings.MenuVolume61 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover61"; }
+.CaorenSettings.MenuVolume62 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover62"; }
+.CaorenSettings.MenuVolume63 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover63"; }
+.CaorenSettings.MenuVolume64 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover64"; }
+.CaorenSettings.MenuVolume65 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover65"; }
+.CaorenSettings.MenuVolume66 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover66"; }
+.CaorenSettings.MenuVolume67 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover67"; }
+.CaorenSettings.MenuVolume68 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover68"; }
+.CaorenSettings.MenuVolume69 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover69"; }
+.CaorenSettings.MenuVolume70 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover70"; }
+.CaorenSettings.MenuVolume71 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover71"; }
+.CaorenSettings.MenuVolume72 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover72"; }
+.CaorenSettings.MenuVolume73 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover73"; }
+.CaorenSettings.MenuVolume74 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover74"; }
+.CaorenSettings.MenuVolume75 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover75"; }
+.CaorenSettings.MenuVolume76 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover76"; }
+.CaorenSettings.MenuVolume77 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover77"; }
+.CaorenSettings.MenuVolume78 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover78"; }
+.CaorenSettings.MenuVolume79 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover79"; }
+.CaorenSettings.MenuVolume80 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover80"; }
+.CaorenSettings.MenuVolume81 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover81"; }
+.CaorenSettings.MenuVolume82 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover82"; }
+.CaorenSettings.MenuVolume83 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover83"; }
+.CaorenSettings.MenuVolume84 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover84"; }
+.CaorenSettings.MenuVolume85 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover85"; }
+.CaorenSettings.MenuVolume86 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover86"; }
+.CaorenSettings.MenuVolume87 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover87"; }
+.CaorenSettings.MenuVolume88 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover88"; }
+.CaorenSettings.MenuVolume89 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover89"; }
+.CaorenSettings.MenuVolume90 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover90"; }
+.CaorenSettings.MenuVolume91 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover91"; }
+.CaorenSettings.MenuVolume92 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover92"; }
+.CaorenSettings.MenuVolume93 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover93"; }
+.CaorenSettings.MenuVolume94 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover94"; }
+.CaorenSettings.MenuVolume95 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover95"; }
+.CaorenSettings.MenuVolume96 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover96"; }
+.CaorenSettings.MenuVolume97 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover97"; }
+.CaorenSettings.MenuVolume98 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover98"; }
+.CaorenSettings.MenuVolume99 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover99"; }
+.CaorenSettings.MenuVolume100 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover100"; }

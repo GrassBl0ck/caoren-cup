@@ -11,6 +11,9 @@
   var currentProfile = {};
   var currentMatchState = { matchStatus: 'waiting', joined: false, joinAvailable: false, leaveAvailable: false };
   var matchStatusLabels = { waiting: '等待中', started: '已开始', ended: '已结束' };
+  var savedLoginNameKey = 'caoren_saved_login_name';
+  var savedPasswordKey = 'caoren_saved_login_password';
+  var saveDecisionKey = 'caoren_saved_login_decided';
 
   async function requestJson(url, options) {
     try {
@@ -30,6 +33,53 @@
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body || {})
     };
+  }
+
+  function loadSavedCredentials() {
+    try {
+      var savedName = localStorage.getItem(savedLoginNameKey) || '';
+      var savedPassword = localStorage.getItem(savedPasswordKey) || '';
+      if (byId('player-center-login-name') && savedName) {
+        byId('player-center-login-name').value = savedName;
+        byId('player-center-save-login-name').checked = true;
+      }
+      if (byId('player-center-login-password') && savedPassword) {
+        byId('player-center-login-password').value = savedPassword;
+        byId('player-center-save-password').checked = true;
+      }
+    } catch (_error) {
+      // 浏览器禁用本地存储时仍允许正常登录。
+    }
+  }
+
+  function saveCredentials(loginName, password) {
+    try {
+      if (byId('player-center-save-login-name')?.checked === true) localStorage.setItem(savedLoginNameKey, loginName);
+      else localStorage.removeItem(savedLoginNameKey);
+      if (byId('player-center-save-password')?.checked === true) localStorage.setItem(savedPasswordKey, password);
+      else localStorage.removeItem(savedPasswordKey);
+      localStorage.setItem(saveDecisionKey, '1');
+    } catch (_error) {
+      // 不影响登录结果。
+    }
+  }
+
+  async function askFirstLoginSavePreference() {
+    try {
+      if (localStorage.getItem(saveDecisionKey) === '1') return;
+      var saveBoth = await window.caorenConfirm('这是第一次使用账号密码登录。是否保存账号和密码？\n\n登录框下方也可以分别选择“保存账号”和“保存密码”。', {
+        title: '保存登录信息',
+        confirmText: '保存账号和密码',
+        cancelText: '暂不保存'
+      });
+      if (saveBoth) {
+        byId('player-center-save-login-name').checked = true;
+        byId('player-center-save-password').checked = true;
+      }
+      localStorage.setItem(saveDecisionKey, '1');
+    } catch (_error) {
+      // 不影响登录结果。
+    }
   }
 
   function setEntryError(message, success) {
@@ -180,14 +230,18 @@
     var result = rememberDevice
       ? await window.caorenDesktop.loginPlayerCenter(loginName, password, true)
       : await requestJson('/api/account-auth/login', jsonOptions('POST', { loginName: loginName, password: password }));
-    if (passwordInput) passwordInput.value = '';
     if (!result.ok) {
+      if (passwordInput) passwordInput.value = '';
       var reason = result.reason || result.data?.error;
       var message = reason === 'account_disabled' ? '账号已禁用，请联系管理员。' :
+        reason === 'game_entry_required' ? '请先进入草人杯 CS2 服务器，使用 /cclogin 后再用 /ccreg 注册或绑定账号。' :
         reason === 'rate_limited' ? '失败次数过多，请稍后再试。' :
           reason === 'safe_storage_unavailable' ? 'Windows 安全凭据存储不可用，请取消“记住此设备”后登录。' : '账号或密码错误。';
       return setEntryError(message);
     }
+    await askFirstLoginSavePreference();
+    saveCredentials(loginName, password);
+    if (passwordInput) passwordInput.value = '';
     await establishSession(
       rememberDevice ? result.sessionBootstrapTicket : result.data.sessionBootstrapTicket,
       rememberDevice ? 'desktop-device' : 'web',
@@ -204,17 +258,17 @@
       if (result.ok) return establishSession(result.sessionBootstrapTicket, 'desktop-device');
       var messages = {
         not_found: '',
-        revoked: '此设备的登录已撤销，请使用账号密码或 !cclogin 登录。',
-        expired: '此设备登录已过期，请使用账号密码或 !cclogin 登录。',
+        revoked: '此设备的登录已撤销，请使用账号密码或 /cclogin 登录。',
+        expired: '此设备登录已过期，请使用账号密码或 /cclogin 登录。',
         account_disabled: '账号已禁用，请联系管理员。',
-        password_state_invalid: '账号密码状态异常，请使用 !cclogin 恢复。',
-        account_unavailable: '账号尚未建立，请使用 !cclogin 创建账号。',
+        password_state_invalid: '账号密码状态异常，请使用 /cclogin 恢复。',
+        account_unavailable: '账号尚未建立，请使用 /cclogin 创建账号。',
         network_error: '网络暂时不可用，设备凭据已保留，可稍后重试。',
         credential_corrupt: '本机设备凭据无法解密，已回到账号登录。',
         safe_storage_unavailable: 'Windows 安全凭据存储不可用，请使用账号密码登录。',
         rate_limited: '自动登录尝试过多，请稍后重试。'
       };
-      showEntry(messages[result.reason] || '设备自动登录失败，请使用账号密码或 !cclogin 登录。');
+      showEntry(messages[result.reason] || '设备自动登录失败，请使用账号密码或 /cclogin 登录。');
       return false;
     } finally {
       desktopAutoLoginInFlight = false;
@@ -223,7 +277,7 @@
 
   async function submitGameCode() {
     var gameCode = String(byId('player-center-game-code')?.value || '').trim();
-    if (!gameCode) return setEntryError('请输入 !cclogin 返回的一次性游戏码。');
+    if (!gameCode) return setEntryError('请输入 /cclogin 返回的一次性游戏码。');
     setEntryError('正在验证游戏码...');
     var result = await requestJson('/api/account-recovery/game-code', jsonOptions('POST', { gameCode: gameCode }));
     if (!result.ok) return setEntryError(result.data.error === 'account_disabled' ? '账号已禁用，请联系管理员。' : '游戏码无效或已过期。');
@@ -364,6 +418,7 @@
     byId('player-center-forget-device-btn')?.addEventListener('click', forgetDesktopDevice);
     byId('player-center-join-btn')?.addEventListener('click', joinOrLeaveMatch);
     bindSocketInvalidation();
+    loadSavedCredentials();
     var desktopAvailable = !!window.caorenDesktop?.loginPlayerCenter;
     if (byId('player-center-remember-device-row')) byId('player-center-remember-device-row').hidden = !desktopAvailable;
     if (byId('player-center-forget-device-btn')) byId('player-center-forget-device-btn').hidden = !desktopAvailable;

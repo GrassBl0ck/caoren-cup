@@ -96,9 +96,9 @@ export const canEnqueueServerCommand = (
 ): CommandPolicyResult => {
   const commandClass = classifyServerCommand(command);
   const matchMode = session.matchOptions?.matchMode === 'duel' ? 'duel' : 'competitive';
-  const controller = session.matchOptions?.matchController === 'caoren'
-    ? 'caoren'
-    : (matchMode === 'duel' ? 'caoren' : 'matchzy');
+  // MatchZy 的旧比赛控制字段只做历史兼容，不再决定网页命令权限。
+  // 所有正式模式统一由 CaorenCup Gamemode Runtime 接管。
+  const controller = 'caoren';
   const caorenModifiersEnabled = session.matchOptions?.caorenModifiersEnabled === true;
 
   if (commandClass === 'cosmetic') {
@@ -127,29 +127,6 @@ export const canEnqueueServerCommand = (
         : {
             allowed: false,
             reason: '单挑模式未开启 CaorenCup 修改，已阻止娱乐模块命令。',
-          };
-    }
-  }
-
-  if (controller === 'matchzy') {
-    if (commandClass === 'match-flow') {
-      return {
-        allowed: false,
-        reason: '标准竞技由 MatchZy 管理 ready、暂停、warmup 和重开，网页端不能直接下发该流程命令。',
-      };
-    }
-    if (commandClass === 'map' || commandClass === 'duel-flow') {
-      return {
-        allowed: false,
-        reason: '标准竞技由 MatchZy 管理比赛流程，网页端不能直接切图或修改对局流程 CVar。',
-      };
-    }
-    if (commandClass === 'caoren-modifier') {
-      return caorenModifiersEnabled
-        ? { allowed: true }
-        : {
-            allowed: false,
-            reason: '本局未开启 CaorenCup 修改，已阻止娱乐模块命令。',
           };
     }
   }

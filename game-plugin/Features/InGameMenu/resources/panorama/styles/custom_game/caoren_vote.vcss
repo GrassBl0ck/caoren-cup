@@ -1,0 +1,119 @@
+/* 原生底色、字体、底纹和按钮样式；左侧位置参照用户截图。 */
+.CaorenVoteRoot { width: 100%; height: 100%; }
+.CaorenVotingNotice { width: 340px; position: 0px 410px 0px; padding: 16px; flow-children: down; background-color: rgba(20,20,20,0.90); background-image: url("s2r://panorama/images/backgrounds/bluedots_large_png.vtex"); background-size: 360px 360px; background-img-opacity: 0.04; z-index: 1; }
+.CaorenNoticeTitle { width: 100%; color: #ccccccff; font-family: Stratum2, "Arial Unicode MS"; font-weight: bold; font-size: 20px; margin-bottom: 8px; }
+.CaorenNoticeQuestion { width: 100%; color: #ccccccff; font-size: 18px; margin-bottom: 8px; }
+.CaorenNoticeStatus { width: 100%; color: #ccccccff; font-size: 16px; margin-bottom: 8px; }
+.CaorenNoticeDetail { width: 100%; color: #ccccccff; font-size: 14px; margin-top: 4px; }
+.CaorenVotingNotice.VoteWon #notice_status { color: #0F9D58; }
+#vote_page { z-index: 5; }
+.CaorenVoteOption { width: 100%; font-size: 20px; color: #ccccccff; vertical-align: center; }
+.MyVote { background-color: #82d7ff1a; }
+
+.CaorenNoticeOptions { width: 100%; font-size: 16px; color: #eeeeeeff; margin-bottom: 8px; white-space: normal; }
+.CaorenVoteRow { width: 100%; min-height: 80px; margin: 0px; padding: 16px; border-bottom: 1px solid #ffffff33; flow-children: none; }
+.CaorenVoteRow:hover { background-color: #ffffff22; }
+.CaorenVoteRow.NotVoteable:hover { background-color: #ffffff00; }
+.CaorenVoteRow.MyVote, .CaorenVoteRow.MyVote:hover { background-color: #82d7ff1a; }
+
+/* 个人悬停声音分档，0% 保持无声；原生素材不写入资源包。 */
+.CaorenSettings.MenuVolume1 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover1"; }
+.CaorenSettings.MenuVolume2 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover2"; }
+.CaorenSettings.MenuVolume3 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover3"; }
+.CaorenSettings.MenuVolume4 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover4"; }
+.CaorenSettings.MenuVolume5 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover5"; }
+.CaorenSettings.MenuVolume6 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover6"; }
+.CaorenSettings.MenuVolume7 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover7"; }
+.CaorenSettings.MenuVolume8 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover8"; }
+.CaorenSettings.MenuVolume9 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover9"; }
+.CaorenSettings.MenuVolume10 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover10"; }
+.CaorenSettings.MenuVolume11 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover11"; }
+.CaorenSettings.MenuVolume12 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover12"; }
+.CaorenSettings.MenuVolume13 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover13"; }
+.CaorenSettings.MenuVolume14 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover14"; }
+.CaorenSettings.MenuVolume15 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover15"; }
+.CaorenSettings.MenuVolume16 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover16"; }
+.CaorenSettings.MenuVolume17 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover17"; }
+.CaorenSettings.MenuVolume18 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover18"; }
+.CaorenSettings.MenuVolume19 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover19"; }
+.CaorenSettings.MenuVolume20 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover20"; }
+.CaorenSettings.MenuVolume21 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover21"; }
+.CaorenSettings.MenuVolume22 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover22"; }
+.CaorenSettings.MenuVolume23 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover23"; }
+.CaorenSettings.MenuVolume24 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover24"; }
+.CaorenSettings.MenuVolume25 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover25"; }
+.CaorenSettings.MenuVolume26 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover26"; }
+.CaorenSettings.MenuVolume27 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover27"; }
+.CaorenSettings.MenuVolume28 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover28"; }
+.CaorenSettings.MenuVolume29 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover29"; }
+.CaorenSettings.MenuVolume30 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover30"; }
+.CaorenSettings.MenuVolume31 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover31"; }
+.CaorenSettings.MenuVolume32 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover32"; }
+.CaorenSettings.MenuVolume33 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover33"; }
+.CaorenSettings.MenuVolume34 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover34"; }
+.CaorenSettings.MenuVolume35 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover35"; }
+.CaorenSettings.MenuVolume36 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover36"; }
+.CaorenSettings.MenuVolume37 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover37"; }
+.CaorenSettings.MenuVolume38 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover38"; }
+.CaorenSettings.MenuVolume39 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover39"; }
+.CaorenSettings.MenuVolume40 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover40"; }
+.CaorenSettings.MenuVolume41 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover41"; }
+.CaorenSettings.MenuVolume42 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover42"; }
+.CaorenSettings.MenuVolume43 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover43"; }
+.CaorenSettings.MenuVolume44 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover44"; }
+.CaorenSettings.MenuVolume45 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover45"; }
+.CaorenSettings.MenuVolume46 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover46"; }
+.CaorenSettings.MenuVolume47 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover47"; }
+.CaorenSettings.MenuVolume48 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover48"; }
+.CaorenSettings.MenuVolume49 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover49"; }
+.CaorenSettings.MenuVolume50 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover50"; }
+.CaorenSettings.MenuVolume51 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover51"; }
+.CaorenSettings.MenuVolume52 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover52"; }
+.CaorenSettings.MenuVolume53 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover53"; }
+.CaorenSettings.MenuVolume54 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover54"; }
+.CaorenSettings.MenuVolume55 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover55"; }
+.CaorenSettings.MenuVolume56 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover56"; }
+.CaorenSettings.MenuVolume57 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover57"; }
+.CaorenSettings.MenuVolume58 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover58"; }
+.CaorenSettings.MenuVolume59 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover59"; }
+.CaorenSettings.MenuVolume60 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover60"; }
+.CaorenSettings.MenuVolume61 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover61"; }
+.CaorenSettings.MenuVolume62 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover62"; }
+.CaorenSettings.MenuVolume63 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover63"; }
+.CaorenSettings.MenuVolume64 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover64"; }
+.CaorenSettings.MenuVolume65 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover65"; }
+.CaorenSettings.MenuVolume66 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover66"; }
+.CaorenSettings.MenuVolume67 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover67"; }
+.CaorenSettings.MenuVolume68 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover68"; }
+.CaorenSettings.MenuVolume69 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover69"; }
+.CaorenSettings.MenuVolume70 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover70"; }
+.CaorenSettings.MenuVolume71 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover71"; }
+.CaorenSettings.MenuVolume72 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover72"; }
+.CaorenSettings.MenuVolume73 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover73"; }
+.CaorenSettings.MenuVolume74 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover74"; }
+.CaorenSettings.MenuVolume75 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover75"; }
+.CaorenSettings.MenuVolume76 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover76"; }
+.CaorenSettings.MenuVolume77 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover77"; }
+.CaorenSettings.MenuVolume78 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover78"; }
+.CaorenSettings.MenuVolume79 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover79"; }
+.CaorenSettings.MenuVolume80 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover80"; }
+.CaorenSettings.MenuVolume81 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover81"; }
+.CaorenSettings.MenuVolume82 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover82"; }
+.CaorenSettings.MenuVolume83 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover83"; }
+.CaorenSettings.MenuVolume84 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover84"; }
+.CaorenSettings.MenuVolume85 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover85"; }
+.CaorenSettings.MenuVolume86 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover86"; }
+.CaorenSettings.MenuVolume87 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover87"; }
+.CaorenSettings.MenuVolume88 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover88"; }
+.CaorenSettings.MenuVolume89 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover89"; }
+.CaorenSettings.MenuVolume90 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover90"; }
+.CaorenSettings.MenuVolume91 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover91"; }
+.CaorenSettings.MenuVolume92 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover92"; }
+.CaorenSettings.MenuVolume93 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover93"; }
+.CaorenSettings.MenuVolume94 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover94"; }
+.CaorenSettings.MenuVolume95 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover95"; }
+.CaorenSettings.MenuVolume96 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover96"; }
+.CaorenSettings.MenuVolume97 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover97"; }
+.CaorenSettings.MenuVolume98 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover98"; }
+.CaorenSettings.MenuVolume99 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover99"; }
+.CaorenSettings.MenuVolume100 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover100"; }

@@ -1,0 +1,129 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/csgostyles.vcss_c" />
+        <include src="s2r://panorama/styles/mainmenu.vcss_c" />
+        <include src="s2r://panorama/styles/settings/settings.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_admin_menu.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_vote.vcss_c" />
+    </styles>
+    <Panel class="CaorenVoteRoot" hittest="false">
+        <Panel class="CaorenVoteRoot" id="dialog" hittest="false">
+            <Panel class="CaorenVotingNotice Hidden" id="vote_notice" hittest="false">
+                <Label class="CaorenNoticeTitle" text="{s:notice_title}" />
+                <Label class="CaorenNoticeQuestion" text="{s:notice_question}" />
+                <Label class="CaorenNoticeOptions" text="{s:notice_options}" />
+                <Label class="CaorenNoticeStatus" text="{s:notice_status}" id="notice_status" />
+                <Label class="CaorenNoticeDetail" text="{s:notice_counts}" />
+                <Label class="CaorenNoticeDetail" text="{s:notice_participation}" />
+            </Panel>
+            <Panel class="CaorenSettings UserAlpha10 Hidden" id="vote_page" hittest="true">
+                <Panel class="CaorenMenuBody">
+                    <Panel class="content-navbar__tabs CaorenPrimaryNav Hidden" id="vote_player_tabs">
+                        <Panel class="content-navbar__tabs__center-container">
+                            <Panel id="player_commands_open_host" class="CaorenButtonHost CaorenNavHost">
+                                <Button class="CaorenNavTab CaorenMenuButton" id="player_commands_open">
+                                    <Label text="玩家指令" />
+                                </Button>
+                                <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看玩家指令" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="player_vote_open_host" class="CaorenButtonHost CaorenNavHost">
+                                <Button class="CaorenNavTab CaorenTabSelected CaorenMenuButton" id="player_vote_open">
+                                    <Label text="投票" />
+                                </Button>
+                                <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="打开当前投票" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="player_settings_open_host" class="CaorenButtonHost CaorenNavHost">
+                                <Button class="CaorenNavTab CaorenMenuButton" id="player_settings_open">
+                                    <Label text="个人设置" />
+                                </Button>
+                                <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="调整自己的菜单和音量" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="player_guide_open_host" class="CaorenButtonHost CaorenNavHost">
+                                <Button class="CaorenNavTab CaorenMenuButton" id="player_guide_open">
+                                    <Label text="打开指引" />
+                                </Button>
+                                <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看打开方式和键位设置" />
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                    </Panel>
+                    <Panel class="content-navbar__tabs CaorenPrimaryNav" id="vote_standalone_header">
+                        <Panel class="content-navbar__tabs__center-container">
+                            <Panel class="content-navbar__tabs__btn CaorenTabSelected">
+                                <Label class="" text="投票" />
+                            </Panel>
+                        </Panel>
+                    </Panel>
+                    <Panel class="SettingsMenuTab Active CaorenSettingsPage">
+                        <Panel class="SettingsBackground CaorenSettingsContent">
+                            <Label class="SettingsSectionTitleLabel" text="投票" />
+                            <Label class="CaorenVoteQuestion" text="{s:vote_question}" />
+                            <Label class="CaorenVoteState" text="{s:vote_page_status}" />
+                            <Panel id="vote_option_0_host" class="CaorenButtonHost CaorenVoteHost">
+                                <Button id="vote_option_0" class="CaorenVoteRow CaorenMenuButton">
+                                    <Label class="CaorenVoteOption" text="{s:vote_option0}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="{s:vote_hint0}" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="vote_option_1_host" class="CaorenButtonHost CaorenVoteHost">
+                                <Button id="vote_option_1" class="CaorenVoteRow CaorenMenuButton">
+                                    <Label class="CaorenVoteOption" text="{s:vote_option1}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="{s:vote_hint1}" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="vote_option_2_host" class="CaorenButtonHost CaorenVoteHost">
+                                <Button id="vote_option_2" class="CaorenVoteRow CaorenMenuButton">
+                                    <Label class="CaorenVoteOption" text="{s:vote_option2}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="{s:vote_hint2}" />
+                                </Panel>
+                            </Panel>
+                            <Panel id="vote_option_3_host" class="CaorenButtonHost CaorenVoteHost">
+                                <Button id="vote_option_3" class="CaorenVoteRow CaorenMenuButton">
+                                    <Label class="CaorenVoteOption" text="{s:vote_option3}" />
+                                </Button>
+                                <Panel class="CaorenHoverHint" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="{s:vote_hint3}" />
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                    </Panel>
+                </Panel>
+                <Panel class="CaorenNavigationOverlay" hittest="false">
+                    <Panel id="vote_back_host" class="CaorenButtonHost CaorenBackHost Hidden">
+                        <Button id="vote_back" class="CaorenBackArrow Hidden CaorenMenuButton">
+                            <Panel class="CaorenBackContent" hittest="false">
+                                <Label class="CaorenBackSymbol" text="‹" />
+                                <Label class="CaorenBackText" text="返回" />
+                            </Panel>
+                        </Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                            <Label class="CaorenHoverHintText" text="返回上一级" />
+                        </Panel>
+                    </Panel>
+                    <Panel id="vote_exit_host" class="CaorenButtonHost CaorenExitHost">
+                        <Button id="vote_exit" class="CaorenExitButton CaorenMenuButton">
+                            <Label text="X" class="CaorenExitGlyph" />
+                        </Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                            <Label class="CaorenHoverHintText" text="退出菜单，返回游戏" />
+                        </Panel>
+                    </Panel>
+                    <Label class="CaorenBottomBrand" text="CAORENCUP · 玩家" />
+                </Panel>
+            </Panel>
+        </Panel>
+    </Panel>
+</root>

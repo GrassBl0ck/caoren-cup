@@ -162,6 +162,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         return {
             steamNickname: identity.steamNickname || identity.displayName,
             loginName: account.loginName,
+            hasBackupPassword: account.passwordState === 'active',
         };
     };
 
@@ -173,8 +174,8 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         const session = await centerSessions.use(rawToken);
         const account = session ? service.getLoginAccount(session.identityId) : undefined;
         const identity = session ? service.getIdentity(session.identityId) : undefined;
-        if (!session || !account || !identity || !account.enabled || account.passwordState !== 'active' ||
-            !account.password || account.updatedAt !== session.accountUpdatedAt) {
+        if (!session || !account || !identity || !account.enabled ||
+            (account.passwordState === 'active' && !account.password) || account.updatedAt !== session.accountUpdatedAt) {
             if (rawToken) await centerSessions.revokeCurrent(rawToken);
             clearPlayerCenterCookie(req, res);
             res.status(401).json({ success: false, error: 'player_center_session_invalid' });
@@ -233,8 +234,8 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         if (!ticket) return res.status(401).json({ success: false, error: 'session_bootstrap_invalid' });
         const account = service.getLoginAccount(ticket.identityId);
         const identity = service.getIdentity(ticket.identityId);
-        if (!account || !identity || !account.enabled || account.passwordState !== 'active' || !account.password ||
-            account.updatedAt !== ticket.accountUpdatedAt) {
+        if (!account || !identity || !account.enabled ||
+            (account.passwordState === 'active' && !account.password) || account.updatedAt !== ticket.accountUpdatedAt) {
             return res.status(401).json({ success: false, error: 'session_bootstrap_invalid' });
         }
         try {

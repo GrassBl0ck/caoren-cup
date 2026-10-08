@@ -24,6 +24,10 @@ const v1333NumberEnv = (raw: unknown, fallback: number, min: number): number => 
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CHANGE_ME_ADMIN_PASSWORD';
 export const PLUGIN_TOKEN = process.env.PLUGIN_TOKEN || 'CHANGE_ME_PLUGIN_TOKEN';
 
+// 本地开发专用：置 CAOREN_DEV_PLAYER_LOGIN=1 后，登录名以 P: 开头并输入管理员密码，
+// 将以普通玩家（Player）身份进入房间，用于无 CS2 服务器时测试玩家侧交互。生产环境不得设置此变量。
+export const DEV_PLAYER_LOGIN_ENABLED = process.env.CAOREN_DEV_PLAYER_LOGIN === '1';
+
 export const DRAFT_PICK_SECONDS = Number(process.env.DRAFT_PICK_SECONDS || 15);
 export const MAP_BAN_FIRST_SECONDS = Number(process.env.MAP_BAN_FIRST_SECONDS || 12);
 export const MAP_BAN_SECOND_SECONDS = Number(process.env.MAP_BAN_SECOND_SECONDS || 11);

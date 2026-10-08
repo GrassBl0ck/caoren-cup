@@ -50,14 +50,14 @@ game/csgo/addons/counterstrikesharp/configs/plugins/CS2MiniGames/CS2MiniGames.js
 
 ## 命令
 
-游戏内聊天可使用 `!命令名`，控制台可使用对应的 `css_命令名`：
+游戏内聊天可使用 `/命令名`，控制台可使用对应的 `css_命令名`：
 
 | 聊天命令 | 控制台命令 | 用途 |
 | --- | --- | --- |
-| `!tetris` | `css_tetris` | 开始俄罗斯方块 |
-| `!toptetris` | `css_toptetris` | 查看全服 Top 10 和个人最佳成绩 |
-| `!tetrishelp` | `css_tetrishelp` | 查看操作说明 |
-| `!minigames` | `css_minigames` | 查看可用小游戏 |
+| `/tetris` | `css_tetris` | 开始俄罗斯方块 |
+| `/toptetris` | `css_toptetris` | 查看全服 Top 10 和个人最佳成绩 |
+| `/tetrishelp` | `css_tetrishelp` | 查看操作说明 |
+| `/minigames` | `css_minigames` | 查看可用小游戏 |
 
 ## 俄罗斯方块按键
 

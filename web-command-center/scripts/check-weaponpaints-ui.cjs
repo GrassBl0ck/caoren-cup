@@ -8,6 +8,7 @@ const js = fs.readFileSync(path.join(root, 'public', 'js', 'weaponpaints-app.js'
 const lobbyJs = fs.readFileSync(path.join(root, 'public', 'js', 'lobby-app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'weaponpaints.css'), 'utf8');
 const webPackageScript = fs.readFileSync(path.join(root, '..', 'scripts', 'package-caoren-web.ps1'), 'utf8');
+const webPackageCommon = fs.readFileSync(path.join(root, '..', 'scripts', 'CaorenRelease.psm1'), 'utf8');
 const socketApi = fs.readFileSync(path.join(root, 'src', 'weaponpaints', 'socket-api.ts'), 'utf8');
 const service = fs.readFileSync(path.join(root, 'src', 'weaponpaints', 'service.ts'), 'utf8');
 const repository = fs.readFileSync(path.join(root, 'src', 'weaponpaints', 'repository.ts'), 'utf8');
@@ -150,7 +151,9 @@ assert.match(js, /function setPromoVisibility\(visible\)/, '换肤面板必须�
 assert.match(js, /openPanel\(\)[\s\S]{0,240}setPromoVisibility\(false\)/, '打开换肤面板后必须隐藏宣传卡片');
 assert.match(js, /weaponpaints-panel['"]\)\.hidden\s*=\s*true;[\s\S]{0,160}setPromoVisibility\(true\)/, '关闭换肤面板后必须恢复宣传卡片');
 assert.doesNotMatch(js, /https?:\/\//i, '换肤 UI 不应依赖远程图片或接口');
-assert.match(webPackageScript, /public[\\\\/]weaponpaints/, '网页主包必须排除独立发布的 WeaponPaints 图片目录');
+assert.match(webPackageScript, /CaorenRelease\.psm1/, '网页打包入口必须载入公共打包模块');
+assert.match(webPackageScript, /Copy-ReleaseWebTree/, '网页打包入口必须调用清洁树复制');
+assert.match(webPackageCommon, /public[\\\\/]weaponpaints/, '网页主包必须排除独立发布的 WeaponPaints 图片目录');
 assert.match(webPackageScript, /weaponpaints-data/, '网页主包必须携带 WeaponPaints 本地目录数据');
 
 console.log('weaponpaints UI checks passed');

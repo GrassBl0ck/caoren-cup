@@ -1,0 +1,76 @@
+/* 仅显式开启开发控件时加入 VPK。正式资源不包含此滑轨及调节样式。
+   轨道/进度/滑块的尺寸、颜色来自 CS2 csgostyles.vcss_c 的 HorizontalSlider。
+   用透明按钮命中区接收位置点击，不支持按住拖动。 */
+.CaorenDevDescription { width: 45%; }
+.CaorenDevSliderControl { width: 380px; height: 48px; horizontal-align: right; vertical-align: center; flow-children: right; }
+.CaorenDevSlider { width: 300px; height: 32px; vertical-align: center; }
+.CaorenDevSliderRail { width: 100%; height: 8px; vertical-align: center; background-color: #cccccc20; }
+.CaorenDevSliderProgress { width: 10%; height: 8px; vertical-align: center; background-color: #cccccc80; }
+.CaorenDevSliderSegments { width: 100%; height: 100%; flow-children: right; z-index: 3; }
+.CaorenDevSliderSegment { width: fill-parent-flow(1); height: 100%; background-color: none; }
+.CaorenDevSliderSegment:active { sound: "UIPanorama.submenu_select"; }
+.CaorenDevSliderThumb { width: 16px; height: 12px; border-radius: 2px; background-color: #ccccccff; vertical-align: center; transform: translateX(28.4px); z-index: 4; }
+.CaorenDevSliderValue { width: 64px; margin-left: 16px; text-align: right; vertical-align: center; color: #ccccccff; font-size: 20px; }
+.CaorenSettings.DevTransparency0 { background-color: rgba(20,20,20,1.00); }
+.DevTransparency0 #dev_slider_thumb { transform: translateX(0.0px); }
+.DevTransparency0 #dev_slider_progress { width: 0%; }
+.CaorenSettings.DevTransparency5 { background-color: rgba(20,20,20,0.95); }
+.DevTransparency5 #dev_slider_thumb { transform: translateX(14.2px); }
+.DevTransparency5 #dev_slider_progress { width: 5%; }
+.CaorenSettings.DevTransparency10 { background-color: rgba(20,20,20,0.90); }
+.DevTransparency10 #dev_slider_thumb { transform: translateX(28.4px); }
+.DevTransparency10 #dev_slider_progress { width: 10%; }
+.CaorenSettings.DevTransparency15 { background-color: rgba(20,20,20,0.85); }
+.DevTransparency15 #dev_slider_thumb { transform: translateX(42.6px); }
+.DevTransparency15 #dev_slider_progress { width: 15%; }
+.CaorenSettings.DevTransparency20 { background-color: rgba(20,20,20,0.80); }
+.DevTransparency20 #dev_slider_thumb { transform: translateX(56.8px); }
+.DevTransparency20 #dev_slider_progress { width: 20%; }
+.CaorenSettings.DevTransparency25 { background-color: rgba(20,20,20,0.75); }
+.DevTransparency25 #dev_slider_thumb { transform: translateX(71.0px); }
+.DevTransparency25 #dev_slider_progress { width: 25%; }
+.CaorenSettings.DevTransparency30 { background-color: rgba(20,20,20,0.70); }
+.DevTransparency30 #dev_slider_thumb { transform: translateX(85.2px); }
+.DevTransparency30 #dev_slider_progress { width: 30%; }
+.CaorenSettings.DevTransparency35 { background-color: rgba(20,20,20,0.65); }
+.DevTransparency35 #dev_slider_thumb { transform: translateX(99.4px); }
+.DevTransparency35 #dev_slider_progress { width: 35%; }
+.CaorenSettings.DevTransparency40 { background-color: rgba(20,20,20,0.60); }
+.DevTransparency40 #dev_slider_thumb { transform: translateX(113.6px); }
+.DevTransparency40 #dev_slider_progress { width: 40%; }
+.CaorenSettings.DevTransparency45 { background-color: rgba(20,20,20,0.55); }
+.DevTransparency45 #dev_slider_thumb { transform: translateX(127.8px); }
+.DevTransparency45 #dev_slider_progress { width: 45%; }
+.CaorenSettings.DevTransparency50 { background-color: rgba(20,20,20,0.50); }
+.DevTransparency50 #dev_slider_thumb { transform: translateX(142.0px); }
+.DevTransparency50 #dev_slider_progress { width: 50%; }
+.CaorenSettings.DevTransparency55 { background-color: rgba(20,20,20,0.45); }
+.DevTransparency55 #dev_slider_thumb { transform: translateX(156.2px); }
+.DevTransparency55 #dev_slider_progress { width: 55%; }
+.CaorenSettings.DevTransparency60 { background-color: rgba(20,20,20,0.40); }
+.DevTransparency60 #dev_slider_thumb { transform: translateX(170.4px); }
+.DevTransparency60 #dev_slider_progress { width: 60%; }
+.CaorenSettings.DevTransparency65 { background-color: rgba(20,20,20,0.35); }
+.DevTransparency65 #dev_slider_thumb { transform: translateX(184.6px); }
+.DevTransparency65 #dev_slider_progress { width: 65%; }
+.CaorenSettings.DevTransparency70 { background-color: rgba(20,20,20,0.30); }
+.DevTransparency70 #dev_slider_thumb { transform: translateX(198.8px); }
+.DevTransparency70 #dev_slider_progress { width: 70%; }
+.CaorenSettings.DevTransparency75 { background-color: rgba(20,20,20,0.25); }
+.DevTransparency75 #dev_slider_thumb { transform: translateX(213.0px); }
+.DevTransparency75 #dev_slider_progress { width: 75%; }
+.CaorenSettings.DevTransparency80 { background-color: rgba(20,20,20,0.20); }
+.DevTransparency80 #dev_slider_thumb { transform: translateX(227.2px); }
+.DevTransparency80 #dev_slider_progress { width: 80%; }
+.CaorenSettings.DevTransparency85 { background-color: rgba(20,20,20,0.15); }
+.DevTransparency85 #dev_slider_thumb { transform: translateX(241.4px); }
+.DevTransparency85 #dev_slider_progress { width: 85%; }
+.CaorenSettings.DevTransparency90 { background-color: rgba(20,20,20,0.10); }
+.DevTransparency90 #dev_slider_thumb { transform: translateX(255.6px); }
+.DevTransparency90 #dev_slider_progress { width: 90%; }
+.CaorenSettings.DevTransparency95 { background-color: rgba(20,20,20,0.05); }
+.DevTransparency95 #dev_slider_thumb { transform: translateX(269.8px); }
+.DevTransparency95 #dev_slider_progress { width: 95%; }
+.CaorenSettings.DevTransparency100 { background-color: rgba(20,20,20,0.00); }
+.DevTransparency100 #dev_slider_thumb { transform: translateX(284.0px); }
+.DevTransparency100 #dev_slider_progress { width: 100%; }

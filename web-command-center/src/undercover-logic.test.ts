@@ -41,6 +41,8 @@ const makePlayer = (id: string, team: 'A' | 'B', options: Partial<Player> = {}):
 });
 
 const connect = (session: ReturnType<typeof createInitialSession>, playerId: string) => {
+    session.matchOptions.gameModeId = 'undercover';
+    session.matchOptions.undercoverModeEnabled = true;
     setSession(session);
     const io = new FakeIo();
     registerSocketHandlers(io as any, { broadcastState() {}, notifyMessage() {}, persistSessionNow() {} });

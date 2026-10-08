@@ -1,0 +1,275 @@
+[
+  {
+    "Name": ".ready",
+    "Console": "css_ready",
+    "Module": "MatchZy · 对局",
+    "Summary": "标记自己已准备",
+    "Permission": "普通参赛玩家；由 MatchZy 检查当前比赛阶段与条件",
+    "Usage": [
+      ".ready"
+    ],
+    "Parameters": [
+      "无参数。"
+    ],
+    "Examples": [
+      ".ready"
+    ],
+    "Notes": [
+      "仅在 MatchZy 接受准备且比赛尚未开始时生效。",
+      "只操作自己的准备状态；达到所需条件可能触发开赛。",
+      "控制台：css_ready。"
+    ],
+    "Sources": [
+      "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/ConsoleCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": ".ready"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": ".ready"
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "在 MatchZy 准备阶段，把自己标记为已准备，并重新检查开赛条件。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": ".tac",
+    "Console": "css_tac",
+    "Module": "MatchZy · 对局",
+    "Summary": "申请本队战术暂停",
+    "Permission": "普通参赛玩家；由 MatchZy 检查当前比赛阶段与条件",
+    "Usage": [
+      ".tac"
+    ],
+    "Parameters": [
+      "无参数。"
+    ],
+    "Examples": [
+      ".tac"
+    ],
+    "Notes": [
+      "正式比赛开始后、当前没有普通暂停时使用。",
+      "只申请自己所属 T 或 CT 的暂停；剩余次数不足时 MatchZy 会拒绝。",
+      "时长和配额由游戏规则及服务器设置决定，不能把技术暂停参数套用到这里。",
+      "控制台：css_tac。"
+    ],
+    "Sources": [
+      "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/ConsoleCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": ".tac"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": ".tac"
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "本队还有战术暂停次数且当前允许时，请求本队战术暂停。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": ".tech",
+    "Console": "css_tech",
+    "Module": "MatchZy · 对局",
+    "Summary": "申请技术暂停",
+    "Permission": "普通参赛玩家；由 MatchZy 检查当前比赛阶段与条件",
+    "Usage": [
+      ".tech",
+      ".pause"
+    ],
+    "Parameters": [
+      "无参数。"
+    ],
+    "Examples": [
+      ".tech"
+    ],
+    "Notes": [
+      "需要本局已进入正式比赛，且自己属于 T 或 CT。",
+      "已经暂停、半场、赛后或战术暂停期间不能再申请。",
+      "服务器可关闭技术暂停或设置额外权限；当前检查时技术暂停开启、权限标记为空。",
+      "当前配置下 .pause 与 .tech 同效果；若管理员将 pause 改为战术暂停，使用 .tech 仍表示技术暂停。",
+      "0.8.15 当前入口没有使用独立技术暂停计时实现，本帮助不承诺自动 5 分钟或每队 2 次。",
+      "控制台：css_tech；.pause 对应 css_pause。"
+    ],
+    "Sources": [
+      "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/ConsoleCommands.cs",
+      "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/Utility.cs",
+      "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/Pausing.cs",
+      "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/ConfigConvars.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": ".tech"
+        }
+      ],
+      [
+        {
+          "Text": ".pause"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": ".tech"
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "向 MatchZy 请求普通/技术暂停，由游戏在冻结时间执行。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": ".unpause",
+    "Console": "css_unpause",
+    "Module": "MatchZy · 对局",
+    "Summary": "代表本队申请恢复比赛",
+    "Permission": "普通参赛玩家；由 MatchZy 检查当前比赛阶段与条件",
+    "Usage": [
+      ".unpause"
+    ],
+    "Parameters": [
+      "无参数。"
+    ],
+    "Examples": [
+      ".unpause"
+    ],
+    "Notes": [
+      "通常需要双方队伍各有人输入 .unpause；自己输入一次不等于立刻恢复。",
+      "管理员强制暂停不能由玩家解除。",
+      ".unpause 不代替战术暂停的计时规则。",
+      "控制台：css_unpause。"
+    ],
+    "Sources": [
+      "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/ConsoleCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": ".unpause"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": ".unpause"
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "普通暂停中记录本队的恢复申请；双方都申请后恢复比赛。"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "Name": ".unready",
+    "Console": "css_unready",
+    "Module": "MatchZy · 对局",
+    "Summary": "取消自己的准备状态",
+    "Permission": "普通参赛玩家；由 MatchZy 检查当前比赛阶段与条件",
+    "Usage": [
+      ".unready"
+    ],
+    "Parameters": [
+      "无参数。"
+    ],
+    "Examples": [
+      ".unready"
+    ],
+    "Notes": [
+      "不能用来终止已开始的比赛。",
+      "控制台：css_unready。"
+    ],
+    "Sources": [
+      "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/ConsoleCommands.cs"
+    ],
+    "ColoredUsage": [
+      [
+        {
+          "Text": ".unready"
+        }
+      ]
+    ],
+    "ColoredParameters": [
+      [
+        {
+          "Text": "无参数。"
+        }
+      ]
+    ],
+    "WorkedExamples": [
+      {
+        "Command": [
+          {
+            "Text": ".unready"
+          }
+        ],
+        "Effect": [
+          {
+            "Text": "在 MatchZy 准备阶段，取消自己的已准备标记。"
+          }
+        ]
+      }
+    ]
+  }
+]

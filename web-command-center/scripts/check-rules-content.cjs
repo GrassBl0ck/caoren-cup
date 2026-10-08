@@ -34,6 +34,6 @@ for (const obsolete of [
   assert.ok(!source.includes(obsolete), `仍包含旧默认绑定说明：${obsolete}`);
 }
 
-assert.match(source, /!cclogin[\s\S]{0,100}(唯一|开户|恢复)/);
+assert.match(source, /\/cclogin[\s\S]{0,100}(唯一|开户|恢复)/);
 assert.match(source, /HTTP[\s\S]{0,160}(独立密码|不要.*共用)/);
 console.log('rules content contract checks passed');

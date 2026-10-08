@@ -1,5 +1,15 @@
 namespace CaorenCupPlugin;
 
+/// <summary>
+/// 单挑拆分为独立插件后，桥接不再持有单挑会话；此枚举仅供命令调度器使用，
+/// 桥接用遥测隔离状态映射出的“GameManaged 活跃窗口”传入，维持原有拦截语义。
+/// </summary>
+public enum DuelControlMode
+{
+    None,
+    GameManaged
+}
+
 internal enum PluginCommandTransactionDisposition
 {
     Applied,

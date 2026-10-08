@@ -107,3 +107,27 @@ test('blocked membership remains blocked in its current match', async (t) => {
     assert.equal(await service.blockMembership(joined.membership.membershipId), true);
     assert.equal(service.getMembership(joined.membership.membershipId)?.blockedAt !== undefined, true);
 });
+
+
+test('game registration binds Steam, hashes the password, and permits password login', async (t) => {
+    const { dir, service } = await makeService('game-registration');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const registered = await service.registerAccountFromGame({
+        steamId: '76561198000000906',
+        steamNickname: 'In Game Player',
+        loginName: 'player_906',
+        password: 'current-pass',
+    });
+    assert.equal(registered.identity.gameBoundAt, 1_000);
+    assert.equal(registered.account.password?.hash.includes('current-pass'), false);
+    assert.equal((await service.authenticateLoginAccount({ loginName: 'player_906', password: 'current-pass' })).ok, true);
+    await assert.rejects(
+        service.registerAccountFromGame({
+            steamId: '76561198000000906',
+            steamNickname: 'In Game Player',
+            loginName: 'player_906b',
+            password: 'current-pass',
+        }),
+        /account_exists/,
+    );
+});

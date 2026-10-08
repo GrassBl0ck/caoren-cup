@@ -1,7 +1,7 @@
 ﻿// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { CellStatus, GamePhase, GameSession, LiveGameData, Player, RosterTeam, TaskCell, WsEvents } from './types';
+import { CellStatus, GamePhase, GameSession, LiveGameData, Player, PlayerRole, RosterTeam, TaskCell, WsEvents } from './types';
 import { getSession, resetSessionWithAdmins, terminateAndClear } from './session-manager';
 import {
     findPlayerById,
@@ -31,7 +31,7 @@ import {
     resumeRestoredPregameFlow,
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
-import { ADMIN_PASSWORD } from './game-constants';
+import { ADMIN_PASSWORD, DEV_PLAYER_LOGIN_ENABLED } from './game-constants';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import { assignTaskGridToPlayer } from './task-system';
 import { loadTaskPresets, createTaskPreset, renameTaskPreset, deleteTaskPreset } from './task-preset-store';
@@ -271,8 +271,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             ) : undefined;
             if (!ticket || !identityId || ticket.identityId !== identityId || ticket.sessionId !== session.sessionId ||
                 !membership || membership.sessionId !== session.sessionId || membership.identityId !== identityId ||
-                membership.leftAt || membership.blockedAt || !account?.enabled || account.passwordState !== 'active' ||
-                !account.password || !identity || !player) {
+                membership.leftAt || membership.blockedAt || !account?.enabled ||
+                (account.passwordState === 'active' && !account.password) || !identity || !player) {
                 socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '比赛登录票据无效或已过期，请回到玩家中心重试。' });
                 return;
             }
@@ -326,14 +326,17 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
 
         socket.on(WsEvents.LOGIN, (data: { name: string; extraParam?: string }) => {
             const session = getSession();
-            const name = String(data?.name || '').trim() || 'Admin';
+            const rawName = String(data?.name || '').trim();
             const extraParam = String(data?.extraParam || '').trim();
             if (extraParam !== ADMIN_PASSWORD) {
                 socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员密码错误。' });
                 return;
             }
+            const isDevPlayer = DEV_PLAYER_LOGIN_ENABLED && rawName.startsWith('P:');
+            const name = (isDevPlayer ? rawName.slice(2).trim() : rawName) || (isDevPlayer ? 'DevPlayer' : 'Admin');
+            const role: PlayerRole = isDevPlayer ? 'Player' : 'Admin';
             const existingByName = Object.values(session.players).find((player) =>
-                player.role === 'Admin' && player.name === name,
+                player.role === role && player.name === name,
             );
             const existing = existingByName;
 
@@ -354,7 +357,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
 
             const playerId = uuidv4();
             const bindCode = generateBindCode();
-            const newPlayer: Player = { playerId, name, role: 'Admin', bindCode, isReady: true, isOnline: true };
+            const newPlayer: Player = { playerId, name, role, bindCode, isReady: !isDevPlayer, isOnline: true };
             session.players[playerId] = newPlayer;
             session.playerOrder.push(playerId);
             socket.data.playerId = playerId;
@@ -363,7 +366,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 success: true,
                 playerId,
                 bindCode,
-                message: `管理员 ${name} 登录成功。`,
+                message: isDevPlayer ? `开发测试玩家 ${name} 登录成功。` : `管理员 ${name} 登录成功。`,
             });
             sendPrivateData(socket.id, playerId);
             broadcastState();
@@ -452,34 +455,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 }
 
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame) {
-                    if (isDuelMode()) {
-                        clearUndercoverModeState();
-                        session.rolesReleased = true;
-                        const rosterPlayers = getGamePlayers(session).filter(p => p.rosterTeam === 'A' || p.rosterTeam === 'B');
-                        const blockers = rosterPlayers.filter(p => !p.isReady);
-                        if (blockers.length > 0) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${blockers.length} 名单挑玩家未准备：${blockers.map(p => p.name).join('、')}。` });
-                            return;
-                        }
-                    } else if (isUndercoverModeEnabled()) {
-                        const unassigned = getGamePlayers(session).filter(p => !p.gameRole);
-                        if (unassigned.length > 0) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${unassigned.length} 名玩家未分配身份，请先由管理员分配/随机补齐。` });
-                            return;
-                        }
-                        if (!session.rolesReleased) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: '身份尚未发放给玩家。请先点击“发放身份给玩家”，再进入正式对局。' });
-                            return;
-                        }
-                        const blockers = getReadinessBlockers();
-                        if (blockers.length > 0) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${blockers.length} 名玩家未完成准备：${blockers.map(p => p.name).join('、')}。可在游戏内用 /notice nor 提醒。` });
-                            return;
-                        }
-                    } else {
-                        clearUndercoverModeState();
-                        session.rolesReleased = true;
-                    }
+                    socket.emit(WsEvents.NOTIFICATION, { message: '正式比赛由 Gamemode 接管，请使用网页“开始 Warmup”或游戏内 /gamemode start；不能再用旧的阶段推进开赛。' });
+                    return;
                 }
 
                 if (nextPhase === GamePhase.Scoreboard) {
@@ -491,9 +468,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     return;
                 }
                 persistSessionNow?.();
-                if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame && !isDuelMode()) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '网页流程已完成。请管理员在游戏内使用 MatchZy .start 开始比赛，网页不会直接重启或开赛。' });
-                }
                 return;
             }
 
@@ -1012,8 +986,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 case 'REQUEST_HINT':
                     if (cell.status === 'Complete' || cell.status === 'Abandoned' || cell.isHintUsed || !String(cell.hint || '').trim()) return;
                     cell.isHintUsed = true;
-                    if (!cell.borderHistory) cell.borderHistory = [];
-                    if (!cell.borderHistory.includes('blue')) cell.borderHistory.push('blue');
+                    if (cell.borderHistory) cell.borderHistory = cell.borderHistory.filter(color => color !== 'blue');
                     break;
                 case 'REPLACE': {
                     if (cell.status === 'Complete' || cell.status === 'Abandoned') return;

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>CaorenCupFunCommands</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -16,10 +17,16 @@
     <Compile Remove="Diagnostics\**" />
     <EmbeddedResource Remove="Diagnostics\**" />
     <None Remove="Diagnostics\**" />
+    <Compile Remove="PluginSplit\**" />
+    <EmbeddedResource Remove="PluginSplit\**" />
+    <None Remove="PluginSplit\**" />
+    <Compile Remove="CaorenCupConfig.cs" />
+    <Compile Remove="Features\ManagedCvarScope.cs" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.373" />
+    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.374" />
+    <ProjectReference Include="PluginSplit\CaorenCupContracts\CaorenCupContracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
