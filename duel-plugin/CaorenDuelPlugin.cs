@@ -8,6 +8,7 @@ using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
 using static CaorenDuel.DuelPluginUtils;
+using CaorenCup.Contracts;
 
 namespace CaorenDuel;
 
@@ -25,6 +26,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
     private const string BridgeCvarReadyCommand = "css_duelbridge_cvar_ready";
 
     private readonly DuelGameSession _duelSession = new();
+    private readonly DuelGameModeProvider _gameModeProvider = new();
     private readonly DuelServerCvarScope _duelServerCvars = new();
     private readonly DuelCleanupState _duelCleanupState = new();
     private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
@@ -113,6 +115,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
         AddCommand("css_duel_map", "切换单挑创意工坊地图。用法：/duel_map <序号|地图名|创意工坊ID>", OnDuelMapCommand);
         AddCommand("css_duel_maps", "查看可切换的单挑地图。用法：/duel_maps", OnDuelMapsCommand);
         RegisterDuelWeaponCommands();
+        CaorenCupGameModeRegistry.Register(_gameModeProvider);
         RegisterListener<Listeners.OnPlayerTakeDamagePre>(OnPlayerTakeDamagePre);
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
@@ -124,6 +127,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
     public override void Unload(bool hotReload)
     {
         _isUnloading = true;
+        CaorenCupGameModeRegistry.Unregister(_gameModeProvider);
         CleanupDuelImmediately();
         StopTimers();
         RemoveCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
@@ -396,6 +400,12 @@ public sealed class CaorenDuelPlugin : BasePlugin
 
     private void StartGameManagedDuel(CCSPlayerController? player, CommandInfo command)
     {
+        if (CaorenCupPracticeState.IsPracticeActive)
+        {
+            ReplyToDuelCaller(player, command, "[草人杯] 当前处于 MatchZy Practice，请先使用 /sleep 退出练习模式。");
+            return;
+        }
+
         if (!_duelCleanupState.RestartPending &&
             _duelCvarRestorePending)
         {

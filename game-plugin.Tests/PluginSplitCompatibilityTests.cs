@@ -93,6 +93,7 @@ public sealed class PluginSplitCompatibilityTests
         public ManagedCvarScope ManagedCvars { get; } = new();
         public string LegacyConfigPath => string.Empty;
         public string ModulesDirectory => string.Empty;
+        public ICaorenCupGameModeRuntime GameModes => throw new NotSupportedException();
         public void SaveConfig() { }
     }
 

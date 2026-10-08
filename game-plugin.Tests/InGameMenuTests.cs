@@ -300,7 +300,7 @@ public sealed class InGameMenuTests
     {
         var nav = BuildCatalogNavigator(new FakeMenuHost());
         var pages = nav.RegisteredPageIds.ToHashSet();
-        foreach (var id in new[] { "root", "global", "duel", "duel_nades", "duel_time", "matchzy", "mz_ready" })
+        foreach (var id in new[] { "root", "global", "duel", "duel_nades", "duel_time", "gamemode", "matchzy", "mz_ready" })
         {
             Assert.Contains(id, pages);
         }
@@ -316,7 +316,11 @@ public sealed class InGameMenuTests
         Assert.Equal("单挑控制", nav.BuildRender(Sid, true)!.Title);
 
         nav.HandleClick(Sid, "nav_back", true);
-        nav.HandleClick(Sid, "menu_btn_2", true); // MatchZy
+        nav.HandleClick(Sid, "menu_btn_2", true); // Gamemode
+        Assert.Equal("Gamemode 模式", nav.BuildRender(Sid, true)!.Title);
+
+        nav.HandleClick(Sid, "nav_back", true);
+        nav.HandleClick(Sid, "menu_btn_3", true); // MatchZy
         Assert.Equal("MatchZy 比赛", nav.BuildRender(Sid, true)!.Title);
     }
 
@@ -358,6 +362,23 @@ public sealed class InGameMenuTests
         Assert.Equal("单挑 · 道具模式", nav.BuildRender(Sid, true)!.Title);
         nav.HandleClick(Sid, "menu_btn_4", true); // 全道具
         Assert.Contains("css_duel nades full", host.PlayerCommands);
+    }
+
+    [Fact]
+    public void Catalog_gamemode_page_executes_unified_commands()
+    {
+        var host = new FakeMenuHost();
+        var nav = BuildCatalogNavigator(host);
+        nav.Open(Sid, "gamemode");
+
+        nav.HandleClick(Sid, "menu_btn_0", true);
+        Assert.Contains("gamemode status", host.PlayerCommands);
+
+        nav.HandleClick(Sid, "menu_btn_1", true); // Competitive
+        Assert.Equal("操作确认", nav.BuildRender(Sid, true)!.Title);
+        nav.HandleClick(Sid, "menu_btn_0", true); // 确认
+        Assert.Contains("gamemode competitive", host.PlayerCommands);
+        Assert.Contains("gamemode start", host.PlayerCommands);
     }
 
     [Fact]

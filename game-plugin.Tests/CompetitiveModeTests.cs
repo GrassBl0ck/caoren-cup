@@ -6,10 +6,10 @@ namespace CaorenCup.GamePlugin.Tests;
 public sealed class CompetitiveModeTests
 {
     [Fact]
-    public void CompetitiveRestoresCaorenRulesAfterLeavingMatchZyPractice()
+    public void CompetitiveDoesNotInvokeMatchZyForFormalMode()
     {
         Assert.Equal(
-            ["css_reset_plu", "css_exitprac", "exec grass/default"],
+            ["css_reset_plu"],
             CompetitiveModePlan.StartCommands);
     }
 }

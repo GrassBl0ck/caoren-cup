@@ -6,13 +6,12 @@ namespace CaorenCup.GamePlugin.Tests;
 public sealed class RushFeatureTests
 {
     [Fact]
-    public void Start_commands_sleep_matchzy_before_switching_to_official_rush_mode()
+    public void Start_commands_do_not_depend_on_matchzy_sleep()
     {
         Assert.Equal(
             new[]
             {
                 "css_reset_plu",
-                "css_sleep",
                 "game_type 0",
                 "game_mode 6",
                 "changelevel rush_001",
@@ -24,7 +23,7 @@ public sealed class RushFeatureTests
     public void Post_map_start_reapplies_official_rush_config_after_matchzy_sleep()
     {
         Assert.Equal(2.0f, RushModePlan.ReapplyDelaySeconds);
-        Assert.Equal(new[] { "exec gamemode_rush.cfg" }, RushModePlan.PostMapStartCommands);
+        Assert.Equal(new[] { "exec grass/default_common.cfg", "exec grass/default_rush.cfg", "exec gamemode_rush.cfg" }, RushModePlan.PostMapStartCommands);
     }
 
     [Fact]

@@ -46,7 +46,18 @@ public sealed partial class CaorenCupInGameMenuPlugin
 
     private static bool IsVoteAdministrator(CCSPlayerController player) => AdminManager.PlayerHasPermissions(player, "@css/root");
     private static bool IsHuman(CCSPlayerController player) => player.IsValid && !player.IsBot && !player.IsHLTV && player.SteamID != 0;
-    private static List<CCSPlayerController> VoteHumans() => Utilities.GetPlayers().Where(IsHuman).ToList();
+    private static List<CCSPlayerController> VoteHumans()
+    {
+        try
+        {
+            return Utilities.GetPlayers().Where(IsHuman).ToList();
+        }
+        catch (NativeException)
+        {
+            // Core reset can run before the entity system is ready during early map startup.
+            return [];
+        }
+    }
     private bool IsVoteDraftAwaitingInput(string steamId) => _voteDrafts.TryGetValue(steamId, out var draft) && !draft.Ready;
 
     private void OnAdminVoteCommand(CCSPlayerController? player, CommandInfo info)

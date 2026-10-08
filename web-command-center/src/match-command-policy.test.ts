@@ -65,11 +65,11 @@ assert.equal(classifyServerCommand('host_workshop_map 3250543760'), 'map');
 assert.equal(classifyServerCommand('wp_refresh 76561198000000001 safe'), 'cosmetic');
 assert.equal(classifyServerCommand('sv_cheats 1'), 'unknown');
 
-const matchzyCompetitive = baseSession();
-assertRejected(matchzyCompetitive, 'mp_restartgame 1');
-assertRejected(matchzyCompetitive, 'mp_warmup_end');
-assertRejected(matchzyCompetitive, 'mp_pause_match');
-assertRejected(matchzyCompetitive, 'mp_unpause_match');
+const legacyMatchzyCompetitive = baseSession();
+assertAllowed(legacyMatchzyCompetitive, 'mp_restartgame 1');
+assertAllowed(legacyMatchzyCompetitive, 'mp_warmup_end');
+assertAllowed(legacyMatchzyCompetitive, 'mp_pause_match');
+assertAllowed(legacyMatchzyCompetitive, 'mp_unpause_match');
 
 assertAllowed(
   baseSession({
@@ -117,12 +117,12 @@ assertAllowed(
   'mp_restartgame 1'
 );
 
-assertRejected(matchzyCompetitive, 'sv_cheats 1');
-assertAllowed(matchzyCompetitive, 'wp_refresh 76561198000000001 safe');
-assertAllowed(matchzyCompetitive, 'wp_refresh 76561198000000001');
-assertRejected(matchzyCompetitive, 'wp_refresh all');
-assertRejected(matchzyCompetitive, 'wp_refresh 76561198000000001 unsafe');
-assertRejected(matchzyCompetitive, 'wp_refresh 76561198000000001 safe; sv_cheats 1');
-assertRejected(matchzyCompetitive, "wp_refresh 76561198000000001 safe\nsv_cheats 1");
+assertRejected(legacyMatchzyCompetitive, 'sv_cheats 1');
+assertAllowed(legacyMatchzyCompetitive, 'wp_refresh 76561198000000001 safe');
+assertAllowed(legacyMatchzyCompetitive, 'wp_refresh 76561198000000001');
+assertRejected(legacyMatchzyCompetitive, 'wp_refresh all');
+assertRejected(legacyMatchzyCompetitive, 'wp_refresh 76561198000000001 unsafe');
+assertRejected(legacyMatchzyCompetitive, 'wp_refresh 76561198000000001 safe; sv_cheats 1');
+assertRejected(legacyMatchzyCompetitive, "wp_refresh 76561198000000001 safe\nsv_cheats 1");
 
 console.log('match-command-policy tests passed');

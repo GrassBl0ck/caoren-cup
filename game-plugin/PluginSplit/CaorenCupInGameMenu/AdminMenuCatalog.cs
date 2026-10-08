@@ -35,6 +35,7 @@ public sealed class AdminMenuCatalog
         RegisterRoot();
         RegisterGlobalPage();
         RegisterDuelPages();
+        RegisterGamemodePages();
         RegisterMatchZyPages();
     }
 
@@ -78,6 +79,7 @@ public sealed class AdminMenuCatalog
             {
                 NavItem("全局管理", "global"),
                 NavItem("单挑控制", "duel"),
+                NavItem("Gamemode 模式", "gamemode"),
                 NavItem("MatchZy 比赛", "matchzy"),
             },
         });
@@ -181,6 +183,59 @@ public sealed class AdminMenuCatalog
                 PlayerCmdItem("2 分钟", "css_duel time 2"),
                 PlayerCmdItem("3 分钟", "css_duel time 3"),
                 PlayerCmdItem("5 分钟", "css_duel time 5"),
+            },
+        });
+    }
+
+    private void RegisterGamemodePages()
+    {
+        _navigator.RegisterPage(new InGameMenuPage
+        {
+            Id = "gamemode",
+            Title = "Gamemode 模式",
+            ParentId = "root",
+            StaticStatus = "统一模式切换、Warmup 和正式开局命令",
+            Items =
+            {
+                PlayerCmdItem("查看当前模式状态", "gamemode status"),
+                new InGameMenuItem
+                {
+                    Title = "Competitive",
+                    ConfirmText = "确认选择 Competitive 并开始 Warmup?",
+                    OnClick = (sid, _) => { _host.ExecAsPlayer(sid, "gamemode competitive"); _host.ExecAsPlayer(sid, "gamemode start"); return true; },
+                },
+                new InGameMenuItem
+                {
+                    Title = "RUSH",
+                    ConfirmText = "确认切换到 RUSH 并开始 Warmup?",
+                    OnClick = (sid, _) => { _host.ExecAsPlayer(sid, "gamemode rush"); _host.ExecAsPlayer(sid, "gamemode start"); return true; },
+                },
+                new InGameMenuItem
+                {
+                    Title = "Duel（单挑）",
+                    ConfirmText = "确认切换到 Duel 并启动现有单挑运行时?",
+                    OnClick = (sid, _) => { _host.ExecAsPlayer(sid, "gamemode duel"); _host.ExecAsPlayer(sid, "gamemode start"); return true; },
+                },
+                PlayerCmdItem("开始当前模式 Warmup", "gamemode start"),
+                new InGameMenuItem
+                {
+                    Title = "停止当前模式",
+                    ConfirmText = "确认停止当前模式并恢复 CVar?",
+                    OnClick = (sid, _) => { _host.ExecAsPlayer(sid, "gamemode stop"); return true; },
+                },
+                new InGameMenuItem
+                {
+                    Title = "恢复指定回合备份",
+                    ConfirmText = "将通过聊天输入要恢复的回合数；输入 cancel 可取消。确认继续?",
+                    OnClick = (sid, _) =>
+                    {
+                        _host.BeginChatRelay(sid, "请输入要恢复的回合数（1-999），输入 cancel 取消。", text =>
+                        {
+                            _host.ExecAsPlayer(sid, $"ccrestore {text}");
+                        });
+                        return true;
+                    },
+                },
             },
         });
     }

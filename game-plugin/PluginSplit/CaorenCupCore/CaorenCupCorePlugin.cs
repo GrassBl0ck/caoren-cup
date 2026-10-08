@@ -1,5 +1,7 @@
 using CaorenCup.Contracts;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Timers;
 using CaorenCup.Features;
 
 namespace CaorenCup.Core;
@@ -14,6 +16,7 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
     private CaorenCupConfigStore _configStore = null!;
     public CaorenCupConfig Config => _configStore.Config;
     public ManagedCvarScope ManagedCvars { get; private set; } = new();
+    public ICaorenCupGameModeRuntime GameModes { get; private set; } = null!;
     public string LegacyConfigPath => _configStore.LegacyConfigPath;
     public string ModulesDirectory => _configStore.ModulesDirectory;
     private PlayerPreferenceStore _preferences = null!;
@@ -44,14 +47,35 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
             _configStore.AttachExisting(retained.Config);
             ManagedCvars = retained.ManagedCvars;
         }
+        GameModes = new GameModeRuntime(
+            ManagedCvars,
+            (seconds, callback) => AddTimer(seconds, callback),
+            command => CounterStrikeSharp.API.Server.ExecuteCommand(command),
+            () => CounterStrikeSharp.API.Server.MapName,
+            message => Console.WriteLine($"[CaorenCupCore] {message}"));
         CaorenCupCoreAccess.Publish(this);
         _preferences = new PlayerPreferenceStore(Path.Combine(ModuleDirectory, "data", "player-preferences.json"));
         CaorenCupPreferencesAccess.Publish(_preferences);
+        RegisterListener<Listeners.OnMapStart>(_ => ScheduleMatchZyPracticeOnlyGuard());
+        RegisterMatchZyPracticeStateListeners();
+        ScheduleMatchZyPracticeOnlyGuard();
         RegisterCoreCommands();
+    }
+
+
+    private void ScheduleMatchZyPracticeOnlyGuard()
+    {
+        AddTimer(0.25f, () =>
+        {
+            // MatchZy remains installed for /prac, but must not auto-enter match mode.
+            // The guard runs after plugin loading and before MatchZy's delayed AutoStart.
+            Server.ExecuteCommand("matchzy_autostart_mode 0");
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     public override void Unload(bool hotReload)
     {
+        UnregisterMatchZyPracticeStateListeners();
         CaorenCupPreferencesAccess.Withdraw(_preferences);
         CaorenCupCoreAccess.Withdraw(this);
     }

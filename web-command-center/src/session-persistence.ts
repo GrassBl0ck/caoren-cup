@@ -3,6 +3,7 @@ import path from 'path';
 import { GameSession } from './types';
 import { createInitialSession, getSession, setSession } from './session-manager';
 import { clearFlowUndoHistory } from './flow-undo-manager';
+import { GAME_MODE_MANIFESTS, modeUsesUndercoverFlow, modeUsesUnbalancedRoster, normalizeGameModeId, normalizeGameModeOverrides } from './game-mode';
 
 const SNAPSHOT_VERSION = 2;
 const SNAPSHOT_DIR = path.resolve(__dirname, '..', 'runtime');
@@ -103,8 +104,15 @@ const normalizeRestoredSession = (raw: any): GameSession => {
     };
     // Older snapshots may contain fields removed from the current session model. Restoring
     // through the current snapshot whitelist keeps those fields out of memory and broadcasts.
+    const gameModeId = normalizeGameModeId(restored.matchOptions.gameModeId, restored.matchOptions);
+    const gameModeManifest = GAME_MODE_MANIFESTS[gameModeId];
+    restored.matchOptions.gameModeId = gameModeId;
+    restored.matchOptions.gameModeWarmupSeconds = Math.max(1, Math.min(300, Math.floor(Number(restored.matchOptions.gameModeWarmupSeconds || gameModeManifest.defaultWarmupSeconds))));
+    restored.matchOptions.gameModeCvarOverrides = normalizeGameModeOverrides(gameModeId, restored.matchOptions.gameModeCvarOverrides);
     restored.matchOptions.matchMode = restored.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
-    restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
+    restored.matchOptions.matchController = 'caoren';
+    restored.matchOptions.undercoverModeEnabled = restored.matchOptions.matchMode === 'duel' ? false : modeUsesUndercoverFlow(gameModeId);
+    restored.matchOptions.unbalancedModeEnabled = modeUsesUnbalancedRoster(gameModeId);
     restored.accusations = restored.accusations || {};
     restored.adminLock = restored.adminLock || { holderId: null, acquiredAt: null };
     restored.rollTimeout = undefined;

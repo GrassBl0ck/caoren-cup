@@ -8,6 +8,8 @@ export interface IdentityRecord {
     displayName: string;
     steamId?: string;
     steamNickname?: string;
+    // 仅由可信 CS2 桥接路径写入；账号密码登录要求该标记存在。
+    gameBoundAt?: number;
     createdAt: number;
     updatedAt: number;
 }

@@ -18,6 +18,8 @@ export type Team = 'CT' | 'T' | 'Unassigned';
 export type RosterTeam = 'A' | 'B';
 export type MatchMode = 'competitive' | 'duel';
 export type MatchController = 'matchzy' | 'caoren';
+export type GameModeId = 'competitive' | 'rush' | 'duel' | 'ability' | 'undercover' | 'unbalanced';
+export type GameModeLifecycle = 'Lobby' | 'Warmup' | 'Live' | 'Stopped' | 'Error';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
 export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
 export type IdentityLevel = 'temporary' | 'longTerm';
@@ -207,6 +209,9 @@ export interface LiveGameData {
     winnerTeam: RosterTeam | null;
     matchFinished: boolean;
     winTarget: number;
+    roundLimit?: number;
+    halftimeEnabled?: boolean;
+    halftimeRound?: number;
     lastScoredRound: number;
     mapName?: string;
     players?: Record<string, PluginLivePlayer>;
@@ -221,7 +226,23 @@ export interface LiveGameData {
     formalStatsStarted?: boolean;
     [key: string]: any;
 }
+export interface GameModeCvarOverride {
+    name: string;
+    value: string;
+}
+
+export interface GameModeRuntimeState {
+    modeId: GameModeId;
+    lifecycle: GameModeLifecycle;
+    warmupSeconds: number;
+    revision: number;
+    error?: string;
+}
+
 export interface MatchOptions {
+    gameModeId?: GameModeId;
+    gameModeWarmupSeconds?: number;
+    gameModeCvarOverrides?: Record<string, string>;
     matchMode?: MatchMode;
     matchController?: MatchController;
     undercoverModeEnabled: boolean;
@@ -241,6 +262,7 @@ export interface GameSession {
     phase: GamePhase;
     matchId: string;
     matchOptions: MatchOptions;
+    gameModeRuntime?: GameModeRuntimeState;
     players: Record<string, Player>;
     playerOrder: string[];
     teams: {

@@ -2,12 +2,14 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
+using CaorenCup.Contracts;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Events;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.Logging;
@@ -51,6 +53,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, CsTeam> _teamAssignments = new(StringComparer.Ordinal);
     private readonly HashSet<string> _teamAssignmentBypass = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WebPlayerState> _webPlayersBySteamId = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, RegistrationDraft> _registrationDrafts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _lobbySteamIds = new(StringComparer.Ordinal);
     private readonly object _webStateLock = new();
     private readonly List<WebPlayerState> _lastNoticeMissingTargets = new();
@@ -62,9 +65,20 @@ public sealed class CaorenCupPlugin : BasePlugin
     private volatile bool _isUnloading;
     private bool _hasSuccessfulLobbyStateSync;
     private bool _lobbyRemindersEnabled = true;
+    private bool _demoRecording;
+    private string? _demoRecordingName;
     private DateTimeOffset _lastSuccessfulLobbyStateSync;
     private int _webStateRefreshInProgress;
     private int _webStateGeneration;
+    private sealed class RegistrationDraft
+    {
+        public required string SteamId { get; init; }
+        public required string Name { get; init; }
+        public string? LoginName { get; set; }
+        public bool WaitingForPassword { get; set; }
+        public CounterStrikeSharp.API.Modules.Timers.Timer? Timer { get; set; }
+    }
+
     private const string DefaultNoticeSound = "training/bell_normal.vsnd_c";
     private static readonly TimeSpan LobbyStateMaxAge = TimeSpan.FromSeconds(15);
     private static Action<Action> MapStartLifecycleSchedule => Server.NextWorldUpdate;
@@ -123,6 +137,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _http.DefaultRequestHeaders.Add("x-caoren-plugin-token", _config.PluginToken);
 
         AddCommand("css_cclogin", "获取草人杯网页登录码。用法：/cclogin", OnGameLoginCommand);
+        AddCommand("css_ccreg", "在游戏内注册草人杯账号。用法：/ccreg", OnGameRegistrationCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
@@ -133,6 +148,8 @@ public sealed class CaorenCupPlugin : BasePlugin
         AddCommand("css_duelbridge_cvar_ready", "内部命令：由单挑插件在 CVar 恢复状态变化时触发。", OnDuelBridgeCvarReadyCommand);
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
+        RegisterEventHandler<EventPlayerChat>(OnRegistrationChat);
+        RegisterEventHandler<EventPlayerDisconnect>(OnRegistrationDisconnect);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _outboundWorker = Task.Run(() => ProcessOutboundQueueAsync(_outboundCts.Token));
 
@@ -231,6 +248,128 @@ public sealed class CaorenCupPlugin : BasePlugin
         var text = File.ReadAllText(path);
         _config = JsonSerializer.Deserialize<CaorenConfig>(text, _jsonOptions) ?? new CaorenConfig();
     }
+
+    private void OnGameRegistrationCommand(CCSPlayerController? player, CommandInfo command)
+    {
+        if (!IsRealPlayer(player))
+        {
+            command.ReplyToCommand("[草人杯] 这条指令只能由玩家在游戏内执行。");
+            return;
+        }
+
+        var steamId = player!.SteamID.ToString();
+        CancelRegistration(steamId);
+        var draft = new RegistrationDraft
+        {
+            SteamId = steamId,
+            Name = SafePlayerName(player),
+            WaitingForPassword = false,
+        };
+        _registrationDrafts[steamId] = draft;
+        ArmRegistrationTimeout(draft);
+        ReplyToPlayer(player, "[草人杯] 请输入要注册的账号名（6-20位，仅字母、数字、下划线）；输入 cancel 取消。");
+    }
+
+    private HookResult OnRegistrationChat(EventPlayerChat @event, GameEventInfo info)
+    {
+        var player = Utilities.GetPlayerFromUserid(@event.Userid);
+        if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
+        var steamId = player.SteamID.ToString();
+        if (!_registrationDrafts.TryGetValue(steamId, out var draft)) return HookResult.Continue;
+
+        var text = (@event.Text ?? string.Empty).Trim();
+        if (draft.Timer != null) draft.Timer.Kill();
+        if (text.Equals("cancel", StringComparison.OrdinalIgnoreCase))
+        {
+            CancelRegistration(steamId);
+            ReplyToPlayer(player, "[草人杯] 已取消注册。密码输入不会被记录到服务器日志。");
+            return HookResult.Handled;
+        }
+        if (text.Length == 0)
+        {
+            ArmRegistrationTimeout(draft);
+            ReplyToPlayer(player, draft.WaitingForPassword ? "[草人杯] 密码不能为空，请重新输入；输入 cancel 取消。" : "[草人杯] 账号名不能为空，请重新输入；输入 cancel 取消。");
+            return HookResult.Handled;
+        }
+
+        if (!draft.WaitingForPassword)
+        {
+            draft.LoginName = text;
+            draft.WaitingForPassword = true;
+            ArmRegistrationTimeout(draft);
+            ReplyToPlayer(player, "[草人杯] 请输入密码（8-128位）；输入 cancel 取消。密码不会写入服务器日志。");
+            return HookResult.Handled;
+        }
+
+        _registrationDrafts.Remove(steamId);
+        _ = SubmitGameRegistrationAsync(player, draft, text);
+        return HookResult.Handled;
+    }
+
+    private HookResult OnRegistrationDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
+    {
+        var player = @event.Userid;
+        var steamId = @event.Xuid != 0 ? @event.Xuid.ToString()
+            : player?.IsValid == true ? player.SteamID.ToString() : string.Empty;
+        if (!string.IsNullOrWhiteSpace(steamId)) CancelRegistration(steamId);
+        return HookResult.Continue;
+    }
+
+    private void ArmRegistrationTimeout(RegistrationDraft draft)
+    {
+        draft.Timer?.Kill();
+        draft.Timer = AddTimer(120.0f, () =>
+        {
+            if (_registrationDrafts.Remove(draft.SteamId))
+            {
+                var player = FindPlayerBySteamId(draft.SteamId);
+                if (player != null) ReplyToPlayer(player, "[草人杯] 注册输入超时，已取消。");
+            }
+        }, TimerFlags.STOP_ON_MAPCHANGE);
+    }
+
+    private void CancelRegistration(string steamId)
+    {
+        if (_registrationDrafts.Remove(steamId, out var draft)) draft.Timer?.Kill();
+    }
+
+    private async Task SubmitGameRegistrationAsync(CCSPlayerController player, RegistrationDraft draft, string password)
+    {
+        try
+        {
+            using var response = await _http.PostAsJsonAsync("api/plugin/account-register", new
+            {
+                steamId = draft.SteamId,
+                name = draft.Name,
+                loginName = draft.LoginName,
+                password,
+            }, _jsonOptions);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!ShouldProcessPluginContinuation(_isUnloading)) return;
+            if (response.IsSuccessStatusCode)
+            {
+                var result = JsonSerializer.Deserialize<PluginAccountRegisterResponse>(body, _jsonOptions);
+                ReplyToPlayer(player, $"[草人杯] 注册成功。账号：{result?.LoginName ?? draft.LoginName}。请务必记住账号和密码，遗失后只能重新进入服务器使用 /ccreg。网页现在可以用账号密码登录。");
+                return;
+            }
+            var error = ExtractErrorMessage(body);
+            var message = error switch
+            {
+                "account_exists" => "该 Steam 账户已经注册过账号；请使用已有账号密码登录，忘记密码请重新使用 /cclogin。",
+                "login_name_taken" => "账号名已被占用，请重新执行 /ccreg。",
+                "login_name_invalid" => "账号名格式无效，请重新执行 /ccreg。",
+                "password_invalid" => "密码长度必须为 8-128 位，请重新执行 /ccreg。",
+                _ => "注册失败，请稍后重新执行 /ccreg。",
+            };
+            ReplyToPlayer(player, $"[草人杯] {message}");
+        }
+        catch
+        {
+            if (ShouldProcessPluginContinuation(_isUnloading)) ReplyToPlayer(player, "[草人杯] 注册失败：无法连接网页指挥台，请稍后重试。");
+        }
+    }
+
+    private CCSPlayerController? FindPlayerBySteamId(string steamId) => Utilities.GetPlayers().FirstOrDefault(player => IsRealPlayer(player) && player.SteamID.ToString() == steamId);
 
     private void OnGameLoginCommand(CCSPlayerController? player, CommandInfo command)
     {
@@ -722,7 +861,11 @@ public sealed class CaorenCupPlugin : BasePlugin
         var heartbeatRequest = _heartbeatResponseOrder.NextRequest();
         try
         {
-            var response = await _http.PostAsJsonAsync("api/plugin/heartbeat", new { mapName = SafeMapName() }, _jsonOptions);
+            var response = await _http.PostAsJsonAsync("api/plugin/heartbeat", new
+            {
+                mapName = SafeMapName(),
+                gameMode = CaorenCupCoreAccess.TryGet()?.GameModes.State,
+            }, _jsonOptions);
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             var text = await response.Content.ReadAsStringAsync();
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
@@ -848,6 +991,55 @@ public sealed class CaorenCupPlugin : BasePlugin
             _scoreCt = Math.Max(0, state.ScoreCT);
             _scoreT = Math.Max(0, state.ScoreT);
         }
+
+        SyncDemoRecording(state);
+    }
+
+    private void SyncDemoRecording(PluginHeartbeatResponse? state)
+    {
+        var modeState = CaorenCupCoreAccess.TryGet()?.GameModes.State;
+        var modeId = modeState?.ModeId?.Trim().ToLowerInvariant();
+        var modeIsLive = modeState?.Lifecycle == GameModeLifecycleState.Live;
+        var matchEnded = state?.MatchFinished == true ||
+            string.Equals(state?.Phase, "Scoreboard", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(state?.Phase, "PostGameAccusation", StringComparison.OrdinalIgnoreCase);
+
+        if (modeIsLive && !matchEnded && !_demoRecording && !string.IsNullOrWhiteSpace(modeId))
+        {
+            StartDemoRecording(modeId!);
+        }
+        else if ((!modeIsLive || matchEnded) && _demoRecording)
+        {
+            StopDemoRecording();
+        }
+    }
+
+    private void StartDemoRecording(string modeId)
+    {
+        var safeMode = new string(modeId.Where(char.IsLetterOrDigit).ToArray());
+        if (safeMode.Length == 0) safeMode = "unknown";
+        var matchPart = string.IsNullOrWhiteSpace(_currentMatchId)
+            ? "nomatch"
+            : new string(_currentMatchId!.Where(char.IsLetterOrDigit).Take(12).ToArray());
+        var fileName = $"caorencup_{DateTime.Now:yyyyMMdd_HHmmss}_{safeMode}_{matchPart}";
+        var gameCsgoDirectory = new DirectoryInfo(ModuleDirectory);
+        for (var index = 0; index < 6 && gameCsgoDirectory.Parent is not null; index++)
+            gameCsgoDirectory = gameCsgoDirectory.Parent;
+        var demoDirectory = Path.Combine(gameCsgoDirectory.FullName, "demos", "caorencup");
+        Directory.CreateDirectory(demoDirectory);
+        var recordName = $"demos/caorencup/{fileName}";
+        Server.ExecuteCommand($"tv_record {recordName}");
+        _demoRecording = true;
+        _demoRecordingName = recordName;
+        Logger.LogInformation("Demo recording started: {DemoName}", recordName);
+    }
+
+    private void StopDemoRecording()
+    {
+        Server.ExecuteCommand("tv_stop");
+        Logger.LogInformation("Demo recording stopped: {DemoName}", _demoRecordingName ?? "unknown");
+        _demoRecording = false;
+        _demoRecordingName = null;
     }
 
     private async Task SendSnapshotAsync(CCSPlayerController? replyTo = null)
@@ -984,8 +1176,14 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (ready) _ = DrainDeferredHeartbeatCommandsAsync();
     }
 
+    private void StopDemoRecordingIfNeeded()
+    {
+        if (_demoRecording) StopDemoRecording();
+    }
+
     private void OnMapStart(string _mapName)
     {
+        StopDemoRecordingIfNeeded();
         ClearLobbyReminderState();
         if (!_isUnloading)
         {
@@ -1533,12 +1731,65 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             ClearTeamAssignments();
         }
+        else if (command.Type?.StartsWith("GAME_MODE_", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            ApplyGameModeCommand(command);
+        }
         else
         {
             Logger.LogWarning("Unknown CaorenCup plugin command: {Type}", command.Type);
         }
 
         return Task.FromResult(true);
+    }
+
+    private void ApplyGameModeCommand(PluginCommand command)
+    {
+        if (command.Payload.ValueKind != JsonValueKind.Object)
+        {
+            Logger.LogWarning("Game mode command payload is not an object: {Type}", command.Type);
+            return;
+        }
+
+        string modeId = command.Payload.TryGetProperty("modeId", out var modeElement)
+            ? modeElement.GetString()?.Trim().ToLowerInvariant() ?? string.Empty
+            : string.Empty;
+        if (!string.IsNullOrWhiteSpace(modeId) && !GameModeCommandPolicy.IsAllowedMode(modeId))
+        {
+            Logger.LogWarning("Rejected unknown game mode from web: {ModeId}", modeId);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(modeId) &&
+            (string.Equals(command.Type, "GAME_MODE_SELECT", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(command.Type, "GAME_MODE_START", StringComparison.OrdinalIgnoreCase)))
+        {
+            Server.ExecuteCommand($"gamemode {modeId}");
+            ApplyGameModeOverrides(command.Payload);
+        }
+
+        if (string.Equals(command.Type, "GAME_MODE_START", StringComparison.OrdinalIgnoreCase))
+            Server.ExecuteCommand("gamemode start");
+        else if (string.Equals(command.Type, "GAME_MODE_STOP", StringComparison.OrdinalIgnoreCase))
+            Server.ExecuteCommand("gamemode stop");
+    }
+
+    private void ApplyGameModeOverrides(JsonElement payload)
+    {
+        if (!payload.TryGetProperty("cvarOverrides", out var overrides) ||
+            overrides.ValueKind != JsonValueKind.Object) return;
+
+        foreach (var item in overrides.EnumerateObject())
+        {
+            string name = item.Name.Trim();
+            string value = item.Value.GetString()?.Trim() ?? string.Empty;
+            if (!GameModeCommandPolicy.IsAllowedCvar(name, value))
+            {
+                Logger.LogWarning("Rejected game mode CVar override: {Name}", name);
+                continue;
+            }
+            Server.ExecuteCommand($"gamemode_cvar {name} {value}");
+        }
     }
 
     private void ApplyTeamAssignments(JsonElement payload)
@@ -2245,6 +2496,9 @@ public sealed class PluginHeartbeatResponse
 
     [JsonPropertyName("currentRound")]
     public int CurrentRound { get; set; }
+
+    [JsonPropertyName("matchFinished")]
+    public bool MatchFinished { get; set; }
 }
 
 internal sealed class PlayerEquipmentSnapshot
@@ -2267,3 +2521,10 @@ internal sealed class PlayerEquipmentSnapshot
     [JsonPropertyName("hasHelmet")]
     public bool HasHelmet { get; set; }
 }
+
+internal sealed class PluginAccountRegisterResponse
+    {
+        public bool Success { get; set; }
+        public string? LoginName { get; set; }
+        public string? Error { get; set; }
+    }

@@ -72,12 +72,17 @@
             <div id="player-center-login" class="player-center-auth-panel">
                 <label>登录账号<input id="player-center-login-name" type="text" maxlength="32" autocomplete="username" placeholder="例如 cc_Abc234xy"></label>
                 <label>密码<input id="player-center-login-password" type="password" maxlength="128" autocomplete="current-password"></label>
+                <div class="player-center-login-save-options" style="display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:13px;">
+                    <label><input id="player-center-save-login-name" type="checkbox"> 保存账号</label>
+                    <label><input id="player-center-save-password" type="checkbox"> 保存密码</label>
+                </div>
+                <p style="font-size:12px;color:#64748b;margin:4px 0 8px;">首次使用账号密码登录时，网站会询问是否保存；两个选项也可以分别勾选。</p>
                 <label id="player-center-remember-device-row" hidden><input id="player-center-remember-device" type="checkbox"> 记住此设备（仅桌面客户端）</label>
                 <button id="player-center-login-btn" class="primary-btn" type="button">登录玩家中心</button>
                 <button id="player-center-game-code-toggle" class="header-text-link" type="button">使用 <code>/cclogin</code> 游戏码</button>
             </div>
             <div id="player-center-game-code-panel" class="player-center-auth-panel" hidden>
-                <p>在 CS2 输入 <code>/cclogin</code>，将一次性游戏码填到这里。首次使用会创建账号；已有账号会进入密码恢复。</p>
+                <p>推荐流程：先在 CS2 输入 <code>/cclogin</code> 确认进入草人杯，再输入 <code>/ccreg</code>，按游戏提示注册账号和密码。已有账号忘记密码时，可使用这里的 <code>/cclogin</code> 游戏码恢复。</p>
                 <label>一次性游戏码<input id="player-center-game-code" type="text" maxlength="16" autocomplete="one-time-code"></label>
                 <button id="player-center-game-code-btn" class="primary-btn" type="button">验证游戏码</button>
             </div>
@@ -384,6 +389,27 @@
                 <h4>本局模式设置</h4>
                 <div id="match-options-status" class="match-options-status">当前阶段：读取中……</div>
 
+                <div class="match-options-row" id="game-mode-selection-row">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;width:100%;">
+                        <label>
+                            <div class="match-options-title">游戏模式</div>
+                            <select id="game-mode-id">
+                                <option value="competitive">Competitive（竞技）</option>
+                                <option value="rush">RUSH</option>
+                                <option value="duel">Duel（单挑）</option>
+                                <option value="ability" disabled>Ability（异能，尚未加载）</option>
+                                <option value="undercover" disabled>Undercover（卧底，尚未加载）</option>
+                                <option value="unbalanced" disabled>Unbalanced（非对称，尚未加载）</option>
+                            </select>
+                        </label>
+                        <label>
+                            <div class="match-options-title">Warmup 秒数</div>
+                            <input id="game-mode-warmup-seconds" type="number" min="1" max="300" step="1" value="15">
+                        </label>
+                    </div>
+                    <div class="match-options-desc" style="margin-top:6px;">网页完成阵容和模式设置后，由管理员开始；Warmup 结束后由 Gamemode 自动开始正式比赛。</div>
+                </div>
+
                 <label class="match-options-row" style="display:none;" aria-hidden="true">
                     <input type="checkbox" id="match-option-duel">
                     <div>
@@ -464,8 +490,8 @@
                     <div class="match-options-desc" style="margin-top:6px;">不平衡竞技会在分队、地图 BP、赛前准备和锁队同步前校验目标人数。</div>
                 </div>
 
-                <label class="match-options-row">
-                    <input type="checkbox" id="match-option-undercover" checked>
+                <label class="match-options-row" id="legacy-undercover-option" style="display:none;" aria-hidden="true">
+                    <input type="checkbox" id="match-option-undercover">
                     <div>
                         <div class="match-options-title">启用卧底模式</div>
                         <div class="match-options-desc">
@@ -483,6 +509,10 @@
                     </div>
                 </label>
 
+                <div class="match-options-actions">
+                    <button type="button" class="primary-btn" id="start-game-mode-btn" onclick="startSelectedGameMode()">开始 Warmup</button>
+                    <button type="button" class="secondary-btn" id="stop-game-mode-btn" onclick="stopSelectedGameMode()">停止模式</button>
+                </div>
                 <div class="match-options-actions">
                     <button type="button" class="primary-btn" id="save-match-options-btn" onclick="saveMatchOptions()">保存本局模式</button>
                     <button type="button" class="secondary-btn" id="refresh-match-options-btn" onclick="refreshMatchOptions()">刷新状态</button>

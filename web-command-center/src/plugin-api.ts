@@ -2,6 +2,7 @@
 import express from 'express';
 import { GamePhase, WsEvents, LiveGameData } from './types';
 import { getSession } from './session-manager';
+import type { GameModeId, GameModeLifecycle } from './types';
 import {
     getGamePlayers,
     normalizeSteamId,
@@ -17,13 +18,14 @@ import {
     normalizePluginRound,
     updateMatchFinishState,
     resolveRosterTeamByInitialSide,
-    markStandardMatchLiveFromMatchZy,
+    markGameModeLiveFromRuntime,
 } from './game-flow-manager';
 import { ADMIN_PASSWORD, PLUGIN_TOKEN } from './game-constants';
 import { resolveDuelMapConfig } from './duel-config';
 import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer } from './identity/session-integration';
 import { validateUnbalancedRosterForTeamLock } from './unbalanced-roster';
+import { getGameModeRoundRules } from './game-mode-rounds';
 
 type TeamAssignmentSide = 'CT' | 'T';
 
@@ -67,7 +69,8 @@ const isPluginStatsLocked = (session: any): boolean =>
 const createEmptyLiveGameData = (): LiveGameData => ({
     scoreCT: 0, scoreT: 0, scoreA: 0, scoreB: 0,
     currentRound: 0, pluginConnected: false, winnerTeam: null, matchFinished: false,
-    winTarget: 13, lastScoredRound: 0, rawPluginRound: 0, roundBaseOffset: undefined,
+    winTarget: 0, roundLimit: 0, halftimeEnabled: false, halftimeRound: 0,
+    lastScoredRound: 0, rawPluginRound: 0, roundBaseOffset: undefined,
     formalRoundStartRaw: undefined, formalStatsStarted: false, statsLocked: false,
     killMatrix: {}, openingKillMatrix: {}, awpKillMatrix: {}, firstKillRounds: {},
 });
@@ -81,13 +84,16 @@ const getFormalRound = (session: any): number => {
 
 const getTeamASideForRound = (selectedSide: unknown, round: number): TeamAssignmentSide | null => {
     if (selectedSide !== 'CT' && selectedSide !== 'T') return null;
+    const session = getSession();
     const initial = selectedSide as TeamAssignmentSide;
-    if (getSession().matchOptions?.matchMode === 'duel') return initial;
-    return round >= 13 ? oppositeSide(initial) : initial;
+    const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
+    if (!rules.halftimeEnabled || round < rules.halftimeRound) return initial;
+    return oppositeSide(initial);
 };
 
 const buildTeamAssignments = (session: any): TeamAssignmentBuildResult => {
     const round = getFormalRound(session);
+    const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
     const teamASide = getTeamASideForRound(session.selectedSide, round);
     if (!teamASide) {
         throw new Error('还没有完成选边，不能同步分队到游戏内。');
@@ -120,7 +126,7 @@ const buildTeamAssignments = (session: any): TeamAssignmentBuildResult => {
 
     return {
         round,
-        halftimeSwapped: round >= 13,
+        halftimeSwapped: rules.halftimeEnabled && round >= rules.halftimeRound,
         teamASide,
         assignments,
         missingSteamIds,
@@ -155,11 +161,12 @@ const enqueueTeamAssignments = (
         throw new Error('没有可同步的已绑定 A/B 队玩家。');
     }
 
+    const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
     const queued = enqueuePluginCommand('APPLY_TEAM_ASSIGNMENTS', {
         matchId: session.matchId,
         round: built.round,
-        validFromRound: built.halftimeSwapped ? 13 : 0,
-        validUntilRound: built.halftimeSwapped ? 0 : 12,
+        validFromRound: built.halftimeSwapped ? rules.halftimeRound : 0,
+        validUntilRound: built.halftimeSwapped ? 0 : Math.max(0, rules.halftimeRound - 1),
         lockTeams,
         reason,
         halftimeSwapped: built.halftimeSwapped,
@@ -301,6 +308,23 @@ export function registerPluginRoutes(app: express.Express, deps: {
         session.liveGameData.pluginConnected = true;
         session.liveGameData.lastPluginHeartbeatAt = Date.now();
         if (req.body?.mapName) session.liveGameData.mapName = String(req.body.mapName);
+        const runtime = req.body?.gameMode;
+        if (runtime && typeof runtime === 'object' &&
+            typeof runtime.modeId === 'string' &&
+            typeof runtime.lifecycle === 'string' &&
+            Number.isFinite(Number(runtime.warmupSeconds)) &&
+            Number.isFinite(Number(runtime.revision))) {
+            session.gameModeRuntime = {
+                modeId: runtime.modeId as GameModeId,
+                lifecycle: runtime.lifecycle as GameModeLifecycle,
+                warmupSeconds: Math.max(1, Math.floor(Number(runtime.warmupSeconds))),
+                revision: Math.max(0, Math.floor(Number(runtime.revision))),
+                ...(typeof runtime.error === 'string' ? { error: runtime.error } : {}),
+            };
+            if (runtime.lifecycle === 'Live') {
+                markGameModeLiveFromRuntime(runtime.modeId);
+            }
+        }
         broadcastState();
         res.json({
             success: true,
@@ -309,6 +333,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
             scoreCT: session.liveGameData.scoreCT || 0,
             scoreT: session.liveGameData.scoreT || 0,
             currentRound: session.liveGameData.currentRound || 0,
+            matchFinished: session.liveGameData.matchFinished === true,
             commands: takeQueuedPluginCommands(),
         });
     });
@@ -415,13 +440,8 @@ export function registerPluginRoutes(app: express.Express, deps: {
         const type = String(req.body?.type || '');
         const payload = req.body?.payload || {};
 
-        const promotedFromPreGame = session.phase === GamePhase.PreGameSetup &&
-            type === 'round_start' &&
-            session.matchOptions?.matchMode !== 'duel' &&
-            markStandardMatchLiveFromMatchZy();
-
         if (!isPluginLivePhase(session.phase)) return res.json({ success: true, ignored: true, reason: `当前阶段 ${session.phase} 不接收实时事件` });
-        if (!promotedFromPreGame && req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
+        if (req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
         if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
         if (isPluginStatsLocked(session)) return res.json({ success: true, ignored: true, reason: '赛后战绩已锁定' });
         session.liveGameData.pluginConnected = true;
@@ -601,8 +621,10 @@ function applyRoundStartEvent(session: any, payload: any) {
         }
     }
 
+    const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
     const shouldRefreshHalftimeLock =
-        round >= 13 &&
+        rules.halftimeEnabled &&
+        round >= rules.halftimeRound &&
         live.teamLockEnabled === true &&
         Number(live.teamLockLastAutoSideSwapRound || 0) !== round &&
         Date.now() - Number(live.teamLockLastAutoSideSwapAt || 0) > 3000 &&

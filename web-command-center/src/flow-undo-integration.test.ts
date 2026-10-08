@@ -9,6 +9,7 @@ import {
 import { clearAllFlowTimers } from './game-timers';
 import { createInitialSession, getSession, setSession } from './session-manager';
 import { registerSocketHandlers } from './socket-handlers';
+import { markGameModeLiveFromRuntime } from './game-flow-manager';
 import { GamePhase, Player, WsEvents } from './types';
 
 class FakeSocket {
@@ -141,7 +142,7 @@ test('admin can undo phase advance, forced draft assignment, and forced map ban 
     assert.ok(persisted >= 6);
 });
 
-test('entering LiveGame clears all pregame undo history', async () => {
+test('Gamemode runtime enters LiveGame and clears pregame undo history', async () => {
     const session = createInitialSession();
     const admin = player('admin', 'Admin', 'Admin');
     session.players.admin = admin;
@@ -160,6 +161,9 @@ test('entering LiveGame clears all pregame undo history', async () => {
 
     await socket.trigger(WsEvents.ADMIN_ACTION, { playerId: admin.playerId, action: 'ADVANCE_PHASE' });
 
+    assert.equal(session.phase, GamePhase.PreGameSetup);
+    assert.equal(exportFlowUndoState().entries.length, 1);
+    assert.equal(markGameModeLiveFromRuntime('competitive'), true);
     assert.equal(session.phase, GamePhase.LiveGame);
     assert.equal(exportFlowUndoState().entries.length, 0);
 });

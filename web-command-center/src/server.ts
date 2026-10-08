@@ -13,6 +13,7 @@ import { restoreSessionSnapshot, saveSessionSnapshotNow, scheduleSessionSnapshot
 import { loadTaskPresets } from './task-preset-store';
 import { findPlayerById, generateBindCode, sanitizeGameStateForViewer } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
+import { registerGameModeRoutes } from './routes/game-mode-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
 import {
     LobbyAnnouncement,
@@ -42,6 +43,7 @@ import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY
 import { registerIdentityAuthRoutes } from './identity/auth-routes';
 import { registerSteamAuthRoutes } from './identity/steam-auth-routes';
 import { normalizeUnbalancedRosterOptions } from './unbalanced-roster';
+import { GAME_MODE_MANIFESTS, normalizeGameModeId, normalizeGameModeOverrides, modeUsesUndercoverFlow, modeUsesUnbalancedRoster } from './game-mode';
 import { initializeIdentityRuntime, lobbyIdentityService, playerCenterBootstrapTickets, playerCenterMatchSocketTickets, playerCenterSessionStore } from './identity/identity-runtime';
 import { bindPlayerCenterSocketIdentity } from './identity/player-center-socket';
 import { attachMembershipToSession, detachMatchMembershipsForScoreboard, removeIdentityFromSession } from './identity/session-integration';
@@ -222,23 +224,33 @@ const ensureMatchOptions = () => {
     const session = getSession();
     if (!session.matchOptions) {
         session.matchOptions = {
+            gameModeId: 'competitive',
+            gameModeWarmupSeconds: 15,
+            gameModeCvarOverrides: {},
             matchMode: 'competitive',
-            matchController: 'matchzy',
-            undercoverModeEnabled: true,
+            matchController: 'caoren',
+            undercoverModeEnabled: false,
             caorenModifiersEnabled: false,
             duelMap: DUEL_DEFAULT_MAP,
             duelMapWorkshopId: DUEL_DEFAULT_WORKSHOP_ID,
             duelRoundTimeMinutes: DUEL_DEFAULT_ROUND_TIME_MINUTES,
             duelRounds: getDefaultDuelRounds(),
             duelUtilityMode: DUEL_DEFAULT_UTILITY_MODE,
+            unbalancedModeEnabled: false,
+            unbalancedTeamASize: 3,
+            unbalancedTeamBSize: 5,
         };
     }
+    const gameModeId = normalizeGameModeId(session.matchOptions.gameModeId, session.matchOptions);
+    const gameModeManifest = GAME_MODE_MANIFESTS[gameModeId];
+    session.matchOptions.gameModeId = gameModeId;
+    session.matchOptions.gameModeWarmupSeconds = Math.max(1, Math.min(300, Math.floor(Number(session.matchOptions.gameModeWarmupSeconds || gameModeManifest.defaultWarmupSeconds))));
+    session.matchOptions.gameModeCvarOverrides = normalizeGameModeOverrides(gameModeId, session.matchOptions.gameModeCvarOverrides);
     session.matchOptions.matchMode = session.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
-    session.matchOptions.matchController = session.matchOptions.matchMode === 'duel' ? 'caoren' : 'matchzy';
-    session.matchOptions.undercoverModeEnabled = session.matchOptions.matchMode === 'duel'
-        ? false
-        : session.matchOptions.undercoverModeEnabled !== false;
+    session.matchOptions.matchController = 'caoren';
+    session.matchOptions.undercoverModeEnabled = session.matchOptions.matchMode === 'duel' ? false : modeUsesUndercoverFlow(gameModeId);
     session.matchOptions.caorenModifiersEnabled = session.matchOptions.caorenModifiersEnabled === true;
+    session.matchOptions.unbalancedModeEnabled = modeUsesUnbalancedRoster(gameModeId);
     session.matchOptions.duelMap = normalizeDuelMap(session.matchOptions.duelMap);
     session.matchOptions.duelMapWorkshopId = normalizeDuelWorkshopId(session.matchOptions.duelMapWorkshopId) || DUEL_DEFAULT_WORKSHOP_ID;
     session.matchOptions.duelRoundTimeMinutes = normalizeDuelRoundTimeMinutes(session.matchOptions.duelRoundTimeMinutes);
@@ -254,6 +266,17 @@ registerMatchOptionsRoutes(app, {
     getPlayerById: (playerId: string) => findPlayerById(getSession(), playerId),
     ensureMatchOptions,
     applyMatchOptions,
+    notify: notifyMessage,
+    broadcastState,
+});
+
+registerGameModeRoutes(app, {
+    adminPassword: ADMIN_PASSWORD,
+    getPhase: () => getSession().phase,
+    getPlayerById: (playerId: string) => findPlayerById(getSession(), playerId),
+    ensureMatchOptions,
+    applyMatchOptions,
+    enqueuePluginCommand,
     notify: notifyMessage,
     broadcastState,
 });
@@ -327,6 +350,7 @@ io.on('connection', (socket) => {
 
 registerGameCodeLogin(app, io, {
     broadcastState,
+    identityService: lobbyIdentityService,
 });
 
 // MatchZy CSV import is intentionally disabled. Official stats now come from the bridge plugin.

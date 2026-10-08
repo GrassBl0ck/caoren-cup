@@ -222,7 +222,54 @@ export class LobbyIdentityService {
         const identity = this.store.snapshot().identities[account.identityId];
         if (!identity) return { ok: false as const, reason: 'invalid_credentials' as const };
         if (!account.enabled) return { ok: false as const, reason: 'account_disabled' as const };
+        if (!identity.gameBoundAt) return { ok: false as const, reason: 'game_entry_required' as const };
         return { ok: true as const, identity, account };
+    }
+
+    async registerAccountFromGame(input: {
+        steamId: unknown;
+        steamNickname: unknown;
+        loginName: unknown;
+        password: unknown;
+    }) {
+        const steamId = strictSteamId(input.steamId);
+        if (!steamId) throw new Error('steam_id_invalid');
+        const steamNickname = String(input.steamNickname || '').trim().slice(0, 128) || `Steam ${steamId.slice(-6)}`;
+        const loginName = validateLoginName(input.loginName);
+        const password = await hashAccountPassword(input.password, { now: this.now, randomBytes: this.randomBytes });
+        const now = this.now();
+        return this.store.mutate((data) => {
+            const existingIdentity = Object.values(data.identities).find(candidate => candidate.steamId === steamId);
+            if (existingIdentity && data.accounts[existingIdentity.identityId]) throw new Error('account_exists');
+            const duplicateLogin = Object.values(data.accounts).some(account => account.loginName.toLowerCase() === loginName.toLowerCase());
+            if (duplicateLogin) throw new Error('login_name_taken');
+            const identityId = existingIdentity?.identityId || this.makeId(16);
+            const identity = existingIdentity || {
+                identityId,
+                displayName: steamNickname,
+                steamId,
+                steamNickname,
+                gameBoundAt: now,
+                createdAt: now,
+                updatedAt: now,
+            };
+            identity.displayName = steamNickname;
+            identity.steamId = steamId;
+            identity.steamNickname = steamNickname;
+            identity.gameBoundAt = now;
+            identity.updatedAt = now;
+            data.identities[identityId] = identity;
+            data.accounts[identityId] = {
+                identityId,
+                loginName,
+                enabled: true,
+                passwordState: 'active',
+                password,
+                createdAt: now,
+                updatedAt: now,
+            };
+            return { identity, account: data.accounts[identityId] };
+        });
     }
 
     async openOrBeginAccountRecovery(input: AccountRecoveryStartInput) {
@@ -238,6 +285,7 @@ export class LobbyIdentityService {
                 const account = identity ? data.accounts[identity.identityId] : undefined;
                 if (!identity || !account) throw new Error('account_state_changed');
                 identity.steamNickname = steamNickname;
+                identity.gameBoundAt = now;
                 identity.updatedAt = now;
                 return account.enabled
                     ? { kind: 'recovery_required' as const, identityId: identity.identityId, loginName: account.loginName }
@@ -251,6 +299,7 @@ export class LobbyIdentityService {
             let identity = Object.values(data.identities).find((candidate) => candidate.steamId === steamId);
             if (identity && data.accounts[identity.identityId]) {
                 identity.steamNickname = steamNickname;
+                identity.gameBoundAt = now;
                 identity.updatedAt = now;
                 if (!data.accounts[identity.identityId].enabled) {
                     return {
@@ -271,6 +320,7 @@ export class LobbyIdentityService {
                     displayName: steamNickname,
                     steamId,
                     steamNickname,
+                    gameBoundAt: now,
                     createdAt: now,
                     updatedAt: now,
                 };

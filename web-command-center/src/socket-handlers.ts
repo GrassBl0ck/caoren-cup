@@ -455,34 +455,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 }
 
                 if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame) {
-                    if (isDuelMode()) {
-                        clearUndercoverModeState();
-                        session.rolesReleased = true;
-                        const rosterPlayers = getGamePlayers(session).filter(p => p.rosterTeam === 'A' || p.rosterTeam === 'B');
-                        const blockers = rosterPlayers.filter(p => !p.isReady);
-                        if (blockers.length > 0) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${blockers.length} 名单挑玩家未准备：${blockers.map(p => p.name).join('、')}。` });
-                            return;
-                        }
-                    } else if (isUndercoverModeEnabled()) {
-                        const unassigned = getGamePlayers(session).filter(p => !p.gameRole);
-                        if (unassigned.length > 0) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${unassigned.length} 名玩家未分配身份，请先由管理员分配/随机补齐。` });
-                            return;
-                        }
-                        if (!session.rolesReleased) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: '身份尚未发放给玩家。请先点击“发放身份给玩家”，再进入正式对局。' });
-                            return;
-                        }
-                        const blockers = getReadinessBlockers();
-                        if (blockers.length > 0) {
-                            socket.emit(WsEvents.NOTIFICATION, { message: `还有 ${blockers.length} 名玩家未完成准备：${blockers.map(p => p.name).join('、')}。可在游戏内用 /notice nor 提醒。` });
-                            return;
-                        }
-                    } else {
-                        clearUndercoverModeState();
-                        session.rolesReleased = true;
-                    }
+                    socket.emit(WsEvents.NOTIFICATION, { message: '正式比赛由 Gamemode 接管，请使用网页“开始 Warmup”或游戏内 /gamemode start；不能再用旧的阶段推进开赛。' });
+                    return;
                 }
 
                 if (nextPhase === GamePhase.Scoreboard) {
@@ -494,9 +468,6 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                     return;
                 }
                 persistSessionNow?.();
-                if (current === GamePhase.PreGameSetup && nextPhase === GamePhase.LiveGame && !isDuelMode()) {
-                    socket.emit(WsEvents.NOTIFICATION, { message: '网页流程已完成。请管理员在游戏内使用 MatchZy .start 开始比赛，网页不会直接重启或开赛。' });
-                }
                 return;
             }
 

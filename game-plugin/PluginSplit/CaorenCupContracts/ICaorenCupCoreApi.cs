@@ -12,6 +12,7 @@ public interface ICaorenCupCoreApi
     string LegacyConfigPath { get; }
     string ModulesDirectory { get; }
     void SaveConfig();
+    ICaorenCupGameModeRuntime GameModes { get; }
 }
 
 /// <summary>Core 热重载时保留模块配置对象与已托管的 CVar 状态。</summary>

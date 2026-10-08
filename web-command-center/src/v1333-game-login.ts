@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Player, WsEvents } from './types';
 import { getSession } from './session-manager';
 import { normalizeSteamId, normalizeLoginText, generateBindCode } from './player-utils';
+import { LobbyIdentityService } from './identity/identity-service';
+import { lobbyIdentityService } from './identity/identity-runtime';
 import {
     V1333_GAME_LOGIN_CODE_TTL_SECONDS,
     V1333_PLUGIN_ONLINE_TTL_MS,
@@ -69,7 +71,9 @@ export const v1333ConsumeGameLoginTicket = (codeRaw: unknown): GameLoginTicket |
 
 export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, deps: {
     broadcastState: () => void;
+    identityService?: LobbyIdentityService;
 }) {
+    const identityService = deps.identityService || lobbyIdentityService;
     app.get('/api/public/server-status', (_req, res) => {
         const live = getSession().liveGameData;
         const lastHeartbeatAt = live?.lastPluginHeartbeatAt || null;
@@ -87,6 +91,26 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
             connectUrl: V1333_GAME_SERVER_CONNECT_URL,
             connectUrlConfigured: !!V1333_GAME_SERVER_CONNECT_URL,
         });
+    });
+
+    app.post('/api/plugin/account-register', async (req, res) => {
+        const token = req.header('x-caoren-plugin-token') || req.query?.token;
+        if (!PLUGIN_TOKEN || token !== PLUGIN_TOKEN) {
+            return res.status(401).json({ success: false, error: '插件认证失败' });
+        }
+        try {
+            const result = await identityService.registerAccountFromGame({
+                steamId: req.body?.steamId,
+                steamNickname: req.body?.name,
+                loginName: req.body?.loginName,
+                password: req.body?.password,
+            });
+            return res.json({ success: true, loginName: result.account.loginName });
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : 'account_register_failed';
+            const status = reason === 'account_exists' || reason === 'login_name_taken' ? 409 : 400;
+            return res.status(status).json({ success: false, error: reason });
+        }
     });
 
     app.post('/api/plugin/game-login-code', (req, res) => {
