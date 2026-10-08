@@ -19,6 +19,14 @@
                                 <Label class="CaorenHoverHintText" text="查看玩家指令" />
                             </Panel>
                         </Panel>
+                        <Panel id="player_stats_open_host" class="CaorenButtonHost CaorenNavHost">
+                            <Button class="CaorenNavTab CaorenMenuButton" id="player_stats_open">
+                                <Label text="趣味数据" />
+                            </Button>
+                            <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                <Label class="CaorenHoverHintText" text="查看当前地图趣味数据" />
+                            </Panel>
+                        </Panel>
                         <Panel id="player_vote_open_host" class="CaorenButtonHost CaorenNavHost">
                             <Button class="CaorenNavTab CaorenMenuButton" id="player_vote_open">
                                 <Label text="投票" />
@@ -140,6 +148,107 @@
                                     </Button>
                                     <Panel class="CaorenHoverHint" hittest="false">
                                         <Label class="CaorenHoverHintText" text="查看下一页" />
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                        <Panel id="player_stats" class="CaorenMenuSection Hidden">
+                            <Label text="趣味数据" class="SettingsSectionTitleLabel" />
+                            <Label text="{s:player_stats_page}" class="CaorenGuidePage" />
+                            <Panel class="CaorenStatsTable">
+                                <Panel class="CaorenStatsHeader">
+                                    <Label text="玩家" class="CaorenStatsName CaorenStatsHeaderName" />
+                                    <Label id="player_stats_header_0" text="{s:player_stats_header0}" class="CaorenStatsHeaderCell" />
+                                    <Label id="player_stats_header_1" text="{s:player_stats_header1}" class="CaorenStatsHeaderCell" />
+                                    <Label id="player_stats_header_2" text="{s:player_stats_header2}" class="CaorenStatsHeaderCell" />
+                                    <Label id="player_stats_header_3" text="{s:player_stats_header3}" class="CaorenStatsHeaderCell" />
+                                </Panel>
+                            <Panel id="player_stats_row_0" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name0}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value0_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value0_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value0_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value0_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_1" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name1}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value1_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value1_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value1_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value1_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_2" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name2}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value2_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value2_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value2_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value2_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_3" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name3}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value3_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value3_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value3_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value3_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_4" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name4}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value4_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value4_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value4_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value4_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_5" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name5}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value5_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value5_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value5_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value5_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_6" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name6}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value6_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value6_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value6_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value6_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_7" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name7}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value7_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value7_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value7_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value7_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_8" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name8}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value8_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value8_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value8_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value8_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            <Panel id="player_stats_row_9" class="CaorenStatsRow Hidden">
+                                <Label text="{s:player_stats_name9}" class="CaorenStatsName" />
+                                    <Label text="{s:player_stats_value9_0}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value9_1}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value9_2}" class="CaorenStatsValue" />
+                                    <Label text="{s:player_stats_value9_3}" class="CaorenStatsValue" />
+                            </Panel>
+                            </Panel>
+                            <Panel class="CaorenVoteActions">
+                                <Panel id="player_stats_prev_host" class="CaorenButtonHost CaorenPageHost">
+                                    <Button id="player_stats_prev" class="CaorenMenuButton">
+                                        <Label text="上一页" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="查看上一组统计项" />
+                                    </Panel>
+                                </Panel>
+                                <Panel id="player_stats_next_host" class="CaorenButtonHost CaorenPageHost">
+                                    <Button id="player_stats_next" class="CaorenMenuButton">
+                                        <Label text="下一页" />
+                                    </Button>
+                                    <Panel class="CaorenHoverHint" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="查看下一组统计项" />
                                     </Panel>
                                 </Panel>
                             </Panel>

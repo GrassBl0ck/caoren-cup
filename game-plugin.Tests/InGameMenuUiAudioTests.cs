@@ -193,6 +193,22 @@ public sealed class InGameMenuUiAudioTests
     }
 
     [Fact]
+    public void Player_layout_contains_stats_tab_table_and_column_navigation()
+    {
+        var repository = FindRepository();
+        var path = Path.Combine(repository, "game-plugin", "Features", "InGameMenu", "resources", "panorama", "layout", "custom_game", "caoren_player_menu.vxml");
+        var doc = XDocument.Load(path);
+        var ids = doc.Descendants().Attributes("id").Select(attribute => attribute.Value).ToHashSet();
+
+        Assert.Contains("player_stats_open", ids);
+        Assert.Contains("player_stats", ids);
+        Assert.Contains("player_stats_prev", ids);
+        Assert.Contains("player_stats_next", ids);
+        for (var i = 0; i < 4; i++) Assert.Contains($"player_stats_header_{i}", ids);
+        for (var i = 0; i < 10; i++) Assert.Contains($"player_stats_row_{i}", ids);
+    }
+
+    [Fact]
     public void Menu_click_rolls_back_to_previously_audible_native_event()
     {
         var click = Assert.Single(new CaorenAudioService().Events, item => item.Id == "menu.click");

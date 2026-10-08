@@ -335,7 +335,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         if (!_votePages.TryGetValue(sid, out var session)) return;
         if (buttonId == "vote_exit") { ExitOwnMenus(player); return; }
         if (buttonId == "vote_back") { ReturnFromVotePage(player); return; }
-        if (_voteFromPersonalMenu.Contains(sid) && buttonId is "player_commands_open" or "player_settings_open" or "player_guide_open")
+        if (_voteFromPersonalMenu.Contains(sid) && buttonId is ("player_commands_open" or "player_stats_open" or "player_settings_open" or "player_guide_open"))
         {
             ReturnFromVotePage(player);
             HandlePersonalClick(player, buttonId);
