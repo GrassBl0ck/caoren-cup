@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Events;
+using CaorenCup.Contracts;
 
 namespace CaorenCup.Features.InGameMenu;
 
@@ -19,18 +20,61 @@ public sealed partial class CaorenCupInGameMenuPlugin
     };
 
     private PlayerStatsTracker _playerStats = null!;
+    private PlayerStatsMatchSession _playerStatsSession = null!;
 
     private void RegisterPlayerStatsHooks()
     {
-        _playerStats = new PlayerStatsTracker();
+        _playerStatsSession = new PlayerStatsMatchSession();
+        _playerStats = _playerStatsSession.Tracker;
         _playerStats.Changed += RefreshOpenPlayerStatsMenus;
+        RegisterListener<Listeners.OnTick>(OnPlayerStatsTick);
         RegisterEventHandler<EventRoundStart>(OnPlayerStatsRoundStart);
         RegisterEventHandler<EventPlayerHurt>(OnPlayerStatsPlayerHurt);
         RegisterEventHandler<EventWeaponFire>(OnPlayerStatsWeaponFire);
     }
 
+    private void OnPlayerStatsTick()
+    {
+        ObservePlayerStatsLifecycle();
+    }
+
+    private void ObservePlayerStatsLifecycle()
+    {
+        var core = CaorenCupCoreAccess.TryGet();
+        if (core is null) return;
+
+        var export = _playerStatsSession.Observe(
+            core.GameModes.State,
+            Server.MapName,
+            DateTimeOffset.Now);
+        if (export is not null) ExportPlayerStats(export);
+    }
+
+    private void FinishPlayerStatsSession(string reason)
+    {
+        var export = _playerStatsSession?.End(reason, DateTimeOffset.Now);
+        if (export is not null) ExportPlayerStats(export);
+    }
+
+    private void ExportPlayerStats(PlayerStatsMatchExport export)
+    {
+        try
+        {
+            var directory = Path.Combine(ModuleDirectory, "data", "player-stats");
+            var path = PlayerStatsCsvExporter.Export(export, directory);
+            Console.WriteLine($"[CaorenCupInGameMenu] 正式比赛统计已导出：{path}");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            Console.WriteLine($"[CaorenCupInGameMenu] 正式比赛统计导出失败：{ex.Message}");
+        }
+    }
+
     private HookResult OnPlayerStatsRoundStart(EventRoundStart _, GameEventInfo __)
     {
+        ObservePlayerStatsLifecycle();
+        if (!_playerStatsSession.IsActive) return HookResult.Continue;
+
         _playerStats.BeginRound(Utilities.GetPlayers()
             .Where(IsHuman)
             .Where(player => player.TeamNum is 2 or 3)
@@ -41,6 +85,9 @@ public sealed partial class CaorenCupInGameMenuPlugin
 
     private HookResult OnPlayerStatsPlayerHurt(EventPlayerHurt @event, GameEventInfo _)
     {
+        ObservePlayerStatsLifecycle();
+        if (!_playerStatsSession.IsActive) return HookResult.Continue;
+
         var victim = @event.Userid;
         if (victim == null || !IsHuman(victim)) return HookResult.Continue;
 
@@ -65,6 +112,9 @@ public sealed partial class CaorenCupInGameMenuPlugin
 
     private HookResult OnPlayerStatsWeaponFire(EventWeaponFire @event, GameEventInfo _)
     {
+        ObservePlayerStatsLifecycle();
+        if (!_playerStatsSession.IsActive) return HookResult.Continue;
+
         var player = @event.Userid;
         if (player == null || !IsHuman(player)) return HookResult.Continue;
 
@@ -75,11 +125,14 @@ public sealed partial class CaorenCupInGameMenuPlugin
 
     private void ResetPlayerStatsForMap()
     {
-        _playerStats.Reset();
+        FinishPlayerStatsSession("map-change");
         _personalStatsPages.Clear();
     }
 
-    private void TrackDisconnectedPlayer(string steamId) => _playerStats.MarkDisconnected(steamId);
+    private void TrackDisconnectedPlayer(string steamId)
+    {
+        if (_playerStatsSession.IsActive) _playerStats.MarkDisconnected(steamId);
+    }
 
     private void RefreshOpenPlayerStatsMenus()
     {
@@ -95,9 +148,12 @@ public sealed partial class CaorenCupInGameMenuPlugin
 
     private void RenderPersonalStats(CCSPlayerController player)
     {
-        SyncOnlinePlayerStats();
+        ObservePlayerStatsLifecycle();
+        if (_playerStatsSession.IsActive) SyncOnlinePlayerStats();
         var sid = player.SteamID.ToString();
-        var rows = _playerStats.Snapshot();
+        var rows = _playerStatsSession.IsActive
+            ? _playerStats.Snapshot()
+            : Array.Empty<PlayerStatsRow>();
         var pageCount = GetPlayerStatsPageCount();
         var page = Math.Clamp(_personalStatsPages.GetValueOrDefault(sid), 0, pageCount - 1);
         _personalStatsPages[sid] = page;
