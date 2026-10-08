@@ -74,6 +74,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
 
     public override void Unload(bool hotReload)
     {
+        FinishPlayerStatsSession("plugin-unload");
         CloseAllMenus(VoteEndReason.PluginUnloaded);
         CaorenCupModuleRegistry.Unregister(this);
     }
