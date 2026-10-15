@@ -4715,3 +4715,42 @@ body[data-theme="dark"] .task-preset-panel {
     }
 
 }
+
+.site-legal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px 20px;
+    margin: 24px auto 28px;
+    padding: 12px 20px;
+    color: var(--text-muted, #64748b);
+    font-size: 12px;
+    line-height: 1.6;
+    text-align: center;
+}
+
+.site-legal-footer a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.site-legal-footer img {
+    width: 18px;
+    height: 20px;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+
+.site-legal-footer a:hover,
+.site-legal-footer a:focus-visible {
+    text-decoration: underline;
+}
+
+.rules-legal-footer {
+    width: min(1280px, 100%);
+    box-sizing: border-box;
+}

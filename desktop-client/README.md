@@ -59,7 +59,7 @@ CaorenCupClient-桌面客户端-v1.0.0.exe
 - 客户端不会访问 Steam Community、Steam Web API 或 OpenID，也不会读取或上传密码、Cookie、Steam 令牌。
 - 客户端不读取本机 Steam 账号。玩家身份中的 SteamID64 由 CS2 桥接插件可信上报，并继续用于本场确认和换肤权限。
 - 完整设备令牌只留在主进程；页面只接收短时单次玩家中心引导票据。
-- 当前生产站点明确允许设备 Bearer Token 通过 HTTP 自动登录。HTTP 不提供传输加密，局域网或链路攻击者可能窃取长期设备令牌；成功即轮换、短时单次引导票据、速率限制、审计和撤销只能降低泄露后果，不能替代 HTTPS。
+- 默认网站为 `https://caorencup.icu/`。设备凭证在公网只通过 HTTPS 传输；HTTP 仅允许本机开发地址。网页不再自行保存密码，浏览器会话保持登录，客户端设备凭据仍由主进程加密保存。
 - `nodeIntegration` 保持关闭，`contextIsolation` 和 sandbox 保持开启；文件与凭据能力只通过固定 preload/IPC 提供。
 - `steam://connect/...` 会交给系统打开，用于连接 CS2 服务器。
 - 普通“退出玩家中心”只清除网页 Cookie；桌面端“退出账号并忘记此设备”会尝试撤销当前设备令牌并清除本机 `safeStorage` 凭据。

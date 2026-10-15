@@ -12,8 +12,6 @@
   var currentMatchState = { matchStatus: 'waiting', joined: false, joinAvailable: false, leaveAvailable: false };
   var matchStatusLabels = { waiting: '等待中', started: '已开始', ended: '已结束' };
   var savedLoginNameKey = 'caoren_saved_login_name';
-  var savedPasswordKey = 'caoren_saved_login_password';
-  var saveDecisionKey = 'caoren_saved_login_decided';
 
   async function requestJson(url, options) {
     try {
@@ -35,48 +33,25 @@
     };
   }
 
-  function loadSavedCredentials() {
+  function loadSavedLoginName() {
     try {
+      // Remove only the two legacy keys; never read or reuse a saved password.
+      localStorage.removeItem('caoren_saved_login_password');
+      localStorage.removeItem('caoren_saved_login_decided');
       var savedName = localStorage.getItem(savedLoginNameKey) || '';
-      var savedPassword = localStorage.getItem(savedPasswordKey) || '';
       if (byId('player-center-login-name') && savedName) {
         byId('player-center-login-name').value = savedName;
         byId('player-center-save-login-name').checked = true;
-      }
-      if (byId('player-center-login-password') && savedPassword) {
-        byId('player-center-login-password').value = savedPassword;
-        byId('player-center-save-password').checked = true;
       }
     } catch (_error) {
       // 浏览器禁用本地存储时仍允许正常登录。
     }
   }
 
-  function saveCredentials(loginName, password) {
+  function saveLoginName(loginName) {
     try {
       if (byId('player-center-save-login-name')?.checked === true) localStorage.setItem(savedLoginNameKey, loginName);
       else localStorage.removeItem(savedLoginNameKey);
-      if (byId('player-center-save-password')?.checked === true) localStorage.setItem(savedPasswordKey, password);
-      else localStorage.removeItem(savedPasswordKey);
-      localStorage.setItem(saveDecisionKey, '1');
-    } catch (_error) {
-      // 不影响登录结果。
-    }
-  }
-
-  async function askFirstLoginSavePreference() {
-    try {
-      if (localStorage.getItem(saveDecisionKey) === '1') return;
-      var saveBoth = await window.caorenConfirm('这是第一次使用账号密码登录。是否保存账号和密码？\n\n登录框下方也可以分别选择“保存账号”和“保存密码”。', {
-        title: '保存登录信息',
-        confirmText: '保存账号和密码',
-        cancelText: '暂不保存'
-      });
-      if (saveBoth) {
-        byId('player-center-save-login-name').checked = true;
-        byId('player-center-save-password').checked = true;
-      }
-      localStorage.setItem(saveDecisionKey, '1');
     } catch (_error) {
       // 不影响登录结果。
     }
@@ -239,8 +214,7 @@
           reason === 'safe_storage_unavailable' ? 'Windows 安全凭据存储不可用，请取消“记住此设备”后登录。' : '账号或密码错误。';
       return setEntryError(message);
     }
-    await askFirstLoginSavePreference();
-    saveCredentials(loginName, password);
+    saveLoginName(loginName);
     if (passwordInput) passwordInput.value = '';
     await establishSession(
       rememberDevice ? result.sessionBootstrapTicket : result.data.sessionBootstrapTicket,
@@ -364,7 +338,8 @@
   }
 
   async function logout() {
-    await requestJson('/api/player-center/logout', jsonOptions('POST', {}));
+    var result = await requestJson('/api/player-center/logout', jsonOptions('POST', {}));
+    if (!result.ok) return setHomeMessage('退出失败，尚未确认服务端已退出，请检查网络后重试。');
     showEntry('已退出玩家中心。');
   }
 
@@ -418,7 +393,7 @@
     byId('player-center-forget-device-btn')?.addEventListener('click', forgetDesktopDevice);
     byId('player-center-join-btn')?.addEventListener('click', joinOrLeaveMatch);
     bindSocketInvalidation();
-    loadSavedCredentials();
+    loadSavedLoginName();
     var desktopAvailable = !!window.caorenDesktop?.loginPlayerCenter;
     if (byId('player-center-remember-device-row')) byId('player-center-remember-device-row').hidden = !desktopAvailable;
     if (byId('player-center-forget-device-btn')) byId('player-center-forget-device-btn').hidden = !desktopAvailable;

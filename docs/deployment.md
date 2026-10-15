@@ -31,6 +31,7 @@ ADMIN_PASSWORD
 PLUGIN_TOKEN
 PORT
 TRUST_PROXY（HTTPS 反向代理与 Node 位于同机时设为 loopback）
+WEB_BIND_HOST（同机反向代理部署设为 127.0.0.1，保留游戏桥接的本机连接）
 ```
 
 `PLUGIN_TOKEN` 要和 CS2 桥接插件的 `caoren_config.json` 保持一致。
@@ -39,17 +40,25 @@ TRUST_PROXY（HTTPS 反向代理与 Node 位于同机时设为 loopback）
 
 固定成员账户启用后，身份库会从 schema v1 向后兼容迁移到 schema v2。迁移保留现有长期身份、单场成员和设备令牌。更新前必须同时备份主文件和 `identity-store.previous.json`；未知版本或主副本均损坏时，服务会明确停止启动，不会静默创建空身份库。
 
-## 3. HTTP 风险边界
+## 3. HTTPS 登录与内部连接
 
-当前生产站点明确选择允许设备令牌签发、自动登录、轮换和退出通过 HTTP 进行。HTTP 不提供传输加密，局域网或链路攻击者可能窃取长期设备令牌；Bearer 只在必要认证请求发送，成功后立即轮换，并使用短时单次玩家中心引导票据，但这些措施与速率限制、审计、撤销都只能降低泄露后果，不能替代 HTTPS。
+公开入口统一使用 `https://caorencup.icu/`。HTTP 只用于跳转，`www` 应跳转到主域名，避免产生两份独立的登录状态。生产环境设备凭证的签发、登录、轮换和退出只接受 HTTPS；HTTP 仅允许非生产环境的本机开发。
 
-账号密码登录以及管理员创建或重置密码可以在 HTTP 环境使用，但密码同样不会被加密。部署 HTTPS 前，应为本系统使用独立且不复用到其他服务的密码。不得通过关闭 TLS 校验等方式增加额外风险。
+网页不再保存密码。当前访问来源下的原有浏览器密码记录和旧保存提示标记会在页面启动时按指定键移除（不同域名或 HTTP/HTTPS 的存储相互隔离，无法跨来源清除），已选择保存的账号名继续保留。玩家中心沿用 HttpOnly、SameSite=Lax Cookie；经可信 HTTPS 代理访问时附加 Secure。现有会话期限为闲置 7 天、最长 30 天。普通退出撤销当前网页会话；客户端另有“退出账号并忘记此设备”，会清除本机设备凭据并尝试服务端撤销。
 
-反向代理终止 TLS 时，需要转发 `X-Forwarded-Proto: https`，并在可信的本机代理场景配置：
+同机 Nginx 终止 TLS 时，转发 `Host`、`X-Forwarded-For` 和 `X-Forwarded-Proto`，设置：
 
 ```text
+NODE_ENV=production
 TRUST_PROXY=loopback
+WEB_BIND_HOST=127.0.0.1
 ```
+
+`WEB_BIND_HOST` 未设置时保留原监听方式；正式部署必须显式设置为本机地址。这样 Nginx 和同机游戏桥接仍能访问 `http://127.0.0.1:3000`，外部玩家无法直连明文 3000 入口。其他机器上的客户端或桥接连接切换到 HTTPS 域名后，才能收紧监听范围。
+
+Steam 登录在服务器能稳定完成官方验证、网页接入和真实登录验收前继续关闭。不要只设置 `STEAM_AUTH_PUBLIC_BASE_URL` 就宣称已经可用。
+
+首次部署前备份实际网页文件、Nginx 配置、PM2 状态以及 `runtime/identity-store*.json`、`runtime/player-center-sessions*.json`。部署时仅覆盖本次核对的文件，保留备案页脚、现有客户端包、游戏插件、账号数据和比赛状态。只重启网页服务；验证主域名、www 跳转、HTTPS 认证、3000 公网不可达和游戏桥接心跳，再确认完成。回滚恢复本次文件、Nginx 配置及原监听设置，不用旧身份库覆盖部署期间的新增数据。
 
 ## 4. Web Bridge Plugin Config
 

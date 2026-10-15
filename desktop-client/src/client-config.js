@@ -1,3 +1,3 @@
 module.exports = {
-  COMMAND_CENTER_URL: 'http://119.45.166.182/'
+  COMMAND_CENTER_URL: 'https://caorencup.icu/'
 };

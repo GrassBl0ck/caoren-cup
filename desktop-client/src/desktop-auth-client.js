@@ -3,9 +3,10 @@ const crypto = require('node:crypto');
 function isDesktopAuthUrlAllowed(rawUrl) {
   try {
     const url = new URL(rawUrl);
-    // 当前生产环境明确接受 HTTP 自动登录风险。这里不把 HTTP 描述为安全：Bearer 设备令牌可能被
-    // 局域网或链路攻击者窃取，轮换、短时票据与撤销只能降低后果，不能替代 TLS。
-    return url.protocol === 'https:' || url.protocol === 'http:';
+    if (url.protocol === 'https:') return true;
+    if (url.protocol !== 'http:') return false;
+    // HTTP is allowed only for local development; production device credentials must use TLS.
+    return ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   } catch (_error) {
     return false;
   }
