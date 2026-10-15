@@ -22,9 +22,11 @@ test('ephemeral ticket is single-use and expires after its TTL', () => {
     assert.equal(tickets.consume(expired.ticket), undefined);
 });
 
-test('device auth explicitly allows production HTTP for the accepted deployment risk', () => {
+test('device auth requires HTTPS in production and permits only local HTTP development', () => {
     assert.equal(isDeviceAuthTransportAllowed({ production: false, secure: false, hostname: '127.0.0.1' }), true);
-    assert.equal(isDeviceAuthTransportAllowed({ production: true, secure: false, hostname: '203.0.113.10' }), true);
+    assert.equal(isDeviceAuthTransportAllowed({ production: false, secure: false, hostname: 'localhost' }), true);
+    assert.equal(isDeviceAuthTransportAllowed({ production: false, secure: false, hostname: '203.0.113.10' }), false);
+    assert.equal(isDeviceAuthTransportAllowed({ production: true, secure: false, hostname: '203.0.113.10' }), false);
     assert.equal(isDeviceAuthTransportAllowed({ production: true, secure: true, hostname: 'cup.example.com' }), true);
 });
 

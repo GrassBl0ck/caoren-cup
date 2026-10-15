@@ -19,6 +19,19 @@ if (packageJson.build?.win?.signAndEditExecutable !== false) {
   throw new Error('desktop-client disables executable signing/editing to avoid Windows symlink permission failures.');
 }
 
+const clientConfig = require('../src/client-config');
+if (new URL(clientConfig.COMMAND_CENTER_URL).protocol !== 'https:') {
+  throw new Error('the packaged client must use the HTTPS website by default.');
+}
+const lock = JSON.parse(readFileSync(join(__dirname, '..', 'package-lock.json'), 'utf8'));
+if (lock.version !== packageJson.version || lock.packages[''].version !== packageJson.version) {
+  throw new Error('client package and lockfile versions must match.');
+}
+const homepage = readFileSync(join(__dirname, '..', '..', 'web-command-center', 'public', 'index.html'), 'utf8');
+if (!homepage.includes(`href="/downloads/CaorenCupClient-v${packageJson.version}.zip"`)) {
+  throw new Error('the website download must match the client version.');
+}
+
 const mainJs = readFileSync(join(__dirname, '..', 'src', 'main.js'), 'utf8');
 if (!mainJs.includes('nodeIntegration: false') || !mainJs.includes('contextIsolation: true') || !mainJs.includes('sandbox: true')) {
   throw new Error('desktop-client BrowserWindow must keep nodeIntegration disabled, contextIsolation enabled and sandbox enabled.');

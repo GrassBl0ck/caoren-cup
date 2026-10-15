@@ -53,10 +53,9 @@ export const isDeviceAuthTransportAllowed = (input: {
     secure: boolean;
     hostname: string;
 }): boolean => {
-    void input;
-    // 项目当前生产站点明确选择允许 HTTP 自动登录。Bearer 设备令牌可能被局域网或链路攻击者窃取；
-    // 短时单次票据、轮换和撤销只能降低泄露后果，不能提供传输加密。
-    return true;
+    if (input.secure) return true;
+    if (input.production) return false;
+    return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(input.hostname.toLowerCase());
 };
 
 export const lastForwardedValue = (rawValue: unknown): string | undefined => {

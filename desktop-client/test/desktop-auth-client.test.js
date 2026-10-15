@@ -2,11 +2,21 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { DesktopAuthClient, isDesktopAuthUrlAllowed } = require('../src/desktop-auth-client');
 
-test('desktop auth allows the configured HTTP production site with an explicit transport risk', () => {
-  assert.equal(isDesktopAuthUrlAllowed('http://203.0.113.10/'), true);
+test('desktop auth requires HTTPS outside local development', () => {
+  assert.equal(isDesktopAuthUrlAllowed('http://203.0.113.10/'), false);
   assert.equal(isDesktopAuthUrlAllowed('http://127.0.0.1:3000/'), true);
   assert.equal(isDesktopAuthUrlAllowed('http://localhost:3000/'), true);
   assert.equal(isDesktopAuthUrlAllowed('https://cup.example.com/'), true);
+});
+
+test('public HTTP is rejected before reading a device credential or sending a password', async () => {
+  const client = new DesktopAuthClient({
+    baseUrl: 'http://cup.example.com/',
+    fetch: async () => { throw new Error('must not send a request'); },
+    credentialStore: { load: () => { throw new Error('must not read credentials'); } },
+  });
+  assert.deepEqual(await client.authenticateDevice(), { ok: false, reason: 'unsupported_url' });
+  assert.deepEqual(await client.loginAccount('cc_test', 'secret', true), { ok: false, reason: 'unsupported_url' });
 });
 
 test('device authentication rotates immediately and returns only a player-center bootstrap ticket', async () => {
@@ -30,7 +40,7 @@ test('device authentication rotates immediately and returns only a player-center
     assert.equal(options.headers.Authorization, 'Bearer rotated-token');
     return { ok: true, json: async () => ({ success: true }) };
   };
-  const client = new DesktopAuthClient({ baseUrl: 'http://cup.example.com/', fetch, credentialStore });
+  const client = new DesktopAuthClient({ baseUrl: 'https://cup.example.com/', fetch, credentialStore });
 
   const result = await client.authenticateDevice();
   assert.deepEqual(result, {
@@ -47,7 +57,7 @@ test('device authentication rotates immediately and returns only a player-center
 test('remembered account login stores the token in the main process without returning it to renderer', async () => {
   const saved = [];
   const client = new DesktopAuthClient({
-    baseUrl: 'http://cup.example.com/',
+    baseUrl: 'https://cup.example.com/',
     randomUUID: () => 'new-device-id',
     credentialStore: {
       load: () => ({ ok: false, reason: 'not_found' }),
@@ -88,21 +98,21 @@ test('definitive device rejection clears the local token but a network failure p
     clear: () => { cleared += 1; return { ok: true }; },
   };
   const rejected = new DesktopAuthClient({
-    baseUrl: 'http://cup.example.com/', credentialStore,
+    baseUrl: 'https://cup.example.com/', credentialStore,
     fetch: async () => ({ ok: false, status: 401, json: async () => ({ success: false, error: 'account_disabled' }) }),
   });
   assert.deepEqual(await rejected.authenticateDevice(), { ok: false, reason: 'account_disabled', credentialCleared: true });
   assert.equal(cleared, 1);
 
   const limited = new DesktopAuthClient({
-    baseUrl: 'http://cup.example.com/', credentialStore,
+    baseUrl: 'https://cup.example.com/', credentialStore,
     fetch: async () => ({ ok: false, status: 429, json: async () => ({ success: false, error: 'rate_limited' }) }),
   });
   assert.deepEqual(await limited.authenticateDevice(), { ok: false, reason: 'rate_limited' });
   assert.equal(cleared, 1);
 
   const offline = new DesktopAuthClient({
-    baseUrl: 'http://cup.example.com/', credentialStore,
+    baseUrl: 'https://cup.example.com/', credentialStore,
     fetch: async () => { throw new Error('offline'); },
   });
   assert.deepEqual(await offline.authenticateDevice(), { ok: false, reason: 'network_error' });
@@ -112,7 +122,7 @@ test('definitive device rejection clears the local token but a network failure p
 test('concurrent automatic login calls share one rotation request', async () => {
   let requests = 0;
   const client = new DesktopAuthClient({
-    baseUrl: 'http://cup.example.com/',
+    baseUrl: 'https://cup.example.com/',
     credentialStore: {
       load: () => ({ ok: true, credential: { deviceToken: 'stored-token', deviceId: 'device-id' } }),
       save: () => ({ ok: true }),
@@ -140,7 +150,7 @@ test('rotation confirmation rejection clears the replacement credential while ne
     clear: () => { clearCount += 1; return { ok: true }; },
   };
   const client = new DesktopAuthClient({
-    baseUrl: 'http://cup.example.com/', credentialStore,
+    baseUrl: 'https://cup.example.com/', credentialStore,
     fetch: async (url) => {
       if (String(url).endsWith('/login')) return { ok: true, json: async () => ({
         success: true, sessionBootstrapTicket: 'ticket', sessionBootstrapExpiresAt: 1,

@@ -36,7 +36,7 @@
 /* v1.3.3 socket capture end */
 </script>
     <script defer src="/js/caoren-audio-controller.js"></script>
-    <link rel="stylesheet" href="/css/app.css?v=1.9.7">
+    <link rel="stylesheet" href="/css/app.css?v=1.9.7-psb1">
     <link rel="stylesheet" href="/css/update-announcements.css">
     <link rel="stylesheet" href="/css/caoren-mod-panel.css">
     <link rel="stylesheet" href="/css/caoren-motion.css">
@@ -63,7 +63,7 @@
         <section id="player-center-entry" class="panel player-center-entry" aria-labelledby="player-center-entry-title">
             <div class="login-panel-header">
                 <div>
-                    <span class="section-eyebrow">草人杯 1.9.2</span>
+                    <span class="section-eyebrow">草人杯 1.11.1</span>
                     <h2 id="player-center-entry-title">玩家中心</h2>
                     <p>账号登录只进入玩家中心，不会自动加入比赛。</p>
                 </div>
@@ -74,9 +74,8 @@
                 <label>密码<input id="player-center-login-password" type="password" maxlength="128" autocomplete="current-password"></label>
                 <div class="player-center-login-save-options" style="display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:13px;">
                     <label><input id="player-center-save-login-name" type="checkbox"> 保存账号</label>
-                    <label><input id="player-center-save-password" type="checkbox"> 保存密码</label>
                 </div>
-                <p style="font-size:12px;color:#64748b;margin:4px 0 8px;">首次使用账号密码登录时，网站会询问是否保存；两个选项也可以分别勾选。</p>
+                <p style="font-size:12px;color:#64748b;margin:4px 0 8px;">登录后自动保持登录：连续 7 天未使用或满 30 天需重新登录。网站不保存密码；公共电脑使用后请退出账号。</p>
                 <label id="player-center-remember-device-row" hidden><input id="player-center-remember-device" type="checkbox"> 记住此设备（仅桌面客户端）</label>
                 <button id="player-center-login-btn" class="primary-btn" type="button">登录玩家中心</button>
                 <button id="player-center-game-code-toggle" class="header-text-link" type="button">使用 <code>/cclogin</code> 游戏码</button>
@@ -110,8 +109,8 @@
                 <details class="download-menu">
                     <summary>客户端下载</summary>
                     <div class="download-menu-content">
-                        <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.6.3.zip" download>下载桌面客户端</a>
-                        <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.6.3" target="_blank" rel="noopener">GitHub 备用下载</a>
+                        <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.11.1.zip" download>下载桌面客户端</a>
+                        <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.11.1" target="_blank" rel="noopener">GitHub 备用下载</a>
                     </div>
                 </details>
             </div>
@@ -872,6 +871,13 @@
         <div id="update-announcement-list" class="update-announcement-list"></div>
     </aside>
 
+    <footer class="site-legal-footer" aria-label="网站备案信息">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">冀ICP备2026043660号-1</a>
+        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=13102402000558" target="_blank" rel="noreferrer">
+            <img src="/assets/beian-police.png" width="18" height="20" alt="">
+            <span>冀公网安备13102402000558号</span>
+        </a>
+    </footer>
     <script src="/js/update-announcement-read-state.js"></script>
     <script src="/js/caoren-dialog.js?v=1.9.2-modern-dialog11"></script>
     <script src="/js/task-template-history.js?v=undercover-ui1"></script>
@@ -895,7 +901,7 @@
 
 
 <script src="/js/access-admin.js?v=1.9.2-modern-dialog8"></script>
-<script src="/js/player-center.js?v=1.9.2-exitcopy1"></script>
+<script src="/js/player-center.js?v=1.11.1-https-session1"></script>
 <script src="/js/weaponpaints-draft.js?v=1.9.2-qol2"></script>
 <script src="/js/weaponpaints-app.js?v=1.9.2-modern-dialog8"></script>
 </body>

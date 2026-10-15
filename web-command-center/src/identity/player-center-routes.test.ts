@@ -12,7 +12,7 @@ import { LobbyIdentityService } from './identity-service';
 import { createTestLoginAccount } from './test-account-helper';
 import { PlayerCenterSessionStore } from './player-center-session-store';
 
-const startServer = async (name: string) => {
+const startServer = async (name: string, trustLocalProxy = false) => {
     const dir = path.resolve(__dirname, '..', '..', 'runtime', `player-center-routes-${name}-${process.pid}-${Date.now()}`);
     fs.mkdirSync(dir, { recursive: true });
     const identityStore = new IdentityStore(path.join(dir, 'identity-store.json'));
@@ -22,6 +22,7 @@ const startServer = async (name: string) => {
     const tickets = new EphemeralTicketService<PlayerCenterBootstrapTicket>();
     const socketInvalidations: Array<{ identityId: string; preserveSessionId?: string }> = [];
     const app = express();
+    if (trustLocalProxy) app.set('trust proxy', 'loopback');
     app.use(express.json());
     registerIdentityAuthRoutes(app, {
         service,
@@ -49,6 +50,7 @@ const requestJson = async (
     body?: unknown,
     cookie?: string,
     authorization?: string,
+    forwardedProto?: string,
 ) => {
     const response = await fetch(url, {
         method,
@@ -56,6 +58,7 @@ const requestJson = async (
             ...(body === undefined ? {} : { 'content-type': 'application/json' }),
             ...(cookie ? { cookie } : {}),
             ...(authorization ? { authorization } : {}),
+            ...(forwardedProto ? { 'x-forwarded-proto': forwardedProto } : {}),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -201,6 +204,50 @@ test('bootstrap ticket creates an HttpOnly browser session and current identity 
     });
     assert.equal(JSON.stringify(current.body).match(/"(?:steamId|identityId|password|token|membership|players|score)"\s*:/i), null);
     assert.equal(Object.keys(runtime.sessionStore.snapshot().sessions).length, 1);
+});
+
+test('HTTPS through a trusted local proxy creates a Secure session and logout rejects its replay', async (t) => {
+    const runtime = await startServer('https-cookie', true);
+    t.after(runtime.close);
+    const { identity, account } = await createAccount(runtime, '209');
+    const ticket = runtime.tickets.issue({ identityId: identity.identityId, accountUpdatedAt: account.updatedAt }, 30_000);
+    const opened = await requestJson(`${runtime.baseUrl}/api/player-center/session`, 'POST', {
+        sessionBootstrapTicket: ticket.ticket,
+    }, undefined, undefined, 'https');
+    assert.equal(opened.status, 200);
+    assert.match(opened.setCookie, /;\s*Secure/i);
+    assert.match(opened.setCookie, /HttpOnly/i);
+    assert.match(opened.setCookie, /SameSite=Lax/i);
+    const maxAge = Number(/Max-Age=(\d+)/i.exec(opened.setCookie)?.[1]);
+    assert.ok(maxAge > 0 && maxAge <= 30 * 24 * 60 * 60);
+    const cookie = opened.setCookie.split(';')[0];
+    assert.equal((await requestJson(`${runtime.baseUrl}/api/player-center/me`, 'GET', undefined, cookie, undefined, 'https')).status, 200);
+    const loggedOut = await requestJson(`${runtime.baseUrl}/api/player-center/logout`, 'POST', {}, cookie, undefined, 'https');
+    assert.equal(loggedOut.status, 200);
+    assert.match(loggedOut.setCookie, /;\s*Secure/i);
+    assert.equal((await requestJson(`${runtime.baseUrl}/api/player-center/me`, 'GET', undefined, cookie, undefined, 'https')).status, 401);
+});
+
+test('production blocks every HTTP device-auth endpoint and accepts HTTPS only from its trusted proxy', async (t) => {
+    const original = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    t.after(() => { if (original === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = original; });
+    const runtime = await startServer('production-transport', true);
+    t.after(runtime.close);
+    for (const endpoint of ['account-login', 'login', 'rotation/confirm', 'logout']) {
+        const response = await requestJson(`${runtime.baseUrl}/api/desktop-auth/${endpoint}`, 'POST', {});
+        assert.equal(response.status, 403, endpoint);
+        assert.equal(response.body.error, 'DEVICE_AUTH_TRANSPORT_NOT_ALLOWED');
+    }
+    const { account } = await createAccount(runtime, '210');
+    const secure = await requestJson(`${runtime.baseUrl}/api/desktop-auth/account-login`, 'POST', {
+        loginName: account.loginName, password: 'current-pass', deviceId: 'https-device-210',
+    }, undefined, undefined, 'https');
+    assert.equal(secure.status, 200);
+    const untrusted = await startServer('untrusted-https-header');
+    t.after(untrusted.close);
+    const forged = await requestJson(`${untrusted.baseUrl}/api/desktop-auth/login`, 'POST', {}, undefined, undefined, 'https');
+    assert.equal(forged.status, 403);
 });
 
 test('bootstrap ticket is consumed once and rechecks disabled, password state, and account version', async (t) => {

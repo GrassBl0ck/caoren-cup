@@ -382,7 +382,8 @@ Promise.all([
     initializeWeaponPaintsRuntime(),
     updateAnnouncementService.initialize(),
 ])
-    .then(() => httpServer.listen(PORT, () => console.log(`草人杯指挥台已启动: http://localhost:${PORT}`)))
+    .then(() => httpServer.listen({ port: Number(PORT), host: process.env.WEB_BIND_HOST || undefined },
+        () => console.log(`草人杯指挥台已启动: http://${process.env.WEB_BIND_HOST || 'localhost'}:${PORT}`)))
     .catch((error) => {
         console.error('[Startup] 核心服务初始化失败，服务未启动：', error);
         process.exitCode = 1;
