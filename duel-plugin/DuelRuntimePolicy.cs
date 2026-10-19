@@ -30,6 +30,55 @@ internal sealed record DuelSteamBoundLoadoutPlan(
 
 internal sealed record DuelCvarSetting(string Name, string Value, string Fallback);
 
+/// <summary>
+/// 一次延迟发装/选枪回调的归属快照。回调必须同时匹配当前回合、生成号和玩家身份，
+/// 避免上一回合、上一次生命或已结束比赛的计时器继续操作新状态。
+/// </summary>
+internal sealed record DuelLoadoutCallback(
+    int Generation,
+    int Round,
+    ulong SteamId,
+    uint PawnHandle,
+    int Team,
+    uint ControllerHandle);
+
+internal readonly record struct DuelLoadoutCallbackContext(
+    int ScheduledGeneration,
+    int CurrentGeneration,
+    int ScheduledRound,
+    int CurrentRound,
+    bool IsUnloading,
+    bool DuelModeEnabled,
+    bool PlayerValid,
+    bool PawnAlive,
+    ulong ScheduledSteamId,
+    ulong CurrentSteamId,
+    uint ScheduledPawnHandle,
+    uint CurrentPawnHandle,
+    int ScheduledTeam,
+    int CurrentTeam,
+    uint ScheduledControllerHandle,
+    uint CurrentControllerHandle);
+
+/// <summary>
+/// 单次发装后的默认持枪选择。每个发装计划只允许发出一次选择指令；
+/// 玩家随后主动切刀、副武器或投掷物时，不再有第二次回调把选择抢回来。
+/// </summary>
+internal sealed class DuelPreferredWeaponSelection
+{
+    private bool _issued;
+
+    public bool Issued => _issued;
+
+    public bool TryIssue(string? activeWeapon, DuelLoadoutRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        if (_issued) return false;
+        _issued = true;
+        return !string.Equals(activeWeapon, rule.PreferredWeapon, StringComparison.OrdinalIgnoreCase);
+    }
+}
+
 internal static class DuelRuntimePolicy
 {
     private static readonly HashSet<string> NonFirearmWeapons = new(StringComparer.OrdinalIgnoreCase)
@@ -111,6 +160,18 @@ internal static class DuelRuntimePolicy
     }
 
     public static bool ShouldBlockDrop(string? designerName) => IsFirearm(designerName);
+
+    public static bool CanApplyDuelLoadoutCallback(DuelLoadoutCallbackContext context)
+    {
+        if (context.IsUnloading || !context.DuelModeEnabled) return false;
+        if (!context.PlayerValid || !context.PawnAlive) return false;
+        if (context.ScheduledGeneration != context.CurrentGeneration) return false;
+        if (context.ScheduledRound != context.CurrentRound) return false;
+        if (context.ScheduledSteamId == 0 || context.ScheduledSteamId != context.CurrentSteamId) return false;
+        if (context.ScheduledPawnHandle is 0 or uint.MaxValue || context.ScheduledPawnHandle != context.CurrentPawnHandle) return false;
+        if (context.ScheduledControllerHandle is 0 or uint.MaxValue || context.ScheduledControllerHandle != context.CurrentControllerHandle) return false;
+        return context.ScheduledTeam is 2 or 3 && context.ScheduledTeam == context.CurrentTeam;
+    }
 
     public static bool CanActivateRuntime(bool cvarScopeReady, bool duelRuntimeActive) =>
         cvarScopeReady || duelRuntimeActive;

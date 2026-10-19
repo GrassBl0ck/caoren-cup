@@ -1,9 +1,10 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
+using CaorenCup.WeaponPaints.Core;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using Newtonsoft.Json.Linq;
@@ -254,132 +255,40 @@ namespace CaorenCup.WeaponPaints
 			return false;
 		}
 
-		private void RefreshWeapons(CCSPlayerController? player)
+		private void RefreshWeapons(CCSPlayerController? player, WeaponRefreshIdentity identity)
 		{
 			if (!_gBCommandsAllowed) return;
-			if (player == null || !player.IsValid || player.PlayerPawn.Value == null || (LifeState_t)player.LifeState != LifeState_t.LIFE_ALIVE)
+			if (player == null || !CanRefreshPlayer(player, identity) || player.PlayerPawn.Value == null)
 				return;
 			if (player.PlayerPawn.Value.WeaponServices == null || player.PlayerPawn.Value.ItemServices == null)
-				return;
-
-			var weapons = player.PlayerPawn.Value.WeaponServices.MyWeapons;
-
-			if (weapons.Count == 0)
 				return;
 			if (player.Team is CsTeam.None or CsTeam.Spectator)
 				return;
 
-			var hasKnife = false;
-
-			Dictionary<string, List<(int, int)>> weaponsWithAmmo = [];
-
-			foreach (var weapon in weapons)
-			{
-				if (!weapon.IsValid || weapon.Value == null ||
-					!weapon.Value.IsValid || !weapon.Value.DesignerName.Contains("weapon_"))
-					continue;
-
-				CCSWeaponBaseGun gun = weapon.Value.As<CCSWeaponBaseGun>();
-
-				if (weapon.Value.Entity == null) continue;
-				if (!weapon.Value.OwnerEntity.IsValid) continue;
-				if (gun.Entity == null) continue;
-				if (!gun.IsValid) continue;
-
-				try
+			// 只在现有武器实体上原地重写皮肤属性。禁止 Kill/重发武器或发送 slot/lastinv，
+			// 否则会把单挑刚发好的配装和玩家已选中的手持武器一起破坏。
+			WeaponRefreshWorkflow.Apply(player.PlayerPawn.Value.WeaponServices.MyWeapons, weapon =>
 				{
-					CCSWeaponBaseVData? weaponData = weapon.Value.As<CCSWeaponBase>().VData;
-
-					if (weaponData == null) continue;
-
-					if (weaponData.GearSlot is gear_slot_t.GEAR_SLOT_RIFLE or gear_slot_t.GEAR_SLOT_PISTOL)
+					if (!weapon.IsValid || weapon.Value == null || !weapon.Value.IsValid ||
+					    weapon.Value.Entity == null || !weapon.Value.DesignerName.Contains("weapon_"))
 					{
-						if (!WeaponDefindex.TryGetValue(weapon.Value.AttributeManager.Item.ItemDefinitionIndex, out var weaponByDefindex))
-							continue;
-
-						int clip1 = weapon.Value.Clip1;
-						int reservedAmmo = weapon.Value.ReserveAmmo[0];
-
-						if (!weaponsWithAmmo.TryGetValue(weaponByDefindex, out var value))
-						{
-							value = [];
-							weaponsWithAmmo.Add(weaponByDefindex, value);
-						}
-
-						value.Add((clip1, reservedAmmo));
-
-						if (gun.VData == null) return;
-
-						weapon.Value?.AddEntityIOEvent("Kill", weapon.Value, null, "", 0.1f);
+						return;
 					}
 
-					if (weaponData.GearSlot == gear_slot_t.GEAR_SLOT_KNIFE)
+					try
 					{
-						weapon.Value?.AddEntityIOEvent("Kill", weapon.Value, null, "", 0.1f);
-						hasKnife = true;
+						GivePlayerWeaponSkin(player, weapon.Value);
 					}
-				}
-				catch (Exception ex)
-				{
-					Logger.LogWarning(ex.Message);
-				}
-			}
-
-			AddTimer(0.23f, () =>
+					catch (Exception ex)
 					{
-						if (!_gBCommandsAllowed) return;
-
-						if (!PlayerHasKnife(player) && hasKnife)
-						{
-							var newKnife = new CBasePlayerWeapon(player.GiveNamedItem(CsItem.Knife));
-							var newWeapon = new CBasePlayerWeapon(player.GiveNamedItem(CsItem.USP));
-							player.GiveNamedItem(CsItem.Knife);
-							player.ExecuteClientCommand("slot3");
-
-							Server.NextFrame(() =>
-							{
-								try
-								{
-									if (newKnife != null && newKnife.IsValid)
-										newKnife.AddEntityIOEvent("Kill", newKnife, null, "", 0.01f);
-									if (newWeapon != null && newWeapon.IsValid)
-										newWeapon.AddEntityIOEvent("Kill", newWeapon, null, "", 0.01f);
-								}
-								catch (Exception ex)
-								{
-									Logger.LogWarning("Error AddEntityIOEvent " + ex.Message);
-								}
-							});
-						}
-
-
-						foreach (var entry in weaponsWithAmmo)
-						{
-							foreach (var ammo in entry.Value)
-							{
-								var newWeapon = new CBasePlayerWeapon(player.GiveNamedItem(entry.Key));
-								Server.NextFrame(() =>
-						{
-							try
-							{
-								newWeapon.Clip1 = ammo.Item1;
-								newWeapon.ReserveAmmo[0] = ammo.Item2;
-
-								IncrementWearForWeaponWithStickers(player, newWeapon);
-							}
-							catch (Exception ex)
-							{
-								Logger.LogWarning("Error setting weapon properties: " + ex.Message);
-							}
-						});
-							}
-						}
-					}, TimerFlags.STOP_ON_MAPCHANGE);
+						Logger.LogWarning(ex, "原地刷新武器皮肤失败：{Weapon}", weapon.Value.DesignerName);
+					}
+				});
 		}
 
-		private void GivePlayerGloves(CCSPlayerController player)
+		private void GivePlayerGloves(CCSPlayerController player, WeaponRefreshIdentity identity)
 		{
-			if (!WeaponPaintsUtility.IsPlayerValid(player) || (LifeState_t)player.LifeState != LifeState_t.LIFE_ALIVE) return;
+			if (!CanRefreshPlayer(player, identity)) return;
 
 			CCSPlayerPawn? pawn = player.PlayerPawn.Value;
 			if (pawn == null || !pawn.IsValid)
@@ -387,19 +296,12 @@ namespace CaorenCup.WeaponPaints
 
 			CEconItemView item = pawn.EconGloves;
 
-			item.NetworkedDynamicAttributes.Attributes.RemoveAll();
-			item.AttributeList.Attributes.RemoveAll();
-
-			//force gloves model refresh to prevent model overlap
-			player.ExecuteClientCommand("lastinv");
+			// 在原出生实体上刷新手套，不通过 lastinv 改变玩家手持物品。
 			Instance.AddTimer(0.08f, () =>
 			{
 				try
 				{
-					if (!player.IsValid)
-						return;
-
-					if (!player.PawnIsAlive)
+					if (!CanRefreshPlayer(player, identity))
 						return;
 
 					if (!GPlayersGlove.TryGetValue(player.Slot, out var gloveInfo) ||
@@ -424,10 +326,12 @@ namespace CaorenCup.WeaponPaints
 
 					item.Initialized = true;
 
-					//force gloves model refresh to prevent model overlap
-					player.ExecuteClientCommand("lastinv");
+					// 通过 bodygroup 更新显示，并在延迟恢复前再次验证身份。
 					SetBodygroup(pawn, "first_or_third_person", 0);
-					AddTimer(0.2f, () => SetBodygroup(pawn, "first_or_third_person", 1), TimerFlags.STOP_ON_MAPCHANGE);
+					AddTimer(0.2f, () =>
+					{
+						if (CanRefreshPlayer(player, identity)) SetBodygroup(pawn, "first_or_third_person", 1);
+					}, TimerFlags.STOP_ON_MAPCHANGE);
 				}
 				catch (Exception) { }
 			}, TimerFlags.STOP_ON_MAPCHANGE);
@@ -476,7 +380,7 @@ namespace CaorenCup.WeaponPaints
 			UpdateWeaponMeshGroupMask(weapon, isLegacy);
 		}
 
-		private static void GivePlayerAgent(CCSPlayerController player)
+		private void GivePlayerAgent(CCSPlayerController player, WeaponRefreshIdentity identity)
 		{
 			if (!GPlayersAgent.TryGetValue(player.Slot, out var value)) return;
 
@@ -490,6 +394,7 @@ namespace CaorenCup.WeaponPaints
 			{
 				Server.NextFrame(() =>
 				{
+					if (!CanRefreshPlayer(player, identity)) return;
 					player.PlayerPawn.Value.SetModel(
 						$"agents/models/{model}.vmdl"
 					);

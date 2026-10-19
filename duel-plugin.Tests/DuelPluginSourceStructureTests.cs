@@ -101,17 +101,19 @@ public sealed class DuelPluginSourceStructureTests
     }
 
     [Fact]
-    public void Duel_weapon_rules_avoid_direct_entity_removal_and_use_delayed_retry()
+    public void Duel_weapon_rules_avoid_direct_entity_removal_and_use_single_shot_selection()
     {
         var source = ReadPluginSource();
         Assert.Contains("AddCommandListener(\"drop\", OnDuelDropCommand, HookMode.Pre)", source);
         Assert.DoesNotContain("RemoveUnexpectedDuelFirearms", source);
         Assert.DoesNotContain("weapon.Remove()", source);
-        Assert.Contains("QueuePreferredDuelWeapon(player, plan.Rule)", source);
+        Assert.Contains("QueuePreferredDuelWeapon(player, plan.Rule, callback)", source);
         Assert.Contains("AddTimer(0.2f", source);
         Assert.Contains("FindDuelPlayer(plan.SteamId)", source);
-        Assert.Contains("AddTimer(0.1f", source);
-        Assert.Contains("allowRetry: false", source);
+        Assert.Contains("new DuelPreferredWeaponSelection()", source);
+        Assert.Contains("CanApplyDuelLoadoutContinuation(player, callback)", source);
+        Assert.DoesNotContain("AddTimer(0.1f", source);
+        Assert.DoesNotContain("allowRetry", source);
     }
 
     [Fact]

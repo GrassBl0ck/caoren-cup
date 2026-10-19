@@ -57,6 +57,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             new LoadoutFeature(),
             new ModifierFeature(),
             new MovementRulesFeature(),
+            new FriendsVineFeature(),
             new PresetFeature(),
         };
 

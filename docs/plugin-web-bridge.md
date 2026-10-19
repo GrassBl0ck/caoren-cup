@@ -53,7 +53,7 @@ cp caoren_config.example.json caoren_config.json
 网页登录还需要在网页端环境变量中配置服务器连接地址：
 
 ```bash
-GAME_SERVER_CONNECT_URL=steam://connect/<ip>:<port>
+GAME_SERVER_CONNECT_URL=steam://connect/play.caorencup.icu:27015
 # 可选：默认 21600 秒
 GAME_LOGIN_CODE_TTL_SECONDS=21600
 # 可选：默认 15000 毫秒

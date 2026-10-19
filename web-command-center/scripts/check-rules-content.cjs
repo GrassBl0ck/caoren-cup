@@ -13,7 +13,7 @@ for (const text of [
   '开户与账号恢复',
   'SteamID64',
   '本场确认',
-  'connect 119.45.166.182:27015',
+  'connect play.caorencup.icu',
   'QQ：3465434029',
   '不平衡竞技',
   '卧底模式',

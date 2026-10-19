@@ -51,6 +51,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
     private readonly Dictionary<string, string> _duelCurrentSecondary = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingAwpRequest> _duelAwpRequests = new(StringComparer.Ordinal);
     private int _duelLoadoutGeneration;
+    private int _duelRoundSequence;
     private bool _gameManagedDuelRuntimeActive;
     private bool _duelCvarRestorePending;
     private static Action<Action> MapStartLifecycleSchedule => Server.NextWorldUpdate;
@@ -715,6 +716,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
             return HookResult.Continue;
         }
 
+        _duelRoundSequence++;
         if (_duelSession.ControlMode == DuelControlMode.GameManaged &&
             _duelSession.Lifecycle == DuelLifecycle.Running)
         {
@@ -732,6 +734,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
     [GameEventHandler]
     public HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
     {
+        _duelLoadoutGeneration++;
         if (_duelSession.ControlMode != DuelControlMode.GameManaged) return HookResult.Continue;
 
         var winner = TeamName(@event.Winner);
@@ -950,6 +953,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
     private void ClearDuelEquipmentState()
     {
         _duelLoadoutGeneration++;
+        _duelRoundSequence++;
         _duelPendingPrimary.Clear();
         _duelPendingSecondary.Clear();
         _duelCurrentPrimary.Clear();
@@ -1222,10 +1226,15 @@ public sealed class CaorenDuelPlugin : BasePlugin
     {
         if (!_duelModeEnabled) return;
         var stage = GetDuelStage();
-        var inputs = Utilities.GetPlayers()
+        var players = Utilities.GetPlayers()
             .Where(IsRealPlayer)
             .Where(player => player.Team == CsTeam.Terrorist || player.Team == CsTeam.CounterTerrorist)
-            .Select(player =>
+            .ToList();
+        var generation = ++_duelLoadoutGeneration;
+        var round = _duelRoundSequence;
+        var callbacks = players.ToDictionary(player => player.SteamID.ToString(), player => new DuelLoadoutCallback(
+            generation, round, player.SteamID, player.PlayerPawn.Raw, (int)player.Team, player.EntityHandle.Raw));
+        var inputs = players.Select(player =>
             {
                 var steamId = player.SteamID.ToString();
                 var primary = stage switch
@@ -1244,22 +1253,25 @@ public sealed class CaorenDuelPlugin : BasePlugin
             })
             .ToList();
         var plans = DuelRuntimePolicy.BuildSteamBoundLoadoutPlans(stage, inputs);
-        var generation = ++_duelLoadoutGeneration;
 
         AddTimer(0.2f, () =>
         {
-            if (_isUnloading || !_duelModeEnabled || generation != _duelLoadoutGeneration) return;
+            if (_isUnloading || !_duelModeEnabled) return;
+            if (generation != _duelLoadoutGeneration || round != _duelRoundSequence) return;
             foreach (var plan in plans.Values)
             {
-                ApplyDuelLoadout(plan, stage, generation);
+                ApplyDuelLoadout(plan, stage, callbacks[plan.SteamId]);
             }
         }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
-    private void ApplyDuelLoadout(DuelSteamBoundLoadoutPlan plan, DuelStage stage, int generation)
+    private void ApplyDuelLoadout(
+        DuelSteamBoundLoadoutPlan plan,
+        DuelStage stage,
+        DuelLoadoutCallback callback)
     {
         var player = FindDuelPlayer(plan.SteamId);
-        if (player == null || !player.PawnIsAlive) return;
+        if (player == null || !CanApplyDuelLoadoutContinuation(player, callback)) return;
 
         try
         {
@@ -1270,8 +1282,8 @@ public sealed class CaorenDuelPlugin : BasePlugin
             if (stage == DuelStage.Pistol) GivePlayerKevlar(player);
             else player.GiveNamedItem("item_assaultsuit");
             GiveDuelUtilities(player);
-            QueuePreferredDuelWeapon(player, plan.Rule);
-            AddTimer(0.05f, () => LogAppliedDuelLoadout(plan, generation), TimerFlags.STOP_ON_MAPCHANGE);
+            QueuePreferredDuelWeapon(player, plan.Rule, callback);
+            AddTimer(0.05f, () => LogAppliedDuelLoadout(plan, callback), TimerFlags.STOP_ON_MAPCHANGE);
         }
         catch (Exception ex)
         {
@@ -1285,11 +1297,10 @@ public sealed class CaorenDuelPlugin : BasePlugin
             player.SteamID.ToString() == steamId
             && (player.Team == CsTeam.Terrorist || player.Team == CsTeam.CounterTerrorist));
 
-    private void LogAppliedDuelLoadout(DuelSteamBoundLoadoutPlan plan, int generation)
+    private void LogAppliedDuelLoadout(DuelSteamBoundLoadoutPlan plan, DuelLoadoutCallback callback)
     {
-        if (_isUnloading || !_duelModeEnabled || generation != _duelLoadoutGeneration) return;
         var player = FindDuelPlayer(plan.SteamId);
-        if (player == null) return;
+        if (player == null || !CanApplyDuelLoadoutContinuation(player, callback)) return;
         Logger.LogDebug(
             "Duel loadout bound by SteamID {SteamId}: expected primary={Primary} secondary={Secondary}; actual={Actual}",
             plan.SteamId,
@@ -1298,57 +1309,41 @@ public sealed class CaorenDuelPlugin : BasePlugin
             string.Join(",", PlayerEquipment(player).Weapons));
     }
 
-    private void QueuePreferredDuelWeapon(CCSPlayerController player, DuelLoadoutRule rule)
+    private void QueuePreferredDuelWeapon(
+        CCSPlayerController player,
+        DuelLoadoutRule rule,
+        DuelLoadoutCallback callback)
     {
-        var steamId = player.SteamID;
+        var selection = new DuelPreferredWeaponSelection();
         Server.NextFrame(() =>
         {
-            if (!CanApplyDuelLoadoutContinuation(player, steamId)) return;
-            TrySelectPreferredDuelWeapon(player, rule, allowRetry: true);
+            if (!CanApplyDuelLoadoutContinuation(player, callback)) return;
+            if (!selection.TryIssue(PlayerEquipment(player).ActiveWeapon, rule)) return;
+            var slotCommand = rule.PreferredSlot == DuelPreferredWeaponSlot.Primary ? "slot1" : "slot2";
+            player.ExecuteClientCommand(slotCommand);
         });
     }
 
-    private void TrySelectPreferredDuelWeapon(
-        CCSPlayerController player,
-        DuelLoadoutRule rule,
-        bool allowRetry)
+    private bool CanApplyDuelLoadoutContinuation(CCSPlayerController player, DuelLoadoutCallback callback)
     {
-        if (string.Equals(
-                PlayerEquipment(player).ActiveWeapon,
-                rule.PreferredWeapon,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        var slotCommand = rule.PreferredSlot == DuelPreferredWeaponSlot.Primary ? "slot1" : "slot2";
-        player.ExecuteClientCommand(slotCommand);
-        if (!allowRetry) return;
-
-        var steamId = player.SteamID;
-        AddTimer(0.1f, () =>
-        {
-            if (!CanApplyDuelLoadoutContinuation(player, steamId)) return;
-            TrySelectPreferredDuelWeapon(player, rule, allowRetry: false);
-            if (!string.Equals(
-                    PlayerEquipment(player).ActiveWeapon,
-                    rule.PreferredWeapon,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                Logger.LogDebug(
-                    "Duel preferred weapon selection did not settle for {SteamId}: {Weapon}",
-                    steamId,
-                    rule.PreferredWeapon);
-            }
-        }, TimerFlags.STOP_ON_MAPCHANGE);
-    }
-
-    private bool CanApplyDuelLoadoutContinuation(CCSPlayerController player, ulong steamId)
-    {
-        return !_isUnloading
-            && _duelModeEnabled
-            && IsRealPlayer(player)
-            && player.SteamID == steamId;
+        if (!IsRealPlayer(player)) return false;
+        return DuelRuntimePolicy.CanApplyDuelLoadoutCallback(new DuelLoadoutCallbackContext(
+            callback.Generation,
+            _duelLoadoutGeneration,
+            callback.Round,
+            _duelRoundSequence,
+            _isUnloading,
+            _duelModeEnabled,
+            PlayerValid: true,
+            player.PawnIsAlive,
+            callback.SteamId,
+            player.SteamID,
+            callback.PawnHandle,
+            player.PlayerPawn.Raw,
+            callback.Team,
+            (int)player.Team,
+            callback.ControllerHandle,
+            player.EntityHandle.Raw));
     }
 
     private static string GetPendingOrCurrent(
@@ -1457,6 +1452,8 @@ public sealed class CaorenDuelPlugin : BasePlugin
     {
         var activeDuelMode = _duelSession.ControlMode;
         if (_isUnloading) return;
+        _duelLoadoutGeneration++;
+        _duelRoundSequence++;
         MapStartLifecycleSchedule(() =>
         {
             if (_isUnloading) return;

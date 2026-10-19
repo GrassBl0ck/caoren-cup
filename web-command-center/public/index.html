@@ -41,15 +41,19 @@
     <link rel="stylesheet" href="/css/caoren-mod-panel.css">
     <link rel="stylesheet" href="/css/caoren-motion.css">
     <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9.2-skinpromo1">
+    <link rel="stylesheet" href="/css/caoren-2026.css?v=20261019-visual1">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
 </head>
 <body class="caoren-modifiers-disabled">
     <div class="page-shell">
     <header class="site-header">
-        <div class="site-brand">
-            <h1>草人杯对局指挥台</h1>
-            <p class="page-subtitle">比赛大厅、身份核对与对局流程控制</p>
-        </div>
+        <a class="site-brand" href="/" aria-label="草人杯对局指挥台首页">
+            <span class="brand-mark" aria-hidden="true">草</span>
+            <span class="brand-text">
+                <strong>草人杯</strong>
+                <small>CAOREN CUP · CS2</small>
+            </span>
+        </a>
         <div class="site-header-actions">
             <a id="rules-guide-link" class="header-text-link" href="/rules.html">赛前指引</a>
             <button id="update-announcement-trigger" class="header-text-link update-announcement-trigger" type="button" aria-haspopup="dialog" aria-controls="update-announcement-drawer">
@@ -60,69 +64,88 @@
         </div>
     </header>
     <div id="login-area">
+        <section class="lobby-hero" aria-labelledby="lobby-hero-title">
+            <div class="lobby-hero-copy">
+                <h1 id="lobby-hero-title">草人杯<br>对局指挥台</h1>
+                <p class="hero-lede">玩家在这里登录、加入本场对局并连接服务器；管理员在同一页面分队、禁选地图、推进比赛阶段。</p>
+                <ul class="hero-facts">
+                    <li>竞技、RUSH 与单挑</li>
+                    <li>5v5 与 1v1</li>
+                    <li>网页与游戏内状态同步</li>
+                </ul>
+            </div>
+            <div class="map-mosaic" role="img" aria-label="草人杯比赛地图实拍：Mirage、Anubis、Nuke、Inferno">
+                <figure>
+                    <img src="/assets/maps/de_mirage.jpg" alt="Mirage 地图中的木箱与拱门近景" width="632" height="360" decoding="async">
+                    <figcaption>Mirage <span>de_mirage</span></figcaption>
+                </figure>
+                <figure>
+                    <img src="/assets/maps/de_anubis.jpg" alt="Anubis 地图的水路与石墙近景" width="632" height="360" decoding="async">
+                    <figcaption>Anubis <span>de_anubis</span></figcaption>
+                </figure>
+                <figure>
+                    <img src="/assets/maps/de_nuke.jpg" alt="Nuke 地图的仓库与货箱近景" width="632" height="360" decoding="async">
+                    <figcaption>Nuke <span>de_nuke</span></figcaption>
+                </figure>
+                <figure>
+                    <img src="/assets/maps/de_inferno.jpg" alt="Inferno 地图的巷道与阳台近景" width="632" height="360" decoding="async">
+                    <figcaption>Inferno <span>de_inferno</span></figcaption>
+                </figure>
+            </div>
+        </section>
+
+        <div class="lobby-desk">
+            <div class="lobby-desk-main">
         <section id="player-center-entry" class="panel player-center-entry" aria-labelledby="player-center-entry-title">
             <div class="login-panel-header">
                 <div>
-                    <span class="section-eyebrow">草人杯 1.11.1</span>
+                    <span class="section-eyebrow">草人杯 1.11.2</span>
                     <h2 id="player-center-entry-title">玩家中心</h2>
                     <p>账号登录只进入玩家中心，不会自动加入比赛。</p>
                 </div>
                 <span class="status-chip">账号密码登录</span>
             </div>
-            <div id="player-center-login" class="player-center-auth-panel">
-                <label>登录账号<input id="player-center-login-name" type="text" maxlength="32" autocomplete="username" placeholder="例如 cc_Abc234xy"></label>
-                <label>密码<input id="player-center-login-password" type="password" maxlength="128" autocomplete="current-password"></label>
-                <div class="player-center-login-save-options" style="display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:13px;">
-                    <label><input id="player-center-save-login-name" type="checkbox"> 保存账号</label>
-                </div>
-                <p style="font-size:12px;color:#64748b;margin:4px 0 8px;">登录后自动保持登录：连续 7 天未使用或满 30 天需重新登录。网站不保存密码；公共电脑使用后请退出账号。</p>
-                <label id="player-center-remember-device-row" hidden><input id="player-center-remember-device" type="checkbox"> 记住此设备（仅桌面客户端）</label>
-                <button id="player-center-login-btn" class="primary-btn" type="button">登录玩家中心</button>
-                <button id="player-center-game-code-toggle" class="header-text-link" type="button">使用 <code>/cclogin</code> 游戏码</button>
-            </div>
-            <div id="player-center-game-code-panel" class="player-center-auth-panel" hidden>
-                <p>推荐流程：先在 CS2 输入 <code>/cclogin</code> 确认进入草人杯，再输入 <code>/ccreg</code>，按游戏提示注册账号和密码。已有账号忘记密码时，可使用这里的 <code>/cclogin</code> 游戏码恢复。</p>
-                <label>一次性游戏码<input id="player-center-game-code" type="text" maxlength="16" autocomplete="one-time-code"></label>
-                <button id="player-center-game-code-btn" class="primary-btn" type="button">验证游戏码</button>
-            </div>
-            <div id="player-center-created" class="player-center-auth-panel player-center-credential-card" hidden>
-                <h3>账号已创建，请立即保存</h3>
-                <p>以下随机密码只显示这一次。保存后才能进入玩家中心。</p>
-                <div><span>登录账号</span><strong id="player-center-created-login-name"></strong><button id="player-center-copy-login-name" type="button">复制账号</button></div>
-                <div><span>随机密码</span><strong id="player-center-created-password"></strong><button id="player-center-copy-password" type="button">复制密码</button></div>
-                <button id="player-center-credentials-saved" class="primary-btn" type="button">确认已保存</button>
-            </div>
-            <div id="player-center-recovery" class="player-center-auth-panel" hidden>
-                <h3>恢复账号</h3>
-                <p>现有账号：<strong id="player-center-recovery-login-name"></strong></p>
-                <label>新密码<input id="player-center-recovery-password" type="password" maxlength="128" autocomplete="new-password"></label>
-                <label>再次输入新密码<input id="player-center-recovery-confirm-password" type="password" maxlength="128" autocomplete="new-password"></label>
-                <button id="player-center-recovery-btn" class="primary-btn" type="button">设置新密码并进入</button>
-            </div>
-            <div id="player-center-entry-error" class="player-center-message" aria-live="polite"></div>
-            <div class="login-utility-row">
-                <div class="server-status-line" aria-live="polite">
-                    <span id="v1333-server-dot" class="server-status-dot" aria-hidden="true"></span>
-                    <strong id="v1333-server-status">正在读取服务器状态...</strong>
-                </div>
-                <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草人杯服务器</button>
-                <details class="download-menu">
-                    <summary>客户端下载</summary>
-                    <div class="download-menu-content">
-                        <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.11.1.zip" download>下载桌面客户端</a>
-                        <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.11.1" target="_blank" rel="noopener">GitHub 备用下载</a>
+            <div class="player-center-auth-stack">
+                <div id="player-center-login" class="player-center-auth-panel">
+                    <label>登录账号<input id="player-center-login-name" type="text" maxlength="32" autocomplete="username" placeholder="例如 cc_Abc234xy"></label>
+                    <label>密码<input id="player-center-login-password" type="password" maxlength="128" autocomplete="current-password"></label>
+                    <div class="player-center-login-save-options" style="display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:13px;">
+                        <label><input id="player-center-save-login-name" type="checkbox"> 保存账号</label>
                     </div>
-                </details>
-            </div>
-            <details id="admin-login-entry" class="admin-login-entry">
-                <summary>管理员登录</summary>
-                <p>管理员认证是独立流程；登录管理员不会创建玩家账号，也不会自动参赛。</p>
-                <div class="admin-login-row">
-                    <input id="admin-login-password" type="password" maxlength="128" autocomplete="current-password" placeholder="管理员密码">
-                    <button id="admin-login-btn" type="button">登录管理台</button>
+                    <label id="player-center-remember-device-row" hidden><input id="player-center-remember-device" type="checkbox"> 记住此设备（仅桌面客户端）</label>
+                    <button id="player-center-login-btn" class="primary-btn" type="button">登录玩家中心</button>
+                    <button id="player-center-game-code-toggle" class="header-text-link" type="button">使用 <code>/cclogin</code> 游戏码</button>
                 </div>
-                <div id="admin-login-error" class="player-center-message" aria-live="polite"></div>
-            </details>
+                <div id="player-center-game-code-panel" class="player-center-auth-panel" hidden>
+                    <p>推荐流程：先在 CS2 输入 <code>/cclogin</code> 确认进入草人杯，再输入 <code>/ccreg</code>，按游戏提示注册账号和密码。已有账号忘记密码时，可使用这里的 <code>/cclogin</code> 游戏码恢复。</p>
+                    <label>一次性游戏码<input id="player-center-game-code" type="text" maxlength="16" autocomplete="one-time-code"></label>
+                    <button id="player-center-game-code-btn" class="primary-btn" type="button">验证游戏码</button>
+                </div>
+                <div id="player-center-created" class="player-center-auth-panel player-center-credential-card" hidden>
+                    <h3>账号已创建，请立即保存</h3>
+                    <p>以下随机密码只显示这一次。保存后才能进入玩家中心。</p>
+                    <div><span>登录账号</span><strong id="player-center-created-login-name"></strong><button id="player-center-copy-login-name" type="button">复制账号</button></div>
+                    <div><span>随机密码</span><strong id="player-center-created-password"></strong><button id="player-center-copy-password" type="button">复制密码</button></div>
+                    <button id="player-center-credentials-saved" class="primary-btn" type="button">确认已保存</button>
+                </div>
+                <div id="player-center-recovery" class="player-center-auth-panel" hidden>
+                    <h3>恢复账号</h3>
+                    <p>现有账号：<strong id="player-center-recovery-login-name"></strong></p>
+                    <label>新密码<input id="player-center-recovery-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                    <label>再次输入新密码<input id="player-center-recovery-confirm-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                    <button id="player-center-recovery-btn" class="primary-btn" type="button">设置新密码并进入</button>
+                </div>
+            </div>
+            <aside class="login-side" aria-label="登录说明">
+                <h3>登录说明</h3>
+                <ul>
+                    <li><strong>保持登录</strong>连续 7 天未使用，或满 30 天，需要重新登录。</li>
+                    <li><strong>不保存密码</strong>网站只保留登录状态，不保存密码原文。</li>
+                    <li><strong>公共电脑</strong>使用后请退出账号，避免下一位玩家沿用你的会话。</li>
+                </ul>
+                <p class="login-side-note">没有账号或忘记密码？在 CS2 输入 <code>/cclogin</code> 获取一次性游戏码，再回到这里完成注册或重设密码。</p>
+            </aside>
+            <div id="player-center-entry-error" class="player-center-message" aria-live="polite"></div>
         </section>
 
         <section id="player-center-home" class="panel player-center-home" hidden aria-labelledby="player-center-home-title">
@@ -168,6 +191,44 @@
             </div>
             <div id="lobby-announcement-body" class="lobby-announcement-body"></div>
         </section>
+            </div><!-- /lobby-desk-main -->
+            <aside class="desk-rail" aria-label="服务器与客户端入口">
+                <div class="rail-block">
+                    <h3>服务器</h3>
+                    <div class="login-utility-row">
+                        <div class="server-status-line" aria-live="polite">
+                            <span id="v1333-server-dot" class="server-status-dot" aria-hidden="true"></span>
+                            <strong id="v1333-server-status">正在读取服务器状态...</strong>
+                        </div>
+                        <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草人杯服务器</button>
+                    </div>
+                    <p class="rail-note">点击后通过 Steam 启动 CS2，并加入当前对局服务器。</p>
+                </div>
+                <div class="rail-block">
+                    <h3>客户端</h3>
+                    <details class="download-menu">
+                        <summary>客户端下载</summary>
+                        <div class="download-menu-content">
+                            <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.11.1.zip" download>下载桌面客户端</a>
+                            <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.11.1" target="_blank" rel="noopener">GitHub 备用下载</a>
+                        </div>
+                    </details>
+                    <p class="rail-note">仅桌面客户端支持记住设备登录。</p>
+                </div>
+                <div class="rail-block">
+                    <h3>管理员</h3>
+                    <details id="admin-login-entry" class="admin-login-entry">
+                        <summary>管理员登录</summary>
+                        <p>管理员认证是独立流程；登录管理员不会创建玩家账号，也不会自动参赛。</p>
+                        <div class="admin-login-row">
+                            <input id="admin-login-password" type="password" maxlength="128" autocomplete="current-password" placeholder="管理员密码">
+                            <button id="admin-login-btn" type="button">登录管理台</button>
+                        </div>
+                        <div id="admin-login-error" class="player-center-message" aria-live="polite"></div>
+                    </details>
+                </div>
+            </aside>
+        </div><!-- /lobby-desk -->
     </div>
     <!-- 换肤入口由玩家中心账号会话或管理员会话控制，必须位于大厅容器之外，未参赛时也可显示。 -->
     <button id="weaponpaints-open-btn" class="weaponpaints-promo" type="button" aria-label="打开换肤中心" aria-controls="weaponpaints-panel" hidden>
@@ -520,7 +581,7 @@
                 <div class="match-options-warning">只能在大厅阶段修改；进入队长选择后，本局模式会锁定。</div>
             </div>
                 <div class="admin-action-row">
-                    <button id="template-config-btn" onclick="openTemplateModal()" style="font-weight:bold; background-color:#bbdefb; border-color:#90caf9; font-size: 16px; padding: 10px 20px;">配置任务模板</button>
+                    <button id="template-config-btn" class="secondary-btn" onclick="openTemplateModal()" style="font-size:15px; padding:9px 16px;">配置任务模板</button>
                 </div>
 
                 <div id="team-lock-panel" class="match-options-panel">
@@ -743,27 +804,27 @@
                                         <input type="number" id="tpl-edit-streak-nmax" min="1" max="9" oninput="handleTplInput()" placeholder="例如 4">
                                     </div>
                                 </div>
-                                <p style="font-size:13px; color:#9a3412; margin:8px 0 0;">说明：适合“连续击杀/连续达成”类任务，系统会自动显示为“首个/后续N”，例如 5/4N。</p>
+                                <p style="font-size:13px; color:var(--cc-muted); margin:8px 0 0;">说明：适合“连续击杀/连续达成”类任务，系统会自动显示为“首个/后续N”，例如 5/4N。</p>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="template-modal-actions">
-                    <button onclick="saveTemplate()" style="background:#4caf50; color:#fff; font-size:18px; padding:12px 30px; border-radius:30px;">保存并应用模板</button>
-                    <button onclick="downloadTemplateJson()" style="background:#2563eb; color:#fff; font-size:16px; padding:12px 24px; border-radius:30px;">导出为 JSON 文件</button>
-                    <button onclick="saveTemplateToLocal()" style="background:#475569; color:#fff; font-size:16px; padding:12px 24px; border-radius:30px;">保存到浏览器本地</button>
+                    <button onclick="saveTemplate()" style="background:var(--cc-ink); color:var(--cc-sheet); font-size:16px; padding:12px 26px; border-radius:4px;">保存并应用模板</button>
+                    <button onclick="downloadTemplateJson()" style="background:transparent; color:var(--cc-ink); font-size:15px; padding:11px 22px; border:1px solid var(--cc-line-strong); border-radius:4px;">导出为 JSON 文件</button>
+                    <button onclick="saveTemplateToLocal()" style="background:transparent; color:var(--cc-ink); font-size:15px; padding:11px 22px; border:1px solid var(--cc-line-strong); border-radius:4px;">保存到浏览器本地</button>
                 </div>
             </div>
 
             <div id="template-json-tab" style="display:none;">
-                <p style="font-size:14px; color:#666;">你可以在这里导出、复制、备份或导入任务模板 JSON。</p>
-                <textarea id="template-json-textarea" style="width: 100%; height: 400px; font-family: monospace; font-size: 13px; border:1px solid #ccc; padding:10px; box-sizing:border-box;"></textarea>
+                <p style="font-size:14px; color:var(--cc-muted);">你可以在这里导出、复制、备份或导入任务模板 JSON。</p>
+                <textarea id="template-json-textarea" style="width: 100%; height: 400px; font-family: var(--cc-font); font-size: 13px; border:1px solid var(--cc-line-strong); padding:10px; box-sizing:border-box;"></textarea>
                 <div class="json-toolbar">
-                    <button onclick="saveTemplateFromJson()" style="background:#4caf50; color:#fff; font-size:16px;">解析并应用 JSON</button>
-                    <button onclick="downloadTemplateJson()" style="background:#2563eb; color:#fff; font-size:16px;">导出为 JSON 文件</button>
-                    <button onclick="copyTemplateJson()" style="background:#0f766e; color:#fff; font-size:16px;">复制 JSON</button>
-                    <button onclick="saveTemplateToLocal()" style="background:#475569; color:#fff; font-size:16px;">保存到浏览器本地</button>
-                    <button onclick="loadTemplateFromLocal()" style="background:#7c3aed; color:#fff; font-size:16px;">读取本地备份</button>
+                    <button onclick="saveTemplateFromJson()" style="background:var(--cc-ink); color:var(--cc-sheet); font-size:15px;">解析并应用 JSON</button>
+                    <button onclick="downloadTemplateJson()" style="background:transparent; color:var(--cc-ink); font-size:15px;">导出为 JSON 文件</button>
+                    <button onclick="copyTemplateJson()" style="background:var(--cc-signal); color:var(--cc-signal-ink); font-size:15px;">复制 JSON</button>
+                    <button onclick="saveTemplateToLocal()" style="background:transparent; color:var(--cc-ink); font-size:15px;">保存到浏览器本地</button>
+                    <button onclick="loadTemplateFromLocal()" style="background:transparent; color:var(--cc-ink); font-size:15px;">读取本地备份</button>
                 </div>
             </div>
         </div>
@@ -873,11 +934,14 @@
     </aside>
 
     <footer class="site-legal-footer" aria-label="网站备案信息">
+        <p class="footer-brand">草人杯 · CS2 自定义娱乐赛</p>
+        <div class="footer-legal-links">
         <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">冀ICP备2026043660号-1</a>
         <a href="https://beian.mps.gov.cn/#/query/webSearch?code=13102402000558" target="_blank" rel="noreferrer">
             <img src="/assets/beian-police.png" width="18" height="20" alt="">
             <span>冀公网安备13102402000558号</span>
         </a>
+        </div>
     </footer>
     <script src="/js/update-announcement-read-state.js"></script>
     <script src="/js/caoren-dialog.js?v=1.9.2-modern-dialog11"></script>

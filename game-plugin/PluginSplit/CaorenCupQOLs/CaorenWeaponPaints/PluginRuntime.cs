@@ -35,6 +35,8 @@ public partial class CaorenWeaponPaintsPlugin
     private bool _mvpPlayed;
     private bool _giveNamedItemHooked;
     private int _databaseInitializationActive;
+    private bool _runtimeActive;
+    private int _lifecycleGeneration;
 
     private void StartRuntime(bool hotReload)
     {
@@ -45,6 +47,7 @@ public partial class CaorenWeaponPaintsPlugin
             return;
         }
 
+        _runtimeActive = true;
         _gameDataReady = File.Exists(GetGlobalGameDataPath());
         if (!_gameDataReady)
         {
@@ -109,6 +112,9 @@ public partial class CaorenWeaponPaintsPlugin
 
     private void StopRuntime()
     {
+        _runtimeActive = false;
+        _lifecycleGeneration++;
+
         if (_giveNamedItemHooked)
         {
             VirtualFunctions.GiveNamedItemFunc.Unhook(OnGiveNamedItemPost, HookMode.Post);
@@ -213,6 +219,7 @@ public partial class CaorenWeaponPaintsPlugin
 
     private void RegisterGameEvents()
     {
+        RegisterListener<Listeners.OnMapStart>(_ => _lifecycleGeneration++);
         RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
@@ -387,11 +394,19 @@ public partial class CaorenWeaponPaintsPlugin
         if (WeaponPaintsUtility.IsPlayerValid(player) && player is not null)
         {
             _pendingRefresh.TryRemove(player.SteamID.ToString(), out _);
-            AddTimer(0.2f, () => ApplyAll(player));
+            var identity = CaptureRefreshIdentity(player);
+            AddTimer(0.2f, () => ApplyAll(player, identity), TimerFlags.STOP_ON_MAPCHANGE);
         }
 
         return HookResult.Continue;
     }
+
+    private WeaponRefreshIdentity CaptureRefreshIdentity(CCSPlayerController player) => new(
+        player.SteamID, player.EntityHandle.Raw, player.PlayerPawn.Raw, (int)player.Team, _lifecycleGeneration);
+
+    private bool CanRefreshPlayer(CCSPlayerController player, WeaponRefreshIdentity identity) =>
+        _runtimeActive && _gameDataReady && WeaponPaintsUtility.IsPlayerValid(player) && player.PawnIsAlive &&
+        WeaponRefreshWorkflow.CanApply(identity, CaptureRefreshIdentity(player));
 
     private HookResult OnRoundStart(EventRoundStart _, GameEventInfo __)
     {
@@ -403,6 +418,7 @@ public partial class CaorenWeaponPaintsPlugin
     private HookResult OnRoundEnd(EventRoundEnd _, GameEventInfo __)
     {
         _officialRoundActive = false;
+        _lifecycleGeneration++;
         return HookResult.Continue;
     }
 
@@ -439,14 +455,20 @@ public partial class CaorenWeaponPaintsPlugin
         var player = @event.Userid;
         if (WeaponPaintsUtility.IsPlayerValid(player) && player is not null)
         {
+            var identity = CaptureRefreshIdentity(player);
             AddTimer(0.05f, () =>
             {
+                if (!CanRefreshPlayer(player, identity))
+                {
+                    return;
+                }
+
                 var weapon = player.PlayerPawn.Value?.WeaponServices?.ActiveWeapon.Value;
                 if (weapon is { IsValid: true })
                 {
                     GivePlayerWeaponSkin(player, weapon);
                 }
-            });
+            }, TimerFlags.STOP_ON_MAPCHANGE);
         }
 
         return HookResult.Continue;
@@ -632,7 +654,7 @@ public partial class CaorenWeaponPaintsPlugin
         }
     }
 
-    private void ApplyAll(CCSPlayerController player)
+    private void ApplyAll(CCSPlayerController player, WeaponRefreshIdentity? scheduledIdentity = null)
     {
         if (!WeaponPaintsUtility.IsPlayerValid(player) ||
             !_gameDataReady ||
@@ -642,11 +664,20 @@ public partial class CaorenWeaponPaintsPlugin
             return;
         }
 
-        GivePlayerGloves(player);
-        RefreshWeapons(player);
-        GivePlayerAgent(player);
+        var identity = scheduledIdentity ?? CaptureRefreshIdentity(player);
+        if (!CanRefreshPlayer(player, identity))
+        {
+            return;
+        }
+
+        GivePlayerGloves(player, identity);
+        RefreshWeapons(player, identity);
+        GivePlayerAgent(player, identity);
         GivePlayerMusicKit(player);
-        AddTimer(0.15f, () => GivePlayerPin(player));
+        AddTimer(0.15f, () =>
+        {
+            if (CanRefreshPlayer(player, identity)) GivePlayerPin(player);
+        }, TimerFlags.STOP_ON_MAPCHANGE);
     }
 
     private PluginHealth CurrentHealth()
