@@ -169,17 +169,18 @@
             <div id="lobby-announcement-body" class="lobby-announcement-body"></div>
         </section>
     </div>
+    <!-- 换肤入口由玩家中心账号会话或管理员会话控制，必须位于大厅容器之外，未参赛时也可显示。 -->
+    <button id="weaponpaints-open-btn" class="weaponpaints-promo" type="button" aria-label="打开换肤中心" aria-controls="weaponpaints-panel" hidden>
+        <span class="weaponpaints-promo-slides" aria-hidden="true">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_knife_butterfly-38.png" alt="" decoding="async">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_awp-344.png" alt="" decoding="async">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_ak47-180.png" alt="" decoding="async">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_m4a1-309.png" alt="" decoding="async">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_knife_karambit-415.png" alt="" decoding="async">
+        </span>
+        <span class="weaponpaints-promo-label">换肤中心</span>
+    </button>
     <div id="lobby-area" style="display:none;">
-        <button id="weaponpaints-open-btn" class="weaponpaints-promo" type="button" aria-label="打开换肤中心" aria-controls="weaponpaints-panel">
-            <span class="weaponpaints-promo-slides" aria-hidden="true">
-                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_knife_butterfly-38.png" alt="" decoding="async">
-                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_awp-344.png" alt="" decoding="async">
-                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_ak47-180.png" alt="" decoding="async">
-                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_m4a1-309.png" alt="" decoding="async">
-                <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_knife_karambit-415.png" alt="" decoding="async">
-            </span>
-            <span class="weaponpaints-promo-label">换肤中心</span>
-        </button>
         <div class="toolbar-row panel identity-toolbar">
             <div id="player-summary" class="player-session-summary">
                 <div class="status-chip">当前身份</div>
@@ -881,7 +882,7 @@
     <script src="/js/update-announcement-read-state.js"></script>
     <script src="/js/caoren-dialog.js?v=1.9.2-modern-dialog11"></script>
     <script src="/js/task-template-history.js?v=undercover-ui1"></script>
-    <script src="/js/lobby-app.js?v=1.9.7"></script>
+    <script src="/js/lobby-app.js?v=1.11.1-pcskin1"></script>
     <script src="/js/update-announcement-public.js"></script>
     <script src="/js/update-announcement-admin-mutation-state.js"></script>
     <script src="/js/update-announcement-admin.js?v=1.9.2-modern-dialog8"></script>
@@ -901,8 +902,9 @@
 
 
 <script src="/js/access-admin.js?v=1.9.2-modern-dialog8"></script>
-<script src="/js/player-center.js?v=1.11.1-https-session1"></script>
+<script src="/js/player-center.js?v=1.11.1-pcskin1"></script>
 <script src="/js/weaponpaints-draft.js?v=1.9.2-qol2"></script>
-<script src="/js/weaponpaints-app.js?v=1.9.2-modern-dialog8"></script>
+<script src="/js/weaponpaints-entry.js?v=1.11.1-pcskin1"></script>
+<script src="/js/weaponpaints-app.js?v=1.11.1-pcskin1"></script>
 </body>
 </html>

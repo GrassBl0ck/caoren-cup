@@ -10,11 +10,11 @@ const accessAdminJs = fs.readFileSync(path.join(root, 'public', 'js', 'access-ad
 const audioJs = fs.readFileSync(path.join(root, 'public', 'js', 'caoren-audio-controller.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 
-if (!html.includes('/js/player-center.js?v=1.11.1-https-session1')) {
-  throw new Error('player-center cache version must match the HTTPS session update');
+if (!html.includes('/js/player-center.js?v=1.11.1-pcskin1')) {
+  throw new Error('player-center cache version must match the account session notification update');
 }
-if (!html.includes('/js/lobby-app.js?v=1.9.7')) {
-  throw new Error('lobby script cache version must match the undercover task UI update');
+if (!html.includes('/js/lobby-app.js?v=1.11.1-pcskin1')) {
+  throw new Error('lobby script cache version must match the admin session notification update');
 }
 if (!html.includes('/js/access-admin.js?v=1.9.2-modern-dialog8')) {
   throw new Error('access-admin cache version must match the modern-dialog update');
@@ -124,6 +124,25 @@ for (const id of ['v1333-connect-server-btn', 'v1333-lobby-connect-server-btn'])
   if (referenceCount < 2) {
     throw new Error(`connect-server status and click binding must both cover button: ${id}`);
   }
+}
+
+if (!js.includes("dispatchEvent(new CustomEvent('caoren:player-center-session'")) {
+  throw new Error('account session state must be broadcast so the skin entry can follow login/logout');
+}
+if (!js.includes('window.__caorenPlayerCenterSessionActive = next')) {
+  throw new Error('account session state must stay readable before the skin entry binds its listener');
+}
+for (const call of ['notifyPlayerCenterSession(true', 'notifyPlayerCenterSession(false']) {
+  if (!js.includes(call)) throw new Error(`account session notification is not wired: ${call}`);
+}
+if (!lobbyJs.includes("dispatchEvent(new CustomEvent('caoren:admin-session'")) {
+  throw new Error('admin session state must be broadcast for the skin entry');
+}
+if (!lobbyJs.includes('if (wasAdminSession !== isAdmin) notifyAdminSession(isAdmin);')) {
+  throw new Error('admin session notification must follow the real admin state instead of the lobby visibility');
+}
+if (!lobbyJs.includes('notifyAdminSession(false);')) {
+  throw new Error('leaving the lobby must clear the admin session notification');
 }
 
 console.log('Player-center UI contract checks passed.');

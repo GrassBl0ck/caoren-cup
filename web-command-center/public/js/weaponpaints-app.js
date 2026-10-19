@@ -801,9 +801,84 @@
         return guardUnsavedChange(() => applyCategory(category));
     }
 
+    let entryControllerInstance = null;
+
+    function entryController() {
+        const api = window.WeaponPaintsEntry;
+        if (!api) return null;
+        if (!entryControllerInstance) {
+            entryControllerInstance = api.create({
+                getElement: el,
+                readIdentity: () => ({
+                    playerCenterActive: window.__caorenPlayerCenterSessionActive === true,
+                    adminActive: el('admin-controls')?.classList.contains('is-admin-session') === true,
+                }),
+                onIdentityLost: handleIdentityLost,
+            });
+        }
+        return entryControllerInstance;
+    }
+
+    // visible=true 表示面板已经关闭：仅在玩家中心会话或管理员会话仍有效时恢复入口。
     function setPromoVisibility(visible) {
-        const promo = el('weaponpaints-open-btn');
-        if (promo) promo.hidden = !visible;
+        const controller = entryController();
+        if (!controller) {
+            const promo = el('weaponpaints-open-btn');
+            if (promo) promo.hidden = visible !== true;
+            return;
+        }
+        controller.setPanelOpen(visible !== true);
+    }
+
+    // 身份退出、切换或失效后，不得把上一身份的展示、筛选和草稿留给下一个账号。
+    function resetIdentityScopedState() {
+        state.status = null;
+        state.targetSteamId = '';
+        state.loadout = null;
+        state.items = [];
+        state.groups = [];
+        state.offset = 0;
+        state.total = 0;
+        state.category = 'gun';
+        state.team = 3;
+        state.stickerSlot = 0;
+        state.query = '';
+        state.emptyCatalogMessage = '';
+        state.lastSaveError = '';
+        state.pendingNavigation = null;
+        state.finishesByGroup = new Map();
+        clearDraftSelection();
+        notice('');
+        const grid = el('weaponpaints-grid');
+        if (grid) grid.innerHTML = '';
+        const categories = el('weaponpaints-categories');
+        if (categories) categories.innerHTML = '';
+        const editor = el('weaponpaints-editor');
+        if (editor) editor.innerHTML = '<p class="muted-line">选择枪皮或刀皮后，可在这里调整高级参数。</p>';
+        const target = el('weaponpaints-target');
+        if (target) target.innerHTML = '';
+        const search = el('weaponpaints-search');
+        if (search) search.value = '';
+        const adminBar = el('weaponpaints-admin-bar');
+        if (adminBar) adminBar.hidden = true;
+        const health = el('weaponpaints-health');
+        if (health) {
+            health.className = 'weaponpaints-health';
+            health.textContent = '正在检查换肤服务...';
+        }
+        const unsavedDialog = el('weaponpaints-unsaved-dialog');
+        if (unsavedDialog) unsavedDialog.hidden = true;
+        const unsavedError = el('weaponpaints-unsaved-error');
+        if (unsavedError) unsavedError.textContent = '';
+    }
+
+    // 身份失效时必须直接收起面板，未保存更改确认不能阻止退出账号。
+    function handleIdentityLost() {
+        const panel = el('weaponpaints-panel');
+        if (panel) panel.hidden = true;
+        state.open = false;
+        resetIdentityScopedState();
+        entryController()?.setPanelOpen(false);
     }
 
     async function openPanel() {
@@ -814,7 +889,11 @@
         try {
             state.status = await emit(WEAPONPAINTS_STATUS);
             renderHealth();
-            if (!state.status.canUse) throw new Error('请先使用有效玩家中心账号登录。');
+            if (!state.status.canUse) {
+                throw new Error(state.status.health?.settings?.enabled === false
+                    ? '网页换肤总开关已关闭，请联系管理员开启后再试。'
+                    : '请先使用有效玩家中心账号登录。');
+            }
             state.targetSteamId = state.status.isAdmin ? (state.status.targets?.[0]?.steamId || '') : '';
             renderAdminBar(); renderTeams(); renderCategories();
             await loadTarget();
@@ -875,6 +954,12 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+        const entryApi = window.WeaponPaintsEntry;
+        if (entryApi) {
+            entryController();
+            window.addEventListener(entryApi.PLAYER_CENTER_EVENT, (event) => entryController()?.handleEvent(event));
+            window.addEventListener(entryApi.ADMIN_EVENT, (event) => entryController()?.handleEvent(event));
+        }
         el('weaponpaints-open-btn')?.addEventListener('click', openPanel);
         el('weaponpaints-close-btn')?.addEventListener('click', () => guardUnsavedChange(async () => {
             clearDraftSelection();

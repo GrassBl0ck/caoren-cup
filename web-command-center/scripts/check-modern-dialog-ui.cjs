@@ -38,10 +38,10 @@ if (dialogScriptIndex < 0 || lobbyScriptIndex < 0 || dialogScriptIndex > lobbySc
 
 for (const src of [
   '/js/caoren-dialog.js?v=1.9.2-modern-dialog11',
-  '/js/lobby-app.js?v=1.9.7',
+  '/js/lobby-app.js?v=1.11.1-pcskin1',
   '/js/update-announcement-admin.js?v=1.9.2-modern-dialog8',
   '/js/access-admin.js?v=1.9.2-modern-dialog8',
-  '/js/weaponpaints-app.js?v=1.9.2-modern-dialog8',
+  '/js/weaponpaints-app.js?v=1.11.1-pcskin1',
 ]) {
   if (!html.includes(src)) throw new Error(`missing modern dialog cache version: ${src}`);
 }

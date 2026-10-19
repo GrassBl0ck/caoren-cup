@@ -199,11 +199,21 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             }
         }
 
+        // 管理员会话与玩家中心账号会话相互独立；这里只广播“管理员会话是否有效”，供本人换肤入口使用。
+        function notifyAdminSession(active) {
+            try {
+                window.dispatchEvent(new CustomEvent('caoren:admin-session', { detail: { active: active === true } }));
+            } catch (_error) { /* 不支持 CustomEvent 的环境沿用 admin-controls 的类名判断 */ }
+        }
+
         function resetToLogin(message, title = '已退出当前房间') {
             document.getElementById('lobby-area').style.display = 'none';
             document.getElementById('login-area').style.display = 'block';
+            document.getElementById('lobby-area')?.classList.remove('is-admin-session');
+            document.getElementById('admin-controls')?.classList.remove('is-admin-session');
             myPlayerId = null;
             window._currentPlayer = null;
+            notifyAdminSession(false);
             if (message) void caorenAlert(message, { title });
         }
 
@@ -1223,6 +1233,7 @@ if (window._caorenModifiersEnabled !== true) {
             const wasAdminSession = adminControls?.classList.contains('is-admin-session') === true;
             lobbyArea?.classList.toggle('is-admin-session', isAdmin);
             adminControls?.classList.toggle('is-admin-session', isAdmin);
+            if (wasAdminSession !== isAdmin) notifyAdminSession(isAdmin);
             if (adminControls && currentPlayer) adminControls.style.display = 'block';
             const phaseSummary = document.getElementById('lobby-phase-summary');
             if (phaseSummary) phaseSummary.textContent = '当前阶段 · ' + state.phase;

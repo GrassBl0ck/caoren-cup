@@ -12,6 +12,7 @@ async function page({ saved = {}, session = false, logoutFails = false, storageF
   const reads = [];
   const writes = [];
   const requests = [];
+  const events = [];
   const elements = new Map();
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, {
@@ -35,13 +36,20 @@ async function page({ saved = {}, session = false, logoutFails = false, storageF
     if (url === '/api/player-center/logout' && logoutFails) throw Error('offline');
     return { ok: status === 200, status, json: async () => data };
   };
+  const window = {
+    addEventListener() {},
+    dispatchEvent(event) { events.push(event); return true; },
+  };
+  class CustomEvent {
+    constructor(type, init) { this.type = type; this.detail = init?.detail; }
+  }
   vm.runInNewContext(source, {
     document: { readyState: 'complete', getElementById: element },
-    window: {}, localStorage, fetch, setTimeout,
+    window, localStorage, fetch, setTimeout, CustomEvent,
   });
   // Drain the startup request and its async continuations without a timed sleep.
   await new Promise(setImmediate);
-  return { storage, reads, writes, requests, element };
+  return { storage, reads, writes, requests, events, window, element };
 }
 
 test('startup removes only legacy saved-password keys without reading the password', async () => {
@@ -109,4 +117,34 @@ test('failed logout keeps the current view and reports that logout was not confi
   await p.element('player-center-logout-btn').handlers.click();
   assert.equal(p.element('player-center-home').hidden, false);
   assert.match(p.element('player-center-home-message').textContent, /退出失败/);
+});
+
+test('restored account session is broadcast without exposing credentials', async () => {
+  const p = await page({ session: true });
+  assert.deepEqual(
+    p.events.map((event) => [event.type, event.detail.active]),
+    [['caoren:player-center-session', true]],
+  );
+  assert.equal(p.window.__caorenPlayerCenterSessionActive, true);
+  assert.equal(JSON.stringify(p.events.map((event) => event.detail)).includes('secret'), false);
+});
+
+test('visiting without a session never broadcasts an active account', async () => {
+  const p = await page();
+  assert.equal(p.events.some((event) => event.detail.active === true), false);
+});
+
+test('logging out broadcasts an inactive account session', async () => {
+  const p = await page({ session: true });
+  await p.element('player-center-logout-btn').handlers.click();
+  assert.equal(p.events.at(-1).type, 'caoren:player-center-session');
+  assert.equal(p.events.at(-1).detail.active, false);
+  assert.equal(p.window.__caorenPlayerCenterSessionActive, false);
+});
+
+test('failed logout keeps the account session marked active', async () => {
+  const p = await page({ session: true, logoutFails: true });
+  await p.element('player-center-logout-btn').handlers.click();
+  assert.equal(p.window.__caorenPlayerCenterSessionActive, true);
+  assert.equal(p.events.at(-1).detail.active, true);
 });

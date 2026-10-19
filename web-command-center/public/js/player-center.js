@@ -12,6 +12,7 @@
   var currentMatchState = { matchStatus: 'waiting', joined: false, joinAvailable: false, leaveAvailable: false };
   var matchStatusLabels = { waiting: '等待中', started: '已开始', ended: '已结束' };
   var savedLoginNameKey = 'caoren_saved_login_name';
+  var playerCenterSessionActive = false;
 
   async function requestJson(url, options) {
     try {
@@ -71,6 +72,21 @@
     target.classList.toggle('is-success', success === true);
   }
 
+  // 只广播“账号会话是否有效”，不暴露任何会话凭据；其他页面模块据此控制本人入口显隐。
+  function notifyPlayerCenterSession(active, reason) {
+    var next = active === true;
+    try { window.__caorenPlayerCenterSessionActive = next; } catch (_error) { /* 测试沙箱或旧环境缺少 window */ }
+    if (next === playerCenterSessionActive) return;
+    playerCenterSessionActive = next;
+    try {
+      window.dispatchEvent(new CustomEvent('caoren:player-center-session', {
+        detail: { active: next, reason: reason || '' }
+      }));
+    } catch (_error) {
+      // 不支持 CustomEvent 时，其他模块仍可通过 window.__caorenPlayerCenterSessionActive 读取状态。
+    }
+  }
+
   function hideAuthPanels() {
     ['player-center-login', 'player-center-game-code-panel', 'player-center-created', 'player-center-recovery'].forEach(function (id) {
       if (byId(id)) byId(id).hidden = true;
@@ -85,6 +101,7 @@
     hideAuthPanels();
     if (byId('player-center-login')) byId('player-center-login').hidden = false;
     setEntryError(message || '');
+    notifyPlayerCenterSession(false, 'entry');
   }
 
   function renderHome(data) {
@@ -110,6 +127,7 @@
     if (byId('player-center-entry')) byId('player-center-entry').hidden = true;
     if (byId('player-center-home')) byId('player-center-home').hidden = false;
     setHomeMessage('');
+    notifyPlayerCenterSession(true, 'home');
   }
 
   function consumeMatchSocketTicket(ticket) {

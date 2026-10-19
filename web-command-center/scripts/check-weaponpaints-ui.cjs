@@ -52,10 +52,33 @@ assert.doesNotMatch(
     /id="weaponpaints-panel"/,
     '换肤面板必须位于隐藏大厅容器之外，确保未参赛玩家也能打开',
 );
+assert.doesNotMatch(
+    html.slice(lobbyAreaStart, postLobbyMarker),
+    /id="weaponpaints-open-btn"/,
+    '换肤入口不能放在默认隐藏的大厅容器内，否则账号已登录但未参赛时入口仍不可见',
+);
+const loginAreaStart = html.indexOf('<div id="login-area">');
+const promoIndex = html.indexOf('id="weaponpaints-open-btn"');
+assert.ok(loginAreaStart >= 0, '必须能定位账号中心容器');
+assert.ok(
+    promoIndex > loginAreaStart && promoIndex < lobbyAreaStart,
+    '换肤入口必须位于账号中心之后、大厅容器之前的公共层级',
+);
+assert.match(
+    html,
+    /id="weaponpaints-open-btn"[^>]*hidden/,
+    '换肤入口必须默认隐藏，只在账号会话或管理员会话有效时显示',
+);
 assert.match(html, /weaponpaints-app\.js/);
+assert.match(html, /weaponpaints-entry\.js/);
 assert.match(html, /weaponpaints\.css/);
 assert.match(html, /weaponpaints\.css\?v=1\.9\.2-skinpromo1/);
-assert.match(html, /weaponpaints-app\.js\?v=1\.9\.2-modern-dialog8/);
+assert.match(html, /weaponpaints-entry\.js\?v=1\.11\.1-pcskin1/);
+assert.match(html, /weaponpaints-app\.js\?v=1\.11\.1-pcskin1/);
+assert.ok(
+    html.indexOf('/js/weaponpaints-entry.js') < html.indexOf('/js/weaponpaints-app.js'),
+    '入口显隐模块必须先于换肤面板脚本加载',
+);
 for (const category of ['gun', 'knife', 'glove', 'agent', 'music', 'pin', 'keychain']) {
     assert.match(js, new RegExp(`['"]${category}['"]`), `缺少分类 ${category}`);
 }
@@ -150,6 +173,15 @@ assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/, '减少动画
 assert.match(js, /function setPromoVisibility\(visible\)/, '换肤面板必须统一控制宣传卡片显隐');
 assert.match(js, /openPanel\(\)[\s\S]{0,240}setPromoVisibility\(false\)/, '打开换肤面板后必须隐藏宣传卡片');
 assert.match(js, /weaponpaints-panel['"]\)\.hidden\s*=\s*true;[\s\S]{0,160}setPromoVisibility\(true\)/, '关闭换肤面板后必须恢复宣传卡片');
+assert.match(js, /const api = window\.WeaponPaintsEntry;[\s\S]{0,200}api\.create\(\{/, '换肤入口显隐必须使用独立的身份状态模块');
+assert.match(js, /entryApi\.PLAYER_CENTER_EVENT/, '换肤入口必须跟随玩家中心账号会话');
+assert.match(js, /entryApi\.ADMIN_EVENT/, '换肤入口必须跟随管理员会话');
+const identityLostMatch = js.match(/function handleIdentityLost\(\)[\s\S]*?\n    }\n/);
+assert.ok(identityLostMatch, '缺少身份失效处理函数');
+assert.doesNotMatch(identityLostMatch[0], /guardUnsavedChange/, '身份失效时必须直接收起面板，不能被未保存更改确认拦截');
+assert.match(js, /function resetIdentityScopedState\(\)[\s\S]{0,1200}state\.loadout = null;/, '身份失效后必须清除上一身份的换肤配置');
+assert.match(js, /function resetIdentityScopedState\(\)[\s\S]{0,2000}clearDraftSelection\(\);/, '身份失效后必须清除上一身份的编辑草稿');
+assert.match(js, /网页换肤总开关已关闭/, '总开关关闭时必须给出明确提示，不能提示成未登录');
 assert.doesNotMatch(js, /https?:\/\//i, '换肤 UI 不应依赖远程图片或接口');
 assert.match(webPackageScript, /CaorenRelease\.psm1/, '网页打包入口必须载入公共打包模块');
 assert.match(webPackageScript, /Copy-ReleaseWebTree/, '网页打包入口必须调用清洁树复制');

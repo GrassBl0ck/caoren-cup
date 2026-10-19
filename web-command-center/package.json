@@ -20,7 +20,7 @@
     "test:player-center-ui": "node scripts/check-player-center-ui.cjs && node --test scripts/player-center-login-session.test.cjs",
     "test:legacy-login-removed": "node scripts/check-legacy-player-login-removed.cjs",
     "test:lobby-identity": "tsx --test src/identity/*.test.ts src/v1333-game-login.test.ts",
-    "test:weaponpaints": "tsx --test src/weaponpaints/*.test.ts && node scripts/check-weaponpaints-draft.cjs && node scripts/check-weaponpaints-ui.cjs",
+    "test:weaponpaints": "tsx --test src/weaponpaints/*.test.ts && node scripts/check-weaponpaints-draft.cjs && node scripts/check-weaponpaints-ui.cjs && node --test scripts/weaponpaints-entry.test.cjs",
     "sync:weaponpaints-rarities": "node scripts/sync-weaponpaints-rarities.mjs",
     "test:rules-content": "node scripts/check-rules-content.cjs",
     "test:rules-pdf": "node scripts/check-rules-pdf.cjs",
