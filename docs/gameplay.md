@@ -1,71 +1,97 @@
-# Gameplay Overview
+# 草人杯 v1.10 玩法说明
 
-草人杯系统包含网页赛事流程和 CS2 插件玩法。
+本页介绍网页比赛与服务器娱乐功能；具体比赛判定和分值见[完整规则](rules/caoren-cup-full-rules.md)。
 
-## 1. Web Match Flow
+## 网页比赛流程
 
-网页指挥台的大致流程：
+| 阶段 | 玩家与管理员的操作 |
+| --- | --- |
+| 大厅 | 玩家登录后明确加入本场比赛 |
+| 队长选择 | 管理员选择或确认队长 |
+| Roll 点 | 决定双方先后手 |
+| 队长选人 | 轮流选择队员（蛇形选人） |
+| 地图 Ban/Pick | 禁用或选择比赛地图 |
+| 阵营选择 | 选择 CT / T |
+| 赛前配置 | 配置规则、分配身份与任务 |
+| 正式比赛 | 桥接同步比分、回合事件与战绩 |
+| 赛后指认 | 指认卧底 |
+| 积分结算 | 展示成绩与各项得分 |
+
+源码中的对应阶段：
 
 ```text
-Lobby
-CaptainSelection
-Roll
-PlayerDraft
-MapBan
-SidePick
-PreGameSetup
-LiveGame
-PostGameAccusation
-Scoreboard
+Lobby → CaptainSelection → Roll → PlayerDraft → MapBan → SidePick
+→ PreGameSetup → LiveGame → PostGameAccusation → Scoreboard
 ```
 
-含义：
+## 身份与卧底任务
 
-1. 大厅等待玩家加入。
-2. 管理员选择或确认队长。
-3. 队长 Roll 点决定先后手。
-4. 队长蛇形选人。
-5. 地图 Ban/Pick。
-6. 选择 CT/T 阵营。
-7. 管理员分配身份。
-8. 正式比赛，桥接插件同步比分和战绩。
-9. 赛后指认卧底。
-10. 结算页面统计分数。
+- **士兵（Soldier）**：正常完成比赛并争取胜利。
+- **卧底（Undercover）**：完成特殊任务，同时避免被发现。
+- **侦探（Detective）**：观察比赛并在赛后指认阶段帮助判断卧底身份。
 
-## 2. Roles
+卧底使用九宫格任务板，状态包括未完成、部分完成、已完成和已放弃。支持完成标记、任务替换、任务提示、N 值任务和连线计分。任务卡片显示 N 的范围、状态和操作记录；蓝色提示边框表示尚有未查看的提示。
 
-支持的身份：
+计分涵盖击杀、死亡、助攻、伤害、回合与比赛胜负、卧底任务和连线、赛后指认、被指认惩罚以及侦探相关奖惩。数值与判定以完整规则及本场配置为准。
 
-- Soldier：士兵
-- Undercover：卧底
-- Detective：侦探
+## 游戏内菜单与模式
 
-## 3. Undercover Task Board
+| 入口 | 用途 |
+| --- | --- |
+| `/ca` | 管理员菜单 |
+| `/cm` | 玩家设置，支持保存个人音量、透明度等 |
+| `/cv` | 投票入口 |
+| `/competitive` | 重置玩法、退出练习并应用默认竞技配置 |
+| `/rush start` | 管理员启动 RUSH |
+| `/prac` | MatchZy 练习模式 |
 
-卧底任务为九宫格任务板，任务状态包括：
+菜单还提供玩家正常对局的 MatchZy 指令入口。RUSH 的决胜局中立塔和击杀后 14 秒抢塔规则需要匹配的资源补丁，详见[安装说明](release-installation.md)。
 
-- Incomplete：未完成
-- Partial：部分完成
-- Complete：完成
-- Abandoned：放弃
+单挑由独立 CaorenDuel 插件提供，开玩前按[单挑测试流程](duel-mode-test-flow.md)验收。CS2MiniGames 按独立插件保留配置、数据库和排行榜。
 
-系统支持任务提示、任务替换、N 值任务和连线计分。
+## 娱乐修改与网页面板
 
-## 4. Game Plugin Features
+FunCommands 提供血量、伤害、友伤、经济、弹药、二段跳、FOV、击退、发光等娱乐规则。网页面板将部分常用配置转换为已有游戏命令，游戏内命令入口继续保留。
 
-`game-plugin/Features/` 中包含多个 CS2 娱乐玩法模块，例如：
+管理员需先在本场模式设置中开启 CaorenCup 修改，才能通过面板下发。网页后端校验参数和命令白名单，桥接再次校验白名单后执行。
 
-- 击杀回血
-- 持续流血/回血
-- 火焰回血或增伤
-- 二段跳
-- 伤害倍率
-- 友伤倍率
-- FOV 调整
-- ESP 发光
-- 弹药/道具概率保留
-- 武器速度控制
-- 经济倍率
-- 非对称一人成军模式
+以下为服务器控制台命令参考，不是聊天输入示例；参数以对应 Feature 的实现与命令帮助为准：
 
-具体指令和配置请查看对应 Feature 源码与 `CaorenCupConfig.cs`。
+| 功能 | 命令 | 参数或用途 |
+| --- | --- | --- |
+| 弹药 / 道具消耗概率 | `css_ammo` | 配置弹药与道具消耗 |
+| 防弹衣耐久 | `css_armor` | 配置护甲 |
+| 剑气 | `css_aura` | 配置剑气效果 |
+| 经济倍率 | `css_cash` | 配置经济奖励倍率 |
+| FOV | `css_fov` | 调整视野 |
+| 二段跳 / 多段跳 | `css_dj` | 配置额外跳跃 |
+| 全局血量上下限 | `css_hpcap` | 配置血量边界 |
+| 伤害倍率 / 锁血上限 | `css_dmg` | `<t/ct/all/0> <倍率/-> <伤害上限> <窗口秒>` |
+| 动态时间伤害 | `css_incdmg` | `<t/ct/all/0> [每5秒倍率变化]` |
+| 持续流血 / 回血 | `css_bleed` | `<t/ct/all/0> <秒> <正回负扣>`，受 hpcap 上下限控制 |
+| 击杀回血 / 扣血 | `css_kh` | `<t/ct/all/vip/0> [变动数值]`，受 hpcap 上下限控制 |
+| 动能击退 | `css_kb` | `<t/ct/all/0> [水平力] [垂直力] [友军1/0] [伤害倍数]` |
+| 名刀无敌 | `css_lhimm` | `<t/ct/all/0> <无敌秒数> <额外速度%>` |
+| 烟雾弹控制 | `css_smoke` | `<t/ct/all/0> <持续时间/-> <每秒血量变化>` |
+| ESP 透视 | `css_esp` | `<t/ct/all/0> [最远距离] [模式]`，0 持续、1 准星指向 |
+| 友伤倍率 | `css_ffire` | `<t/ct/all/0> <倍率> <1/0是否允许击杀>` |
+| 火疗 / 火焰伤害 | `css_fh` | `<t/ct/all/0> <倍率>`，0 免疫、负数回血 |
+| 武器速度 | `css_wspd` | `<t/ct/all/0> <切枪速度%> <射击速度%>` |
+| 受击速度 | `css_tag` | `<t/ct/all/0> <0.0~1.0/df>` |
+| 魔法弹道吸附 | `css_magic` | `<t/ct/all/0> [吸附半径] [单次伤害]` |
+| 黑客攻防 | `css_bq` | `<题型组合/0> [强制秒数/0] [CT延迟秒数]` |
+| 重置娱乐修改 | `reset_plu` | 重置 CaorenCup 修改 |
+
+复杂玩法的网页支持范围以当前面板为准；完整模块实现位于 [Features/](../game-plugin/Features/)，面板定义位于 [caoren-modules.ts](../web-command-center/src/caoren-modules.ts)。
+
+## 音频控制
+
+支持暂停、从原进度恢复、停止、循环、同通道替换和迟入接入，不修改全局游戏音量。玩家可在个人设置中调整音量。
+
+音频清单必须与工坊资源匹配；素材更新见[工坊资源维护指南](workshop-resource-update-guide.md)。
+
+## 配置与账号
+
+分模块配置和命令别名见[开发说明](development.md)。当前玩家账号密码登录、游戏码开户 / 恢复与明确加入比赛的规则见[桥接说明](plugin-web-bridge.md)。
+
+返回[项目首页](../README.md)。
