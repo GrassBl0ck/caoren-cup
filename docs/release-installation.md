@@ -1,10 +1,12 @@
 # 草人杯版本包安装说明
 
-## v1.11.1 修复更新
+## v1.11.2 视觉与功能更新
 
-本次更新网页端与 Windows 客户端的 HTTPS 登录和下载入口。客户端版本统一为 v1.11.1；服务器插件合集的程序文件与已发布 v1.11.0 完全一致，仅版本清单更新。已经安装 v1.11.0 服务器插件时，无需重新替换游戏、桥接或小游戏插件。
+本次更新网页端视觉与规则文案，并更新服务器插件合集（个人统计、单挑发装修复、Friends Vine 等）。Windows 客户端未变更，继续使用 v1.11.1。
 
-客户端 ZIP 为单独附件，保持 `CaorenCupClient-v1.11.1.zip` 文件名并放入网页的 `public/downloads/` 目录，供首页下载按钮使用。
+服务器包中的 CaorenDuel、CaorenWeaponPaints、CaorenCupInGameMenu 与 CaorenCupFunCommands 需要更新；桥接插件本次无代码变更，可沿用现有版本。网页端升级时保留 `runtime/`、账号、会话、比赛与换肤运行数据。
+
+客户端 ZIP 保持 `CaorenCupClient-v1.11.1.zip` 文件名并放入网页的 `public/downloads/` 目录，供首页下载按钮使用。
 
 网页端应通过 HTTPS 反向代理访问；同机部署可设置 `TRUST_PROXY=loopback`、`WEB_BIND_HOST=127.0.0.1`，并保留游戏桥接的同机内部连接。网站不再自行保存密码，使用现有会话保持登录；Steam 一键登录继续关闭。升级时保留账号、会话及比赛运行数据。
 
@@ -39,7 +41,7 @@ RUSH 的 DLL 与资源补丁是两个交付环节。tools/rush/ 只包含补丁�
 
 ## 发布范围与许可
 
-1.10 不纳入延期至 1.11 的登录升级；保留现有登录方式。弗一把目前已归档并半永久暂停，不随本包发布；ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 也不随本包发布。弗一把未来是否恢复需要重新确认，不应从本发布说明推断其仍在开发。已验收的试听素材属于资源清单内容，不因排除能力探针代码而自动删除。
+v1.11.2 包含 v1.11.1 的登录与 HTTPS 修复，以及其后的个人统计、换肤入口、单挑发装修复与 Friends Vine。弗一把目前已归档并半永久暂停，不随本包发布；ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 也不随本包发布。弗一把未来是否恢复需要重新确认，不应从本发布说明推断其仍在开发。已验收的试听素材属于资源清单内容，不因排除能力探针代码而自动删除。
 
 CaorenCup 主体许可证见 licenses/CaorenCup-MIT.txt。CS2MiniGames 和 CaorenWeaponPaints 保留各自 GPL-3.0 许可证及上游说明，不能把它们整体标为 MIT；分发二进制时同时提供可获得的对应版本源码，位置见 SOURCE.md。
 
