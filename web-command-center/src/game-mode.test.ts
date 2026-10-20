@@ -11,7 +11,7 @@ import { getGameModeRoundRules } from './game-mode-rounds';
 test('new sessions use an available gamemode manifest', () => {
   assert.equal(GAME_MODE_MANIFESTS.competitive.availability, 'available');
   assert.equal(GAME_MODE_MANIFESTS.rush.requiredMap, 'rush_001');
-  assert.equal(GAME_MODE_MANIFESTS.ability.availability, 'planned');
+  assert.equal(GAME_MODE_MANIFESTS.ability.availability, 'available');
 });
 
 test('legacy options migrate without making competitive undercover by default', () => {
