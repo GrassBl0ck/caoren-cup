@@ -1,0 +1,142 @@
+.AbilityHudPanel
+{
+    width: 430px;
+    min-height: 148px;
+    margin-left: 72px;
+    margin-bottom: 86px;
+    padding: 15px 18px 14px 22px;
+    horizontal-align: left;
+    vertical-align: bottom;
+    flow-children: down;
+    background-color: #101820e8;
+    border: 1px solid #82d8ff70;
+    box-shadow: 0px 4px 18px #000000b8;
+}
+
+.AbilityHudPanel.Hidden
+{
+    visibility: collapse;
+}
+
+.AbilityHudAccent
+{
+    width: 4px;
+    height: 100%;
+    margin-left: -17px;
+    background-color: #82d8ff;
+    position: 0px 0px 0px;
+}
+
+.AbilityHudHeader
+{
+    width: 100%;
+    flow-children: right;
+    vertical-align: center;
+}
+
+.AbilityHudKicker
+{
+    color: #82d8ff;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.AbilityHudRole
+{
+    margin-left: 12px;
+    color: #f2f6f8;
+    font-size: 22px;
+    font-weight: bold;
+}
+
+.AbilityHudChargeRow
+{
+    width: 100%;
+    margin-top: 10px;
+    flow-children: right;
+}
+
+.AbilityHudLabel
+{
+    color: #a3b1bf;
+    font-size: 15px;
+}
+
+.AbilityHudValue
+{
+    margin-left: 8px;
+    color: #f2f6f8;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+.AbilityHudChargeBar
+{
+    width: 100%;
+    margin-top: 2px;
+    color: #82d8ff;
+    font-size: 17px;
+    letter-spacing: 2px;
+}
+
+.AbilityHudStatusRow
+{
+    width: 100%;
+    margin-top: 6px;
+    flow-children: right;
+}
+
+.AbilityHudStatus
+{
+    color: #a8e4b3;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.AbilityHudCooldown
+{
+    margin-left: 12px;
+    color: #ffc776;
+    font-size: 13px;
+}
+
+.AbilityHudPreview,
+.AbilityHudPrompt,
+.AbilityHudExtra
+{
+    width: 100%;
+    margin-top: 4px;
+    color: #a3b1bf;
+    font-size: 13px;
+}
+
+.AbilityHudPrompt
+{
+    color: #82d8ff;
+}
+
+.AbilityHudExtra
+{
+    color: #c9d3dc;
+}
+
+.AbilityHudPanel.HudUsed
+{
+    border-color: #ffc77680;
+}
+
+.AbilityHudPanel.HudUsed .AbilityHudStatus
+{
+    color: #ffc776;
+}
+
+.AbilityHudPanel.HudDisabled
+{
+    border-color: #ffffff30;
+}
+
+.AbilityHudPanel.HudDisabled .AbilityHudStatus
+{
+    color: #a3b1bf;
+}

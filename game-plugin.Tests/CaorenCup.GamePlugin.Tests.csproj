@@ -36,5 +36,6 @@
     <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupQOL_PlaySound\CaorenCupQOL_PlaySound.csproj" />
     <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupGamemode_RUSH\CaorenCupGamemode_RUSH.csproj" />
     <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupGamemode_Competitive\CaorenCupGamemode_Competitive.csproj" />
+    <ProjectReference Include="..\game-plugin\PluginSplit\CaorenCupGamemode_Ability\CaorenCupGamemode_Ability.csproj" />
   </ItemGroup>
 </Project>

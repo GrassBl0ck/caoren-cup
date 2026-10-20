@@ -24,6 +24,7 @@ $projects = @(
     @{ Name = 'CaorenCupInGameMenu'; Source = 'PluginSplit\CaorenCupInGameMenu'; Subdir = 'CaorenCupInGameMenu' },
     @{ Name = 'CaorenCupGamemode_Competitive'; Source = 'PluginSplit\CaorenCupGamemode_Competitive'; Subdir = 'CaorenCupGamemodes\CaorenCupGamemode_Competitive' },
     @{ Name = 'CaorenCupGamemode_RUSH'; Source = 'PluginSplit\CaorenCupGamemode_RUSH'; Subdir = 'CaorenCupGamemodes\CaorenCupGamemode_RUSH' },
+    @{ Name = 'CaorenCupGamemode_Ability'; Source = 'PluginSplit\CaorenCupGamemode_Ability'; Subdir = 'CaorenCupGamemodes\CaorenCupGamemode_Ability' },
     @{ Name = 'CaorenCupQOL_Alias'; Source = 'PluginSplit\CaorenCupQOL_Alias'; Subdir = 'CaorenCupQOLs\CaorenCupQOL_Alias' },
     @{ Name = 'CaorenCupQOL_PlaySound'; Source = 'PluginSplit\CaorenCupQOL_PlaySound'; Subdir = 'CaorenCupQOLs\CaorenCupQOL_PlaySound' },
     @{ Name = 'CaorenCupQOL_RadarColor'; Source = 'PluginSplit\CaorenCupQOL_RadarColor'; Subdir = 'CaorenCupQOLs\CaorenCupQOL_RadarColor' },
