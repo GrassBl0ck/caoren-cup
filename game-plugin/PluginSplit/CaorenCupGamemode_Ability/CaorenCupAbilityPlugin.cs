@@ -54,11 +54,14 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             () => null,
             null));
 
-        AddCommand("css_ability", "选择并启动异能模式", OnAbilityCommand);
-        AddCommand("css_ability_role", "为玩家分配异能职业：/ability_role <玩家> <职业>", OnAssignCommand);
-        AddCommand("css_ability_roles", "查看异能职业分配", OnListCommand);
-        AddCommand("css_ability_role_clear", "清除单个玩家的异能职业：/ability_role_clear <玩家>", OnClearOneCommand);
-        AddCommand("css_ability_roles_clear", "清空异能职业分配", OnClearCommand);
+        foreach (var prefix in new[] { "css_", string.Empty })
+        {
+            AddCommand($"{prefix}ability", "选择并启动异能模式", OnAbilityCommand);
+            AddCommand($"{prefix}ability_role", "为玩家分配异能职业：.ability_role <玩家> <职业>", OnAssignCommand);
+            AddCommand($"{prefix}ability_roles", "查看异能职业分配", OnListCommand);
+            AddCommand($"{prefix}ability_role_clear", "清除单个玩家的异能职业：.ability_role_clear <玩家>", OnClearOneCommand);
+            AddCommand($"{prefix}ability_roles_clear", "清空异能职业分配", OnClearCommand);
+        }
 
         CaorenCupAbilityAccess.Publish(this);
     }
