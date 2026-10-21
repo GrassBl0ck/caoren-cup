@@ -3,7 +3,7 @@
         <include src="s2r://panorama/styles/csgostyles.vcss_c" />
         <include src="s2r://panorama/styles/custom_game/caoren_ability_hud.vcss_c" />
     </styles>
-    <Panel id="ability_hud_root" hittest="false">
+    <Panel hittest="false">
         <Panel id="ability_hud" class="AbilityHudPanel Hidden" hittest="false">
             <Panel class="AbilityHudAccent" hittest="false" />
             <Panel class="AbilityHudHeader" hittest="false">
