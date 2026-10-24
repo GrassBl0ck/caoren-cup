@@ -1,6 +1,8 @@
 # 草人杯菜单与音频：工坊资源更新指南
 
-维护基线：2026-09-29。用于更新已经发布的资源项目；实际工具界面、服务器版本和素材清单应在每次维护前重新核对。
+维护基线：2026-10-22。用于更新已经发布的资源项目；实际工具界面、服务器版本和素材清单应在每次维护前重新核对。
+
+> 2026-10-22 更新：工坊项目现已包含异能 HUD（`caoren_ability_hud.*`）与异能职业分配菜单布局（`admin_ability` 区块），文件总数由 22 增至 24。当前工作树已迁移到 `feat-v1.12-ability`，见第 2 节。
 
 ## 1. 最短操作流程
 
@@ -20,8 +22,8 @@
 |---|---|
 | 工坊 ID | **3810054981**，更新沿用这个 ID |
 | 工坊页面 | [菜单与音频资源](https://steamcommunity.com/sharedfiles/filedetails/?id=3810054981) |
-| 内容 | 菜单布局、样式、声音事件库、已登记音频及 `addoninfo.txt` |
-| 服务插件 | `CaorenCupQOL_PlaySound.dll` |
+| 内容 | 菜单布局、样式、声音事件库、已登记音频及 `addoninfo.txt`；2026-10-22 起含异能 HUD 与异能菜单布局 |
+| 服务插件 | `CaorenCupQOL_PlaySound.dll`；异能相关为 `CaorenCupGamemode_Ability.dll` 与 `CaorenCupInGameMenu.dll` |
 | 管理入口 | `/ca` → 音乐与音频广播；`/caudio` |
 | 玩家入口 | `/cm`；投票 `/cv` |
 | 服务器分发 | MultiAddonManager，使用 `mm_extra_addons` |
@@ -34,10 +36,24 @@
 当前代码工作树：
 
 ```text
-D:\OpenSourcework\02-worktrees\caoren-cup\feat-v1.10-friberg
+D:\OpenSourcework\02-worktrees\caoren-cup\feat-v1.12-ability
 ```
 
 工作树名称是历史开发标识；弗一把已归档并半永久暂停，不代表将其、粒子菜单或私有性能检测纳入此次发布。代码迁移到其他工作树时先读取项目的工作树规则，并更新本指南和 `AGENTS.md` 索引。
+
+### 2.1 资源文件清单（2026-10-22 基线）
+
+工坊包内布局与样式共 8 个源文件、8 个 `_c` 编译产物：
+
+| 源文件 | 用途 |
+|---|---|
+| `panorama/layout/custom_game/caoren_admin_menu.vxml` | 管理员菜单（含 `admin_ability` 异能分配区块） |
+| `panorama/layout/custom_game/caoren_player_menu.vxml` | 玩家菜单 |
+| `panorama/layout/custom_game/caoren_vote.vxml` | 投票界面 |
+| `panorama/layout/custom_game/caoren_ability_hud.vxml` | 异能 HUD（2026-10-22 新增） |
+| `panorama/styles/custom_game/` 下对应 4 个 `.vcss` | 上述布局的样式 |
+
+> `caoren_ability_hud.vxml` 的根面板**不要**带 `id="ability_hud_root"`；该 ID 会导致布局加载异常，已在提交 `6c00a62` 移除。
 
 ## 3. 先判断需要更新什么
 
@@ -45,10 +61,13 @@ D:\OpenSourcework\02-worktrees\caoren-cup\feat-v1.10-friberg
 |---|---|
 | 菜单 DLL 中的帮助文字、命令列表、字符串间距或权限判断 | 对应服务器 DLL；资源文件未变时无需更新工坊 |
 | `.vxml` 布局、`.vcss` 样式、提示声音事件 | 重新编译资源并更新工坊；涉及新的对话变量／控件 ID 时还要同步菜单 DLL |
+| 异能菜单 / 异能 HUD 的布局或变量 | 同步 `caoren_admin_menu.vxml`、`caoren_ability_hud.vxml` 及样式，重新编译后更新工坊；**并同步 `CaorenCupInGameMenu.dll`**——布局只提供控件，变量填充与点击分发全在 DLL 侧 |
 | 新 OGG、替换音频内容、循环资源或时长变化 | 重新构建音频资源、声音事件库、`audio-events.json`、`audio-assets.json`，同步服务器清单和工坊 |
 | 新音频控制协议、插件逻辑或共享 Contracts | 按具体影响范围另行构建／部署插件；不能只更新 VPK |
 
 工坊包只装客户端／服务端共用资源，不装服务器 DLL、凭据、生产配置或运行数据。
+
+> 异能资源是两条独立链路的组合：布局（工坊 VPK）与逻辑（DLL）。只更新一侧时，客户端要么看不到入口、要么看到空白页——2026-10-21 游戏内「没有异能菜单」即由此引起。
 
 ## 4. 保留完整源素材与登记清单
 
@@ -164,7 +183,7 @@ $buildOutput = Join-Path $repoRoot ('release-build\ingamemenu-audio\build-' + (G
 
 以本次 `build-report.json` 的 `Compiled` 目录为准，检查它与 `vpk_stage` 中需要发布的编译文件一致。尤其确认该 Addon 的 **game 根目录存在 `addoninfo.txt`**；它声明允许自定义菜单。若缺少，备份／记录原状态后，从本次构建产物补齐同一份文件。
 
-发布器根据游戏的 Workshop 文件白名单收集内容：首次包含 21 个编译资源和 `addoninfo.txt`，共 22 个文件；`panorama/preprocessor_config.txt` 未被该白名单收集，因此本地暂存目录的 23 文件与工坊 22 文件不同是已核实的情况。后续素材增减会改变数量，不以固定“22 个”为永久验收标准，也不为增加统计数字修改白名单。
+发布器根据游戏的 Workshop 文件白名单收集内容：首次包含 21 个编译资源和 `addoninfo.txt`，共 22 个文件；2026-10-22 加入异能 HUD 的 `caoren_ability_hud.vxml_c` / `.vcss_c` 后为 24 个文件。`panorama/preprocessor_config.txt` 未被该白名单收集，因此本地暂存目录的文件数与工坊文件数不同是已核实的情况。后续素材增减会改变数量，不以固定数字为永久验收标准，也不为增加统计数字修改白名单。
 
 本地资源更新需要完全退出 CS2，备份原资源及挂载配置，再按授权安装本次 VPK。服务器若需要临时加载新版资源或清单，同样先说明覆盖／换图／重启影响并取得授权。
 
@@ -177,7 +196,7 @@ $buildOutput = Join-Path $repoRoot ('release-build\ingamemenu-audio\build-' + (G
 3. 找到 **Published ID 3810054981**，选中它，点击工具栏 **Re-Upload**。
 4. 核对 **Addon Folder** 是本次新产物，而不是旧时间戳目录。若当前界面不允许切换，截图确认处理方式，保留原项目 ID。
 5. 更新标题／说明／预览图及改动说明，保留适合该项目的 `Custom` 标签；核对可见性。已公开项目不要意外改成好友或隐藏。
-6. 点击 **Contents**，核对布局、样式、声音事件库、音频和 `addoninfo.txt` 都来自本次构建；不要包含服务器 DLL、日志或凭据。
+6. 点击 **Contents**，核对布局、样式、声音事件库、音频和 `addoninfo.txt` 都来自本次构建；含异能资源时应能看到 `caoren_ability_hud.vxml_c` 与 `caoren_ability_hud.vcss_c`。不要包含服务器 DLL、日志或凭据。
 7. 你确认内容后手动提交。记录上传成功回执、工坊 ID、资源版本和时间；若等待 Steam 审核，等公开可用后再验证下载。
 
 新建项目的 **New** 用于首次发布。正常维护通过 Re-Upload 沿用 3810054981，避免让服务器和玩家改用另一套 ID。
@@ -222,6 +241,7 @@ MAM 下载完成可能重载地图；开启 `mm_addon_mount_download` 会在挂�
 - 服务器实际下载了新版本；记录清单、必要的 VPK 哈希或内容 Manifest。
 - 分卷 VPK 的目录卷通常为 `_dir.vpk`、数据卷为 `_000.vpk`；逐文件 CRC／SHA256 核对实际内容，不只比较目录卷大小。
 - 测试客户端没有手工挂载；实际获取新版，菜单、新音频和个人音量正常。
+- 涉及异能时额外验证：`/crcmenu_admin` → 快捷指令页出现「异能模式」行 → 进入「管理异能」能看到在线玩家列表 → 点玩家进入职业列表 → 选职业后返回列表并显示已分配。
 - 至少验证一个清晰可识别的本次变化，防止把缓存的旧版本当作新版本。
 - 实际测了暂停、循环、接入或换图清理才写通过；未测项目明确保留。
 
@@ -238,6 +258,7 @@ MAM 下载完成可能重载地图；开启 `mm_addon_mount_download` 会在挂�
 ## 参考与维护
 
 - [正式音频实现及验收记录](2026-09-28-formal-audio-service.md)
+- [异能菜单与工坊资源处理记录](2026-10-22-ability-menu-and-workshop-resource-record.md)
 - [MAM 官方 README](https://github.com/Source2ZE/MultiAddonManager/blob/main/README.md)
 - [MAM 1.5.4 官方兼容说明](https://github.com/Source2ZE/MultiAddonManager/releases/tag/v1.5.4)
 

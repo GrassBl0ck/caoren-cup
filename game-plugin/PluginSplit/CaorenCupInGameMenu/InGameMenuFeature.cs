@@ -162,6 +162,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         }
         if (_navigator.HasSession(steamId) && HandleAdminVotingClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleAdminAudioClick(player, buttonId)) return;
+        if (_navigator.HasSession(steamId) && HandleAdminAbilityClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleCommandHelpClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleAdminSettingsClick(player, buttonId)) return;
         if (_adminVoteViews.GetValueOrDefault(steamId) != AdminVoteView.Home) return;
@@ -205,6 +206,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
     {
         _navigator.Close(player.SteamID.ToString());
         _adminVoteViews.Remove(player.SteamID.ToString());
+        _abilityMenuStates.Remove(player.SteamID.ToString());
         ForgetCommandHelp(player.SteamID.ToString());
         _surface.SetClass(player, "dialog", "Hidden", true);
         _surface.ReleaseInput(player);
