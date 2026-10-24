@@ -84,6 +84,17 @@
 <Button id="admin_audio_open" class="CaorenMenuButton"><Label text="管理音频" /></Button>
 <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="管理音乐和音频广播" /></Panel>
 </Panel></Panel>
+                            <Panel class="content-navbar__seperator CaorenRowSeparator" />
+                            <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
+                                <Panel class="CaorenSettingDescription">
+                                    <Label class="CaorenSettingName" text="异能模式" />
+                                    <Label class="CaorenSettingScope" text="影响范围：全服 · 管理员专属" />
+                                </Panel>
+                                <Panel id="admin_ability_open_host" class="CaorenButtonHost CaorenActionHost">
+                                    <Button id="admin_ability_open" class="CaorenMenuButton"><Label text="管理异能" /></Button>
+                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="为在线玩家分配异能职业" /></Panel>
+                                </Panel>
+                            </Panel>
                         </Panel>
                         <Panel id="admin_audio" class="CaorenMenuSection Hidden">
 <Label class="SettingsSectionTitleLabel" text="音乐与音频广播" />
@@ -166,7 +177,58 @@
 </Panel>
 </Panel>
 </Panel>
-<Panel id="admin_vote_management" class="CaorenMenuSection Hidden">
+<Panel id="admin_ability" class="CaorenMenuSection Hidden">
+                            <Panel class="SettingsSectionTitleContianer CaorenSectionHeader">
+                                <Label class="SettingsSectionTitleLabel" text="异能职业分配" />
+                            </Panel>
+                            <Label class="CaorenSettingScope" text="{s:ability_state}" />
+                            <Label class="CaorenSettingScope" text="{s:ability_page}" />
+                            <Panel id="ability_row_0_host" class="CaorenButtonHost CaorenAudioItem">
+                                <Button id="ability_row_0" class="CaorenMenuButton"><Label text="{s:ability_row0}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:ability_hint0}" /></Panel>
+                            </Panel>
+                            <Panel id="ability_row_1_host" class="CaorenButtonHost CaorenAudioItem">
+                                <Button id="ability_row_1" class="CaorenMenuButton"><Label text="{s:ability_row1}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:ability_hint1}" /></Panel>
+                            </Panel>
+                            <Panel id="ability_row_2_host" class="CaorenButtonHost CaorenAudioItem">
+                                <Button id="ability_row_2" class="CaorenMenuButton"><Label text="{s:ability_row2}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:ability_hint2}" /></Panel>
+                            </Panel>
+                            <Panel id="ability_row_3_host" class="CaorenButtonHost CaorenAudioItem">
+                                <Button id="ability_row_3" class="CaorenMenuButton"><Label text="{s:ability_row3}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:ability_hint3}" /></Panel>
+                            </Panel>
+                            <Panel id="ability_row_4_host" class="CaorenButtonHost CaorenAudioItem">
+                                <Button id="ability_row_4" class="CaorenMenuButton"><Label text="{s:ability_row4}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:ability_hint4}" /></Panel>
+                            </Panel>
+                            <Panel id="ability_row_5_host" class="CaorenButtonHost CaorenAudioItem">
+                                <Button id="ability_row_5" class="CaorenMenuButton"><Label text="{s:ability_row5}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:ability_hint5}" /></Panel>
+                            </Panel>
+                            <Panel class="CaorenAudioControls">
+                                <Panel id="ability_prev_host" class="CaorenButtonHost CaorenAudioButton">
+                                    <Button id="ability_prev" class="CaorenMenuButton"><Label text="上一页" /></Button>
+                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="查看上一页" /></Panel>
+                                </Panel>
+                                <Panel id="ability_next_host" class="CaorenButtonHost CaorenAudioButton">
+                                    <Button id="ability_next" class="CaorenMenuButton"><Label text="下一页" /></Button>
+                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="查看下一页" /></Panel>
+                                </Panel>
+                            </Panel>
+                            <Panel class="CaorenAudioControls">
+                                <Panel id="ability_clear_host" class="CaorenButtonHost CaorenAudioButton">
+                                    <Button id="ability_clear" class="CaorenMenuButton"><Label text="清空全部分配" /></Button>
+                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="清除所有玩家的异能职业" /></Panel>
+                                </Panel>
+                                <Panel id="ability_back_host" class="CaorenButtonHost CaorenAudioButton">
+                                    <Button id="ability_back" class="CaorenMenuButton"><Label text="{s:ability_back_label}" /></Button>
+                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="回到上一级" /></Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_vote_management" class="CaorenMenuSection Hidden">
                             <Label class="SettingsSectionTitleLabel" text="投票管理" />
                             <Label class="CaorenVoteQuestion" text="{s:vote_admin_question}" />
                             <Label class="CaorenVoteState" text="{s:vote_admin_state}" />

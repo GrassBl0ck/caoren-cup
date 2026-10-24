@@ -86,12 +86,14 @@ public sealed class CustomHudMenuSurface : IMenuHudSurface
 
     internal static bool IsBusinessButton(string id) => id is
         "admin_home_tab" or "admin_help_open_tab" or "admin_settings_open" or "admin_back" or "admin_exit" or "admin_vote_open" or "menu_btn_0" or
+        "admin_ability_open" or "ability_prev" or "ability_next" or "ability_clear" or "ability_back" or
         "player_commands_open" or "player_vote_open" or "player_stats_open" or "player_settings_open" or "player_guide_open" or "player_back" or "player_exit" or
         "player_cmd_prev" or "player_cmd_next" or "player_detail_prev" or "player_detail_next" or "player_stats_prev" or "player_stats_next" or
         "guide_prev" or "guide_next" or "guide_detail_prev" or "guide_detail_next" or
         "vote_create" or "vote_cancel" or "vote_start" or "vote_discard" or "vote_cancel_confirm" or "vote_back" or "vote_exit"
         || id.StartsWith("settings_", StringComparison.Ordinal)
         || Enumerable.Range(0, 8).Any(index => id == "player_cmd_" + index || id == "guide_item_" + index)
+        || Enumerable.Range(0, 6).Any(index => id == "ability_row_" + index)
         || Enumerable.Range(0, 4).Any(index => id == "vote_option_" + index);
 
     public void ReleaseInput(CCSPlayerController player)

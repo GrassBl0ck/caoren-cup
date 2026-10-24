@@ -1,0 +1,153 @@
+/* custom_hud_layout 根面板不允许带 id；以第二层 id="dialog" 作为变量与类名作用域。
+   两层容器都铺满屏幕，底部居中的技能条才能按预期定位。 */
+.AbilityHudRoot
+{
+    width: 100%;
+    height: 100%;
+}
+
+.AbilityHudDialog
+{
+    width: 100%;
+    height: 100%;
+}
+
+/* 底部居中横向技能条：左侧职业名，右侧状态，下方充能与计时。 */
+.AbilityHudPanel
+{
+    width: 470px;
+    padding: 12px 18px 12px 18px;
+    horizontal-align: center;
+    vertical-align: bottom;
+    margin-bottom: 28px;
+    flow-children: down;
+    background-color: #0d151ee6;
+    border: 1px solid #82d8ff55;
+    border-radius: 6px;
+    box-shadow: 0px 4px 16px #000000a0;
+}
+
+.AbilityHudPanel.Hidden
+{
+    visibility: collapse;
+}
+
+.AbilityHudTop
+{
+    width: 100%;
+    flow-children: right;
+}
+
+.AbilityHudSpacer
+{
+    width: fill-parent-flow(1);
+}
+
+.AbilityHudRole
+{
+    color: #f2f6f8;
+    font-size: 26px;
+    font-weight: bold;
+}
+
+.AbilityHudStatus
+{
+    color: #a8e4b3;
+    font-size: 16px;
+    font-weight: bold;
+    vertical-align: bottom;
+}
+
+.AbilityHudChargeRow
+{
+    width: 100%;
+    margin-top: 8px;
+    flow-children: right;
+}
+
+.AbilityHudLabel
+{
+    color: #8fa3b8;
+    font-size: 14px;
+    vertical-align: bottom;
+}
+
+.AbilityHudValue
+{
+    margin-left: 6px;
+    color: #f2f6f8;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.AbilityHudPreview
+{
+    margin-left: 10px;
+    color: #82d8ff;
+    font-size: 13px;
+    vertical-align: bottom;
+}
+
+.AbilityHudChargeBar
+{
+    width: 100%;
+    margin-top: 4px;
+    color: #82d8ff;
+    font-size: 16px;
+    letter-spacing: 2px;
+}
+
+.AbilityHudBottom
+{
+    width: 100%;
+    margin-top: 6px;
+    flow-children: right;
+}
+
+.AbilityHudCooldown
+{
+    color: #ffc776;
+    font-size: 12px;
+}
+
+.AbilityHudPrompt
+{
+    color: #82d8ff;
+    font-size: 12px;
+    horizontal-align: right;
+}
+
+.AbilityHudExtra
+{
+    width: 100%;
+    margin-top: 4px;
+    color: #c9d3dc;
+    font-size: 12px;
+}
+
+/* 状态着色：可用时高亮描边，已用为暖色，未启用为灰。 */
+.AbilityHudPanel.HudReady
+{
+    border-color: #82d8ffcc;
+    box-shadow: 0px 0px 14px #82d8ff45;
+}
+
+.AbilityHudPanel.HudUsed
+{
+    border-color: #ffc77680;
+}
+
+.AbilityHudPanel.HudUsed .AbilityHudStatus
+{
+    color: #ffc776;
+}
+
+.AbilityHudPanel.HudDisabled
+{
+    border-color: #ffffff30;
+}
+
+.AbilityHudPanel.HudDisabled .AbilityHudStatus
+{
+    color: #a3b1bf;
+}

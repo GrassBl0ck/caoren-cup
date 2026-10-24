@@ -1,0 +1,29 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/csgostyles.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_ability_hud.vcss_c" />
+    </styles>
+    <Panel class="AbilityHudRoot" hittest="false">
+        <Panel id="dialog" class="AbilityHudDialog" hittest="false">
+            <Panel id="ability_hud" class="AbilityHudPanel Hidden" hittest="false">
+                <Panel class="AbilityHudTop" hittest="false">
+                    <Label class="AbilityHudRole" text="{s:ability_role}" />
+                    <Panel class="AbilityHudSpacer" hittest="false" />
+                    <Label class="AbilityHudStatus" text="{s:ability_status}" />
+                </Panel>
+                <Panel class="AbilityHudChargeRow" hittest="false">
+                    <Label class="AbilityHudLabel" text="充能" />
+                    <Label class="AbilityHudValue" text="{s:ability_charge}" />
+                    <Label class="AbilityHudPreview" text="{s:ability_preview}" />
+                </Panel>
+                <Label class="AbilityHudChargeBar" text="{s:ability_charge_bar}" />
+                <Panel class="AbilityHudBottom" hittest="false">
+                    <Label class="AbilityHudCooldown" text="{s:ability_cooldown}" />
+                    <Panel class="AbilityHudSpacer" hittest="false" />
+                    <Label class="AbilityHudPrompt" text="{s:ability_prompt}" />
+                </Panel>
+                <Label class="AbilityHudExtra" text="{s:ability_extra}" />
+            </Panel>
+        </Panel>
+    </Panel>
+</root>

@@ -7,6 +7,7 @@
     { "name": "CaorenCupInGameMenu", "project": "game-plugin/PluginSplit/CaorenCupInGameMenu/CaorenCupInGameMenu.csproj", "directory": "CaorenCupInGameMenu" },
     { "name": "CaorenCupGamemode_Competitive", "project": "game-plugin/PluginSplit/CaorenCupGamemode_Competitive/CaorenCupGamemode_Competitive.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_Competitive" },
     { "name": "CaorenCupGamemode_RUSH", "project": "game-plugin/PluginSplit/CaorenCupGamemode_RUSH/CaorenCupGamemode_RUSH.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_RUSH" },
+    { "name": "CaorenCupGamemode_Ability", "project": "game-plugin/PluginSplit/CaorenCupGamemode_Ability/CaorenCupGamemode_Ability.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_Ability" },
     { "name": "CaorenDuel", "project": "duel-plugin/CaorenDuel.csproj", "directory": "CaorenCupGamemodes/CaorenCupSolos/CaorenDuel" },
     { "name": "CaorenCupQOL_Alias", "project": "game-plugin/PluginSplit/CaorenCupQOL_Alias/CaorenCupQOL_Alias.csproj", "directory": "CaorenCupQOLs/CaorenCupQOL_Alias" },
     { "name": "CaorenCupQOL_PlaySound", "project": "game-plugin/PluginSplit/CaorenCupQOL_PlaySound/CaorenCupQOL_PlaySound.csproj", "directory": "CaorenCupQOLs/CaorenCupQOL_PlaySound" },

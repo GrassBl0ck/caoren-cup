@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using CaorenCup.Contracts;
 
 namespace CaorenCup.Features.InGameMenu;
 
@@ -36,6 +39,7 @@ public sealed class AdminMenuCatalog
         RegisterGlobalPage();
         RegisterDuelPages();
         RegisterGamemodePages();
+        RegisterAbilityPages();
         RegisterMatchZyPages();
     }
 
@@ -216,6 +220,13 @@ public sealed class AdminMenuCatalog
                     ConfirmText = "确认切换到 Duel 并启动现有单挑运行时?",
                     OnClick = (sid, _) => { _host.ExecAsPlayer(sid, "gamemode duel"); _host.ExecAsPlayer(sid, "gamemode start"); return true; },
                 },
+                new InGameMenuItem
+                {
+                    Title = "Ability（异能）",
+                    ConfirmText = "确认切换到异能模式并开始 Warmup?（需先为玩家分配职业）",
+                    OnClick = (sid, _) => { _host.ExecAsPlayer(sid, "gamemode ability"); _host.ExecAsPlayer(sid, "gamemode start"); return true; },
+                },
+                NavItem("异能职业分配", "ability"),
                 PlayerCmdItem("开始当前模式 Warmup", "gamemode start"),
                 new InGameMenuItem
                 {
@@ -238,6 +249,114 @@ public sealed class AdminMenuCatalog
                 },
             },
         });
+    }
+
+    private const string AbilityPlayersPageId = "ability_players";
+
+    private void RegisterAbilityPages()
+    {
+        _navigator.RegisterPage(new InGameMenuPage
+        {
+            Id = "ability",
+            Title = "异能职业分配",
+            ParentId = "gamemode",
+            StatusProvider = _ =>
+            {
+                var ability = CaorenCupAbilityAccess.TryGet();
+                return ability is null ? "CaorenCupGamemode_Ability 未加载" : ability.StatusText;
+            },
+            Items =
+            {
+                new InGameMenuItem
+                {
+                    Title = "为在线玩家分配职业",
+                    OnClick = (sid, _) =>
+                    {
+                        OpenAbilityPlayersPage();
+                        return _navigator.Open(sid, AbilityPlayersPageId);
+                    },
+                },
+                PlayerCmdItem("查看当前分配", "css_ability_roles"),
+                PlayerCmdItem("查看模式状态", "gamemode status"),
+                new InGameMenuItem
+                {
+                    Title = "清空全部分配",
+                    ConfirmText = "确认清空所有玩家的异能职业分配?",
+                    OnClick = (sid, _) => { _host.ExecAsPlayer(sid, "css_ability_roles_clear"); return true; },
+                },
+            },
+        });
+    }
+
+    private void OpenAbilityPlayersPage()
+    {
+        var players = CaorenCupAbilityAccess.TryGet()?.OnlinePlayers ?? Array.Empty<CaorenCupAbilitySeatInfo>();
+        var page = new InGameMenuPage
+        {
+            Id = AbilityPlayersPageId,
+            Title = "选择玩家",
+            ParentId = "ability",
+            StaticStatus = players.Count == 0 ? "当前没有可分配的在线玩家" : "点击玩家后选择异能职业",
+        };
+        foreach (var player in players)
+        {
+            var steamId = player.SteamId;
+            var playerName = player.PlayerName;
+            page.Items.Add(new InGameMenuItem
+            {
+                Title = string.IsNullOrEmpty(player.AbilityId)
+                    ? playerName
+                    : $"{playerName} ({player.AbilityId})",
+                OnClick = (sid, _) =>
+                {
+                    OpenAbilityRolePage(steamId, playerName);
+                    return _navigator.Open(sid, $"ability_role:{steamId}");
+                },
+            });
+        }
+
+        _navigator.RegisterDynamicPage(page);
+    }
+
+    private void OpenAbilityRolePage(string steamId, string playerName)
+    {
+        var ability = CaorenCupAbilityAccess.TryGet();
+        var roles = (ability?.Roles ?? Array.Empty<CaorenCupAbilityRoleInfo>())
+            .Where(role => role.Enabled)
+            .ToList();
+        var page = new InGameMenuPage
+        {
+            Id = $"ability_role:{steamId}",
+            Title = $"职业 · {playerName}",
+            ParentId = AbilityPlayersPageId,
+            StaticStatus = roles.Count == 0 ? "没有已放行的职业，请检查 ability-roles.json" : "选择该玩家的异能职业",
+        };
+        foreach (var role in roles)
+        {
+            var abilityId = role.AbilityId;
+            page.Items.Add(new InGameMenuItem
+            {
+                Title = role.DisplayName,
+                OnClick = (sid, _) =>
+                {
+                    _host.ExecAsPlayer(sid, $"css_ability_role {steamId} {abilityId}");
+                    return _navigator.Open(sid, AbilityPlayersPageId);
+                },
+            });
+        }
+
+        page.Items.Add(new InGameMenuItem
+        {
+            Title = "清除该玩家职业",
+            ConfirmText = $"确认清除 {playerName} 的异能职业?",
+            OnClick = (sid, _) =>
+            {
+                _host.ExecAsPlayer(sid, $"css_ability_role_clear {steamId}");
+                return _navigator.Open(sid, AbilityPlayersPageId);
+            },
+        });
+
+        _navigator.RegisterDynamicPage(page);
     }
 
     private void RegisterMatchZyPages()

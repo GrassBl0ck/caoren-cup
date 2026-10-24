@@ -78,6 +78,12 @@ public sealed class MenuNavigator
     /// <summary>注册静态页;同 Id 覆盖(页面目录重新构建时使用)。</summary>
     public void RegisterPage(InGameMenuPage page) => _pages[page.Id] = page;
 
+    /// <summary>注册运行时生成的页面(如玩家/职业选择);同 Id 覆盖。</summary>
+    public void RegisterDynamicPage(InGameMenuPage page) => _dynamicPages[page.Id] = page;
+
+    /// <summary>移除运行时生成的页面;不存在的 Id 忽略。</summary>
+    public void RemoveDynamicPage(string pageId) => _dynamicPages.Remove(pageId);
+
     public bool HasSession(string steamId) => _sessions.ContainsKey(steamId);
 
     public IReadOnlyDictionary<string, MenuSession> Sessions => _sessions;
