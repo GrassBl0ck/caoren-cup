@@ -5,8 +5,17 @@ namespace CaorenCup.Contracts;
 /// <summary>异能职业定义投影，供游戏内菜单与状态页展示。</summary>
 public sealed record CaorenCupAbilityRoleInfo(string AbilityId, string DisplayName, bool Enabled);
 
-/// <summary>已分配异能职业的玩家投影。</summary>
-public sealed record CaorenCupAbilitySeatInfo(string SteamId, string PlayerName, string AbilityId);
+/// <summary>
+/// 已分配异能职业的玩家投影。
+/// <paramref name="SteamId"/> 对真人是 SteamID，对 bot 是 <c>bot:名字</c> 形式的身份键；
+/// <paramref name="UserId"/> 供界面下发命令时用 <c>#用户编号</c> 稳定定位（bot 名字可能含空格）。
+/// </summary>
+public sealed record CaorenCupAbilitySeatInfo(
+    string SteamId,
+    string PlayerName,
+    string AbilityId,
+    bool IsBot = false,
+    int UserId = 0);
 
 /// <summary>异能模式对外只读能力。写入操作仍走 CaorenCupGamemode_Ability 的命令。</summary>
 public interface ICaorenCupAbilityApi

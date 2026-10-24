@@ -1,16 +1,30 @@
+/* custom_hud_layout 根面板不允许带 id；以第二层 id="dialog" 作为变量与类名作用域。
+   两层容器都铺满屏幕，底部居中的技能条才能按预期定位。 */
+.AbilityHudRoot
+{
+    width: 100%;
+    height: 100%;
+}
+
+.AbilityHudDialog
+{
+    width: 100%;
+    height: 100%;
+}
+
+/* 底部居中横向技能条：左侧职业名，右侧状态，下方充能与计时。 */
 .AbilityHudPanel
 {
-    width: 430px;
-    min-height: 148px;
-    margin-left: 72px;
-    margin-bottom: 86px;
-    padding: 15px 18px 14px 22px;
-    horizontal-align: left;
+    width: 470px;
+    padding: 12px 18px 12px 18px;
+    horizontal-align: center;
     vertical-align: bottom;
+    margin-bottom: 28px;
     flow-children: down;
-    background-color: #101820e8;
-    border: 1px solid #82d8ff70;
-    box-shadow: 0px 4px 18px #000000b8;
+    background-color: #0d151ee6;
+    border: 1px solid #82d8ff55;
+    border-radius: 6px;
+    box-shadow: 0px 4px 16px #000000a0;
 }
 
 .AbilityHudPanel.Hidden
@@ -18,107 +32,104 @@
     visibility: collapse;
 }
 
-.AbilityHudAccent
-{
-    width: 4px;
-    height: 100%;
-    margin-left: -17px;
-    background-color: #82d8ff;
-    position: 0px 0px 0px;
-}
-
-.AbilityHudHeader
+.AbilityHudTop
 {
     width: 100%;
     flow-children: right;
-    vertical-align: center;
 }
 
-.AbilityHudKicker
+.AbilityHudSpacer
 {
-    color: #82d8ff;
-    font-size: 13px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    width: fill-parent-flow(1);
 }
 
 .AbilityHudRole
 {
-    margin-left: 12px;
     color: #f2f6f8;
-    font-size: 22px;
+    font-size: 26px;
     font-weight: bold;
+}
+
+.AbilityHudStatus
+{
+    color: #a8e4b3;
+    font-size: 16px;
+    font-weight: bold;
+    vertical-align: bottom;
 }
 
 .AbilityHudChargeRow
 {
     width: 100%;
-    margin-top: 10px;
+    margin-top: 8px;
     flow-children: right;
 }
 
 .AbilityHudLabel
 {
-    color: #a3b1bf;
-    font-size: 15px;
+    color: #8fa3b8;
+    font-size: 14px;
+    vertical-align: bottom;
 }
 
 .AbilityHudValue
 {
-    margin-left: 8px;
+    margin-left: 6px;
     color: #f2f6f8;
-    font-size: 17px;
+    font-size: 18px;
     font-weight: bold;
+}
+
+.AbilityHudPreview
+{
+    margin-left: 10px;
+    color: #82d8ff;
+    font-size: 13px;
+    vertical-align: bottom;
 }
 
 .AbilityHudChargeBar
 {
     width: 100%;
-    margin-top: 2px;
+    margin-top: 4px;
     color: #82d8ff;
-    font-size: 17px;
+    font-size: 16px;
     letter-spacing: 2px;
 }
 
-.AbilityHudStatusRow
+.AbilityHudBottom
 {
     width: 100%;
     margin-top: 6px;
     flow-children: right;
 }
 
-.AbilityHudStatus
-{
-    color: #a8e4b3;
-    font-size: 15px;
-    font-weight: bold;
-}
-
 .AbilityHudCooldown
 {
-    margin-left: 12px;
     color: #ffc776;
-    font-size: 13px;
-}
-
-.AbilityHudPreview,
-.AbilityHudPrompt,
-.AbilityHudExtra
-{
-    width: 100%;
-    margin-top: 4px;
-    color: #a3b1bf;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .AbilityHudPrompt
 {
     color: #82d8ff;
+    font-size: 12px;
+    horizontal-align: right;
 }
 
 .AbilityHudExtra
 {
+    width: 100%;
+    margin-top: 4px;
     color: #c9d3dc;
+    font-size: 12px;
+}
+
+/* 状态着色：可用时高亮描边，已用为暖色，未启用为灰。 */
+.AbilityHudPanel.HudReady
+{
+    border-color: #82d8ffcc;
+    box-shadow: 0px 0px 14px #82d8ff45;
 }
 
 .AbilityHudPanel.HudUsed

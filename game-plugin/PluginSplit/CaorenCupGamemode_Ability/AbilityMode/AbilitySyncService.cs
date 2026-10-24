@@ -154,7 +154,7 @@ public static class AbilitySyncValidator
         foreach (var seat in config.Seats)
         {
             if (string.IsNullOrWhiteSpace(seat.PlayerId) || !playerIds.Add(seat.PlayerId)) return Fail("DUPLICATE_PLAYER_ID", "玩家席位 ID 缺失或重复。");
-            if (!RegexHelpers.IsSteamId(seat.SteamId)) return Fail("INVALID_STEAM_ID", "存在不完整或格式无效的 SteamID。");
+            if (!AbilityIdentity.IsValidSeatKey(seat.SteamId)) return Fail("INVALID_STEAM_ID", "存在不完整、格式无效或缺少名字的席位身份。");
             if (!steamIds.Add(seat.SteamId)) return Fail("DUPLICATE_STEAM_ID", "同步配置包含重复 SteamID。");
             if (!teamAbilities.ContainsKey(seat.RosterTeam)) return Fail("INVALID_ROSTER_TEAM", "席位 A/B 队信息无效。");
             if (seat.InitialSide is not ("CT" or "T")) return Fail("INVALID_INITIAL_SIDE", "席位初始 CT/T 信息无效。");

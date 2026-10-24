@@ -62,6 +62,12 @@ public sealed record RuntimeOperationResult(bool Ok, string? Code = null, string
 public sealed record RuntimeActivationResult(bool Activated, bool Duplicate = false, bool ReplacedPreviousMatch = false, string? Code = null);
 public sealed record DeathSettlementResult(bool Counted);
 public sealed record RoundSettlementResult(bool Counted);
+public sealed record SeatSyncResult(
+    bool Ok,
+    IReadOnlyList<string> Added,
+    IReadOnlyList<string> Removed,
+    IReadOnlyList<string> Updated,
+    string? Code = null);
 
 public sealed class AbilitySeatState
 {
@@ -239,7 +245,7 @@ public sealed class AbilityMatchRuntime(AbilityDefinitionCatalog catalog)
     public RuntimeOperationResult QueueSubstitution(string seatId, string newSteamId)
     {
         if (State?.Lifecycle != AbilityRuntimeLifecycle.Running) return new(false, "RUNTIME_NOT_RUNNING");
-        if (!RegexHelpers.IsSteamId(newSteamId)) return new(false, "INVALID_STEAM_ID");
+        if (!AbilityIdentity.IsValidSeatKey(newSteamId)) return new(false, "INVALID_STEAM_ID");
         if (!State.Seats.TryGetValue(seatId, out var seat)) return new(false, "SEAT_NOT_FOUND");
         if (State.Seats.Values.Any(item => item.CurrentSteamId == newSteamId || item.PendingSubstituteSteamId == newSteamId))
             return new(false, "STEAM_ID_IN_USE");
@@ -297,4 +303,51 @@ public sealed class AbilityMatchRuntime(AbilityDefinitionCatalog catalog)
 
     private AbilitySeatState? FindBySteamId(string steamId) =>
         State?.Seats.Values.FirstOrDefault(seat => seat.CurrentSteamId == steamId);
+
+    /// <summary>
+    /// 把运行中的席位对齐到期望列表：新增者从 0 充能起算，移除者直接出局，职业变更者重建状态但保留已积累充能。
+    /// 只在 Running 阶段允许，避免在未开赛的对局里凭空造席位。
+    /// </summary>
+    public SeatSyncResult SynchronizeSeats(IEnumerable<AbilitySyncSeat> desired)
+    {
+        var added = new List<string>();
+        var removed = new List<string>();
+        var updated = new List<string>();
+        if (State is not { Lifecycle: AbilityRuntimeLifecycle.Running } state)
+            return new SeatSyncResult(false, added, removed, updated, "RUNTIME_NOT_RUNNING");
+
+        var wanted = new Dictionary<string, AbilitySyncSeat>(StringComparer.Ordinal);
+        foreach (var seat in desired)
+        {
+            if (string.IsNullOrWhiteSpace(seat.PlayerId)) return new SeatSyncResult(false, added, removed, updated, "EMPTY_SEAT_ID");
+            if (!wanted.TryAdd(seat.PlayerId, seat)) return new SeatSyncResult(false, added, removed, updated, "DUPLICATE_SEAT_ID");
+        }
+
+        foreach (var seatId in state.Seats.Keys.Where(id => !wanted.ContainsKey(id)).ToArray())
+        {
+            state.Seats.Remove(seatId);
+            removed.Add(seatId);
+        }
+
+        foreach (var (seatId, source) in wanted)
+        {
+            if (!catalog.TryGet(source.AbilityId, out var definition))
+                return new SeatSyncResult(false, added, removed, updated, "UNKNOWN_ABILITY");
+
+            if (state.Seats.TryGetValue(seatId, out var existing))
+            {
+                if (existing.AbilityId == source.AbilityId && existing.RosterTeam == source.RosterTeam) continue;
+                var replacement = new AbilitySeatState(source, definition);
+                replacement.SetCharge(Math.Min(existing.Charge, definition.ChargeCap));
+                state.Seats[seatId] = replacement;
+                updated.Add(seatId);
+                continue;
+            }
+
+            state.Seats[seatId] = new AbilitySeatState(source, definition);
+            added.Add(seatId);
+        }
+
+        return new SeatSyncResult(true, added, removed, updated);
+    }
 }

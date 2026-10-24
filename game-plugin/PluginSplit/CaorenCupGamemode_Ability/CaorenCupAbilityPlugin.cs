@@ -37,7 +37,11 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             this,
             _roleSettings,
             Path.Combine(ModuleDirectory, "ability-runtime-state.json"));
+        // 中途分配不下发即时生效，而是在下一个回合开始时按分配表重建席位。
+        _adapter.SeatConfigProvider = () => BuildConfig(keepMatchId: true);
         _adapter.Register();
+        // 跨重启恢复的运行时可能与最新分配表不一致，标记一次，让下一个回合自动对齐席位。
+        if (_adapter.IsRuntimeRunning) _adapter.MarkSeatsDirty();
 
         _provider = new AbilityGameModeProvider(this);
         CaorenCupGameModeRegistry.Register(_provider);
@@ -59,6 +63,7 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             AddCommand($"{prefix}ability", "选择并启动异能模式", OnAbilityCommand);
             AddCommand($"{prefix}ability_role", "为玩家分配异能职业：.ability_role <玩家> <职业>", OnAssignCommand);
             AddCommand($"{prefix}ability_roles", "查看异能职业分配", OnListCommand);
+            AddCommand($"{prefix}ability_me", "查看自己当前的异能职业", OnMyRoleCommand);
             AddCommand($"{prefix}ability_role_clear", "清除单个玩家的异能职业：.ability_role_clear <玩家>", OnClearOneCommand);
             AddCommand($"{prefix}ability_roles_clear", "清空异能职业分配", OnClearCommand);
         }
@@ -105,11 +110,11 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             var result = new List<CaorenCupAbilitySeatInfo>();
             foreach (var player in Utilities.GetPlayers())
             {
-                if (player is null || !player.IsValid || player.IsBot || player.IsHLTV) continue;
+                if (player is null || !player.IsValid || player.IsHLTV) continue;
                 if (player.TeamNum != (int)CsTeam.Terrorist && player.TeamNum != (int)CsTeam.CounterTerrorist) continue;
-                var steamId = player.SteamID.ToString();
-                _assignments.TryGet(steamId, out var abilityId);
-                result.Add(new CaorenCupAbilitySeatInfo(steamId, player.PlayerName, abilityId ?? string.Empty));
+                var key = AbilityIdentity.KeyFor(player);
+                _assignments.TryGet(key, out var abilityId);
+                result.Add(new CaorenCupAbilitySeatInfo(key, player.PlayerName, abilityId ?? string.Empty, player.IsBot, player.UserId ?? 0));
             }
 
             return result;
@@ -123,10 +128,10 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             var result = new List<CaorenCupAbilitySeatInfo>();
             foreach (var player in Utilities.GetPlayers())
             {
-                if (player is null || !player.IsValid || player.IsBot || player.IsHLTV) continue;
-                var steamId = player.SteamID.ToString();
-                if (_assignments.TryGet(steamId, out var abilityId))
-                    result.Add(new CaorenCupAbilitySeatInfo(steamId, player.PlayerName, abilityId));
+                if (player is null || !player.IsValid || player.IsHLTV) continue;
+                var key = AbilityIdentity.KeyFor(player);
+                if (_assignments.TryGet(key, out var abilityId))
+                    result.Add(new CaorenCupAbilitySeatInfo(key, player.PlayerName, abilityId, player.IsBot, player.UserId ?? 0));
             }
 
             return result;
@@ -177,12 +182,22 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
         if (!catalog.TryGet(abilityId, out _)) return new RuntimeOperationResult(false, "UNKNOWN_ROLE");
         if (!_roleSettingsAllows(abilityId)) return new RuntimeOperationResult(false, "ROLE_DISABLED");
         _assignments.Set(steamId, abilityId);
+        if (_adapter.IsRuntimeRunning) _adapter.MarkSeatsDirty();
         return new RuntimeOperationResult(true);
     }
 
-    public bool RemoveAssignment(string steamId) => _assignments.Remove(steamId);
+    public bool RemoveAssignment(string steamId)
+    {
+        var removed = _assignments.Remove(steamId);
+        if (removed && _adapter.IsRuntimeRunning) _adapter.MarkSeatsDirty();
+        return removed;
+    }
 
-    public void ClearAssignments() => _assignments.Clear();
+    public void ClearAssignments()
+    {
+        _assignments.Clear();
+        if (_adapter.IsRuntimeRunning) _adapter.MarkSeatsDirty();
+    }
 
     public IReadOnlyDictionary<string, string> Assignments => _assignments.Snapshot;
 
@@ -197,17 +212,17 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
         var seats = new List<AbilitySyncSeat>();
         foreach (var player in Utilities.GetPlayers())
         {
-            if (player is null || !player.IsValid || player.IsBot || player.IsHLTV) continue;
+            if (player is null || !player.IsValid || player.IsHLTV) continue;
             var team = player.TeamNum;
             if (team != (int)CsTeam.Terrorist && team != (int)CsTeam.CounterTerrorist) continue;
-            var steamId = player.SteamID.ToString();
-            if (!_assignments.TryGet(steamId, out var abilityId)) continue;
+            var seatKey = AbilityIdentity.KeyFor(player);
+            if (!_assignments.TryGet(seatKey, out var abilityId)) continue;
 
             var rosterTeam = team == (int)CsTeam.CounterTerrorist ? "A" : "B";
             seats.Add(new AbilitySyncSeat
             {
-                PlayerId = steamId,
-                SteamId = steamId,
+                PlayerId = seatKey,
+                SteamId = seatKey,
                 RosterTeam = rosterTeam,
                 InitialSide = rosterTeam,
                 AbilityId = abilityId,
@@ -303,7 +318,7 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
         }
 
         var abilityId = info.GetArg(2).Trim().ToLowerInvariant();
-        var result = Assign(target.SteamID.ToString(), abilityId);
+        var result = Assign(AbilityIdentity.KeyFor(target), abilityId);
         if (!result.Ok)
         {
             Reply(player, result.Code switch
@@ -315,7 +330,33 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             return;
         }
 
-        Reply(player, $"已为 {target.PlayerName} 分配职业 {abilityId}。");
+        Reply(player, $"已为 {target.PlayerName} 分配职业 {abilityId}。{SeatSyncHint()}");
+        if (target.IsBot)
+            Reply(player, $"注意：bot 按名字识别（{AbilityIdentity.KeyFor(target)}），同名 bot 会被视为同一身份。");
+    }
+
+    /// <summary>运行时进行中时的席位同步提示（分配不会当场生效）。</summary>
+    private string SeatSyncHint() =>
+        _adapter.IsRuntimeRunning ? "异能模式已在进行，将在下一回合开始时生效。" : string.Empty;
+
+    /// <summary>玩家自查当前异能职业；绿色消息，仅执行者本人可见。</summary>
+    private void OnMyRoleCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (player is null || !player.IsValid)
+        {
+            Console.WriteLine("[草人杯] 该命令需要由游戏内玩家执行。");
+            return;
+        }
+
+        if (!_assignments.TryGet(AbilityIdentity.KeyFor(player), out var abilityId) || string.IsNullOrWhiteSpace(abilityId))
+        {
+            Reply(player, "你还没有异能职业，请联系管理员分配。");
+            return;
+        }
+
+        var catalog = AbilityDefinitionCatalog.CreateProduction();
+        var roleName = catalog.TryGet(abilityId, out var definition) ? definition.Name : abilityId;
+        Reply(player, $"你当前的异能职业：{roleName}");
     }
 
     private void OnListCommand(CCSPlayerController? player, CommandInfo info)
@@ -359,9 +400,9 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             return;
         }
 
-        var removed = RemoveAssignment(target.SteamID.ToString());
+        var removed = RemoveAssignment(AbilityIdentity.KeyFor(target));
         Reply(player, removed
-            ? $"已清除 {target.PlayerName} 的异能职业分配。"
+            ? $"已清除 {target.PlayerName} 的异能职业分配。{SeatSyncHint()}"
             : $"{target.PlayerName} 当前没有异能职业分配。");
     }
 
@@ -374,7 +415,7 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
         }
 
         ClearAssignments();
-        Reply(player, "已清空所有异能职业分配。");
+        Reply(player, $"已清空所有异能职业分配。{SeatSyncHint()}");
     }
 
     private static void Reply(CCSPlayerController? player, string message)
@@ -383,10 +424,11 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
         else Console.WriteLine($"[草人杯] {message}");
     }
 
+    /// <summary>解析分配目标；允许 bot，按名字或 #userId 匹配。同名 bot 取第一个。</summary>
     private static CCSPlayerController? ResolveTarget(string input)
     {
         if (string.IsNullOrWhiteSpace(input)) return null;
-        var players = Utilities.GetPlayers().Where(p => p is { IsValid: true, IsBot: false, IsHLTV: false }).ToList();
+        var players = Utilities.GetPlayers().Where(p => p is { IsValid: true, IsHLTV: false }).ToList();
 
         if (input.StartsWith('#'))
         {
@@ -395,7 +437,10 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
         }
 
         if (ulong.TryParse(input, out var steamId))
-            return players.FirstOrDefault(p => p.SteamID == steamId);
+        {
+            var bySteamId = players.FirstOrDefault(p => p.SteamID == steamId);
+            if (bySteamId is not null) return bySteamId;
+        }
 
         return players.FirstOrDefault(p => p.PlayerName.Contains(input, StringComparison.OrdinalIgnoreCase));
     }

@@ -11,7 +11,9 @@ namespace Caoren.AbilityMode;
 public sealed class AbilityHudSurface
 {
     private const string LayoutPath = "panorama/layout/custom_game/caoren_ability_hud.xml";
-    private const string PanelId = "ability_hud";
+    /// <summary>custom_hud_layout 以根面板 id="dialog" 作为变量作用域，与菜单布局保持一致。</summary>
+    private const string DialogPanelId = "dialog";
+    private const string HudPanelId = "ability_hud";
     private CCSCustomHudLayout? _hud;
 
     public bool IsAlive => _hud is { IsValid: true };
@@ -60,13 +62,17 @@ public sealed class AbilityHudSurface
 
     private void SetVariable(CCSPlayerController player, string name, string value)
     {
-        if (_hud is { IsValid: true })
-            _hud.SetDialogVariableStringForPlayer(player, PanelId, name, value ?? string.Empty);
+        if (_hud is not { IsValid: true }) return;
+        var text = value ?? string.Empty;
+        // 同时写入 dialog 与 ability_hud 两个作用域：前者是布局约定根，后者实际承载 {s:...} 标签。
+        // 实机只观察到「类名生效、文本为空」，双写避免再猜引擎在哪个层级解析对话变量。
+        _hud.SetDialogVariableStringForPlayer(player, DialogPanelId, name, text);
+        _hud.SetDialogVariableStringForPlayer(player, HudPanelId, name, text);
     }
 
     private void SetClass(CCSPlayerController player, string className, bool enabled)
     {
         if (_hud is { IsValid: true })
-            _hud.SetHasClassForPlayer(player, PanelId, className, enabled);
+            _hud.SetHasClassForPlayer(player, HudPanelId, className, enabled);
     }
 }

@@ -33,6 +33,16 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     private int _roundSequence;
     private int _callbackGeneration;
     private bool _registered;
+    private bool _seatsDirty;
+
+    /// <summary>供插件提供最新席位来源（由分配表构建）；中途分配后置脏，回合开始时统一应用。</summary>
+    public Func<AbilitySyncConfig?>? SeatConfigProvider { get; set; }
+
+    /// <summary>标记席位需要重新对齐；真正生效发生在下一个回合开始。</summary>
+    public void MarkSeatsDirty() => _seatsDirty = true;
+
+    /// <summary>异能运行时是否处于进行中（用于提示“下回合生效”）。</summary>
+    public bool IsRuntimeRunning => IsRunning();
 
     public CounterStrikeAbilityRuntimeAdapter(BasePlugin plugin, AbilityRoleSettings roleSettings, string statePath)
     {
@@ -275,6 +285,8 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     {
         if (!IsRunning()) return HookResult.Continue;
         if (LocalRoundAuthority) AdvanceLocalRound();
+        // 中途分配的职业在回合开始时统一生效，避免交火中途属性突变。
+        ApplyPendingSeatChanges();
         _roundStartedAt = Server.CurrentTime;
         var authoritativeRoundKey = Controller.Runtime.State?.CurrentRoundKey;
         if (string.IsNullOrWhiteSpace(authoritativeRoundKey)) return HookResult.Continue;
@@ -328,7 +340,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
 
     private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
     {
-        if (!IsRunning() || !TryRealPlayer(@event.Userid, out var player)) return HookResult.Continue;
+        if (!IsRunning() || !TryParticipant(@event.Userid, out var player)) return HookResult.Continue;
         var seat = FindSeat(player!);
         var roundKey = Controller.Runtime.State?.CurrentRoundKey;
         if (seat is null || roundKey is null) return HookResult.Continue;
@@ -352,13 +364,13 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
 
     private HookResult OnPlayerDeath(EventPlayerDeath @event, GameEventInfo info)
     {
-        if (!IsRunning() || !TryRealPlayer(@event.Userid, out var victim)) return HookResult.Continue;
+        if (!IsRunning() || !TryParticipant(@event.Userid, out var victim)) return HookResult.Continue;
         var victimSeat = FindSeat(victim!);
         var state = Controller.Runtime.State;
         if (victimSeat is null || state?.CurrentRoundKey is null) return HookResult.Continue;
         var lifeKey = victimSeat.CurrentLifeKey ?? victimSeat.BeginLife(state.CurrentRoundKey);
         AbilitySeatState? attackerSeat = null;
-        if (TryRealPlayer(@event.Attacker, out var attacker))
+        if (TryParticipant(@event.Attacker, out var attacker))
         {
             attackerSeat = FindSeat(attacker!);
             if (attackerSeat is not null)
@@ -439,7 +451,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
 
     private HookResult OnPlayerHurt(EventPlayerHurt @event, GameEventInfo info)
     {
-        if (!IsRunning() || !TryRealPlayer(@event.Userid, out var victim)) return HookResult.Continue;
+        if (!IsRunning() || !TryParticipant(@event.Userid, out var victim)) return HookResult.Continue;
         var victimSeat = FindSeat(victim!);
         if (victimSeat is null || !_pendingDamage.TryGetValue(victimSeat.SeatId, out var queue) || queue.Count == 0)
             return HookResult.Continue;
@@ -455,10 +467,10 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     private HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
     {
         var player = @event.Userid;
-        if (player is null || player.SteamID == 0) return HookResult.Continue;
+        if (player is null || !player.IsValid) return HookResult.Continue;
         var seat = FindSeat(player);
         if (seat is not null) SynchronizeRolePlayer(player, seat, restoreLedgerOnReconnect: false);
-        Controller.Runtime.Disconnect(player.SteamID.ToString());
+        Controller.Runtime.Disconnect(AbilityIdentity.KeyFor(player));
         if (seat is not null && _roles.GetPlayer(seat.SeatId) is { } rolePlayer)
         {
             rolePlayer.IsConnected = false;
@@ -702,7 +714,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     {
         foreach (var player in Utilities.GetPlayers())
         {
-            if (!TryRealPlayer(player, out var realPlayer)) continue;
+            if (!TryParticipant(player, out var realPlayer)) continue;
             var seat = FindSeat(realPlayer!);
             if (seat is null) continue;
             var wasConnected = seat.IsConnected;
@@ -719,11 +731,11 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     {
         var pawn = player.PlayerPawn?.Value;
         if (pawn is not { IsValid: true }) return;
-        var steamId = player.SteamID.ToString();
-        if (!_baselineVelocityBySteamId.TryGetValue(steamId, out var baseline))
+        var seatKey = AbilityIdentity.KeyFor(player);
+        if (!_baselineVelocityBySteamId.TryGetValue(seatKey, out var baseline))
         {
             baseline = Math.Max(0.01f, pawn.VelocityModifier);
-            _baselineVelocityBySteamId[steamId] = baseline;
+            _baselineVelocityBySteamId[seatKey] = baseline;
         }
         pawn.VelocityModifier = baseline * (float)Controller.Movement.GetCombined(seat.SeatId);
         Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_flVelocityModifier");
@@ -735,7 +747,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
         {
             var pawn = player?.PlayerPawn?.Value;
             if (player is null || !player.IsValid || pawn is not { IsValid: true }) continue;
-            if (!_baselineVelocityBySteamId.TryGetValue(player.SteamID.ToString(), out var baseline)) continue;
+            if (!_baselineVelocityBySteamId.TryGetValue(AbilityIdentity.KeyFor(player), out var baseline)) continue;
             pawn.VelocityModifier = baseline;
             Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_flVelocityModifier");
         }
@@ -765,11 +777,11 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
                 rolePlayer.Position = new Vector3(origin.X, origin.Y, origin.Z);
             if (seat.AbilityId == "tank")
             {
-                var steamId = player.SteamID.ToString();
+                var seatKey = AbilityIdentity.KeyFor(player);
                 var originalMax = rolePlayer.HasManagedHealthSnapshot
                     ? Math.Max(1, rolePlayer.RoleMaxHealth - 100)
                     : GetOrCaptureBaselineMaxHealth(player, pawn);
-                _baselineMaxHealthBySteamId.TryAdd(steamId, originalMax);
+                _baselineMaxHealthBySteamId.TryAdd(seatKey, originalMax);
                 _roles.Tank.PersistManagedHealth(rolePlayer, originalMax);
             }
         }
@@ -794,7 +806,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     private void ApplyRolePlayer(AbilityRolePlayer rolePlayer)
     {
         var player = Utilities.GetPlayers().FirstOrDefault(candidate =>
-            candidate is { IsValid: true } && candidate.SteamID.ToString() == rolePlayer.Seat.CurrentSteamId);
+            candidate is { IsValid: true } && AbilityIdentity.KeyFor(candidate) == rolePlayer.Seat.CurrentSteamId);
         if (player is null) return;
         var pawn = player.PlayerPawn?.Value;
         if (pawn is { IsValid: true })
@@ -833,19 +845,63 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     {
         foreach (var player in Utilities.GetPlayers())
         {
-            if (!TryRealPlayer(player, out var realPlayer)) continue;
+            if (!TryParticipant(player, out var realPlayer)) continue;
             var seat = FindSeat(realPlayer!);
             if (seat is not null) SynchronizeRolePlayer(realPlayer!, seat, restoreLedgerOnReconnect: false);
         }
     }
 
+    /// <summary>
+    /// 把分配表的变化在回合开始时应用到运行中的席位：
+    /// 新增者从 0 充能起算，被清除者回滚职业效果，改职业者重建状态但保留充能。
+    /// </summary>
+    private void ApplyPendingSeatChanges()
+    {
+        if (!_seatsDirty) return;
+        _seatsDirty = false;
+        if (Controller.Runtime.State is null) return;
+        var config = SeatConfigProvider?.Invoke();
+        if (config is null || config.Seats.Count == 0) return;
+
+        var validation = _roleRegistry.ValidateSelectedRoles(config);
+        if (!validation.Ok)
+        {
+            Console.WriteLine($"[草人杯] 中途席位同步被拒绝：{validation.Message}");
+            return;
+        }
+
+        var sync = Controller.Runtime.SynchronizeSeats(config.Seats);
+        if (!sync.Ok)
+        {
+            Console.WriteLine($"[草人杯] 中途席位同步失败：{sync.Code}");
+            return;
+        }
+        if (sync.Added.Count == 0 && sync.Removed.Count == 0 && sync.Updated.Count == 0) return;
+
+        RestoreManagedMovement();
+        RestoreManagedHealth();
+        if (Controller.Runtime.State is { } state) _roles.BindSeats(state.Seats.Values);
+        foreach (var player in Utilities.GetPlayers())
+        {
+            if (!TryParticipant(player, out var participant)) continue;
+            var seat = FindSeat(participant!);
+            if (seat is null) continue;
+            SynchronizeRolePlayer(participant!, seat, restoreLedgerOnReconnect: false);
+            ApplyMovement(participant!, seat);
+        }
+        ApplyAllRolePlayers();
+        _persistence.SaveConfirmedConfigAsync(config).GetAwaiter().GetResult();
+        Controller.ScheduleCurrent();
+        Console.WriteLine($"[草人杯] 中途席位已生效：新增 {sync.Added.Count}，移除 {sync.Removed.Count}，改职业 {sync.Updated.Count}。");
+    }
+
     private int GetOrCaptureBaselineMaxHealth(CCSPlayerController player, CCSPlayerPawn pawn)
     {
-        var steamId = player.SteamID.ToString();
-        if (!_baselineMaxHealthBySteamId.TryGetValue(steamId, out var baseline))
+        var seatKey = AbilityIdentity.KeyFor(player);
+        if (!_baselineMaxHealthBySteamId.TryGetValue(seatKey, out var baseline))
         {
             baseline = Math.Max(1, pawn.MaxHealth);
-            _baselineMaxHealthBySteamId[steamId] = baseline;
+            _baselineMaxHealthBySteamId[seatKey] = baseline;
         }
         return baseline;
     }
@@ -856,7 +912,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
         {
             var pawn = player?.PlayerPawn?.Value;
             if (player is null || !player.IsValid || pawn is not { IsValid: true }) continue;
-            if (!_baselineMaxHealthBySteamId.TryGetValue(player.SteamID.ToString(), out var baseline)) continue;
+            if (!_baselineMaxHealthBySteamId.TryGetValue(AbilityIdentity.KeyFor(player), out var baseline)) continue;
             pawn.MaxHealth = baseline;
             if (pawn.Health > baseline) pawn.Health = baseline;
             Utilities.SetStateChanged(pawn, "CBaseEntity", "m_iMaxHealth");
@@ -939,7 +995,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
         var counts = new Dictionary<string, int>(StringComparer.Ordinal) { ["A"] = 0, ["B"] = 0 };
         foreach (var player in Utilities.GetPlayers())
         {
-            if (!TryRealPlayer(player, out var realPlayer) || realPlayer!.TeamNum != winnerTeam) continue;
+            if (!TryParticipant(player, out var realPlayer) || realPlayer!.TeamNum != winnerTeam) continue;
             var seat = FindSeat(realPlayer);
             if (seat is not null) counts[seat.RosterTeam]++;
         }
@@ -959,8 +1015,9 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
 
     private bool IsRunning() => Controller.Runtime.State?.Lifecycle == AbilityRuntimeLifecycle.Running;
 
+    /// <summary>按身份键（真人 SteamID / bot:名字）查找席位。</summary>
     private AbilitySeatState? FindSeat(CCSPlayerController player) =>
-        Controller.Runtime.State?.Seats.Values.FirstOrDefault(seat => seat.CurrentSteamId == player.SteamID.ToString());
+        Controller.Runtime.State?.Seats.Values.FirstOrDefault(seat => seat.CurrentSteamId == AbilityIdentity.KeyFor(player));
 
     private AbilitySeatState? FindSeat(string? seatId) => seatId is not null
         && Controller.Runtime.State?.Seats.TryGetValue(seatId, out var seat) == true
@@ -971,6 +1028,13 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     {
         result = player;
         return player is { IsValid: true, IsBot: false } && player.SteamID != 0;
+    }
+
+    /// <summary>异能参与者：真人或 bot（bot 也占席位、吃职业效果），仅排除 HLTV 与无效实体。</summary>
+    private static bool TryParticipant(CCSPlayerController? player, out CCSPlayerController? result)
+    {
+        result = player;
+        return player is { IsValid: true } && !player.IsHLTV;
     }
 
     private static int ParseRoundSequence(string? roundKey)
