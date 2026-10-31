@@ -10,7 +10,7 @@ const accessAdminJs = fs.readFileSync(path.join(root, 'public', 'js', 'access-ad
 const audioJs = fs.readFileSync(path.join(root, 'public', 'js', 'caoren-audio-controller.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 
-if (!html.includes('/js/player-center.js?v=2.0.0')) {
+if (!html.includes('/js/player-center.js?v=2.0.0-account-settings1')) {
   throw new Error('player-center cache version must match the account session notification update');
 }
 if (!html.includes('/js/lobby-app.js?v=1.11.1-pcskin1')) {
@@ -29,9 +29,7 @@ for (const id of [
   'player-center-recovery', 'player-center-recovery-login-name', 'player-center-recovery-password',
   'player-center-recovery-confirm-password', 'player-center-recovery-btn', 'player-center-home',
   'player-center-steam-nickname', 'player-center-account-name', 'player-center-match-status',
-  'player-center-join-btn', 'player-center-change-login-name', 'player-center-change-login-btn',
-  'player-center-change-password', 'player-center-change-password-confirm',
-  'player-center-change-password-btn', 'player-center-logout-btn',
+  'player-center-join-btn', 'player-center-logout-btn',
   'player-center-forget-device-btn', 'admin-login-password', 'admin-login-btn',
 ]) {
   if (!html.includes(`id="${id}"`)) throw new Error(`missing player-center UI id: ${id}`);
@@ -71,8 +69,8 @@ if (quitHandlerStart < 0 || quitHandler.includes('confirmName') || quitHandler.i
 for (const text of ['玩家中心', '账号密码登录', '/cclogin', '加入本场比赛', '管理员登录']) {
   if (!html.includes(text)) throw new Error(`missing player-center copy: ${text}`);
 }
-if (!/<details id="player-center-security"[^>]*>[\s\S]*<summary>账号与安全<\/summary>/.test(html)) {
-  throw new Error('account settings must be collapsed under account security');
+if (!html.includes('href="/#account-settings"') || html.includes('id="player-center-security"')) {
+  throw new Error('CS must link to the shared account settings instead of keeping duplicate credential forms');
 }
 if (!/id="player-center-join-btn"[^>]*class="[^"]*player-center-match-action/.test(html)) {
   throw new Error('join match must be the prominent player-center action');
@@ -86,8 +84,8 @@ if (!css.includes('.player-center-match-action')) {
 
 for (const token of [
   '/api/account-auth/login', '/api/account-recovery/game-code', '/api/account-recovery/complete',
-  '/api/player-center/session', '/api/player-center/me', '/api/player-center/account/login-name',
-  '/api/player-center/account/password', '/api/player-center/logout', '/api/player-center/match/join',
+  '/api/player-center/session', '/api/player-center/me',
+  '/api/player-center/logout', '/api/player-center/match/join',
   '/api/player-center/match/leave', '/api/player-center/match/socket-ticket', 'PLAYER_CENTER_MATCH_LOGIN',
   'PLAYER_CENTER_MATCH_ENDED', 'sessionBootstrapTicket', 'navigator.clipboard.writeText',
   'PLAYER_CENTER_SESSION_INVALID', 'authenticatePlayerCenter', 'loginPlayerCenter',

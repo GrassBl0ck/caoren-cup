@@ -6,7 +6,7 @@
   <meta name="description" content="草人杯，一起玩点不一样的。一个草人杯账户，进入 CS 和 Minecraft 板块。">
   <title>[草人杯] 2.0 · 一起玩点不一样的</title>
   <link rel="stylesheet" href="/css/portal.css">
-  <script defer src="/js/portal.js"></script>
+  <script defer src="/js/portal.js?v=2.0.0-account-settings1"></script>
 </head>
 <body data-page="portal">
   <div class="portal-shell">
@@ -67,8 +67,25 @@
           <a class="board-card board-cs" href="/cs"><div class="board-art cs-art" aria-hidden="true"><span>CS</span><i></i></div><div class="board-content"><span class="eyebrow">COUNTER-STRIKE 2</span><h3>CS 板块 <span aria-hidden="true">↗</span></h3><p>组队、选图，开一场属于我们的比赛。<br>竞技、RUSH、单挑和更多娱乐玩法。</p><span class="card-link">进入现有草人杯大厅</span></div></a>
           <a class="board-card board-mc" href="/mc"><div class="board-art mc-art" aria-hidden="true"><span>MC</span><i></i><b></b></div><div class="board-content"><span class="eyebrow">MINECRAFT</span><h3>MC 板块 <span aria-hidden="true">↗</span></h3><p>坐垫上的对决，方块里的新玩法。<br>了解游戏规则，和朋友一起加入服务器。</p><span class="card-link">探索玩法与入服指引</span></div></a>
         </div>
-        <details class="account-settings" id="account-settings"><summary>账户与游戏身份 <span aria-hidden="true">＋</span></summary>
+        <details class="account-settings" id="account-settings"><summary>账户设置与游戏身份 <span aria-hidden="true">＋</span></summary>
           <div class="settings-grid">
+            <section><h3>登录账号</h3><p id="login-name-status" class="muted"></p>
+              <form id="change-login-name-form">
+                <label>当前密码<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
+                <label>新登录账号<input name="newLoginName" autocomplete="username" minlength="6" maxlength="20" pattern="[A-Za-z0-9_]{6,20}" required placeholder="6–20 位字母、数字或下划线"></label>
+                <button class="secondary-button" type="submit">保存新账号</button>
+              </form>
+              <p class="small-note">CS 与 MC 共用此账号。修改后，其他网页会话和其他设备会退出登录。</p>
+            </section>
+            <section><h3>修改密码</h3>
+              <form id="change-password-form">
+                <label>当前密码<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
+                <label>新密码<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required placeholder="8–128 位，使用草人杯独立密码"></label>
+                <label>再次输入新密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+                <button class="secondary-button" type="submit">保存新密码</button>
+              </form>
+              <p class="small-note">修改的是草人杯账户密码。其他网页会话和其他设备会退出登录。</p>
+            </section>
             <section><h3>邮箱</h3><p id="email-status" class="muted"></p>
               <form id="bind-email-form" hidden>
                 <label>绑定邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required></label>

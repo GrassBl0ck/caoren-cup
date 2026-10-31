@@ -163,24 +163,7 @@
                 <button id="player-center-join-btn" class="player-center-match-action primary-btn" type="button">加入本场比赛</button>
                 <button id="player-center-forget-device-btn" type="button" hidden>退出账号并忘记此设备</button>
             </div>
-            <details id="player-center-security" class="player-center-security">
-                <summary>账号与安全</summary>
-                <div class="player-center-settings-grid">
-                    <form id="player-center-login-name-form">
-                        <h3>修改登录账号</h3>
-                        <label>当前密码<input id="player-center-change-login-current-password" type="password" maxlength="128" autocomplete="current-password"></label>
-                        <label>新登录账号<input id="player-center-change-login-name" type="text" maxlength="32" autocomplete="username"></label>
-                        <button id="player-center-change-login-btn" type="submit">保存新账号</button>
-                    </form>
-                    <form id="player-center-password-form">
-                        <h3>修改密码</h3>
-                        <label>当前密码<input id="player-center-change-password-current" type="password" maxlength="128" autocomplete="current-password"></label>
-                        <label>新密码<input id="player-center-change-password" type="password" maxlength="128" autocomplete="new-password"></label>
-                        <label>再次输入新密码<input id="player-center-change-password-confirm" type="password" maxlength="128" autocomplete="new-password"></label>
-                        <button id="player-center-change-password-btn" type="submit">保存新密码</button>
-                    </form>
-                </div>
-            </details>
+            <p class="muted-line">账号、密码和邮箱统一在 <a href="/#account-settings">草人杯账户设置</a> 中管理，CS 与 MC 共用。</p>
             <div id="player-center-home-message" class="player-center-message" aria-live="polite"></div>
             <p class="muted-line">等待中 / 已开始 / 已结束仅为公开简单状态；未加入比赛时不会显示名单、比分或比赛私密数据。</p>
         </section>
@@ -967,7 +950,7 @@
 
 
 <script src="/js/access-admin.js?v=1.9.2-modern-dialog8"></script>
-<script src="/js/player-center.js?v=2.0.0"></script>
+<script src="/js/player-center.js?v=2.0.0-account-settings1"></script>
 <script src="/js/weaponpaints-draft.js?v=1.9.2-qol2"></script>
 <script src="/js/weaponpaints-entry.js?v=1.11.1-pcskin1"></script>
 <script src="/js/weaponpaints-app.js?v=1.11.1-pcskin1"></script>

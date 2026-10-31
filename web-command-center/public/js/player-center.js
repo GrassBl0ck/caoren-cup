@@ -323,39 +323,6 @@
     await establishSession(ticket);
   }
 
-  async function changeLoginName(event) {
-    event.preventDefault();
-    var currentPassword = String(byId('player-center-change-login-current-password')?.value || '');
-    var newLoginName = String(byId('player-center-change-login-name')?.value || '').trim();
-    var result = await requestJson('/api/player-center/account/login-name', jsonOptions('PATCH', {
-      currentPassword: currentPassword,
-      newLoginName: newLoginName
-    }));
-    byId('player-center-change-login-current-password').value = '';
-    if (result.status === 401 && result.data.error === 'player_center_session_invalid') return showEntry('会话已失效，请重新登录。');
-    if (!result.ok) return setHomeMessage(result.data.error === 'current_password_incorrect' ? '当前密码错误。' : '登录账号修改失败。');
-    renderHome(Object.assign({ profile: result.data.profile }, currentMatchState));
-    byId('player-center-change-login-name').value = '';
-    setHomeMessage('登录账号已修改，其他网页会话和其他设备已撤销。', true);
-  }
-
-  async function changePassword(event) {
-    event.preventDefault();
-    var currentPassword = String(byId('player-center-change-password-current')?.value || '');
-    var newPassword = String(byId('player-center-change-password')?.value || '');
-    var confirmPassword = String(byId('player-center-change-password-confirm')?.value || '');
-    if (newPassword !== confirmPassword) return setHomeMessage('两次输入的新密码不一致。');
-    var result = await requestJson('/api/player-center/account/password', jsonOptions('POST', {
-      currentPassword: currentPassword,
-      newPassword: newPassword,
-      confirmPassword: confirmPassword
-    }));
-    ['player-center-change-password-current', 'player-center-change-password', 'player-center-change-password-confirm'].forEach(function (id) { byId(id).value = ''; });
-    if (result.status === 401 && result.data.error === 'player_center_session_invalid') return showEntry('会话已失效，请重新登录。');
-    if (!result.ok) return setHomeMessage(result.data.error === 'current_password_incorrect' ? '当前密码错误。' : '密码修改失败。');
-    setHomeMessage('密码已修改，其他网页会话和其他设备已撤销。', true);
-  }
-
   async function logout() {
     var result = await requestJson('/api/player-center/logout', jsonOptions('POST', {}));
     if (!result.ok) return setHomeMessage('退出失败，尚未确认服务端已退出，请检查网络后重试。');
@@ -406,8 +373,6 @@
     byId('player-center-copy-password')?.addEventListener('click', function () { copyText('player-center-created-password'); });
     byId('player-center-credentials-saved')?.addEventListener('click', confirmCredentialsSaved);
     byId('player-center-recovery-btn')?.addEventListener('click', completeRecovery);
-    byId('player-center-login-name-form')?.addEventListener('submit', changeLoginName);
-    byId('player-center-password-form')?.addEventListener('submit', changePassword);
     byId('player-center-logout-btn')?.addEventListener('click', logout);
     byId('player-center-forget-device-btn')?.addEventListener('click', forgetDesktopDevice);
     byId('player-center-join-btn')?.addEventListener('click', joinOrLeaveMatch);
