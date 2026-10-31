@@ -23,6 +23,17 @@ class McPackageTests(unittest.TestCase):
         output=self.root/'pack.zip';package.pack_datapack(source,output)
         with zipfile.ZipFile(output) as z:
             self.assertEqual(set(z.namelist()),{'pack.mcmeta','data/example/function/load.mcfunction'})
+    def test_local_collaboration_instructions_are_not_distributed(self):
+        source=self.pack_source()
+        (source/'AGENTS.md').write_text('private local workflow',encoding='utf-8')
+        nested=source/'docs';nested.mkdir()
+        (nested/'AGENTS.md').write_text('private nested workflow',encoding='utf-8')
+        (nested/'README.md').write_text('public game guide',encoding='utf-8')
+        output=self.root/'pack.zip';package.pack_datapack(source,output)
+        with zipfile.ZipFile(output) as z:
+            self.assertIn('docs/README.md',z.namelist())
+            self.assertFalse(any(Path(name).name=='AGENTS.md' for name in z.namelist()))
+            self.assertFalse(any(b'private' in z.read(name) for name in z.namelist()))
     def test_missing_datapack_entry_fails_before_output(self):
         source=self.root/'empty';source.mkdir();output=self.root/'pack.zip'
         with self.assertRaises(ValueError): package.pack_datapack(source,output)

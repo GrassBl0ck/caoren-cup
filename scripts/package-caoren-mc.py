@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parents[1]
 MC=ROOT/'mc'
 FIXED_TIME=(2026,1,1,0,0,0)
 EXCLUDED={'build','dist','bin','obj','.gradle','.kotlin','.cache','.runtime','.assets','runtime','__pycache__','playerdata','logs','checks','.git','node_modules'}
-FORBIDDEN={'server.properties','ops.json','whitelist.json','usercache.json','.env','caoren_config.json','ecosystem.config.cjs'}
+FORBIDDEN={'server.properties','ops.json','whitelist.json','usercache.json','.env','caoren_config.json','ecosystem.config.cjs','AGENTS.md'}
 TEXT={'.java','.kt','.kts','.py','.ps1','.sh','.bat','.json','.mcfunction','.mcmeta','.md','.txt','.yml','.yaml','.xml','.properties','.toml','.gradle','.pom','.conf','.csv'}
 
 def digest(raw): return hashlib.sha256(raw).hexdigest()
