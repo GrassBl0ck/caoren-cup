@@ -9,6 +9,7 @@ import {
 } from './auth-core';
 import {
     accountRecoveryTickets,
+    accountEmailCodes,
     lobbyIdentityService,
     playerCenterBootstrapTickets,
     playerCenterMatchSocketTickets,
@@ -18,6 +19,9 @@ import { LobbyIdentityService } from './identity-service';
 import { AccountLoginGuard, validateAccountPassword } from './password-auth';
 import { PlayerCenterSessionRecord, PlayerCenterSessionStore } from './player-center-session-store';
 import { LobbyMembershipRecord } from './identity-types';
+import { EmailAuthError, EmailCodeService, EmailCodePurpose } from './email-codes';
+import { normalizeEmail } from './email-address';
+import { validateLoginName } from './account-foundation';
 
 const PLAYER_CENTER_COOKIE = 'caoren_player_center';
 
@@ -41,6 +45,7 @@ export interface IdentityAuthRouteDependencies {
     onPlayerCenterMatchJoined?: (membership: LobbyMembershipRecord) => void | Promise<void>;
     onPlayerCenterMatchLeft?: (identityId: string, membershipId: string) => void | Promise<void>;
     consumeGameLoginTicket?: (code: unknown) => { steamId: string; name: string } | undefined;
+    emailCodes?: EmailCodeService;
     onDesktopAuthAudit?: (event: {
         action: 'account_login' | 'device_login' | 'rotation_confirm' | 'logout';
         outcome: 'success' | 'rejected';
@@ -106,6 +111,10 @@ const requireAllowedDeviceAuthTransport: express.RequestHandler = (req, res, nex
 };
 
 export const registerIdentityAuthRoutes = (app: express.Express, dependencies: IdentityAuthRouteDependencies = {}) => {
+    app.use(['/api/account-auth', '/api/account-email', '/api/account-recovery', '/api/player-center', '/api/desktop-auth'], (_req, res, next) => {
+        res.setHeader('Cache-Control', 'no-store');
+        next();
+    });
     const service = dependencies.service || lobbyIdentityService;
     const getActiveSession = dependencies.getSession || getSession;
     const accountGuard = dependencies.accountLoginGuard || defaultAccountLoginGuard;
@@ -114,6 +123,8 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
     const matchSocketTickets = dependencies.playerCenterMatchSocketTickets || playerCenterMatchSocketTickets;
     const centerSessions = dependencies.playerCenterSessionStore || playerCenterSessionStore;
     const recoveryTickets = dependencies.accountRecoveryTickets || accountRecoveryTickets;
+    const emailCodes = dependencies.emailCodes || accountEmailCodes;
+    const bindingGuard = new AccountLoginGuard();
     const auditDesktopAuth = (
         req: express.Request,
         event: Omit<Parameters<NonNullable<IdentityAuthRouteDependencies['onDesktopAuthAudit']>>[0], 'transport'>,
@@ -135,9 +146,10 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             membership.identityId === identityId && !membership.blockedAt,
         );
         const waiting = matchStatus === 'waiting';
+        const identity = service.getIdentity(identityId);
         return {
             matchStatus,
-            joinAvailable: waiting && !joined,
+            joinAvailable: waiting && !joined && !!identity?.steamId && !!identity.gameBoundAt,
             leaveAvailable: waiting && joined,
             joined,
         };
@@ -160,9 +172,13 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         const account = service.getLoginAccount(identityId);
         if (!identity || !account) return undefined;
         return {
+            displayName: identity.displayName,
             steamNickname: identity.steamNickname || identity.displayName,
             loginName: account.loginName,
             hasBackupPassword: account.passwordState === 'active',
+            email: account.email,
+            emailVerified: !!account.emailVerifiedAt,
+            hasSteamBinding: !!identity.steamId && !!identity.gameBoundAt,
         };
     };
 
@@ -183,6 +199,123 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         }
         return session;
     };
+
+    const sameOrigin: express.RequestHandler = (req, res, next) => {
+        const origin = req.header('origin');
+        if (origin && origin !== `${req.protocol}://${req.get('host')}`) {
+            res.status(403).json({ success: false, error: 'origin_not_allowed' });
+            return;
+        }
+        res.setHeader('Cache-Control', 'no-store');
+        next();
+    };
+    const emailFailure = (res: express.Response, error: unknown) => {
+        if (error instanceof EmailAuthError && error.retryAfter) res.setHeader('Retry-After', String(error.retryAfter));
+        const safeErrors = new Set([
+            'email_invalid', 'password_invalid', 'login_name_invalid', 'login_name_taken',
+            'registration_unavailable', 'current_password_incorrect', 'account_changed',
+            'email_already_bound', 'email_unavailable', 'recovery_unavailable',
+            'email_service_unavailable', 'email_service_busy', 'email_delivery_failed',
+            'email_rate_limited', 'email_code_invalid',
+        ]);
+        const code = error instanceof Error && safeErrors.has(error.message) ? error.message : 'account_request_failed';
+        return res.status(error instanceof EmailAuthError ? error.status : code === 'account_request_failed' ? 500 : 400)
+            .json({ success: false, error: code });
+    };
+
+    app.get('/api/public/account-capabilities', (_req, res) => {
+        res.setHeader('Cache-Control', 'no-store');
+        res.json({ success: true, emailRegistrationAvailable: emailCodes.enabled, steamQuickLoginAvailable: false });
+    });
+
+    app.post('/api/account-email/code', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+        try {
+            const purpose = req.body?.purpose as EmailCodePurpose;
+            if (!['register', 'bind-email', 'reset-password'].includes(purpose)) {
+                return res.status(400).json({ success: false, error: 'email_purpose_invalid' });
+            }
+            const email = normalizeEmail(req.body?.email);
+            let principal: string | undefined;
+            if (purpose === 'bind-email') {
+                const session = await requirePlayerCenterSession(req, res);
+                if (!session) return;
+                if (service.getLoginAccount(session.identityId)?.email) throw new Error('email_already_bound');
+                principal = session.identityId;
+            }
+            const existing = service.findAccountByEmail(email);
+            const eligible = purpose === 'reset-password' ? !!existing?.enabled : !existing;
+            const challenge = await emailCodes.request({
+                email, purpose, principal, eligible, ip: req.ip || req.socket.remoteAddress || 'unknown',
+            });
+            return res.json({ success: true, ...challenge });
+        } catch (error) { return emailFailure(res, error); }
+    });
+
+    app.post('/api/account-auth/register', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+        try {
+            validateLoginName(req.body?.loginName);
+            validateAccountPassword(req.body?.password);
+            if (req.body?.password !== req.body?.confirmPassword) {
+                return res.status(400).json({ success: false, error: 'password_confirmation_mismatch' });
+            }
+            const email = emailCodes.consume({ ...req.body, purpose: 'register', principal: '', ip: req.ip || 'unknown' });
+            const created = await service.registerVerifiedEmailAccount({
+                email, loginName: req.body.loginName, password: req.body.password,
+            });
+            const issued = await centerSessions.create(created.identity.identityId, created.account.updatedAt);
+            setPlayerCenterCookie(req, res, issued.rawToken, issued.session.absoluteExpiresAt - Date.now());
+            return res.status(201).json({ success: true, profile: playerCenterProfile(created.identity.identityId) });
+        } catch (error) { return emailFailure(res, error); }
+    });
+
+    app.post('/api/player-center/account/email', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+        const session = await requirePlayerCenterSession(req, res);
+        if (!session) return;
+        try {
+            const email = emailCodes.consume({ ...req.body, purpose: 'bind-email', principal: session.identityId, ip: req.ip || 'unknown' });
+            const account = await service.bindVerifiedEmail({
+                identityId: session.identityId, email, currentPassword: req.body?.currentPassword,
+            });
+            await centerSessions.applyAccountChange(session.identityId, session.sessionId, account.updatedAt);
+            await dependencies.onPlayerCenterSessionsRevoked?.({ identityId: session.identityId, preserveSessionId: session.sessionId });
+            return res.json({ success: true, profile: playerCenterProfile(session.identityId) });
+        } catch (error) { return emailFailure(res, error); }
+    });
+
+    app.post('/api/account-recovery/email', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+        try {
+            validateAccountPassword(req.body?.newPassword);
+            if (req.body?.newPassword !== req.body?.confirmPassword) {
+                return res.status(400).json({ success: false, error: 'password_confirmation_mismatch' });
+            }
+            const email = emailCodes.consume({ ...req.body, purpose: 'reset-password', principal: '', ip: req.ip || 'unknown' });
+            const account = await service.resetPasswordByVerifiedEmail(email, req.body.newPassword);
+            await centerSessions.applyAccountChange(account.identityId, undefined, account.updatedAt);
+            await dependencies.onPlayerCenterSessionsRevoked?.({ identityId: account.identityId });
+            clearPlayerCenterCookie(req, res);
+            return res.json({ success: true, loginName: account.loginName });
+        } catch (error) { return emailFailure(res, error); }
+    });
+
+    app.post('/api/player-center/account/steam', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+        const session = await requirePlayerCenterSession(req, res);
+        if (!session) return;
+        const keys = [`ip:${req.ip || 'unknown'}`, `account:${session.identityId}`];
+        if (bindingGuard.check(keys).blocked) return res.status(429).json({ success: false, error: 'rate_limited' });
+        const ticket = dependencies.consumeGameLoginTicket?.(req.body?.code);
+        if (!ticket) {
+            bindingGuard.recordFailure(keys);
+            return res.status(400).json({ success: false, error: 'game_code_invalid' });
+        }
+        try {
+            await service.bindVerifiedGameIdentity(session.identityId, ticket.steamId, ticket.name);
+            bindingGuard.clear(keys);
+            return res.json({ success: true, profile: playerCenterProfile(session.identityId) });
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : '';
+            return res.status(409).json({ success: false, error: ['steam_identity_in_use', 'steam_already_bound'].includes(reason) ? reason : 'steam_binding_failed' });
+        }
+    });
 
     app.get('/api/public/auth-capabilities', (req, res) => {
         const deviceAuthAvailable = deviceAuthAllowed(req);
@@ -399,35 +532,30 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         }
     });
 
-    app.post('/api/account-recovery/game-code', async (req, res) => {
+    app.post('/api/account-recovery/game-code', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+        const keys = [`ip:${req.ip || 'unknown'}`];
+        if (bindingGuard.check(keys).blocked) return res.status(429).json({ success: false, error: 'rate_limited' });
         const proof = dependencies.consumeGameLoginTicket?.(req.body?.gameCode);
         if (!proof) {
+            bindingGuard.recordFailure(keys);
             return res.status(401).json({ success: false, error: 'game_code_invalid_or_expired' });
         }
         try {
+            bindingGuard.clear(keys);
+            const identity = service.findIdentityBySteamId(proof.steamId);
+            const existingAccount = identity ? service.getLoginAccount(identity.identityId) : undefined;
+            if (!existingAccount) return res.status(400).json({ success: false, error: 'account_registration_on_web' });
+            if (existingAccount.emailVerifiedAt) return res.status(400).json({ success: false, error: 'use_email_recovery' });
             const result = await service.openOrBeginAccountRecovery({
                 steamId: proof.steamId,
                 steamNickname: proof.name,
+                existingOnly: true,
             });
-            if (result.kind === 'created') {
-                const account = service.getLoginAccount(result.identityId)!;
-                const issued = bootstrapTickets.issue({
-                    identityId: result.identityId,
-                    accountUpdatedAt: account.updatedAt,
-                }, 30_000);
-                return res.json({
-                    success: true,
-                    flow: 'created',
-                    credentials: {
-                        loginName: result.loginName,
-                        initialPassword: result.initialPassword,
-                    },
-                    sessionBootstrapTicket: issued.ticket,
-                    sessionBootstrapExpiresAt: issued.expiresAt,
-                });
-            }
             if (result.kind === 'account_disabled') {
                 return res.status(403).json({ success: false, error: 'account_disabled' });
+            }
+            if (result.kind !== 'recovery_required') {
+                return res.status(400).json({ success: false, error: 'account_registration_on_web' });
             }
             const issued = recoveryTickets.issue({ identityId: result.identityId }, 10 * 60 * 1000);
             return res.json({
@@ -438,6 +566,9 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
                 recoveryTicketExpiresAt: issued.expiresAt,
             });
         } catch (error) {
+            if (error instanceof Error && ['use_email_recovery', 'account_registration_on_web'].includes(error.message)) {
+                return res.status(400).json({ success: false, error: error.message });
+            }
             if (error instanceof Error && error.message === 'account_disabled') {
                 return res.status(403).json({ success: false, error: 'account_disabled' });
             }
@@ -445,7 +576,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         }
     });
 
-    app.post('/api/account-recovery/complete', async (req, res) => {
+    app.post('/api/account-recovery/complete', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
         if (req.body?.newPassword !== req.body?.confirmPassword) {
             return res.status(400).json({ success: false, error: 'password_confirmation_mismatch' });
         }
@@ -457,6 +588,9 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         const recovery = recoveryTickets.consume(req.body?.recoveryTicket);
         if (!recovery) {
             return res.status(401).json({ success: false, error: 'recovery_ticket_invalid_or_expired' });
+        }
+        if (service.getLoginAccount(recovery.identityId)?.emailVerifiedAt) {
+            return res.status(400).json({ success: false, error: 'use_email_recovery' });
         }
         try {
             const result = await service.completeAccountRecovery({

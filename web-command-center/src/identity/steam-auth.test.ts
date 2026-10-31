@@ -8,7 +8,7 @@ import { SteamOpenIdFlowStore, verifySteamOpenIdAssertion } from './steam-openid
 
 const steamId = '76561198000010901';
 
-test('Steam-only account reuses the trusted identity, never creates a password, and may join explicitly', async (t) => {
+test('historical Steam-only account reuses its identity but needs a CS2 game binding before joining', async (t) => {
     const dir = path.resolve(__dirname, '..', '..', 'runtime', `steam-identity-${process.pid}-${Date.now()}`);
     const store = new IdentityStore(path.join(dir, 'identity.json'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -20,6 +20,8 @@ test('Steam-only account reuses the trusted identity, never creates a password, 
     assert.equal(first.account.passwordState, 'steam_only');
     assert.equal(first.account.password, undefined);
     assert.equal(service.listMemberships('current-match').length, 0);
+    assert.equal((await service.joinPlayerCenterMatch(first.identity.identityId, 'current-match')).ok, false);
+    await service.bindVerifiedGameIdentity(first.identity.identityId, steamId, 'Bound player');
     assert.equal((await service.joinPlayerCenterMatch(first.identity.identityId, 'current-match')).ok, true);
     const token = await service.issueDeviceToken(first.identity.identityId, 'desktop');
     assert.equal((await service.authenticatePlayerCenterDeviceToken(token.rawToken)).ok, true);

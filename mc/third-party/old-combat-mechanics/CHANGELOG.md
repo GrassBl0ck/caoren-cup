@@ -1,0 +1,265 @@
+# Changelog
+
+## [2.8.0](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.7.0...v2.8.0) (2026-10-26)
+
+This release requires Paper or a compatible fork and adds projectile launch options, golden apple cooldown indicators and improved damage tooltips, alongside combat and compatibility fixes.
+
+### Breaking compatibility change
+
+- **Paper or a compatible fork is now required.** Plain Spigot and CraftBukkit are no longer supported and the plugin stops with an explanatory message before loading combat modules. The Minecraft support range remains 1.9 to latest, with Paper 1.9.4 used for the 1.9 family. Folia support is not included.
+
+### Features and configuration
+
+- Added three independently selectable projectile modules: `old-projectile-trajectory` restores legacy launch trajectories, `projectile-shoot-offset` restores legacy launch positions, and `relative-projectile-velocity` removes inherited shooter movement. All three are disabled by default. Enabled `old-potion-throwing` continues to control splash-potion launches independently. Unsupported servers preserve native launches; the launch-position fallback may approximate the first collision.
+- Added `projectile-launch.custom-bows` for additional native bow materials registered by server forks. Vanilla bows remain eligible, and the setting does not turn other items into bows. [#970](https://github.com/kernitus/BukkitOldCombatMechanics/issues/970).
+- Added optional golden apple cooldown overlays through `old-golden-apples.cooldown.show-item-cooldown`, disabled by default. On supported servers with separate normal and enchanted apple materials, the native indicator shows the remaining cooldown and prevents eating that apple type until it expires. [#966](https://github.com/kernitus/BukkitOldCombatMechanics/issues/966).
+- Tool damage tooltips can now show the configured damage in the native attack-damage line on supported Paper versions, without changing combat attributes. `old-tool-damage.tooltip.enabled` controls both native display and lore; `tooltip.native-attribute` selects the native display where available. Custom attribute components retain their existing display and use the lore fallback. [#962](https://github.com/kernitus/BukkitOldCombatMechanics/issues/962).
+- Added independent Paper sword-blocking reduction settings, `sword-blocking.generalDamageReductionAmount` and `generalDamageReductionPercentage`. Each omitted setting inherits its shield counterpart; actual shields and the legacy temporary-shield fallback retain their existing settings. [#975](https://github.com/kernitus/BukkitOldCombatMechanics/pull/975).
+
+### Fixes
+
+- Fixed incorrect melee and critical-hit damage on newer Paper builds, including 26.3, when the server resets attack cooldown before damage is processed.
+- Corrected stronger repeated hits during damage immunity on newer Paper, including armour and absorption calculations, while preserving other plugins' damage adjustments.
+- Fixed `old-armour-durability` applying ordinary-hit armour wear to explosions reported as custom damage on newer Paper. Explosions retain native armour wear, while ordinary hits still use the configured reduction.
+- Fixed repeated player-attributed custom damage, such as `/damage ... by <player>`, incorrectly increasing when the damage type bypasses hit immunity. Custom damage also retains its supplied amount instead of being recalculated as a weapon attack. [#968](https://github.com/kernitus/BukkitOldCombatMechanics/issues/968).
+- Fixed fractional potion durations being truncated to whole seconds. Durations now retain fractional seconds and round to the nearest game tick. [#973](https://github.com/kernitus/BukkitOldCombatMechanics/issues/973).
+- Corrected blocking calculations for fractional damage and prevented OCM's tiny fishing and projectile knockback hits from being amplified by blocking.
+- Corrected fishing-rod knockback direction and strength, prevented duplicate melee knockback, and preserved cancellation by other plugins.
+- Restored legacy arrow base knockback where the server exposes the required knockback events, while preserving native Punch enchantment effects. Older servers without those events retain native arrow knockback.
+- Corrected configured health-regeneration intervals and exhaustion handling, while preserving other plugins' changes to regeneration rates and healing events.
+- Fixed temporary sword-blocking shields remaining after a reload disables the feature, without replacing unrelated offhand items.
+- Fixed Paper sword blocking falling back unnecessarily when public item APIs work but internal compatibility code is unavailable. This addresses a related compatibility problem identified during [#976](https://github.com/kernitus/BukkitOldCombatMechanics/issues/976); the reported resource-pack visual glitch remains unverified.
+
+### Compatibility
+
+- Unrelated combat modules now remain available if PacketEvents fails. Warnings identify affected attack-sound suppression, sweep-particle suppression or sword client detection.
+- Fishing-hook gravity and hooked targets now use available public APIs, retaining older-server fallbacks and the existing scheduled gravity correction.
+- Known legacy limitations remain: on Paper 1.12, attacks triggered inside another damage handler and synthetic damage events can confuse attack-cooldown tracking. Paper 1.9.4 also retains known same-tick cooldown and potion-affected sword-sweep inaccuracies.
+
+Report issues on [GitHub](https://github.com/kernitus/BukkitOldCombatMechanics/issues).
+
+## [2.7.0](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.6.0...v2.7.0) (2026-10-03)
+
+This release adds configurable splash-potion throwing, fishing gravity and knockback friction, improves combat damage calculations, and restores compatibility with Minecraft 26.3.
+
+### Configuration
+
+- Added `old-potion-throwing` to restore 1.8-style player splash-potion launches independently of `old-potion-effects`. Configure launch speed, angles, position offsets, gravity and whether potions inherit player movement. The module is included in the default `old` modeset; lingering potions, witches and dispensers keep their native launches. [#844](https://github.com/kernitus/BukkitOldCombatMechanics/issues/844).
+- Added `fishing-rod-velocity.gravity`, defaulting to the 1.8 value of `0.04`, to adjust how quickly fishing hooks fall while preserving native water behaviour.
+- Added `old-player-knockback.knockback-friction` to control how much existing velocity remains before each hit adds knockback. The default `2.0` retains half the velocity on each axis and preserves the previous behaviour. [#847](https://github.com/kernitus/BukkitOldCombatMechanics/issues/847).
+
+### Fixes
+
+- Fixed Weakness reducing attack damage twice when OCM recalculates damage. Related to [#890](https://github.com/kernitus/BukkitOldCombatMechanics/issues/890).
+- Preserved native sword-sweep damage on servers that identify sweep attacks separately, while retaining OCM's defence and hit-immunity handling. Sweeping Edge still uses the server's native weapon damage, so it may differ from OCM's configured primary-hit damage. Bukkit 1.9 retains the previous sweep handling. Related to [#890](https://github.com/kernitus/BukkitOldCombatMechanics/issues/890).
+- Corrected legacy attack-cooldown tracking between attacks in the same tick on servers that identify sweep attacks separately. Bukkit 1.9 retains its existing per-tick fallback. Related to [#890](https://github.com/kernitus/BukkitOldCombatMechanics/issues/890).
+- Fixed critical-hit calculations when Purpur uses a custom critical multiplier, including after a Purpur reload. [#833](https://github.com/kernitus/BukkitOldCombatMechanics/issues/833).
+- Made armour, protection enchantments, Resistance and shield projectile settings respect damage-source tags where the server exposes them, including custom damage types. Related to [#864](https://github.com/kernitus/BukkitOldCombatMechanics/issues/864).
+- Fixed excess damage when Resistance should fully absorb a hit, and restored Resistance calculations on Bukkit 1.9. Related to [#621](https://github.com/kernitus/BukkitOldCombatMechanics/issues/621) and [#864](https://github.com/kernitus/BukkitOldCombatMechanics/issues/864).
+- Fixed defence calculations after shield damage reduction.
+- Preserved hit-immunity history when a later damage event is cancelled, and corrected combat-cache expiry after cleanup tasks restart.
+- Fixed damage-handler ordering after reloading with different modules enabled.
+- Prevented fishing-rod knockback when its damage event is cancelled.
+- Preserved exhaustion changes made by other plugins during legacy regeneration.
+
+### Compatibility
+
+- Restored Minecraft 26.3 compatibility. [#955](https://github.com/kernitus/BukkitOldCombatMechanics/pull/955).
+
+Report issues on [GitHub](https://github.com/kernitus/BukkitOldCombatMechanics/issues).
+
+## [2.6.0](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.5.1...v2.6.0) (2026-09-01)
+
+This release adds optional per-modeset permissions and improves item handling when players change hotbar slots or swap hands. It also fixes inventory compatibility errors and prevents sword item data from disconnecting players when shared through chat plugins.
+
+### Configuration
+
+- Added optional access control for individual modesets. Enable `mode-permissions.enabled` and grant `oldcombatmechanics.modeset.<modeset>` to decide which modesets each player may select. Tab completion, commands, joining, and changing worlds respect these permissions. The option is disabled by default, preserving existing behaviour. Related to [#905](https://github.com/kernitus/BukkitOldCombatMechanics/issues/905).
+
+### Fixes
+
+- Fixed attack-range and per-item attack cooldown handling when players change hotbar slots or swap hands. OCM now applies settings to the new main-hand item and restores a spear's native reach after removing its range override. Fixes [#925](https://github.com/kernitus/BukkitOldCombatMechanics/issues/925) and [#939](https://github.com/kernitus/BukkitOldCombatMechanics/pull/939).
+
+- Fixed inventory compatibility errors that could produce repeated stack traces when `disable-offhand` processed inventory clicks on some server versions. Sword-blocking hand swaps also use safer inventory-view tracking. Fixes [#911](https://github.com/kernitus/BukkitOldCombatMechanics/issues/911).
+
+- Fixed Paper sword-blocking item data using an invalid duration when serialised by item-chat plugins. Sharing a sword through plugins such as InteractiveChat no longer disconnects recipients because of a negative consumable duration. Fixes [#937](https://github.com/kernitus/BukkitOldCombatMechanics/issues/937) via [#938](https://github.com/kernitus/BukkitOldCombatMechanics/pull/938).
+
+## [2.5.1](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.5.0...v2.5.1) (2026-07-02)
+
+This release focuses on compatibility and crash fixes for newer Paper/Purpur versions, NPC-style entities, sword blocking, armour calculations, and per-item attack cooldowns.
+
+### Fixes
+
+- Fixed sword blocking on Paper/Purpur 26.1.x, where the Paper data component path could fail and OCM would fall back to the shield-swap behaviour instead of the intended sword blocking animation and damage reduction. Fixes [#892](https://github.com/kernitus/BukkitOldCombatMechanics/issues/892) via [#898](https://github.com/kernitus/BukkitOldCombatMechanics/pull/898).
+
+- Fixed crashes and error spam when other plugins expose offline or NPC-like `HumanEntity`/player-shaped entities during combat, potion, shield, knockback, and module lookups. OCM now ignores those offline player-shaped entities instead of treating them as online players. Fixes [#893](https://github.com/kernitus/BukkitOldCombatMechanics/issues/893).
+
+- Fixed explosion and armour-strength calculations on newer versions by falling back to equipped armour modifiers when the expected damage modifier data is unavailable. This prevents armour/explosion damage from being reduced incorrectly in worlds or modes where OCM should not be applying old armour behaviour. Fixes [#861](https://github.com/kernitus/BukkitOldCombatMechanics/issues/861).
+
+- Restored legacy compatibility for old armour strength and old fishing knockback handling, including cases where older server APIs do not expose newer damage or projectile data in the same way.
+
+- Fixed spear attack cooldowns so configured spear speeds no longer produce negative or stuck cooldown values. Fixes [#904](https://github.com/kernitus/BukkitOldCombatMechanics/issues/904).
+
+- Fixed damage pipeline registration so old armour strength, sword blocking, and vanilla damage types that bypass cooldown continue to be handled correctly when only the relevant modules are enabled. Related to [#864](https://github.com/kernitus/BukkitOldCombatMechanics/issues/864).
+
+- Improved Minecraft/Paper version parsing so OCM tolerates noisy server version strings instead of failing compatibility checks on unusual fork/version formats.
+
+## [2.5.0](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.4.0...v2.5.0) (2026-05-23)
+
+
+### Highlights
+
+* Added per-item attack cooldown support for items such as maces and spears, closing [#856](https://github.com/kernitus/BukkitOldCombatMechanics/issues/856).
+* Added default world modesets, including migration for existing configurations, to make configuration quicker and easier when you have lots of worlds.
+* Added build commit details to version output to make support reports and deployed builds easier to identify.
+
+
+### API and integrations
+
+* Added API controls for per-player module overrides and modesets, plus player state change events, documentation, and examples for integrations that need to react to combat-mode changes.
+* Validated bulk module override updates before applying them, avoiding partial or inconsistent per-player override state.
+
+
+### Compatibility
+
+* Improved attack-range support on Paper by detecting data component availability instead of relying on version assumptions.
+* Reworked compatibility checks and optional API fallbacks to use capability detection and safer version comparisons.
+
+
+### Fixes
+
+* Fixed mixed-mode combat handling so armour strength and shield blocking use the defender's modeset, while tool damage uses the attacker's modeset.
+* Fixed explosion defence applying the wrong modeset ([#861](https://github.com/kernitus/BukkitOldCombatMechanics/issues/861)).
+* Fixed no-knockback handling for MythicMobs damage ([#860](https://github.com/kernitus/BukkitOldCombatMechanics/issues/860)).
+* Fixed damage types with `bypasses_cooldown` incorrectly interacting with attack cooldown logic ([#864](https://github.com/kernitus/BukkitOldCombatMechanics/issues/864)).
+* Fixed stale stored world modesets being reused after world or configuration changes ([#865](https://github.com/kernitus/BukkitOldCombatMechanics/issues/865)).
+
+## [2.4.0](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.3.0...v2.4.0) (2026-03-08)
+
+
+### Features
+
+* togglable paper sword blocking ([5d3887d](https://github.com/kernitus/BukkitOldCombatMechanics/commit/5d3887d5b18849ec150cabbd459e66104708dda3))
+
+
+### Bug Fixes
+
+* don't overwrite swords on every click [#843](https://github.com/kernitus/BukkitOldCombatMechanics/issues/843) ([4323853](https://github.com/kernitus/BukkitOldCombatMechanics/commit/432385320c418c0e46df6869e56af051629bfdab))
+* **inventory:** harden stale deferred item mutation paths ([a92664d](https://github.com/kernitus/BukkitOldCombatMechanics/commit/a92664d293af0dd5fd445ca7db47e078386affd7))
+* **reflection:** tighten chooser compatibility fallback ([f383340](https://github.com/kernitus/BukkitOldCombatMechanics/commit/f3833406e4b471a3d89f5e1c5ed8ada9d1d3e1ae))
+* strip sword consumable component ([4624ac0](https://github.com/kernitus/BukkitOldCombatMechanics/commit/4624ac0c422d7f05835cd511b701026769917292))
+* **sword-blocking:** clear sword consumable components on reload when disabled ([b887a28](https://github.com/kernitus/BukkitOldCombatMechanics/commit/b887a28a95b07efa5ec641660aee590207a0d50d)), closes [#845](https://github.com/kernitus/BukkitOldCombatMechanics/issues/845)
+* **sword-blocking:** fall back to shield for pre-1.20.5 clients ([388bee5](https://github.com/kernitus/BukkitOldCombatMechanics/commit/388bee573169a45a27c41558a946e493880677e7)), closes [#842](https://github.com/kernitus/BukkitOldCombatMechanics/issues/842)
+* **sword-blocking:** harden inventory fail-safes to prevent ghosting ([8889bfe](https://github.com/kernitus/BukkitOldCombatMechanics/commit/8889bfeb467c9f64f4d35a2d35e8456f179c35d1))
+* **sword-blocking:** harden legacy death shield drop reconciliation ([2bb730e](https://github.com/kernitus/BukkitOldCombatMechanics/commit/2bb730e5c223da5c1cd73c91a093c86d3dedefbb))
+* **sword-blocking:** prevent GUI click/drag item rewrites & fallback unknown clients to shield ([cfc596c](https://github.com/kernitus/BukkitOldCombatMechanics/commit/cfc596c3d674fd99a9c07b4c7c07c354d58fc755))
+* **sword-blocking:** prevent legacy fallback from cancelling unrelated shield interactions ([727fa97](https://github.com/kernitus/BukkitOldCombatMechanics/commit/727fa97b4e904ac06514170aae27ba1bc91dbb8b))
+* **sword-blocking:** restore offhand item for pre-1.20.5 fallback clients ([68073e8](https://github.com/kernitus/BukkitOldCombatMechanics/commit/68073e876dffa853329c414d156086fe1c76b3fd))
+* **sword-blocking:** sweep stale consumable state on join/quit/world ([96d6981](https://github.com/kernitus/BukkitOldCombatMechanics/commit/96d698145e9d8f1543b272adf87d5026076de927))
+
+## [2.3.0](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.2.0...v2.3.0) (2026-01-24)
+
+
+### Features
+
+* 1.8 hitbox ([5cbd93d](https://github.com/kernitus/BukkitOldCombatMechanics/commit/5cbd93d89dde101dd7e750d4ee13e733b6dfd4a2)), closes [#69](https://github.com/kernitus/BukkitOldCombatMechanics/issues/69)
+* always & disabled modules lists ([5f7bf12](https://github.com/kernitus/BukkitOldCombatMechanics/commit/5f7bf127412e2675294d27703ac6562a4c8e0c9d))
+* always & disabled modules lists ([18dd6e1](https://github.com/kernitus/BukkitOldCombatMechanics/commit/18dd6e17aeb5e391fbb5704c0726d05e0b676971))
+* copper tools support [#822](https://github.com/kernitus/BukkitOldCombatMechanics/issues/822) [#823](https://github.com/kernitus/BukkitOldCombatMechanics/issues/823) ([47ffa96](https://github.com/kernitus/BukkitOldCombatMechanics/commit/47ffa963ecc8619f064b98054d35df81f89a682d))
+* custom trident & mace damage ([be70c5b](https://github.com/kernitus/BukkitOldCombatMechanics/commit/be70c5bb7756699fe4e3cb5bced450df3308f195)), closes [#757](https://github.com/kernitus/BukkitOldCombatMechanics/issues/757)
+* item damage lore ([0ca855a](https://github.com/kernitus/BukkitOldCombatMechanics/commit/0ca855a21634c933ab0626770a74f756e57849fe)), closes [#775](https://github.com/kernitus/BukkitOldCombatMechanics/issues/775)
+* kotlin integration tests ([c63c940](https://github.com/kernitus/BukkitOldCombatMechanics/commit/c63c940fcc292d4db3a27185a613a01e7c5c04f0))
+* switch from protocollib to packetevents ([44afce1](https://github.com/kernitus/BukkitOldCombatMechanics/commit/44afce1a0f01a0ad54b39662e3597a8e371c5454)), closes [#790](https://github.com/kernitus/BukkitOldCombatMechanics/issues/790)
+* sword blocking animation [#769](https://github.com/kernitus/BukkitOldCombatMechanics/issues/769) ([8596c9d](https://github.com/kernitus/BukkitOldCombatMechanics/commit/8596c9da58dc2167d05ac878d4a7809014ff02d8))
+* warn on unknown effects, enchants, etc ([fa828d3](https://github.com/kernitus/BukkitOldCombatMechanics/commit/fa828d3469ca18b51ffd0871bd8e510f0c831d1c))
+
+
+### Bug Fixes
+
+* 'disable-offhand' module working even if disabled ([ecca0b5](https://github.com/kernitus/BukkitOldCombatMechanics/commit/ecca0b56d6f8c1d9b2e96d190ae2098dfeb10fc4))
+* `disable-offhand` handling on modeset change ([54aaf0c](https://github.com/kernitus/BukkitOldCombatMechanics/commit/54aaf0c1a0a812c89c39ae0c49fe6300760a8ecc))
+* apply old tool damage to all mobs ([91b121f](https://github.com/kernitus/BukkitOldCombatMechanics/commit/91b121ff009971586c877778e6a75309088ba667)), closes [#735](https://github.com/kernitus/BukkitOldCombatMechanics/issues/735)
+* chorus fruit tp into blocks ([bba1ecb](https://github.com/kernitus/BukkitOldCombatMechanics/commit/bba1ecb62ec9faf1526189f308798d3b25f43cf9)), closes [#748](https://github.com/kernitus/BukkitOldCombatMechanics/issues/748)
+* clear modules list on reload ([ebdfd10](https://github.com/kernitus/BukkitOldCombatMechanics/commit/ebdfd101ae1393dbf97c431726b09ea797cc267d))
+* double strength effect when old-potion-effects disabled ([4cecb64](https://github.com/kernitus/BukkitOldCombatMechanics/commit/4cecb649c8e03c0c2fd593b907da778e3f7dc453)), closes [#781](https://github.com/kernitus/BukkitOldCombatMechanics/issues/781)
+* fire damage overwriting lastDamage ([9af8a0f](https://github.com/kernitus/BukkitOldCombatMechanics/commit/9af8a0fa796513ab88588612f5551c5bf582db32)), closes [#707](https://github.com/kernitus/BukkitOldCombatMechanics/issues/707)
+* legacy (pre-1.11) sweep detection ([2825b35](https://github.com/kernitus/BukkitOldCombatMechanics/commit/2825b35b4c6b0b879389da170e6d85b9441d9799))
+* negative last damage ([1321717](https://github.com/kernitus/BukkitOldCombatMechanics/commit/1321717288ec9624065d86b00aa441f9a1404b52)), closes [#765](https://github.com/kernitus/BukkitOldCombatMechanics/issues/765)
+* only strip consumable on swords ([e01faea](https://github.com/kernitus/BukkitOldCombatMechanics/commit/e01faea183d8387371dbd62e89fb847deb2fc38e)), closes [#841](https://github.com/kernitus/BukkitOldCombatMechanics/issues/841)
+* reflection error on weapon enchant ([10ff4ce](https://github.com/kernitus/BukkitOldCombatMechanics/commit/10ff4ceead5147b87c13ffea1401ef716596b80c)), closes [#840](https://github.com/kernitus/BukkitOldCombatMechanics/issues/840)
+* skip unknown sound packets ([cfa1e58](https://github.com/kernitus/BukkitOldCombatMechanics/commit/cfa1e58b5b5e481e1427458d22a98e487b32a621))
+* unknown particles. ([1408720](https://github.com/kernitus/BukkitOldCombatMechanics/commit/140872008929ecc49918bdf0cc8e40d226957054)), closes [#825](https://github.com/kernitus/BukkitOldCombatMechanics/issues/825)
+* weakness calc on &gt;=1.20 ([f502adb](https://github.com/kernitus/BukkitOldCombatMechanics/commit/f502adbbece03875e491bd1f39e4a45d1f498802))
+* weakness calculations for amplifier &gt; 1 ([d866015](https://github.com/kernitus/BukkitOldCombatMechanics/commit/d86601504eb6d16481e18946cf07e7432039cd92))
+
+
+### Performance
+
+* **attack-cooldown-tracker:** gate sampler by API presence and use HashMap for stable caching ([b605501](https://github.com/kernitus/BukkitOldCombatMechanics/commit/b605501b40d350457d5227ce24c9c9a9522ed1f9))
+* **disable-enderpearl-cooldown:** use HashMap and lazily drop expired cooldown entries ([83ff726](https://github.com/kernitus/BukkitOldCombatMechanics/commit/83ff726c5a9a2c2e6cc16571ce6e2d37123341ab))
+* **fishing-rod-velocity:** replace per-hook gravity tasks with single shared tick runner ([5856bed](https://github.com/kernitus/BukkitOldCombatMechanics/commit/5856bed51830c51b0b6c205cb010fcb8dd9be0ac))
+* **old-armour-durability:** replace per-explosion suppression task with shared 1-tick expiry cleaner ([c7932d6](https://github.com/kernitus/BukkitOldCombatMechanics/commit/c7932d6f0b32966ad38cdb81f8c83b14ca438478))
+* **old-player-regen:** switch to tick-based interval tracking with shared counter task ([4f8df3c](https://github.com/kernitus/BukkitOldCombatMechanics/commit/4f8df3c5d0781240a46a4ed7e1ce10043aafb8d1))
+* **player-knockback:** replace per-hit cleanup tasks with shared 1-tick expiry cleaner ([9667ef5](https://github.com/kernitus/BukkitOldCombatMechanics/commit/9667ef539e033ede2b97fadf309cd805df6900c5))
+* **shield-damage-reduction:** replace per-hit fully-blocked cleanup tasks with shared 1-tick expiry cleaner ([a18b1ef](https://github.com/kernitus/BukkitOldCombatMechanics/commit/a18b1efec039c35b12f2c7c53dcc2be875545b29))
+* **sword-block:** reduce amount of recurring tasks ([a08b5b4](https://github.com/kernitus/BukkitOldCombatMechanics/commit/a08b5b47bc5c1645db885ffca794e3ac7d9592ba))
+* use one task to clear EDBEE map ([11ec51b](https://github.com/kernitus/BukkitOldCombatMechanics/commit/11ec51bd609339b8e41d74ef2d8697c3083a7d5f))
+
+## [2.2.0](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.1.0...v2.2.0) (2025-10-14)
+
+
+### Features
+
+* add fallback sound reflection logic ([1592dc2](https://github.com/kernitus/BukkitOldCombatMechanics/commit/1592dc249870ad3113b924cdebd41cbc36b68ad5))
+
+
+### Bug Fixes
+
+* ocm mode permissions ([e2f0369](https://github.com/kernitus/BukkitOldCombatMechanics/commit/e2f0369f294e250e8cfc474bbd1121498ecf09fe)), closes [#818](https://github.com/kernitus/BukkitOldCombatMechanics/issues/818)
+* update checker versioning logic ([8d88a49](https://github.com/kernitus/BukkitOldCombatMechanics/commit/8d88a49d0fa1e8c7dfa7c48cf66c8399c766d6e0))
+* use reflection for inventory view ([462e536](https://github.com/kernitus/BukkitOldCombatMechanics/commit/462e536628f3df544c9cf0fe42705eff46b7d4f6)), closes [#812](https://github.com/kernitus/BukkitOldCombatMechanics/issues/812)
+
+
+### Documentation
+
+* update issue templates ([5927729](https://github.com/kernitus/BukkitOldCombatMechanics/commit/5927729ea5fcca44a6218b10f40cec3f8ce3d4a3))
+* update issue templates ([09fd3c5](https://github.com/kernitus/BukkitOldCombatMechanics/commit/09fd3c556ad02d25caa875e7dfe5854888a920cf))
+* use yaml issue forms ([fc51924](https://github.com/kernitus/BukkitOldCombatMechanics/commit/fc51924504e3718b9829f4a7deca7a8701000f9f))
+
+## [2.1.0](https://github.com/kernitus/BukkitOldCombatMechanics/compare/v2.0.4...v2.1.0) (2025-08-21)
+
+
+### Features
+
+* compat with 1.21.8 enums ([68c51ab](https://github.com/kernitus/BukkitOldCombatMechanics/commit/68c51ab8803da56f477660af247c37e5171bc581))
+* make config upgrader remove deprecated keys ([e728374](https://github.com/kernitus/BukkitOldCombatMechanics/commit/e72837462fb8c512c9971c1e7d9376c82f37e741))
+* remove deprecated modules ([da3d5f0](https://github.com/kernitus/BukkitOldCombatMechanics/commit/da3d5f0b28990d8f654b8557e68f54f41e8b5a60))
+
+
+### Bug Fixes
+
+* check fishing knockback module enabled when reeling in ([31e3877](https://github.com/kernitus/BukkitOldCombatMechanics/commit/31e3877330cdd820173a5d89e021919b153c6988)), closes [#803](https://github.com/kernitus/BukkitOldCombatMechanics/issues/803)
+* disable attack sounds not working in &gt;1.21 ([b355322](https://github.com/kernitus/BukkitOldCombatMechanics/commit/b355322f9b3f5e1c2b1e889684d6242f08ceee92)), closes [#794](https://github.com/kernitus/BukkitOldCombatMechanics/issues/794)
+* ExceptionInInitialiserError in enchantment compat ([b2379cc](https://github.com/kernitus/BukkitOldCombatMechanics/commit/b2379cc17e309b035c2acb396392723f15ed3ee2)), closes [#782](https://github.com/kernitus/BukkitOldCombatMechanics/issues/782)
+* improve sound packet compatibility ([4ef28fb](https://github.com/kernitus/BukkitOldCombatMechanics/commit/4ef28fb7bd63631fa4b6f0366d23dd1e159aa115)), closes [#780](https://github.com/kernitus/BukkitOldCombatMechanics/issues/780)
+* null pointer in potion compat ([b30e27d](https://github.com/kernitus/BukkitOldCombatMechanics/commit/b30e27ddb32d210371152feee8d337f27ea8f495)), closes [#791](https://github.com/kernitus/BukkitOldCombatMechanics/issues/791)
+* unmentioned worlds modesets not allowed [#792](https://github.com/kernitus/BukkitOldCombatMechanics/issues/792) ([95c9446](https://github.com/kernitus/BukkitOldCombatMechanics/commit/95c9446edbd0fe56bce0864798cf8d1c70865f8b))
+
+
+### Refactoring
+
+* improve fishing knockback cross-version compat ([d119c9f](https://github.com/kernitus/BukkitOldCombatMechanics/commit/d119c9f35e1a89be8fb8d03573041cfc2ae2d418))
+
+## [2.0.4](https://github.com/kernitus/BukkitOldCombatMechanics/compare/2.0.3...v2.0.4) (2024-10-28)
+
+
+### Bug Fixes
+
+* avoid ghost items after sword block restore ([822fb1f](https://github.com/kernitus/BukkitOldCombatMechanics/commit/822fb1fa147fc49266cb9f0668869959e341982e)), closes [#749](https://github.com/kernitus/BukkitOldCombatMechanics/issues/749)
+* don't prevent moving shield to chests in disable offhand module ([b299df2](https://github.com/kernitus/BukkitOldCombatMechanics/commit/b299df2d21ace1c7e88b1ee8fafb297e2a9347e8))
+* error when right clicking air while holding block in &lt;1.13 ([cbc0c4b](https://github.com/kernitus/BukkitOldCombatMechanics/commit/cbc0c4bc8bf0afd56005699ce70f86ec9b637646)), closes [#754](https://github.com/kernitus/BukkitOldCombatMechanics/issues/754)
+* listen to dynamically loaded worlds for modesets ([f5b59d7](https://github.com/kernitus/BukkitOldCombatMechanics/commit/f5b59d7537d410fac35fbb4e0181a61a485ae1a5)), closes [#747](https://github.com/kernitus/BukkitOldCombatMechanics/issues/747)
+* resolve elytras always unequipped by removing out-of-scope module ([07106e6](https://github.com/kernitus/BukkitOldCombatMechanics/commit/07106e61a220ec4137a3de200a393cf6aaa50be7)), closes [#725](https://github.com/kernitus/BukkitOldCombatMechanics/issues/725)
+* fix sword blocking shield ending up in inventory on world change ([8aa3fa3](https://github.com/kernitus/BukkitOldCombatMechanics/commit/8aa3fa33081c1e1b1a48baa484fd6946b275362b)), closes [#753](https://github.com/kernitus/BukkitOldCombatMechanics/issues/753)
+
+Report issues on [GitHub](https://github.com/kernitus/BukkitOldCombatMechanics/issues).

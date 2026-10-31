@@ -19,7 +19,6 @@ from reportlab.platypus import (
     BaseDocTemplate,
     Flowable,
     Frame,
-    KeepTogether,
     LongTable,
     PageBreak,
     PageTemplate,
@@ -291,11 +290,14 @@ def build_story(
         Paragraph('目录', styles['toc_title']),
     ])
 
-    toc = TableOfContents()
+    toc = TableOfContents(tableStyle=TableStyle([
+        ('TOPPADDING', (0, 0), (-1, -1), 1.5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.5),
+    ]))
     toc.levelStyles = [
-        ParagraphStyle('TOC1', fontName='CaorenRulesCJK', fontSize=10, leading=17, leftIndent=0, textColor=colors.HexColor('#142033')),
-        ParagraphStyle('TOC2', fontName='CaorenRulesCJK', fontSize=9, leading=15, leftIndent=14, textColor=colors.HexColor('#475569')),
-        ParagraphStyle('TOC3', fontName='CaorenRulesCJK', fontSize=8.5, leading=14, leftIndent=28, textColor=colors.HexColor('#64748b')),
+        ParagraphStyle('TOC1', fontName='CaorenRulesCJK', fontSize=10, leading=14, leftIndent=0, textColor=colors.HexColor('#142033')),
+        ParagraphStyle('TOC2', fontName='CaorenRulesCJK', fontSize=9, leading=12, leftIndent=14, textColor=colors.HexColor('#475569')),
+        ParagraphStyle('TOC3', fontName='CaorenRulesCJK', fontSize=8.5, leading=11.5, leftIndent=28, textColor=colors.HexColor('#64748b')),
     ]
     story.extend([toc, PageBreak()])
 
@@ -323,7 +325,7 @@ def build_story(
                 widths = [page_width * 0.29, page_width * 0.71]
             else:
                 widths = [page_width / column_count] * column_count
-            table = LongTable(table_data, colWidths=widths, repeatRows=1, splitByRow=1)
+            table = LongTable(table_data, colWidths=widths, repeatRows=1, splitByRow=1, spaceBefore=2 * mm, spaceAfter=3 * mm)
             table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2563eb')),
                 ('GRID', (0, 0), (-1, -1), 0.45, colors.HexColor('#cbd5e1')),
@@ -334,7 +336,7 @@ def build_story(
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
             ]))
-            story.append(KeepTogether([Spacer(1, 2 * mm), table, Spacer(1, 3 * mm)]))
+            story.append(table)
     return story
 
 

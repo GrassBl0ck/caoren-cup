@@ -53,7 +53,20 @@ test('GAME_CODE_LOGIN cannot consume player recovery codes while administrator l
     const session = sessionManager.createInitialSession();
     sessionManager.setSession(session);
     const io = new FakeIo();
-    registerGameCodeLogin({ get() {}, post() {} } as any, io as any, { broadcastState() {} });
+    const routes = new Map<string, any>();
+    registerGameCodeLogin({ get() {}, post(route: string, handler: any) { routes.set(route, handler); } } as any, io as any, { broadcastState() {} });
+    let registerStatus = 200;
+    let registerResponse: any;
+    const registerRes = {
+        status(code: number) { registerStatus = code; return this; },
+        json(body: any) { registerResponse = body; return this; },
+    };
+    await routes.get('/api/plugin/account-register')({ header: () => constants.PLUGIN_TOKEN, body: {
+        steamId: '76561198000000036', name: 'New Player', loginName: 'Should_Not_Register', password: 'not-a-real-password',
+    } }, registerRes);
+    assert.equal(registerStatus, 410);
+    assert.equal(registerResponse.error, 'account_registration_on_web');
+    assert.equal(identityRuntime.lobbyIdentityService.findIdentityBySteamId('76561198000000036'), undefined);
 
     const firstCode = v1333IssueGameLoginCode('76561198000000035', 'Legacy Socket Player');
     const firstSocket = new FakeSocket('first');

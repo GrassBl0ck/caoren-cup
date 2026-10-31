@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const publicDir = path.join(__dirname, '..', 'public');
-const indexPath = path.join(publicDir, 'index.html');
+const indexPath = path.join(publicDir, '..', 'pages', 'cs.html');
 const cssPath = path.join(publicDir, 'css', 'update-announcements.css');
 const readStatePath = path.join(publicDir, 'js', 'update-announcement-read-state.js');
 const publicJsPath = path.join(publicDir, 'js', 'update-announcement-public.js');

@@ -38,29 +38,29 @@ jobs:
             10.0.x
 
       - name: Restore game plugin
-        working-directory: game-plugin
+        working-directory: cs/game-plugin
         run: dotnet restore
 
       - name: Build game plugin
-        working-directory: game-plugin
+        working-directory: cs/game-plugin
         run: dotnet build -c Release --no-restore
 
       - name: Restore bridge plugin
-        working-directory: web-command-center/CaorenCupPlugin
+        working-directory: cs/web-bridge/CaorenCupPlugin
         run: dotnet restore
 
       - name: Build bridge plugin
-        working-directory: web-command-center/CaorenCupPlugin
+        working-directory: cs/web-bridge/CaorenCupPlugin
         run: dotnet build -c Release --no-restore
 
       - name: Test split game plugins
-        run: dotnet test game-plugin/CaorenCup.sln -c Release --no-restore
+        run: dotnet test cs/game-plugin/CaorenCup.sln -c Release --no-restore
       - name: Test independent duel
-        run: dotnet test duel-plugin.Tests/CaorenDuel.Tests.csproj -c Release
+        run: dotnet test cs/duel-plugin.Tests/CaorenDuel.Tests.csproj -c Release
       - name: Test bridge
-        run: dotnet test web-command-center/CaorenCupPlugin.Tests/CaorenCupPlugin.Tests.csproj -c Release
+        run: dotnet test cs/web-bridge/CaorenCupPlugin.Tests/CaorenCupPlugin.Tests.csproj -c Release
       - name: Test WeaponPaints
-        run: dotnet test game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/tests/CaorenWeaponPaints.Tests.csproj -c Release
+        run: dotnet test cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/tests/CaorenWeaponPaints.Tests.csproj -c Release
 
   minigames-test:
     runs-on: ubuntu-latest
@@ -73,21 +73,38 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore mini games plugin
-        working-directory: mini-games-plugin
+        working-directory: cs/mini-games-plugin
         run: dotnet restore
 
       - name: Test mini games plugin
-        working-directory: mini-games-plugin
+        working-directory: cs/mini-games-plugin
         run: dotnet test --no-restore --logger "console;verbosity=minimal"
 
       - name: Build mini games plugin
-        working-directory: mini-games-plugin
+        working-directory: cs/mini-games-plugin
         run: dotnet build -c Release --no-restore --no-incremental -warnaserror
 
       - name: Verify mini games package tree
         shell: pwsh
-        working-directory: mini-games-plugin
+        working-directory: cs/mini-games-plugin
         run: >-
           ./scripts/Verify-Package.ps1
           -OutputPath ./src/CS2MiniGames/bin/Release/net8.0
+
+  mc-static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check Cushion Wars map geometry and data-pack boundaries
+        run: |
+          python mc/cushion-wars-a/tools/verify_map.py
+          python mc/cushion-wars-a/tools/verify_pack.py
+      - name: Test pinned map resource extraction safety
+        run: python mc/minigames/test_fetch_assets.py
+      - name: Test MC package content and output safety
+        run: python -B scripts/test_package_caoren_mc.py
 

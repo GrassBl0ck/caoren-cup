@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { generateRandomInitialPassword, generateRandomLoginName, validateLoginName } from './account-foundation';
 import { IdentityStore } from './identity-store';
 import { hashAccountPassword, verifyAccountPassword } from './password-auth';
+import { normalizeEmail } from './email-address';
 import {
     DeviceTokenRecord,
     IdentityRecord,
@@ -29,6 +30,7 @@ interface LoginAccountAuthenticationInput {
 interface AccountRecoveryStartInput {
     steamId: unknown;
     steamNickname: unknown;
+    existingOnly?: boolean;
 }
 
 interface AccountRecoveryCompleteInput {
@@ -82,6 +84,9 @@ export class LobbyIdentityService {
             if (!identity || !account || !account.enabled ||
                 (account.passwordState === 'active' && !account.password)) {
                 return { ok: false as const, reason: 'account_unavailable' as const };
+            }
+            if (!identity.steamId || !identity.gameBoundAt) {
+                return { ok: false as const, reason: 'steam_binding_required' as const };
             }
             const memberships = Object.values(data.memberships).filter((membership) =>
                 membership.sessionId === sessionId && membership.identityId === identityId,
@@ -159,6 +164,88 @@ export class LobbyIdentityService {
         return Object.values(this.store.snapshot().accounts).find((account) => account.loginName === loginName);
     }
 
+    findAccountByEmail(raw: unknown): LoginAccountRecord | undefined {
+        let email: string;
+        try { email = normalizeEmail(raw); } catch { return undefined; }
+        return Object.values(this.store.snapshot().accounts).find((account) => account.email === email && !!account.emailVerifiedAt);
+    }
+
+    // Only call after the server has consumed an email ownership challenge.
+    async registerVerifiedEmailAccount(input: { email: unknown; loginName: unknown; password: unknown }) {
+        const email = normalizeEmail(input.email);
+        const loginName = validateLoginName(input.loginName);
+        const password = await hashAccountPassword(input.password, { now: this.now, randomBytes: this.randomBytes });
+        return this.store.mutate((data) => {
+            if (Object.values(data.accounts).some((account) => account.email === email)) throw new Error('registration_unavailable');
+            if (Object.values(data.accounts).some((account) => account.loginName.toLowerCase() === loginName.toLowerCase())) {
+                throw new Error('login_name_taken');
+            }
+            const now = this.now();
+            const identityId = this.makeId(16);
+            const identity: IdentityRecord = { identityId, displayName: loginName, createdAt: now, updatedAt: now };
+            const account: LoginAccountRecord = {
+                identityId, loginName, enabled: true, passwordState: 'active', password,
+                email, emailVerifiedAt: now, createdAt: now, updatedAt: now,
+            };
+            data.identities[identityId] = identity;
+            data.accounts[identityId] = account;
+            return { identity, account };
+        });
+    }
+
+    async bindVerifiedEmail(input: { identityId: string; email: unknown; currentPassword: unknown }) {
+        const email = normalizeEmail(input.email);
+        const original = this.getLoginAccount(input.identityId);
+        if (!original?.enabled || !original.password || !await verifyAccountPassword(input.currentPassword, original.password)) {
+            throw new Error('current_password_incorrect');
+        }
+        return this.store.mutate((data) => {
+            const account = data.accounts[input.identityId];
+            if (!account?.enabled || account.password?.hash !== original.password?.hash) throw new Error('account_changed');
+            if (account.email) throw new Error('email_already_bound');
+            if (Object.values(data.accounts).some((candidate) => candidate.email === email)) throw new Error('email_unavailable');
+            account.email = email;
+            account.emailVerifiedAt = this.now();
+            account.updatedAt = Math.max(this.now(), account.updatedAt + 1);
+            return account;
+        });
+    }
+
+    async resetPasswordByVerifiedEmail(emailRaw: unknown, newPassword: unknown) {
+        const email = normalizeEmail(emailRaw);
+        const password = await hashAccountPassword(newPassword, { now: this.now, randomBytes: this.randomBytes });
+        return this.store.mutate((data) => {
+            const account = Object.values(data.accounts).find((candidate) => candidate.email === email && !!candidate.emailVerifiedAt);
+            if (!account?.enabled) throw new Error('recovery_unavailable');
+            account.password = password;
+            account.passwordState = 'active';
+            account.updatedAt = Math.max(this.now(), account.updatedAt + 1);
+            for (const token of Object.values(data.deviceTokens)) {
+                if (token.identityId === account.identityId) { token.status = 'revoked'; token.revokedAt = this.now(); }
+            }
+            return account;
+        });
+    }
+
+    // Steam identity comes from a consumed CS2 bridge ticket, never from client form fields.
+    async bindVerifiedGameIdentity(identityId: string, steamIdRaw: unknown, nicknameRaw: unknown) {
+        const steamId = strictSteamId(steamIdRaw);
+        if (!steamId) throw new Error('steam_id_invalid');
+        return this.store.mutate((data) => {
+            const identity = data.identities[identityId];
+            if (!identity || !data.accounts[identityId]?.enabled) throw new Error('account_unavailable');
+            const owner = Object.values(data.identities).find((candidate) => candidate.steamId === steamId);
+            if (owner && owner.identityId !== identityId) throw new Error('steam_identity_in_use');
+            if (identity.steamId && identity.steamId !== steamId) throw new Error('steam_already_bound');
+            identity.steamId = steamId;
+            identity.steamNickname = String(nicknameRaw || '').trim().slice(0, 128) || identity.displayName;
+            identity.displayName = identity.steamNickname;
+            identity.gameBoundAt = this.now();
+            identity.updatedAt = this.now();
+            return identity;
+        });
+    }
+
     async findOrCreateSteamAccount(steamIdRaw: unknown) {
         const steamId = strictSteamId(steamIdRaw);
         if (!steamId) throw new Error('steam_id_invalid');
@@ -222,7 +309,7 @@ export class LobbyIdentityService {
         const identity = this.store.snapshot().identities[account.identityId];
         if (!identity) return { ok: false as const, reason: 'invalid_credentials' as const };
         if (!account.enabled) return { ok: false as const, reason: 'account_disabled' as const };
-        if (!identity.gameBoundAt) return { ok: false as const, reason: 'game_entry_required' as const };
+        if (!identity.gameBoundAt && !account.emailVerifiedAt) return { ok: false as const, reason: 'game_entry_required' as const };
         return { ok: true as const, identity, account };
     }
 
@@ -278,12 +365,16 @@ export class LobbyIdentityService {
         const steamNickname = String(input.steamNickname || '').trim().slice(0, 128) || `Steam ${steamId.slice(-6)}`;
         const snapshot = this.store.snapshot();
         const snapshotIdentity = Object.values(snapshot.identities).find((candidate) => candidate.steamId === steamId);
+        if (input.existingOnly && (!snapshotIdentity || !snapshot.accounts[snapshotIdentity.identityId])) {
+            throw new Error('account_registration_on_web');
+        }
         if (snapshotIdentity && snapshot.accounts[snapshotIdentity.identityId]) {
             const now = this.now();
             return this.store.mutate((data) => {
                 const identity = Object.values(data.identities).find((candidate) => candidate.steamId === steamId);
                 const account = identity ? data.accounts[identity.identityId] : undefined;
                 if (!identity || !account) throw new Error('account_state_changed');
+                if (input.existingOnly && account.emailVerifiedAt) throw new Error('use_email_recovery');
                 identity.steamNickname = steamNickname;
                 identity.gameBoundAt = now;
                 identity.updatedAt = now;
@@ -358,6 +449,7 @@ export class LobbyIdentityService {
             const identity = data.identities[input.identityId];
             const account = data.accounts[input.identityId];
             if (!identity || !account) throw new Error('account_not_found');
+            if (account.emailVerifiedAt) throw new Error('use_email_recovery');
             if (!account.enabled) throw new Error('account_disabled');
             account.password = password;
             account.passwordState = 'active';
@@ -481,7 +573,7 @@ export class LobbyIdentityService {
         const rawToken = `ccdt_${tokenId}.${secret}`;
         await this.store.mutate((data) => {
             const identity = data.identities[identityId];
-            if (!identity?.steamId) throw new Error('identity_not_confirmed');
+            if (!identity || (!identity.steamId && !data.accounts[identityId]?.emailVerifiedAt)) throw new Error('identity_not_confirmed');
             data.deviceTokens[tokenId] = {
                 tokenId,
                 identityId,
@@ -511,7 +603,7 @@ export class LobbyIdentityService {
             const absoluteExpiresAt = Math.min(token.absoluteExpiresAt, token.createdAt + TOKEN_ABSOLUTE_MS);
             if (now >= idleExpiresAt || now >= absoluteExpiresAt) return { ok: false as const, reason: 'expired' };
             const identity = data.identities[token.identityId];
-            if (!identity?.steamId) return { ok: false as const, reason: 'identity_not_confirmed' };
+            if (!identity || (!identity.steamId && !data.accounts[token.identityId]?.emailVerifiedAt)) return { ok: false as const, reason: 'identity_not_confirmed' };
             const account = data.accounts[token.identityId];
             if (!account) return { ok: false as const, reason: 'account_unavailable' };
             if (!account.enabled) return { ok: false as const, reason: 'account_disabled' };

@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "pack_format": 121,
+    "supported_formats": { "min_inclusive": 121, "max_inclusive": 121 },
+    "description": "草人杯 · Esc 菜单里的跨地图传送入口（只放在 maps/minigames/world/datapacks）"
+  }
+}

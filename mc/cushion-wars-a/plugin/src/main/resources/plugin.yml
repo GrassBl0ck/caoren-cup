@@ -1,0 +1,28 @@
+name: CushionWarsProbe
+version: '0.1.0'
+main: com.caoren.cushionwars.probe.CushionWarsProbePlugin
+api-version: '26.3'
+description: 坐垫战争 P0 能力探针（G01 AP 门禁 / G02 乘坐与下座 / G04 逐箭伤害 / G07 准星血量）
+author: cushion-wars-a
+folia-supported: false
+commands:
+  maps:
+    description: 跨地图切换（Esc 菜单里的“地图传送”走这条命令）
+    usage: /maps <list|goto <地图id>|help>
+  cw:
+    description: 坐垫战争对局命令
+    usage: /cw <join|leave|status|size|start|stop|build|help>
+  cwprobe:
+    description: 坐垫战争 P0 探针命令
+    usage: /cwprobe <help|status|team|ap|shared|item|reset>
+    permission: cushionwars.probe
+permissions:
+  cushionwars.play:
+    description: 允许加入对局
+    default: true
+  cushionwars.admin:
+    description: 允许开局、中止、改人数、建图
+    default: op
+  cushionwars.probe:
+    description: 允许使用探针命令
+    default: op

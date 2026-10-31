@@ -86,7 +86,7 @@ test('failed persistence keeps the previous in-memory state and the write queue 
     assert.equal(store.snapshot().identities.recovered?.displayName, 'Recovered');
 });
 
-test('schema v1 migrates to v3 while preserving identities and memberships and clearing device tokens', async (t) => {
+test('schema v1 migrates to v4 while preserving identities and memberships and clearing device tokens', async (t) => {
     const dir = makeStoreDir('migration');
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const file = path.join(dir, 'identity-store.json');
@@ -99,7 +99,7 @@ test('schema v1 migrates to v3 while preserving identities and memberships and c
     const expectedMemberships = structuredClone(fixture.memberships);
     delete expectedMemberships.membership.claimedSteamId;
 
-    assert.equal(migrated.schemaVersion, 3);
+    assert.equal(migrated.schemaVersion, 4);
     assert.deepEqual(migrated.identities, fixture.identities);
     assert.deepEqual(migrated.memberships, expectedMemberships);
     assert.deepEqual(migrated.deviceTokens, {});
@@ -108,7 +108,7 @@ test('schema v1 migrates to v3 while preserving identities and memberships and c
     assert.equal(migrated.accounts.identity?.password, undefined);
 });
 
-test('a valid schema v1 previous file restores a corrupt primary as schema v3', async (t) => {
+test('a valid schema v1 previous file restores a corrupt primary as schema v4', async (t) => {
     const dir = makeStoreDir('previous-migration');
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const file = path.join(dir, 'identity-store.json');
@@ -118,11 +118,11 @@ test('a valid schema v1 previous file restores a corrupt primary as schema v3', 
     const store = new IdentityStore(file);
     await store.load();
 
-    assert.equal(store.snapshot().schemaVersion, 3);
+    assert.equal(store.snapshot().schemaVersion, 4);
     assert.equal(store.snapshot().identities.identity?.steamId, '76561198000000071');
 });
 
-test('legacy v3 claim and challenge fields load once but are omitted from the next write', async (t) => {
+test('v3 migration preserves the original backup and removes obsolete claim fields from v4', async (t) => {
     const dir = makeStoreDir('legacy-v3-rewrite');
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const file = path.join(dir, 'identity-store.json');
@@ -173,8 +173,10 @@ test('legacy v3 claim and challenge fields load once but are omitted from the ne
 
     const store = new IdentityStore(file);
     await store.load();
-    assert.deepEqual(store.snapshot().memberships.membership?.challenge, legacyMembership.challenge);
-    assert.equal(store.snapshot().memberships.membership?.claimedSteamId, '76561198000000071');
+    assert.equal(store.snapshot().schemaVersion, 4);
+    assert.equal(store.snapshot().memberships.membership?.challenge, undefined);
+    assert.equal(store.snapshot().memberships.membership?.claimedSteamId, undefined);
+    assert.deepEqual(JSON.parse(fs.readFileSync(store.previousPath, 'utf8')).memberships.membership.challenge, legacyMembership.challenge);
 
     await store.mutate((data) => {
         data.identities.identity.updatedAt = 21;

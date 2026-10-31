@@ -1,0 +1,38 @@
+# ===
+# == IDE settings files
+# ===
+
+# IntelliJ
+/*.eml
+/*.iml
+/.idea
+
+# Eclipse
+/.project
+/.classpath
+/.settings
+
+# ===
+# == Compilation output / working files
+# ===
+out
+builds
+target
+META-INF
+/build/
+# Caoren Cup integration (2026-10-31): retain the upstream Gradle Wrapper sources.
+# Original rule was /gradle/; only the wrapper directory is included here.
+/gradle/*
+!/gradle/wrapper/
+/.gradle/
+.gradle-user/
+/.gradle-cache/
+/.gradle-local/
+
+kls-classpath
+kls_database.db
+/run/
+/bin/
+.opencode/
+.vtcode/
+vtcode.toml

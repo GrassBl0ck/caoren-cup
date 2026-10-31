@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "oldBaseline": "1.8.9",
+  "modernBaseline": "26.3",
+  "status": "测试协议已准备；原版战斗数值尚未采集",
+  "fixture": {
+    "purpose": "原版对照测试，不是正式小游戏地图",
+    "platform": {"minX": -8, "maxX": 8, "minZ": -8, "maxZ": 8, "groundY": 199, "material": "minecraft:stone"},
+    "players": 2,
+    "mode": "survival",
+    "startingHealth": 20,
+    "initialVelocity": "静止",
+    "effects": "无药水效果",
+    "damageUnit": "HP，2HP等于一颗心",
+    "observations": ["初末生命值", "装备与耐久", "攻击时间间隔", "伤害事件", "受击位移", "服务器版本与运行条件"]
+  },
+  "cases": [
+    {"id": "B01", "name": "钻石剑普通攻击、无护甲", "setup": "地面静止、未疾跑、无附魔；现代版等待攻击完全恢复", "expected": "由各自原版环境采集", "status": "NOT_RUN"},
+    {"id": "B02", "name": "钻石剑攻击完整钻石护甲", "setup": "无附魔、无状态、无吸收生命", "expected": "由各自原版环境采集", "status": "NOT_RUN"},
+    {"id": "B03", "name": "攻击冷却与连续点击", "setup": "分别记录完整冷却和较短间隔，不混合两套规则数据", "expected": "由各自原版环境采集", "status": "NOT_RUN"},
+    {"id": "B04", "name": "暴击条件与疾跑交互", "setup": "区分地面、下落、疾跑状态，固定其他条件", "expected": "由各自原版环境采集", "status": "NOT_RUN"},
+    {"id": "B05", "name": "受伤无敌期间同tick第二次攻击", "setup": "记录实际攻击次数及原版是否产生伤害事件；先建立可重复的输入方法", "expected": "待原版对照，不能照搬上游已禁用用例的假定", "status": "NOT_RUN"},
+    {"id": "B06", "name": "受伤无敌期间略高伤害", "setup": "固定前次伤害、后次伤害和间隔", "expected": "待原版对照", "status": "NOT_RUN"},
+    {"id": "B07", "name": "原版零伤害与伤害历史", "setup": "先明确对应版本可重现的零伤害条件", "expected": "待原版对照", "status": "NOT_RUN"},
+    {"id": "B08", "name": "钓鱼竿击退方向", "setup": "记录甩竿者、鱼钩、受击者的位置与初速度；与阶段02失败项对应", "expected": "待1.8.9原版对照", "firstMeleePrototype": false, "status": "NOT_RUN"}
+  ]
+}

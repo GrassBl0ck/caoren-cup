@@ -65,3 +65,13 @@ release-build/
 release-output/
 runtime/
 web-command-center/runtime/
+
+# Preserve the existing local-only boundaries after the CS directory move.
+/cs/game-plugin/Features/ParticleMenu/
+/cs/game-plugin.Tests/ParticleMenu/
+/cs/game-plugin/Diagnostics/
+/cs/game-plugin.Tests/Diagnostics/
+
+# Task-local operational and deployment records are retained outside public source.
+/tasks/TASK-20261031-CS-MC-PORTAL.md
+/handoffs/TASK-20261031-CS-MC-PORTAL-report.md

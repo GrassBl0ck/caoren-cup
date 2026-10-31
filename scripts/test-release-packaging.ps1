@@ -24,7 +24,7 @@ function Put([string]$Relative, [string]$Text) {
 }
 
 $manifest = Read-ServerPackageManifest $repo
-Check (@($manifest.plugins).Count -eq 13) '13 buildable plugin projects and destinations'
+Check (@($manifest.plugins).Count -eq 14) '14 existing buildable plugin projects and destinations'
 Check (@($manifest.externalComponents.name) -contains 'CS2Snake') 'Snake is an explicit external component'
 $selected = @(Select-ReleaseModules $manifest @('CaorenDuel', 'CS2MiniGames'))
 Check ($selected.Count -eq 2 -and $selected[0].directory -eq 'CaorenCupGamemodes/CaorenCupSolos/CaorenDuel') 'partial selection preserves nested directories'
@@ -91,10 +91,10 @@ $null = Put 'boundary/web-command-center/.env' 'must-not-ship'
 $null = Put 'boundary/web-command-center/public/index.html' '<html>fixture</html>'
 $null = Put 'boundary/web-command-center/public/index.html.bak-old' 'must-not-ship'
 $null = Put 'boundary/web-command-center/node_modules/private.txt' 'must-not-ship'
-$null = Put 'boundary/web-command-center/CaorenCupPlugin/secret.dll' 'separate server package'
-$null = Put 'boundary/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data/skin-rarities.json' '{}'
-$null = Put 'boundary/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/LICENSE' 'fixture license'
-$null = Put 'boundary/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/UPSTREAM.md' 'fixture upstream'
+$null = Put 'boundary/cs/web-bridge/CaorenCupPlugin/secret.dll' 'separate server package'
+$null = Put 'boundary/cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data/skin-rarities.json' '{}'
+$null = Put 'boundary/cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/LICENSE' 'fixture license'
+$null = Put 'boundary/cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/UPSTREAM.md' 'fixture upstream'
 $webStage = Resolve-ReleasePath $fixture 'web-stage'
 Copy-ReleaseWebTree $boundary $webStage 'v1.10.0'
 Check (-not (Test-Path -LiteralPath (Join-Path $webStage '.env'))) 'web production environment excluded'

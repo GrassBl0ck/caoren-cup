@@ -1,0 +1,18 @@
+# Generated builds, local dependency caches and runtime data
+**/build/
+**/dist/
+**/.gradle/
+**/.kotlin/
+**/.cache/
+**/.runtime/
+**/.assets/
+**/__pycache__/
+**/checks/
+**/plugin/lib/*.jar
+**/plugin/lib/*.sha256
+**/logs/
+**/playerdata/
+**/usercache.json
+**/ops.json
+**/whitelist.json
+**/server.properties

@@ -127,6 +127,7 @@
     if (byId('player-center-entry')) byId('player-center-entry').hidden = true;
     if (byId('player-center-home')) byId('player-center-home').hidden = false;
     setHomeMessage('');
+    if (profile.hasSteamBinding === false) setHomeMessage('参加 CS 比赛前，请返回板块选择，在“账户与游戏身份”中绑定 CS 游戏身份。');
     notifyPlayerCenterSession(true, 'home');
   }
 
@@ -227,7 +228,7 @@
       if (passwordInput) passwordInput.value = '';
       var reason = result.reason || result.data?.error;
       var message = reason === 'account_disabled' ? '账号已禁用，请联系管理员。' :
-        reason === 'game_entry_required' ? '请先进入草人杯 CS2 服务器，使用 /cclogin 后再用 /ccreg 注册或绑定账号。' :
+        reason === 'game_entry_required' ? '请返回首页用邮箱注册；老账号可以使用 /cclogin 恢复后补绑邮箱。' :
         reason === 'rate_limited' ? '失败次数过多，请稍后再试。' :
           reason === 'safe_storage_unavailable' ? 'Windows 安全凭据存储不可用，请取消“记住此设备”后登录。' : '账号或密码错误。';
       return setEntryError(message);

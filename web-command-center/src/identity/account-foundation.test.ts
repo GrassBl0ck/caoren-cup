@@ -100,7 +100,7 @@ test('schema v2 migration separates accounts, invalidates old passwords, preserv
         deviceTokens: Record<string, unknown>;
     };
 
-    assert.equal(migrated.schemaVersion, 3);
+    assert.equal(migrated.schemaVersion, 4);
     assert.equal(migrated.identities.trusted.steamId, '76561198000000071');
     assert.equal(migrated.identities.trusted.steamNickname, undefined);
     assert.equal(migrated.identities.trusted.fixedAccount, undefined);
@@ -112,7 +112,7 @@ test('schema v2 migration separates accounts, invalidates old passwords, preserv
     assert.equal(migrated.accounts.trusted.password, undefined);
     assert.equal(Object.keys(migrated.memberships).length, 2);
     assert.deepEqual(migrated.deviceTokens, {});
-    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).schemaVersion, 3);
+    assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).schemaVersion, 4);
 });
 
 test('migration write failure preserves the original file and the previous in-memory state', async (t) => {

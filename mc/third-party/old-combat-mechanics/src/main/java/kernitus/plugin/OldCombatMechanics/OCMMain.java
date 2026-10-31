@@ -1,0 +1,407 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+package kernitus.plugin.OldCombatMechanics;
+
+import kernitus.plugin.OldCombatMechanics.utilities.PacketSupport;
+import kernitus.plugin.OldCombatMechanics.api.OldCombatMechanicsAPI;
+import kernitus.plugin.OldCombatMechanics.api.OldCombatMechanicsAPIImpl;
+import kernitus.plugin.OldCombatMechanics.commands.OCMCommandCompleter;
+import kernitus.plugin.OldCombatMechanics.commands.OCMCommandHandler;
+import kernitus.plugin.OldCombatMechanics.hooks.PlaceholderAPIHook;
+import kernitus.plugin.OldCombatMechanics.hooks.api.Hook;
+import kernitus.plugin.OldCombatMechanics.module.*;
+import kernitus.plugin.OldCombatMechanics.updater.ModuleUpdateChecker;
+import kernitus.plugin.OldCombatMechanics.utilities.Config;
+import kernitus.plugin.OldCombatMechanics.utilities.Messenger;
+import kernitus.plugin.OldCombatMechanics.utilities.PaperPlatform;
+import kernitus.plugin.OldCombatMechanics.utilities.damage.AttackCooldownTracker;
+import kernitus.plugin.OldCombatMechanics.utilities.damage.EntityDamageByEntityListener;
+import kernitus.plugin.OldCombatMechanics.utilities.reflection.Reflector;
+import kernitus.plugin.OldCombatMechanics.utilities.storage.ModesetListener;
+import kernitus.plugin.OldCombatMechanics.utilities.storage.PlayerModuleOverrides;
+import kernitus.plugin.OldCombatMechanics.utilities.storage.PlayerStorage;
+import org.bstats.bukkit.Metrics;
+import org.bstats.charts.SimpleBarChart;
+import org.bstats.charts.SimplePie;
+import org.bukkit.Bukkit;
+import org.bukkit.entity.HumanEntity;
+import org.bukkit.event.EventException;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.plugin.PluginDescriptionFile;
+import org.bukkit.plugin.RegisteredListener;
+import org.bukkit.plugin.ServicePriority;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.jetbrains.annotations.NotNull;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+public class OCMMain extends JavaPlugin {
+
+    private static final String BUILD_PROPERTIES_RESOURCE = "/ocm-build.properties";
+
+    private static OCMMain INSTANCE;
+    private static String buildCommit;
+    private final Logger logger = getLogger();
+    private final OCMConfigHandler CH = new OCMConfigHandler(this);
+    private final List<Runnable> disableListeners = new ArrayList<>();
+    private final List<Runnable> enableListeners = new ArrayList<>();
+    private final List<Hook> hooks = new ArrayList<>();
+    private OldCombatMechanicsAPI api;
+    private boolean supportedPlatform;
+    private PacketSupport packetSupport;
+
+    public PacketSupport getPacketSupport() { return packetSupport; }
+    private boolean storageInitialised;
+    public OCMMain() {
+        super();
+    }
+
+    @Override
+    public void onLoad() {
+        supportedPlatform = PaperPlatform.isAvailable(getServer().getClass().getClassLoader());
+        if (!supportedPlatform) return;
+
+        packetSupport = new PacketSupport(this);
+        packetSupport.load();
+    }
+
+    @Override
+    public void onEnable() {
+        if (!supportedPlatform) {
+            logger.severe("OldCombatMechanics requires Paper or a compatible fork. Spigot and CraftBukkit are unsupported.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        INSTANCE = this;
+
+        // Setting up config.yml
+        CH.setupConfigIfNotPresent();
+
+        // Initialise persistent player storage
+        PlayerStorage.initialise(this);
+        storageInitialised = true;
+
+        // Initialise ModuleLoader utility
+        ModuleLoader.initialise(this);
+
+        // Initialise Config utility
+        Config.initialise(this);
+
+        // Initialise the Messenger utility
+        Messenger.initialise(this);
+        packetSupport.initialise();
+
+        // Register all the modules
+        registerModules();
+
+        // Register public API service
+        api = new OldCombatMechanicsAPIImpl(this);
+        Bukkit.getServicesManager().register(OldCombatMechanicsAPI.class, api, this, ServicePriority.Normal);
+
+        // Register all hooks for integrating with other plugins
+        registerHooks();
+
+        // Initialise all the hooks
+        hooks.forEach(hook -> hook.init(this));
+
+        // Set up the command handler
+        getCommand("OldCombatMechanics").setExecutor(new OCMCommandHandler(this));
+        // Set up command tab completer
+        getCommand("OldCombatMechanics").setTabCompleter(new OCMCommandCompleter());
+
+        Config.reload();
+
+        // BStats Metrics
+        final Metrics metrics = new Metrics(this, 53);
+
+        metrics.addCustomChart(new SimplePie("server_software", () -> {
+            final String name = Bukkit.getServer().getName();
+            if (name == null || name.isEmpty()) return "Unknown";
+            final String cleaned = name.split("\\s", 2)[0].trim();
+            return cleaned.isEmpty() ? "Unknown" : cleaned;
+        }));
+
+        // Number of servers enabling each configurable module.
+        metrics.addCustomChart(
+                new SimpleBarChart(
+                        "enabled_modules",
+                        () -> getEnabledConfigurableModules()
+                                .collect(Collectors.toMap(OCMModule::toString, module -> 1))));
+
+        // Pie chart of enabled/disabled for each module
+        ModuleLoader.getModules().forEach(module -> metrics.addCustomChart(
+                new SimplePie(module.getModuleName() + "_pie",
+                        () -> module.isEnabled() ? "enabled" : "disabled")));
+
+        // Distribution of enabled configurable module counts across servers.
+        metrics.addCustomChart(new SimplePie("enabled_modules_count",
+                () -> Long.toString(getEnabledConfigurableModules().count())));
+        metrics.addCustomChart(new SimpleBarChart("enabled_modules_count_bar",
+                () -> Collections.singletonMap(Long.toString(getEnabledConfigurableModules().count()), 1)));
+
+        enableListeners.forEach(Runnable::run);
+
+        // Properly handle Plugman load/unload.
+        final List<RegisteredListener> joinListeners = Arrays
+                .stream(PlayerJoinEvent.getHandlerList().getRegisteredListeners())
+                .filter(registeredListener -> registeredListener.getPlugin().equals(this))
+                .collect(Collectors.toList());
+
+        Bukkit.getOnlinePlayers().forEach(player -> {
+            final PlayerJoinEvent event = new PlayerJoinEvent(player, "");
+
+            // Trick all the modules into thinking the player just joined in case the plugin
+            // was loaded with Plugman.
+            // This way attack speeds, item modifications, etc. will be applied immediately
+            // instead of after a re-log.
+            joinListeners.forEach(registeredListener -> {
+                try {
+                    registeredListener.callEvent(event);
+                } catch (EventException e) {
+                    e.printStackTrace();
+                }
+            });
+        });
+
+        // Logging to console the enabling of OCM
+        final PluginDescriptionFile pdfFile = this.getDescription();
+        logger.info(pdfFile.getName() + " v" + getDisplayVersion() + " has been enabled");
+
+        if (Config.moduleEnabled("update-checker"))
+            Bukkit.getScheduler().runTaskLaterAsynchronously(this,
+                    () -> new UpdateChecker(this).performUpdate(), 20L);
+
+        metrics.addCustomChart(new SimplePie("auto_update_pie",
+                () -> Config.moduleSettingEnabled("update-checker",
+                        "auto-update") ? "enabled" : "disabled"));
+
+    }
+
+    private static Stream<OCMModule> getEnabledConfigurableModules() {
+        final Set<String> configurableNames = ModuleLoader.getConfigurableModuleNames();
+        return ModuleLoader.getModules().stream()
+                .filter(module -> configurableNames.contains(ModuleLoader.normaliseModuleName(module.getConfigName())))
+                .filter(OCMModule::isEnabled);
+    }
+
+    @Override
+    public void onDisable() {
+        if (!supportedPlatform) return;
+
+        final PluginDescriptionFile pdfFile = this.getDescription();
+
+        disableListeners.forEach(Runnable::run);
+
+        // Properly handle Plugman load/unload.
+        final List<RegisteredListener> quitListeners = Arrays
+                .stream(PlayerQuitEvent.getHandlerList().getRegisteredListeners())
+                .filter(registeredListener -> registeredListener.getPlugin().equals(this))
+                .collect(Collectors.toList());
+
+        // Trick all the modules into thinking the player just quit in case the plugin
+        // was unloaded with Plugman.
+        // This way attack speeds, item modifications, etc. will be restored immediately
+        // instead of after a disconnect.
+        Bukkit.getOnlinePlayers().forEach(player -> {
+            final PlayerQuitEvent event = new PlayerQuitEvent(player, "");
+
+            quitListeners.forEach(registeredListener -> {
+                try {
+                    registeredListener.callEvent(event);
+                } catch (EventException e) {
+                    e.printStackTrace();
+                }
+            });
+        });
+
+        if (storageInitialised) {
+            PlayerStorage.instantSave();
+            storageInitialised = false;
+        }
+
+        PlayerModuleOverrides.clearAll();
+
+        if (api != null) {
+            Bukkit.getServicesManager().unregister(OldCombatMechanicsAPI.class, api);
+            api = null;
+        }
+
+        if (packetSupport != null) packetSupport.close();
+
+        // Logging to console the disabling of OCM
+        logger.info(pdfFile.getName() + " v" + pdfFile.getVersion() + " has been disabled");
+    }
+
+    private void registerModules() {
+        // Update Checker (also a module, so we can use the dynamic
+        // registering/unregistering)
+        ModuleLoader.addModule(new ModuleUpdateChecker(this));
+
+        // Modeset listener, for when player joins or changes world
+        ModuleLoader.addModule(new ModesetListener(this));
+
+        // Module listeners
+        ModuleLoader.addModule(new ModuleAttackCooldown(this));
+        ModuleLoader.addModule(new ModuleAttackRange(this));
+
+        // If below 1.16, we need to keep track of player attack cooldown ourselves
+        if (Reflector.getMethod(HumanEntity.class, "getAttackCooldown", 0) == null) {
+            ModuleLoader.addModule(new AttackCooldownTracker(this));
+        }
+
+        // Listeners registered later with same priority are called later
+
+        // These four listen to OCMEntityDamageByEntityEvent:
+        ModuleLoader.addModule(new ModuleOldToolDamage(this));
+        ModuleLoader.addModule(new ModuleSwordSweep(this));
+        ModuleLoader.addModule(new ModuleOldPotionEffects(this));
+        ModuleLoader.addModule(new ModuleOldCriticalHits(this));
+
+        // Next block are all on LOWEST priority, so will be called in the following
+        // order:
+        // Damage order: base -> potion effects -> critical hit -> enchantments
+        // Defence order: overdamage -> blocking -> armour -> resistance -> armour enchs
+        // -> absorption
+        // EntityDamageByEntityListener calls OCMEntityDamageByEntityEvent, see modules
+        // above
+        // For everything from base to overdamage
+        ModuleLoader.addModule(new EntityDamageByEntityListener(this));
+        // ModuleSwordBlocking to calculate blocking
+        ModuleLoader.addModule(new ModuleShieldDamageReduction(this));
+        // OldArmourStrength for armour -> resistance -> armour enchs -> absorption
+        ModuleLoader.addModule(new ModuleOldArmourStrength(this));
+
+        ModuleLoader.addModule(new ModuleSwordBlocking(this));
+        ModuleLoader.addModule(new ModuleOldArmourDurability(this));
+
+        ModuleLoader.addModule(new ModuleGoldenApple(this));
+        ModuleLoader.addModule(new ModuleFishingKnockback(this));
+        ModuleLoader.addModule(new ModulePlayerKnockback(this));
+        ModuleLoader.addModule(new ModulePlayerRegen(this));
+
+        ModuleLoader.addModule(new ModuleDisableCrafting(this));
+        ModuleLoader.addModule(new ModuleDisableOffHand(this));
+        ModuleLoader.addModule(new ModuleOldBrewingStand(this));
+        ModuleLoader.addModule(new ModuleProjectileKnockback(this));
+        ModuleLoader.addModule(new ModuleDisableEnderpearlCooldown(this));
+        ModuleLoader.addModule(new ModuleChorusFruit(this));
+
+        ModuleLoader.addModule(new ModuleOldBurnDelay(this));
+        ModuleLoader.addModule(new ModuleAttackFrequency(this));
+        ModuleLoader.addModule(new ModuleFishingRodVelocity(this));
+        final ModuleOldPotionThrowing potionThrowing = new ModuleOldPotionThrowing(this);
+        ModuleLoader.addModule(potionThrowing);
+        final ModuleOldProjectileTrajectory trajectory = new ModuleOldProjectileTrajectory(this);
+        final ModuleProjectileShootOffset shootOffset = new ModuleProjectileShootOffset(this);
+        final ModuleRelativeProjectileVelocity relativeVelocity = new ModuleRelativeProjectileVelocity(this);
+        ModuleLoader.addModule(trajectory);
+        ModuleLoader.addModule(shootOffset);
+        ModuleLoader.addModule(relativeVelocity);
+        new kernitus.plugin.OldCombatMechanics.utilities.projectile.ProjectileLaunchCoordinator(
+                this, trajectory, shootOffset, relativeVelocity, potionThrowing);
+
+        ModuleLoader.addModule(new ModuleAttackSounds(this));
+        ModuleLoader.addModule(new ModuleSwordSweepParticles(this));
+    }
+
+    private void registerHooks() {
+        if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI"))
+            hooks.add(new PlaceholderAPIHook());
+    }
+
+    public void upgradeConfig() {
+        CH.upgradeConfig();
+    }
+
+    public boolean doesConfigExist() {
+        return CH.doesConfigExist();
+    }
+
+    /**
+     * Registers a runnable to run when the plugin gets disabled.
+     *
+     * @param action the {@link Runnable} to run when the plugin gets disabled
+     */
+    public void addDisableListener(Runnable action) {
+        disableListeners.add(action);
+    }
+
+    /**
+     * Registers a runnable to run when the plugin gets enabled.
+     *
+     * @param action the {@link Runnable} to run when the plugin gets enabled
+     */
+    public void addEnableListener(Runnable action) {
+        enableListeners.add(action);
+    }
+
+    /**
+     * Get the plugin's JAR file
+     *
+     * @return The File object corresponding to this plugin
+     */
+    @NotNull
+    @Override
+    public File getFile() {
+        return super.getFile();
+    }
+
+    public static OCMMain getInstance() {
+        return INSTANCE;
+    }
+
+    public static String getVersion() {
+        return INSTANCE.getDescription().getVersion();
+    }
+
+    public String getDisplayVersion() {
+        return formatDisplayVersion(getDescription().getVersion());
+    }
+
+    public static String formatDisplayVersion(String version) {
+        final String commit = getBuildCommit();
+        if (commit.isEmpty()) return version;
+
+        return version + " (commit " + commit + ")";
+    }
+
+    private static synchronized String getBuildCommit() {
+        if (buildCommit == null) buildCommit = loadBuildCommit();
+
+        return buildCommit;
+    }
+
+    private static String loadBuildCommit() {
+        final Properties properties = new Properties();
+
+        try (InputStream stream = OCMMain.class.getResourceAsStream(BUILD_PROPERTIES_RESOURCE)) {
+            if (stream == null) return "";
+
+            properties.load(stream);
+        } catch (IOException e) {
+            return "";
+        }
+
+        final String commit = properties.getProperty("commit", "").trim();
+        if (commit.isEmpty() || commit.contains("${")) return "";
+
+        return commit;
+    }
+
+}

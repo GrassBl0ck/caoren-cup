@@ -1,0 +1,25 @@
+{
+    "criteria": {
+        "Con1": {
+            "trigger": "minecraft:entity_killed_player",
+            "conditions": {
+                "entity": {
+                    "type": "entity_properties",
+                    "predicate": {
+                        "team": "play.sur.zom",
+                        "entity_type": "player"
+                    },
+                    "entity": "this"
+                }
+            }
+        }
+    },
+    "requirements": [
+        [
+            "Con1"
+        ]
+    ],
+    "rewards": {
+        "function": "surgame:ismedied"
+    }
+}

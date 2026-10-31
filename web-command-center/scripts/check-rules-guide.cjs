@@ -32,7 +32,7 @@ assert.match(html, /href="\/downloads\/caoren-cup-full-rules\.pdf"/);
 assert.ok(!html.includes('/socket.io/socket.io.js'), '公开规则页不应连接 Socket');
 assert.ok(!html.includes('管理员工作区'), '快速指引不应展示管理员内容');
 
-const indexPath = path.join(publicDir, 'index.html');
+const indexPath = path.join(publicDir, '..', 'pages', 'cs.html');
 const indexHtml = fs.readFileSync(indexPath, 'utf8');
 const guideLink = indexHtml.match(/<a\b[^>]*id="rules-guide-link"[^>]*href="([^"]+)"[^>]*>/);
 assert.ok(guideLink, '登录页持久顶栏缺少赛前指引入口');

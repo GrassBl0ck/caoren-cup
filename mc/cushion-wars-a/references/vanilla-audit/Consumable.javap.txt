@@ -1,0 +1,410 @@
+Compiled from "Consumable.java"
+public final class net.minecraft.world.item.component.Consumable extends java.lang.Record {
+  private final float consumeSeconds;
+
+  private final net.minecraft.world.item.ItemUseAnimation animation;
+
+  private final net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound;
+
+  private final boolean hasConsumeParticles;
+
+  private final java.util.List<net.minecraft.world.item.consume_effects.ConsumeEffect> onConsumeEffects;
+
+  public static final float DEFAULT_CONSUME_SECONDS;
+
+  private static final int CONSUME_EFFECTS_INTERVAL;
+
+  private static final float CONSUME_EFFECTS_START_FRACTION;
+
+  public static final com.mojang.serialization.Codec<net.minecraft.world.item.component.Consumable> CODEC;
+
+  public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, net.minecraft.world.item.component.Consumable> STREAM_CODEC;
+
+  public net.minecraft.world.item.component.Consumable(float, net.minecraft.world.item.ItemUseAnimation, net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent>, boolean, java.util.List<net.minecraft.world.item.consume_effects.ConsumeEffect>);
+    Code:
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Record."<init>":()V
+         4: aload_0
+         5: fload_1
+         6: putfield      #7                  // Field consumeSeconds:F
+         9: aload_0
+        10: aload_2
+        11: putfield      #13                 // Field animation:Lnet/minecraft/world/item/ItemUseAnimation;
+        14: aload_0
+        15: aload_3
+        16: putfield      #17                 // Field sound:Lnet/minecraft/core/Holder;
+        19: aload_0
+        20: iload         4
+        22: putfield      #21                 // Field hasConsumeParticles:Z
+        25: aload_0
+        26: aload         5
+        28: putfield      #25                 // Field onConsumeEffects:Ljava/util/List;
+        31: return
+
+  public net.minecraft.world.InteractionResult startConsuming(net.minecraft.world.entity.LivingEntity, net.minecraft.world.item.ItemStack, net.minecraft.world.InteractionHand);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: invokevirtual #29                 // Method canConsume:(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;)Z
+         6: ifne          13
+         9: getstatic     #33                 // Field net/minecraft/world/InteractionResult.FAIL:Lnet/minecraft/world/InteractionResult$Fail;
+        12: areturn
+        13: aload_0
+        14: invokevirtual #39                 // Method consumeTicks:()I
+        17: ifle          24
+        20: iconst_1
+        21: goto          25
+        24: iconst_0
+        25: istore        4
+        27: iload         4
+        29: ifeq          41
+        32: aload_1
+        33: aload_3
+        34: invokevirtual #43                 // Method net/minecraft/world/entity/LivingEntity.startUsingItem:(Lnet/minecraft/world/InteractionHand;)V
+        37: getstatic     #49                 // Field net/minecraft/world/InteractionResult.CONSUME:Lnet/minecraft/world/InteractionResult$Success;
+        40: areturn
+        41: aload_0
+        42: aload_1
+        43: invokevirtual #53                 // Method net/minecraft/world/entity/LivingEntity.level:()Lnet/minecraft/world/level/Level;
+        46: aload_1
+        47: aload_2
+        48: invokevirtual #57                 // Method onConsume:(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;)Lnet/minecraft/world/item/ItemStack;
+        51: astore        5
+        53: getstatic     #49                 // Field net/minecraft/world/InteractionResult.CONSUME:Lnet/minecraft/world/InteractionResult$Success;
+        56: aload         5
+        58: invokevirtual #61                 // Method net/minecraft/world/InteractionResult$Success.heldItemTransformedTo:(Lnet/minecraft/world/item/ItemStack;)Lnet/minecraft/world/InteractionResult$Success;
+        61: areturn
+
+  public net.minecraft.world.item.ItemStack onConsume(net.minecraft.world.level.Level, net.minecraft.world.entity.LivingEntity, net.minecraft.world.item.ItemStack);
+    Code:
+         0: aload_2
+         1: invokevirtual #67                 // Method net/minecraft/world/entity/LivingEntity.getRandom:()Lnet/minecraft/util/RandomSource;
+         4: astore        4
+         6: aload_0
+         7: aload         4
+         9: aload_2
+        10: aload_3
+        11: bipush        16
+        13: invokevirtual #71                 // Method emitParticlesAndSounds:(Lnet/minecraft/util/RandomSource;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;I)V
+        16: aload_2
+        17: instanceof    #75                 // class net/minecraft/server/level/ServerPlayer
+        20: ifeq          53
+        23: aload_2
+        24: checkcast     #75                 // class net/minecraft/server/level/ServerPlayer
+        27: astore        5
+        29: aload         5
+        31: getstatic     #77                 // Field net/minecraft/stats/Stats.ITEM_USED:Lnet/minecraft/stats/StatType;
+        34: aload_3
+        35: invokevirtual #83                 // Method net/minecraft/world/item/ItemStack.getItem:()Lnet/minecraft/world/item/Item;
+        38: invokevirtual #89                 // Method net/minecraft/stats/StatType.get:(Ljava/lang/Object;)Lnet/minecraft/stats/Stat;
+        41: invokevirtual #95                 // Method net/minecraft/server/level/ServerPlayer.awardStat:(Lnet/minecraft/stats/Stat;)V
+        44: getstatic     #99                 // Field net/minecraft/advancements/triggers/CriteriaTriggers.CONSUME_ITEM:Lnet/minecraft/advancements/triggers/ConsumeItemTrigger;
+        47: aload         5
+        49: aload_3
+        50: invokevirtual #105                // Method net/minecraft/advancements/triggers/ConsumeItemTrigger.trigger:(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/item/ItemStack;)V
+        53: aload_3
+        54: ldc           #111                // class net/minecraft/world/item/component/ConsumableListener
+        56: invokevirtual #113                // Method net/minecraft/world/item/ItemStack.getAllOfType:(Ljava/lang/Class;)Ljava/util/stream/Stream;
+        59: aload_0
+        60: aload_1
+        61: aload_2
+        62: aload_3
+        63: invokedynamic #117,  0            // InvokeDynamic #0:accept:(Lnet/minecraft/world/item/component/Consumable;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;)Ljava/util/function/Consumer;
+        68: invokeinterface #121,  2          // InterfaceMethod java/util/stream/Stream.forEach:(Ljava/util/function/Consumer;)V
+        73: aload_1
+        74: invokevirtual #127                // Method net/minecraft/world/level/Level.isClientSide:()Z
+        77: ifne          97
+        80: aload_0
+        81: getfield      #25                 // Field onConsumeEffects:Ljava/util/List;
+        84: aload_1
+        85: aload_3
+        86: aload_2
+        87: invokedynamic #133,  0            // InvokeDynamic #1:accept:(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/LivingEntity;)Ljava/util/function/Consumer;
+        92: invokeinterface #136,  2          // InterfaceMethod java/util/List.forEach:(Ljava/util/function/Consumer;)V
+        97: aload_2
+        98: aload_0
+        99: getfield      #13                 // Field animation:Lnet/minecraft/world/item/ItemUseAnimation;
+       102: getstatic     #139                // Field net/minecraft/world/item/ItemUseAnimation.DRINK:Lnet/minecraft/world/item/ItemUseAnimation;
+       105: if_acmpne     114
+       108: getstatic     #144                // Field net/minecraft/world/level/gameevent/GameEvent.DRINK:Lnet/minecraft/core/Holder$Reference;
+       111: goto          117
+       114: getstatic     #149                // Field net/minecraft/world/level/gameevent/GameEvent.EAT:Lnet/minecraft/core/Holder$Reference;
+       117: invokevirtual #152                // Method net/minecraft/world/entity/LivingEntity.gameEvent:(Lnet/minecraft/core/Holder;)V
+       120: aload_3
+       121: iconst_1
+       122: aload_2
+       123: invokevirtual #156                // Method net/minecraft/world/item/ItemStack.consume:(ILnet/minecraft/world/entity/LivingEntity;)V
+       126: aload_3
+       127: areturn
+
+  public boolean canConsume(net.minecraft.world.entity.LivingEntity, net.minecraft.world.item.ItemStack);
+    Code:
+         0: aload_2
+         1: getstatic     #160                // Field net/minecraft/core/component/DataComponents.FOOD:Lnet/minecraft/core/component/DataComponentType;
+         4: invokevirtual #166                // Method net/minecraft/world/item/ItemStack.get:(Lnet/minecraft/core/component/DataComponentType;)Ljava/lang/Object;
+         7: checkcast     #169                // class net/minecraft/world/food/FoodProperties
+        10: astore_3
+        11: aload_3
+        12: ifnull        38
+        15: aload_1
+        16: instanceof    #171                // class net/minecraft/world/entity/player/Player
+        19: ifeq          38
+        22: aload_1
+        23: checkcast     #171                // class net/minecraft/world/entity/player/Player
+        26: astore        4
+        28: aload         4
+        30: aload_3
+        31: invokevirtual #173                // Method net/minecraft/world/food/FoodProperties.canAlwaysEat:()Z
+        34: invokevirtual #176                // Method net/minecraft/world/entity/player/Player.canEat:(Z)Z
+        37: ireturn
+        38: iconst_1
+        39: ireturn
+
+  public int consumeTicks();
+    Code:
+         0: aload_0
+         1: getfield      #7                  // Field consumeSeconds:F
+         4: ldc           #182                // float 20.0f
+         6: fmul
+         7: f2i
+         8: ireturn
+
+  public void emitParticlesAndSounds(net.minecraft.util.RandomSource, net.minecraft.world.entity.LivingEntity, net.minecraft.world.item.ItemStack, int);
+    Code:
+         0: aload_1
+         1: invokeinterface #183,  1          // InterfaceMethod net/minecraft/util/RandomSource.nextBoolean:()Z
+         6: ifeq          14
+         9: ldc           #188                // float 0.5f
+        11: goto          15
+        14: fconst_1
+        15: fstore        5
+        17: aload_1
+        18: fconst_1
+        19: ldc           #189                // float 0.2f
+        21: invokeinterface #190,  3          // InterfaceMethod net/minecraft/util/RandomSource.triangle:(FF)F
+        26: fstore        6
+        28: ldc           #188                // float 0.5f
+        30: fstore        7
+        32: aload_1
+        33: ldc           #194                // float 0.9f
+        35: fconst_1
+        36: invokestatic  #195                // Method net/minecraft/util/Mth.randomBetween:(Lnet/minecraft/util/RandomSource;FF)F
+        39: fstore        8
+        41: aload_0
+        42: getfield      #13                 // Field animation:Lnet/minecraft/world/item/ItemUseAnimation;
+        45: getstatic     #139                // Field net/minecraft/world/item/ItemUseAnimation.DRINK:Lnet/minecraft/world/item/ItemUseAnimation;
+        48: if_acmpne     56
+        51: ldc           #188                // float 0.5f
+        53: goto          58
+        56: fload         5
+        58: fstore        9
+        60: aload_0
+        61: getfield      #13                 // Field animation:Lnet/minecraft/world/item/ItemUseAnimation;
+        64: getstatic     #139                // Field net/minecraft/world/item/ItemUseAnimation.DRINK:Lnet/minecraft/world/item/ItemUseAnimation;
+        67: if_acmpne     75
+        70: fload         8
+        72: goto          77
+        75: fload         6
+        77: fstore        10
+        79: aload_0
+        80: getfield      #21                 // Field hasConsumeParticles:Z
+        83: ifeq          93
+        86: aload_2
+        87: aload_3
+        88: iload         4
+        90: invokevirtual #201                // Method net/minecraft/world/entity/LivingEntity.spawnItemParticles:(Lnet/minecraft/world/item/ItemStack;I)V
+        93: aload_2
+        94: instanceof    #205                // class net/minecraft/world/item/component/Consumable$OverrideConsumeSound
+        97: ifeq          117
+       100: aload_2
+       101: checkcast     #205                // class net/minecraft/world/item/component/Consumable$OverrideConsumeSound
+       104: astore        12
+       106: aload         12
+       108: aload_3
+       109: invokeinterface #207,  2          // InterfaceMethod net/minecraft/world/item/component/Consumable$OverrideConsumeSound.getConsumeSound:(Lnet/minecraft/world/item/ItemStack;)Lnet/minecraft/sounds/SoundEvent;
+       114: goto          129
+       117: aload_0
+       118: getfield      #17                 // Field sound:Lnet/minecraft/core/Holder;
+       121: invokeinterface #211,  1          // InterfaceMethod net/minecraft/core/Holder.value:()Ljava/lang/Object;
+       126: checkcast     #217                // class net/minecraft/sounds/SoundEvent
+       129: astore        11
+       131: aload_2
+       132: aload         11
+       134: fload         9
+       136: fload         10
+       138: invokevirtual #219                // Method net/minecraft/world/entity/LivingEntity.playSound:(Lnet/minecraft/sounds/SoundEvent;FF)V
+       141: return
+
+  public boolean shouldEmitParticlesAndSounds(int);
+    Code:
+         0: aload_0
+         1: invokevirtual #39                 // Method consumeTicks:()I
+         4: iload_1
+         5: isub
+         6: istore_2
+         7: aload_0
+         8: invokevirtual #39                 // Method consumeTicks:()I
+        11: i2f
+        12: ldc           #223                // float 0.21875f
+        14: fmul
+        15: f2i
+        16: istore_3
+        17: iload_2
+        18: iload_3
+        19: if_icmple     26
+        22: iconst_1
+        23: goto          27
+        26: iconst_0
+        27: istore        4
+        29: iload         4
+        31: ifeq          44
+        34: iload_1
+        35: iconst_4
+        36: irem
+        37: ifne          44
+        40: iconst_1
+        41: goto          45
+        44: iconst_0
+        45: ireturn
+
+  public static net.minecraft.world.item.component.Consumable$Builder builder();
+    Code:
+         0: new           #224                // class net/minecraft/world/item/component/Consumable$Builder
+         3: dup
+         4: invokespecial #226                // Method net/minecraft/world/item/component/Consumable$Builder."<init>":()V
+         7: areturn
+
+  public final java.lang.String toString();
+    Code:
+         0: aload_0
+         1: invokedynamic #227,  0            // InvokeDynamic #2:toString:(Lnet/minecraft/world/item/component/Consumable;)Ljava/lang/String;
+         6: areturn
+
+  public final int hashCode();
+    Code:
+         0: aload_0
+         1: invokedynamic #231,  0            // InvokeDynamic #2:hashCode:(Lnet/minecraft/world/item/component/Consumable;)I
+         6: ireturn
+
+  public final boolean equals(java.lang.Object);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokedynamic #235,  0            // InvokeDynamic #2:equals:(Lnet/minecraft/world/item/component/Consumable;Ljava/lang/Object;)Z
+         7: ireturn
+
+  public float consumeSeconds();
+    Code:
+         0: aload_0
+         1: getfield      #7                  // Field consumeSeconds:F
+         4: freturn
+
+  public net.minecraft.world.item.ItemUseAnimation animation();
+    Code:
+         0: aload_0
+         1: getfield      #13                 // Field animation:Lnet/minecraft/world/item/ItemUseAnimation;
+         4: areturn
+
+  public net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound();
+    Code:
+         0: aload_0
+         1: getfield      #17                 // Field sound:Lnet/minecraft/core/Holder;
+         4: areturn
+
+  public boolean hasConsumeParticles();
+    Code:
+         0: aload_0
+         1: getfield      #21                 // Field hasConsumeParticles:Z
+         4: ireturn
+
+  public java.util.List<net.minecraft.world.item.consume_effects.ConsumeEffect> onConsumeEffects();
+    Code:
+         0: aload_0
+         1: getfield      #25                 // Field onConsumeEffects:Ljava/util/List;
+         4: areturn
+
+  private static void lambda$onConsume$1(net.minecraft.world.level.Level, net.minecraft.world.item.ItemStack, net.minecraft.world.entity.LivingEntity, net.minecraft.world.item.consume_effects.ConsumeEffect);
+    Code:
+         0: aload_3
+         1: aload_0
+         2: aload_1
+         3: aload_2
+         4: invokeinterface #239,  4          // InterfaceMethod net/minecraft/world/item/consume_effects/ConsumeEffect.apply:(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/LivingEntity;)Z
+         9: pop
+        10: return
+
+  private void lambda$onConsume$0(net.minecraft.world.level.Level, net.minecraft.world.entity.LivingEntity, net.minecraft.world.item.ItemStack, net.minecraft.world.item.component.ConsumableListener);
+    Code:
+         0: aload         4
+         2: aload_1
+         3: aload_2
+         4: aload_3
+         5: aload_0
+         6: invokeinterface #245,  5          // InterfaceMethod net/minecraft/world/item/component/ConsumableListener.onConsume:(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/component/Consumable;)V
+        11: return
+
+  private static com.mojang.datafixers.kinds.App lambda$static$0(com.mojang.serialization.codecs.RecordCodecBuilder$Instance);
+    Code:
+         0: aload_0
+         1: getstatic     #248                // Field net/minecraft/util/ExtraCodecs.NON_NEGATIVE_FLOAT:Lcom/mojang/serialization/Codec;
+         4: ldc           #254                // String consume_seconds
+         6: ldc_w         #256                // float 1.6f
+         9: invokestatic  #257                // Method java/lang/Float.valueOf:(F)Ljava/lang/Float;
+        12: invokeinterface #263,  3          // InterfaceMethod com/mojang/serialization/Codec.optionalFieldOf:(Ljava/lang/String;Ljava/lang/Object;)Lcom/mojang/serialization/MapCodec;
+        17: invokedynamic #269,  0            // InvokeDynamic #3:apply:()Ljava/util/function/Function;
+        22: invokevirtual #272                // Method com/mojang/serialization/MapCodec.forGetter:(Ljava/util/function/Function;)Lcom/mojang/serialization/codecs/RecordCodecBuilder;
+        25: getstatic     #278                // Field net/minecraft/world/item/ItemUseAnimation.CODEC:Lcom/mojang/serialization/Codec;
+        28: ldc_w         #281                // String animation
+        31: getstatic     #282                // Field net/minecraft/world/item/ItemUseAnimation.EAT:Lnet/minecraft/world/item/ItemUseAnimation;
+        34: invokeinterface #263,  3          // InterfaceMethod com/mojang/serialization/Codec.optionalFieldOf:(Ljava/lang/String;Ljava/lang/Object;)Lcom/mojang/serialization/MapCodec;
+        39: invokedynamic #284,  0            // InvokeDynamic #4:apply:()Ljava/util/function/Function;
+        44: invokevirtual #272                // Method com/mojang/serialization/MapCodec.forGetter:(Ljava/util/function/Function;)Lcom/mojang/serialization/codecs/RecordCodecBuilder;
+        47: getstatic     #285                // Field net/minecraft/sounds/SoundEvent.CODEC:Lcom/mojang/serialization/Codec;
+        50: ldc_w         #286                // String sound
+        53: getstatic     #287                // Field net/minecraft/sounds/SoundEvents.GENERIC_EAT:Lnet/minecraft/core/Holder$Reference;
+        56: invokeinterface #263,  3          // InterfaceMethod com/mojang/serialization/Codec.optionalFieldOf:(Ljava/lang/String;Ljava/lang/Object;)Lcom/mojang/serialization/MapCodec;
+        61: invokedynamic #292,  0            // InvokeDynamic #5:apply:()Ljava/util/function/Function;
+        66: invokevirtual #272                // Method com/mojang/serialization/MapCodec.forGetter:(Ljava/util/function/Function;)Lcom/mojang/serialization/codecs/RecordCodecBuilder;
+        69: getstatic     #293                // Field com/mojang/serialization/Codec.BOOL:Lcom/mojang/serialization/codecs/PrimitiveCodec;
+        72: ldc_w         #297                // String has_consume_particles
+        75: iconst_1
+        76: invokestatic  #299                // Method java/lang/Boolean.valueOf:(Z)Ljava/lang/Boolean;
+        79: invokeinterface #304,  3          // InterfaceMethod com/mojang/serialization/codecs/PrimitiveCodec.optionalFieldOf:(Ljava/lang/String;Ljava/lang/Object;)Lcom/mojang/serialization/MapCodec;
+        84: invokedynamic #307,  0            // InvokeDynamic #6:apply:()Ljava/util/function/Function;
+        89: invokevirtual #272                // Method com/mojang/serialization/MapCodec.forGetter:(Ljava/util/function/Function;)Lcom/mojang/serialization/codecs/RecordCodecBuilder;
+        92: getstatic     #308                // Field net/minecraft/world/item/consume_effects/ConsumeEffect.CODEC:Lcom/mojang/serialization/Codec;
+        95: invokeinterface #309,  1          // InterfaceMethod com/mojang/serialization/Codec.listOf:()Lcom/mojang/serialization/Codec;
+       100: ldc_w         #313                // String on_consume_effects
+       103: invokestatic  #315                // InterfaceMethod java/util/List.of:()Ljava/util/List;
+       106: invokeinterface #263,  3          // InterfaceMethod com/mojang/serialization/Codec.optionalFieldOf:(Ljava/lang/String;Ljava/lang/Object;)Lcom/mojang/serialization/MapCodec;
+       111: invokedynamic #319,  0            // InvokeDynamic #7:apply:()Ljava/util/function/Function;
+       116: invokevirtual #272                // Method com/mojang/serialization/MapCodec.forGetter:(Ljava/util/function/Function;)Lcom/mojang/serialization/codecs/RecordCodecBuilder;
+       119: invokevirtual #320                // Method com/mojang/serialization/codecs/RecordCodecBuilder$Instance.group:(Lcom/mojang/datafixers/kinds/App;Lcom/mojang/datafixers/kinds/App;Lcom/mojang/datafixers/kinds/App;Lcom/mojang/datafixers/kinds/App;Lcom/mojang/datafixers/kinds/App;)Lcom/mojang/datafixers/Products$P5;
+       122: aload_0
+       123: invokedynamic #326,  0            // InvokeDynamic #8:apply:()Lcom/mojang/datafixers/util/Function5;
+       128: invokevirtual #329                // Method com/mojang/datafixers/Products$P5.apply:(Lcom/mojang/datafixers/kinds/Applicative;Lcom/mojang/datafixers/util/Function5;)Lcom/mojang/datafixers/kinds/App;
+       131: areturn
+
+  static {};
+    Code:
+         0: invokedynamic #334,  0            // InvokeDynamic #9:apply:()Ljava/util/function/Function;
+         5: invokestatic  #335                // Method com/mojang/serialization/codecs/RecordCodecBuilder.create:(Ljava/util/function/Function;)Lcom/mojang/serialization/Codec;
+         8: putstatic     #341                // Field CODEC:Lcom/mojang/serialization/Codec;
+        11: getstatic     #342                // Field net/minecraft/network/codec/ByteBufCodecs.FLOAT:Lnet/minecraft/network/codec/StreamCodec;
+        14: invokedynamic #269,  0            // InvokeDynamic #3:apply:()Ljava/util/function/Function;
+        19: getstatic     #348                // Field net/minecraft/world/item/ItemUseAnimation.STREAM_CODEC:Lnet/minecraft/network/codec/StreamCodec;
+        22: invokedynamic #284,  0            // InvokeDynamic #4:apply:()Ljava/util/function/Function;
+        27: getstatic     #351                // Field net/minecraft/sounds/SoundEvent.STREAM_CODEC:Lnet/minecraft/network/codec/StreamCodec;
+        30: invokedynamic #292,  0            // InvokeDynamic #5:apply:()Ljava/util/function/Function;
+        35: getstatic     #352                // Field net/minecraft/network/codec/ByteBufCodecs.BOOL:Lnet/minecraft/network/codec/StreamCodec;
+        38: invokedynamic #307,  0            // InvokeDynamic #6:apply:()Ljava/util/function/Function;
+        43: getstatic     #354                // Field net/minecraft/world/item/consume_effects/ConsumeEffect.STREAM_CODEC:Lnet/minecraft/network/codec/StreamCodec;
+        46: invokestatic  #355                // InterfaceMethod net/minecraft/network/codec/ByteBufCodecs.list:()Lnet/minecraft/network/codec/StreamCodec$CodecOperation;
+        49: invokeinterface #359,  2          // InterfaceMethod net/minecraft/network/codec/StreamCodec.apply:(Lnet/minecraft/network/codec/StreamCodec$CodecOperation;)Lnet/minecraft/network/codec/StreamCodec;
+        54: invokedynamic #319,  0            // InvokeDynamic #7:apply:()Ljava/util/function/Function;
+        59: invokedynamic #326,  0            // InvokeDynamic #8:apply:()Lcom/mojang/datafixers/util/Function5;
+        64: invokestatic  #364                // InterfaceMethod net/minecraft/network/codec/StreamCodec.composite:(Lnet/minecraft/network/codec/StreamCodec;Ljava/util/function/Function;Lnet/minecraft/network/codec/StreamCodec;Ljava/util/function/Function;Lnet/minecraft/network/codec/StreamCodec;Ljava/util/function/Function;Lnet/minecraft/network/codec/StreamCodec;Ljava/util/function/Function;Lnet/minecraft/network/codec/StreamCodec;Ljava/util/function/Function;Lcom/mojang/datafixers/util/Function5;)Lnet/minecraft/network/codec/StreamCodec;
+        67: putstatic     #368                // Field STREAM_CODEC:Lnet/minecraft/network/codec/StreamCodec;
+        70: return
+}

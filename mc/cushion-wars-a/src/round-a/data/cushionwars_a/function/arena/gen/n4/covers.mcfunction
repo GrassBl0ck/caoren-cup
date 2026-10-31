@@ -1,0 +1,57 @@
+# 由 tools/gen_map.py v2.0.0 从 tools/layout.py 生成，请勿手改。
+# 坐标：相对坐标 (x,z) + 中心偏移 (20000,20000)；y199 地面层，y200 站立/坐垫层。
+
+# N=4 固定掩体：52 格 / 104 方块，两层完整方块。
+# 分组：正面 24、中场 12、翼墙 12、角柱 4。
+fill 19993 200 19989 19993 201 19989 minecraft:stone_bricks
+fill 19994 200 19989 19994 201 19989 minecraft:stone_bricks
+fill 19995 200 19989 19995 201 19989 minecraft:stone_bricks
+fill 19997 200 19989 19997 201 19989 minecraft:stone_bricks
+fill 19998 200 19989 19998 201 19989 minecraft:stone_bricks
+fill 19999 200 19989 19999 201 19989 minecraft:stone_bricks
+fill 20001 200 19989 20001 201 19989 minecraft:stone_bricks
+fill 20002 200 19989 20002 201 19989 minecraft:stone_bricks
+fill 20003 200 19989 20003 201 19989 minecraft:stone_bricks
+fill 20005 200 19989 20005 201 19989 minecraft:stone_bricks
+fill 20006 200 19989 20006 201 19989 minecraft:stone_bricks
+fill 20007 200 19989 20007 201 19989 minecraft:stone_bricks
+fill 19993 200 19993 19993 201 19993 minecraft:stone_bricks
+fill 19994 200 19993 19994 201 19993 minecraft:stone_bricks
+fill 19995 200 19993 19995 201 19993 minecraft:stone_bricks
+fill 20005 200 19993 20005 201 19993 minecraft:stone_bricks
+fill 20006 200 19993 20006 201 19993 minecraft:stone_bricks
+fill 20007 200 19993 20007 201 19993 minecraft:stone_bricks
+fill 19990 200 19997 19990 201 19997 minecraft:stone_bricks
+fill 20010 200 19997 20010 201 19997 minecraft:stone_bricks
+fill 19990 200 19998 19990 201 19998 minecraft:stone_bricks
+fill 19998 200 19998 19998 201 19998 minecraft:stone_bricks
+fill 20002 200 19998 20002 201 19998 minecraft:stone_bricks
+fill 20010 200 19998 20010 201 19998 minecraft:stone_bricks
+fill 19990 200 19999 19990 201 19999 minecraft:stone_bricks
+fill 20010 200 19999 20010 201 19999 minecraft:stone_bricks
+fill 19990 200 20001 19990 201 20001 minecraft:stone_bricks
+fill 20010 200 20001 20010 201 20001 minecraft:stone_bricks
+fill 19990 200 20002 19990 201 20002 minecraft:stone_bricks
+fill 19998 200 20002 19998 201 20002 minecraft:stone_bricks
+fill 20002 200 20002 20002 201 20002 minecraft:stone_bricks
+fill 20010 200 20002 20010 201 20002 minecraft:stone_bricks
+fill 19990 200 20003 19990 201 20003 minecraft:stone_bricks
+fill 20010 200 20003 20010 201 20003 minecraft:stone_bricks
+fill 19993 200 20007 19993 201 20007 minecraft:stone_bricks
+fill 19994 200 20007 19994 201 20007 minecraft:stone_bricks
+fill 19995 200 20007 19995 201 20007 minecraft:stone_bricks
+fill 20005 200 20007 20005 201 20007 minecraft:stone_bricks
+fill 20006 200 20007 20006 201 20007 minecraft:stone_bricks
+fill 20007 200 20007 20007 201 20007 minecraft:stone_bricks
+fill 19993 200 20011 19993 201 20011 minecraft:stone_bricks
+fill 19994 200 20011 19994 201 20011 minecraft:stone_bricks
+fill 19995 200 20011 19995 201 20011 minecraft:stone_bricks
+fill 19997 200 20011 19997 201 20011 minecraft:stone_bricks
+fill 19998 200 20011 19998 201 20011 minecraft:stone_bricks
+fill 19999 200 20011 19999 201 20011 minecraft:stone_bricks
+fill 20001 200 20011 20001 201 20011 minecraft:stone_bricks
+fill 20002 200 20011 20002 201 20011 minecraft:stone_bricks
+fill 20003 200 20011 20003 201 20011 minecraft:stone_bricks
+fill 20005 200 20011 20005 201 20011 minecraft:stone_bricks
+fill 20006 200 20011 20006 201 20011 minecraft:stone_bricks
+fill 20007 200 20011 20007 201 20011 minecraft:stone_bricks

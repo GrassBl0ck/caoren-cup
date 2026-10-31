@@ -1,0 +1,27 @@
+# 坐垫战争：配置数值在下一局开始时取得快照。
+board:
+  world: world
+  center-x: 20000
+  center-z: 20000
+  ground-y: 199
+rules:
+  team-size: 4
+  personal-ap: 2
+  # -1 = 自动使用每队人数 N；分别保存红/蓝覆盖值。
+  red-shared-ap: -1
+  blue-shared-ap: -1
+  # 保留历史探针兼容字段，正式比赛使用上面的两队配置。
+  shared-ap: 4
+  initial-health: 40.0
+  max-health: 40.0
+  arrow-max-damage: 6.0
+  tipped-arrow-bonus: 6.0
+  action-phase-ticks: 600
+probe:
+  block-dismount: true
+  restrict-seat-team: true
+  crosshair-display: true
+  crosshair-range: 40
+  crosshair-interval-ticks: 5
+logging:
+  file: true

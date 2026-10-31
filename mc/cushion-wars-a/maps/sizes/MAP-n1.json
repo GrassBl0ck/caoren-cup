@@ -1,0 +1,251 @@
+{
+  "schema": "cushion-wars/size-manifest@2",
+  "generator": "tools/gen_map.py v2.0.0",
+  "layout_source": "tools/layout.py",
+  "team_size": 1,
+  "total_players": 2,
+  "size": 19,
+  "half": 9,
+  "origin": {
+    "center_x": 20000,
+    "center_z": 20000,
+    "ground_y": 199,
+    "play_y": 200
+  },
+  "absolute_board_box": {
+    "x": [
+      19991,
+      20009
+    ],
+    "z": [
+      19991,
+      20009
+    ],
+    "y": [
+      199,
+      201
+    ]
+  },
+  "counts": {
+    "ground_cells": 361,
+    "cover_cells": 22,
+    "cover_blocks": 44,
+    "free_cells": 339,
+    "covers_per_player": 11.0
+  },
+  "cover_groups": {
+    "spawn_front": 6,
+    "mid_wall": 0,
+    "wing_wall": 12,
+    "final_corner": 4,
+    "total": 22
+  },
+  "spawns": [
+    {
+      "id": "red1",
+      "team": "red",
+      "index": 1,
+      "x": 0,
+      "z": -7
+    },
+    {
+      "id": "blue1",
+      "team": "blue",
+      "index": 1,
+      "x": 0,
+      "z": 7
+    }
+  ],
+  "ap": {
+    "personal": 2,
+    "shared": 1,
+    "team_total": 3
+  },
+  "shrink_rounds": [
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "size": 19,
+      "max_health": 40,
+      "shrinks": false
+    },
+    {
+      "round": 2,
+      "size": 19,
+      "max_health": 40,
+      "shrinks": false
+    },
+    {
+      "round": 3,
+      "size": 19,
+      "max_health": 40,
+      "shrinks": false
+    },
+    {
+      "round": 4,
+      "size": 19,
+      "max_health": 40,
+      "shrinks": false
+    },
+    {
+      "round": 5,
+      "size": 19,
+      "max_health": 40,
+      "shrinks": false
+    },
+    {
+      "round": 6,
+      "size": 19,
+      "max_health": 40,
+      "shrinks": false
+    },
+    {
+      "round": 7,
+      "size": 17,
+      "max_health": 40,
+      "shrinks": true
+    },
+    {
+      "round": 8,
+      "size": 15,
+      "max_health": 40,
+      "shrinks": true
+    },
+    {
+      "round": 9,
+      "size": 13,
+      "max_health": 40,
+      "shrinks": true
+    },
+    {
+      "round": 10,
+      "size": 11,
+      "max_health": 40,
+      "shrinks": true
+    },
+    {
+      "round": 11,
+      "size": 9,
+      "max_health": 40,
+      "shrinks": true
+    },
+    {
+      "round": 12,
+      "size": 7,
+      "max_health": 36,
+      "shrinks": true
+    },
+    {
+      "round": 13,
+      "size": 5,
+      "max_health": 32,
+      "shrinks": true
+    },
+    {
+      "round": 14,
+      "size": 5,
+      "max_health": 28,
+      "shrinks": false
+    }
+  ],
+  "generated_files": [
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/ground.mcfunction",
+      "bytes": 10752,
+      "sha256": "de337b64ac79db64ff5d89123e7d02e2377e7dcfaeeb6138f9cb3bb5d41b018f"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/covers.mcfunction",
+      "bytes": 1620,
+      "sha256": "a65e120f6749500a2afa74abb034abafe47e035a9a4dff13ce63b6ac45c5f252"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/spawn_cushions.mcfunction",
+      "bytes": 626,
+      "sha256": "18d184768ad558e33b168e73bde56c360b3078f352283f0b323ec96deda3b429"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/selfcheck.mcfunction",
+      "bytes": 47519,
+      "sha256": "328b86105a5fcf94e3a8db456d6516d87263badf7d5c5440e6fb43660bfb5798"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/prepare.mcfunction",
+      "bytes": 857,
+      "sha256": "042bd286b9296c00e480ac17d6b0be6180833252d1e31627d013b21e824e32a2"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/shrink/r7.mcfunction",
+      "bytes": 1613,
+      "sha256": "c0bc76f6e48770c6e61989e539f5505ac747f721ef830bc5fc5f7b9a5755f2df"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/shrink/r8.mcfunction",
+      "bytes": 1613,
+      "sha256": "3e92000f3022c05fe6898aaf722d96cc61bb5e00e35d4ff6c1ab2c09d865daea"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/shrink/r9.mcfunction",
+      "bytes": 1613,
+      "sha256": "8b5bfeaba9c81e07baeb9e021427dd2858470223397e7cb3fcab1f9b6924b2c7"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/shrink/r10.mcfunction",
+      "bytes": 1614,
+      "sha256": "139b531366db0343cf5d9ef36a6814b277127d6684316e5681cde102d1780246"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/shrink/r11.mcfunction",
+      "bytes": 1604,
+      "sha256": "ca6c678c762d33f2bf3e0fdd54ff386c3fdb2eb4762da2666b551c08af2117dd"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/shrink/r12.mcfunction",
+      "bytes": 1596,
+      "sha256": "58603c021cbd4fa80db978a5e0b18ad1c14e68cb9433a341fe0a0513beb14dad"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/shrink/r13.mcfunction",
+      "bytes": 1596,
+      "sha256": "fc25a605bff1291867006c339714c9d5e3e745e2f9ecd72f1244f23689a82a5d"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/warn/r6.mcfunction",
+      "bytes": 4923,
+      "sha256": "10232beac2b89fb9e0d2f0a6d12d7cb518458be1ab715c32f6009d5ed159f32d"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/warn/r7.mcfunction",
+      "bytes": 4411,
+      "sha256": "d16fbd648aad7a0139270f5f26105ec5978617d42a74d751041061d94733d6b7"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/warn/r8.mcfunction",
+      "bytes": 3899,
+      "sha256": "90ac7dc6698405be4697523b26968774178e87ae2a2d850b33e94d9c22b6f818"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/warn/r9.mcfunction",
+      "bytes": 3388,
+      "sha256": "39f9bc48e391abb32fa6158a7001ad7cd8295c8cd5672ed4e7e0edb12778da9d"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/warn/r10.mcfunction",
+      "bytes": 2877,
+      "sha256": "8191eb86ce2dc1a5379452f73698b2281c10e6d1c0c21f2959f16f408738d729"
+    },
+    {
+      "path": "src/round-a/data/cushionwars_a/function/arena/gen/n1/warn/r11.mcfunction",
+      "bytes": 2365,
+      "sha256": "d109705a777cba4c04af8a0cd5e862cb5bce7310e58504b3d5f9af9df059b08b"
+    }
+  ]
+}

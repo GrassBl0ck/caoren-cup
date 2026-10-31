@@ -1,0 +1,173 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+package kernitus.plugin.OldCombatMechanics.utilities;
+
+import com.cryptomorin.xseries.XMaterial;
+import kernitus.plugin.OldCombatMechanics.utilities.potions.PotionDurations;
+import kernitus.plugin.OldCombatMechanics.utilities.potions.PotionKey;
+import org.bukkit.Material;
+import org.bukkit.configuration.ConfigurationSection;
+
+import java.util.*;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+/**
+ * Various utilities for making it easier to work with {@link org.bukkit.configuration.Configuration Configurations}.
+ *
+ * @see org.bukkit.configuration.file.YamlConfiguration
+ * @see org.bukkit.configuration.ConfigurationSection
+ */
+public class ConfigUtils {
+    private static final Set<String> warnedUnknownPotionDurationKeys = Collections.synchronizedSet(new HashSet<>());
+    private static final Set<String> warnedUnknownMaterialListKeys = Collections.synchronizedSet(new HashSet<>());
+    private static final Set<String> warnedUnknownMaterialMapKeys = Collections.synchronizedSet(new HashSet<>());
+
+    /** Reads a finite number within an inclusive range, warning and using the default for invalid input. */
+    public static double finiteDouble(ConfigurationSection section, String key, double fallback, double minimum, double maximum) {
+        if (section == null || !section.contains(key)) return fallback;
+        final Object raw = section.get(key);
+        final double value = raw instanceof Number ? ((Number) raw).doubleValue() : Double.NaN;
+        if (Double.isFinite(value) && value >= minimum && value <= maximum) return value;
+        Messenger.warn("Invalid %s.%s: expected a finite number between %s and %s; using %s",
+                section.getCurrentPath(), key, minimum, maximum, fallback);
+        return fallback;
+    }
+
+    /**
+     * Safely loads all doubles from a configuration section, reading both double and integer values.
+     *
+     * @param section The section from which to load the doubles.
+     * @return The map of doubles.
+     */
+    public static Map<String, Double> loadDoubleMap(ConfigurationSection section) {
+        Objects.requireNonNull(section, "section cannot be null!");
+
+        return section.getKeys(false).stream()
+                .filter(((Predicate<String>) section::isDouble).or(section::isInt))
+                .collect(Collectors.toMap(key -> key, section::getDouble));
+    }
+
+    /**
+     * Loads a material-to-double map from a configuration section.
+     * Safely ignores non-matching materials.
+     *
+     * @param section The section from which to load the values.
+     * @return The loaded material map.
+     */
+    public static Map<Material, Double> loadMaterialDoubleMap(ConfigurationSection section) {
+        Objects.requireNonNull(section, "section cannot be null!");
+
+        final String fullKey = section.getCurrentPath() == null ? "" : section.getCurrentPath();
+
+        return section.getKeys(false).stream()
+                .filter(((Predicate<String>) section::isDouble).or(section::isInt))
+                .map(key -> {
+                    Material material = matchMaterial(key);
+                    if (material == null && isUnknownMaterialKey(key)) {
+                        warnUnknownMaterialMap(fullKey, key);
+                        return null;
+                    }
+                    if (material == null) {
+                        return null;
+                    }
+                    return new AbstractMap.SimpleImmutableEntry<>(material, section.getDouble(key));
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (left, right) -> right));
+    }
+
+    /**
+     * Loads the list of {@link Material Materials} with the given key from a configuration section.
+     * Safely ignores non-matching materials.
+     *
+     * @param section The section from which to load the material list.
+     * @param key     The key of the material list.
+     * @return The loaded material list, or an empty list if there is no list at the given key.
+     */
+    public static List<Material> loadMaterialList(ConfigurationSection section, String key) {
+        Objects.requireNonNull(section, "section cannot be null!");
+        Objects.requireNonNull(key, "key cannot be null!");
+
+        if (!section.isList(key)) return new ArrayList<>();
+
+        final String basePath = section.getCurrentPath();
+        final String fullKey = basePath == null || basePath.isEmpty() ? key : basePath + "." + key;
+
+        return section.getStringList(key).stream()
+                .map(String::trim)
+                .map(name -> {
+                    Material material = matchMaterial(name);
+                    if (material == null && isUnknownMaterialKey(name)) {
+                        warnUnknownMaterial(fullKey, name);
+                        return null;
+                    }
+                    return material;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private static void warnUnknownMaterial(String fullKey, String name) {
+        final String warnKey = fullKey + ":" + name.toUpperCase(Locale.ROOT);
+        if (warnedUnknownMaterialListKeys.add(warnKey)) {
+            Messenger.warn("Unknown material '%s' in config list '%s'; skipping", name, fullKey);
+        }
+    }
+
+    private static void warnUnknownMaterialMap(String fullKey, String name) {
+        final String warnKey = fullKey + ":" + name.toUpperCase(Locale.ROOT);
+        if (warnedUnknownMaterialMapKeys.add(warnKey)) {
+            Messenger.warn("Unknown material '%s' in config section '%s'; skipping", name, fullKey);
+        }
+    }
+
+    private static Material matchMaterial(String name) {
+        Optional<XMaterial> match = XMaterial.matchXMaterial(name);
+        if (match.isPresent()) {
+            return match.get().parseMaterial();
+        }
+
+        return Material.matchMaterial(name);
+    }
+
+    private static boolean isUnknownMaterialKey(String name) {
+        return !XMaterial.matchXMaterial(name).isPresent() && Material.matchMaterial(name) == null;
+    }
+
+    /**
+     * Gets potion duration values from config for all configured potion types.
+     * Will create map of potion keys to durations.
+     *
+     * @param section The section from which to load the duration values
+     * @return HashMap of {@link String} and {@link PotionDurations}
+     */
+    public static HashMap<PotionKey, PotionDurations> loadPotionDurationsList(ConfigurationSection section) {
+        Objects.requireNonNull(section, "potion durations section cannot be null!");
+
+        final HashMap<PotionKey, PotionDurations> durationsHashMap = new HashMap<>();
+        final ConfigurationSection durationsSection = section.getConfigurationSection("potion-durations");
+
+        final ConfigurationSection drinkableSection = durationsSection.getConfigurationSection("drinkable");
+        final ConfigurationSection splashSection = durationsSection.getConfigurationSection("splash");
+
+        for (String newPotionTypeName : drinkableSection.getKeys(false)) {
+            // Get durations in seconds and convert to ticks
+            final int drinkableDuration = (int) Math.round(drinkableSection.getDouble(newPotionTypeName) * 20.0);
+            final int splashDuration = (int) Math.round(splashSection.getDouble(newPotionTypeName) * 20.0);
+
+            Optional<PotionKey> potionKey = PotionKey.fromConfigKey(newPotionTypeName);
+            if (potionKey.isPresent()) {
+                durationsHashMap.put(potionKey.get(), new PotionDurations(drinkableDuration, splashDuration));
+            } else if (warnedUnknownPotionDurationKeys.add(newPotionTypeName)) {
+                Messenger.warn("Unknown potion type '%s' in old-potion-effects.potion-durations; skipping", newPotionTypeName);
+            }
+        }
+
+        return durationsHashMap;
+    }
+
+}

@@ -1,0 +1,402 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+package kernitus.plugin.OldCombatMechanics
+
+import com.cryptomorin.xseries.XPotion
+import com.google.common.base.Function
+import io.kotest.common.ExperimentalKotest
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.doubles.plusOrMinus
+import io.kotest.matchers.doubles.shouldBeLessThanOrEqual
+import io.kotest.matchers.shouldBe
+import kernitus.plugin.OldCombatMechanics.module.ModuleOldArmourStrength
+import kernitus.plugin.OldCombatMechanics.utilities.Config
+import kernitus.plugin.OldCombatMechanics.utilities.storage.PlayerStorage.getPlayerData
+import kernitus.plugin.OldCombatMechanics.utilities.storage.PlayerStorage.setPlayerData
+import org.bukkit.Bukkit
+import org.bukkit.Location
+import org.bukkit.Material
+import org.bukkit.entity.Player
+import org.bukkit.event.entity.EntityDamageEvent
+import org.bukkit.inventory.ItemStack
+import org.bukkit.plugin.java.JavaPlugin
+import org.bukkit.potion.PotionEffect
+import java.util.EnumMap
+import java.util.Locale
+import java.util.concurrent.Callable
+
+@OptIn(ExperimentalKotest::class)
+class OldArmourStrengthModesetIntegrationTest :
+    FunSpec({
+        val testPlugin = JavaPlugin.getPlugin(OCMTestMain::class.java)
+        val ocm = JavaPlugin.getPlugin(OCMMain::class.java)
+        val module =
+            ModuleLoader
+                .getModules()
+                .filterIsInstance<ModuleOldArmourStrength>()
+                .firstOrNull() ?: error("ModuleOldArmourStrength not registered")
+
+        lateinit var player: Player
+        lateinit var fakePlayer: FakePlayer
+
+        extensions(MainThreadDispatcherExtension(testPlugin))
+
+        fun runSync(action: () -> Unit) {
+            if (Bukkit.isPrimaryThread()) {
+                action()
+            } else {
+                Bukkit
+                    .getScheduler()
+                    .callSyncMethod(
+                        testPlugin,
+                        Callable {
+                            action()
+                            null
+                        },
+                    ).get()
+            }
+        }
+
+        fun snapshotSection(path: String): Any? {
+            val section = ocm.config.getConfigurationSection(path)
+            return section?.getValues(false) ?: ocm.config.get(path)
+        }
+
+        fun restoreSection(
+            path: String,
+            value: Any?,
+        ) {
+            ocm.config.set(path, null)
+            when (value) {
+                null -> {
+                    Unit
+                }
+
+                is Map<*, *> -> {
+                    @Suppress("UNCHECKED_CAST")
+                    ocm.config.createSection(path, value as Map<String, Any?>)
+                }
+
+                else -> {
+                    ocm.config.set(path, value)
+                }
+            }
+        }
+
+        fun configurableModules(): List<String> {
+            val internalModules =
+                setOf(
+                    "modeset-listener",
+                    "attack-cooldown-tracker",
+                    "entity-damage-listener",
+                )
+            val optionalModules =
+                setOf(
+                    "disable-attack-sounds",
+                    "disable-sword-sweep-particles",
+                )
+
+            return (
+                ModuleLoader
+                    .getModules()
+                    .map { it.configName.lowercase(Locale.ROOT) }
+                    .filterNot { internalModules.contains(it) } + optionalModules
+            ).distinct().sorted()
+        }
+
+        fun reloadConfigAndModules() {
+            ocm.saveConfig()
+            Config.reload()
+            ModuleLoader.toggleModules()
+            module.reload()
+        }
+
+        fun applyIssue861Config() {
+            val oldArmourStrength = "old-armour-strength"
+            ocm.config.set("always_enabled_modules", emptyList<String>())
+            ocm.config.set("disabled_modules", configurableModules().filterNot { it == oldArmourStrength })
+            ocm.config.set("modesets", null)
+            ocm.config.createSection(
+                "modesets",
+                mapOf(
+                    "old" to listOf(oldArmourStrength),
+                    "new" to emptyList<String>(),
+                ),
+            )
+            ocm.config.set("worlds", null)
+            ocm.config.createSection("worlds", mapOf("world" to listOf("new")))
+            reloadConfigAndModules()
+        }
+
+        suspend fun withIssue861Config(block: suspend () -> Unit) {
+            val originalAlways = ocm.config.get("always_enabled_modules")
+            val originalDisabled = ocm.config.get("disabled_modules")
+            val originalModesets = snapshotSection("modesets")
+            val originalWorlds = snapshotSection("worlds")
+
+            try {
+                applyIssue861Config()
+                block()
+            } finally {
+                runSync {
+                    ocm.config.set("always_enabled_modules", originalAlways)
+                    ocm.config.set("disabled_modules", originalDisabled)
+                    restoreSection("modesets", originalModesets)
+                    restoreSection("worlds", originalWorlds)
+                    reloadConfigAndModules()
+                }
+            }
+        }
+
+        fun setModeset(
+            target: Player,
+            modeset: String,
+        ) {
+            val playerData = getPlayerData(target.uniqueId)
+            playerData.setModesetForWorld(target.world.uid, modeset)
+            setPlayerData(target.uniqueId, playerData)
+        }
+
+        fun setModeset(modeset: String) {
+            setModeset(player, modeset)
+        }
+
+        @Suppress("DEPRECATION")
+        fun createExplosionDamageEvent(
+            target: Player = player,
+            cause: EntityDamageEvent.DamageCause = EntityDamageEvent.DamageCause.BLOCK_EXPLOSION,
+        ): EntityDamageEvent {
+            val modifiers =
+                EnumMap<EntityDamageEvent.DamageModifier, Double>(
+                    EntityDamageEvent.DamageModifier::class.java,
+                )
+            modifiers[EntityDamageEvent.DamageModifier.BASE] = 20.0
+            modifiers[EntityDamageEvent.DamageModifier.ARMOR] = -8.0
+            modifiers[EntityDamageEvent.DamageModifier.MAGIC] = -2.0
+
+            val identity =
+                object : Function<Double, Double> {
+                    override fun apply(input: Double): Double = input
+                }
+            val modifierFunctions =
+                EnumMap<EntityDamageEvent.DamageModifier, Function<in Double, Double>>(
+                    EntityDamageEvent.DamageModifier::class.java,
+                )
+            modifiers.keys.forEach { modifierFunctions[it] = identity }
+
+            return EntityDamageEvent(
+                target,
+                cause,
+                modifiers,
+                modifierFunctions,
+            )
+        }
+
+        // Reproduce the legacy server's resistance and negative-damage clamp functions.
+        // Bukkit keeps these functions when plugins replace individual modifier values.
+        @Suppress("DEPRECATION")
+        fun createLegacyResistanceEvent(amplifier: Int): EntityDamageEvent {
+            val functions =
+                EnumMap<EntityDamageEvent.DamageModifier, Function<in Double, Double>>(
+                    EntityDamageEvent.DamageModifier::class.java,
+                )
+            functions[EntityDamageEvent.DamageModifier.BASE] = Function { 0.0 }
+            functions[EntityDamageEvent.DamageModifier.ARMOR] = Function { 0.0 }
+            functions[EntityDamageEvent.DamageModifier.RESISTANCE] =
+                Function { damage -> -(damage * (amplifier + 1) * 0.2).toFloat().toDouble() }
+            functions[EntityDamageEvent.DamageModifier.MAGIC] = Function { damage -> -minOf(0.0, damage) }
+            functions[EntityDamageEvent.DamageModifier.ABSORPTION] = Function { 0.0 }
+
+            val modifiers =
+                EnumMap<EntityDamageEvent.DamageModifier, Double>(EntityDamageEvent.DamageModifier::class.java)
+            modifiers[EntityDamageEvent.DamageModifier.BASE] = 18.0
+            var remainingDamage = 18.0
+            functions.forEach { (modifier, function) ->
+                if (modifier != EntityDamageEvent.DamageModifier.BASE) {
+                    val adjustment = function.apply(remainingDamage)
+                    modifiers[modifier] = adjustment
+                    remainingDamage += adjustment
+                }
+            }
+            return EntityDamageEvent(player, EntityDamageEvent.DamageCause.PROJECTILE, modifiers, functions)
+        }
+
+        beforeSpec {
+            runSync {
+                val world = checkNotNull(Bukkit.getServer().getWorld("world"))
+                fakePlayer = FakePlayer(testPlugin)
+                fakePlayer.spawn(Location(world, 0.0, 100.0, 0.0))
+                player = checkNotNull(Bukkit.getPlayer(fakePlayer.uuid))
+            }
+        }
+
+        afterSpec {
+            runSync {
+                fakePlayer.removePlayer()
+            }
+        }
+
+        beforeTest {
+            runSync {
+                player.inventory.clear()
+                player.activePotionEffects.forEach { player.removePotionEffect(it.type) }
+                player.inventory.setChestplate(ItemStack(Material.DIAMOND_CHESTPLATE))
+            }
+        }
+
+        test("old-armour-strength leaves explosion modifiers unchanged in new modeset") {
+            withIssue861Config {
+                runSync {
+                    setModeset("new")
+
+                    val event = createExplosionDamageEvent()
+                    val originalArmour = event.getDamage(EntityDamageEvent.DamageModifier.ARMOR)
+                    val originalMagic = event.getDamage(EntityDamageEvent.DamageModifier.MAGIC)
+                    val originalFinalDamage = event.finalDamage
+
+                    module.isEnabled(player) shouldBe false
+                    module.onEntityDamage(event)
+
+                    event.getDamage(EntityDamageEvent.DamageModifier.ARMOR) shouldBe (originalArmour plusOrMinus 0.0001)
+                    event.getDamage(EntityDamageEvent.DamageModifier.MAGIC) shouldBe (originalMagic plusOrMinus 0.0001)
+                    event.finalDamage shouldBe (originalFinalDamage plusOrMinus 0.0001)
+                }
+            }
+        }
+
+        test("old-armour-strength applies old armour modifiers to explosion damage in old modeset") {
+            withIssue861Config {
+                runSync {
+                    setModeset("old")
+
+                    val event = createExplosionDamageEvent()
+
+                    module.isEnabled(player) shouldBe true
+                    module.onEntityDamage(event)
+
+                    event.getDamage(EntityDamageEvent.DamageModifier.ARMOR) shouldBe (-6.4 plusOrMinus 0.0001)
+                    event.getDamage(EntityDamageEvent.DamageModifier.MAGIC) shouldBe (0.0 plusOrMinus 0.0001)
+                    event.finalDamage shouldBe (13.6 plusOrMinus 0.0001)
+                }
+            }
+        }
+
+        for ((cause, expectedArmour) in listOf(
+            EntityDamageEvent.DamageCause.FIRE to -6.4,
+            EntityDamageEvent.DamageCause.FIRE_TICK to 0.0,
+        )) {
+            test("legacy cause fallback preserves $cause armour eligibility") {
+                withIssue861Config {
+                    runSync {
+                        setModeset("old")
+                        val event = createExplosionDamageEvent(cause = cause)
+                        // Legacy APIs have no source. Modern deprecated constructors synthesise GENERIC.
+                        module.onEntityDamage(event)
+                        event.getDamage(EntityDamageEvent.DamageModifier.ARMOR) shouldBe
+                            (expectedArmour plusOrMinus 0.0001)
+                    }
+                }
+            }
+        }
+
+        for (amplifier in listOf(4, 5, 255)) {
+            test("full resistance clears stale magic damage at amplifier $amplifier") {
+                withIssue861Config {
+                    runSync {
+                        setModeset("old")
+                        player.inventory.clear()
+                        player.addPotionEffect(PotionEffect(checkNotNull(XPotion.RESISTANCE.get()), 200, amplifier))
+                        val event = createLegacyResistanceEvent(amplifier)
+                        event.finalDamage shouldBe (0.0 plusOrMinus 0.0001)
+
+                        module.onEntityDamage(event)
+
+                        event.getDamage(EntityDamageEvent.DamageModifier.MAGIC) shouldBe (0.0 plusOrMinus 0.0001)
+                        event.finalDamage shouldBe (0.0 plusOrMinus 0.0001)
+
+                        // A later plugin, such as CrackShot, can change the raw damage.
+                        // Legacy Bukkit may then report negative final damage; it must never become damaging.
+                        event.damage = 2.0
+                        event.finalDamage.shouldBeLessThanOrEqual(0.0001)
+                    }
+                }
+            }
+        }
+
+        test("full resistance clears a retained enchantment reduction") {
+            withIssue861Config {
+                runSync {
+                    setModeset("old")
+                    player.inventory.clear()
+                    player.addPotionEffect(PotionEffect(checkNotNull(XPotion.RESISTANCE.get()), 200, 4))
+                    val event = createLegacyResistanceEvent(4)
+                    event.setDamage(EntityDamageEvent.DamageModifier.MAGIC, -2.0)
+
+                    module.onEntityDamage(event)
+
+                    event.getDamage(EntityDamageEvent.DamageModifier.MAGIC) shouldBe (0.0 plusOrMinus 0.0001)
+                    event.finalDamage shouldBe (0.0 plusOrMinus 0.0001)
+                }
+            }
+        }
+
+        test("partial resistance still scales when a later plugin changes damage") {
+            withIssue861Config {
+                runSync {
+                    setModeset("old")
+                    player.inventory.clear()
+                    player.addPotionEffect(PotionEffect(checkNotNull(XPotion.RESISTANCE.get()), 200, 0))
+                    val event = createLegacyResistanceEvent(0)
+
+                    module.onEntityDamage(event)
+
+                    event.finalDamage shouldBe (14.4 plusOrMinus 0.0001)
+                    event.damage = 2.0
+                    event.finalDamage shouldBe (1.6 plusOrMinus 0.0001)
+                }
+            }
+        }
+
+        test("old-armour-strength ignores retained offline player-shaped defenders") {
+            withIssue861Config {
+                runSync {
+                    val world = checkNotNull(Bukkit.getServer().getWorld("world"))
+                    val offlineFake = FakePlayer(testPlugin)
+
+                    try {
+                        offlineFake.spawn(Location(world, 4.5, 100.0, 0.0))
+                        val offlinePlayer = checkNotNull(Bukkit.getPlayer(offlineFake.uuid))
+                        offlinePlayer.inventory.setChestplate(ItemStack(Material.DIAMOND_CHESTPLATE))
+                        setModeset(offlinePlayer, "old")
+
+                        offlineFake.removePlayer()
+                        offlinePlayer.isOnline shouldBe false
+
+                        val event = createExplosionDamageEvent(offlinePlayer)
+                        val originalArmour = event.getDamage(EntityDamageEvent.DamageModifier.ARMOR)
+                        val originalMagic = event.getDamage(EntityDamageEvent.DamageModifier.MAGIC)
+                        val originalFinalDamage = event.finalDamage
+                        val thrown =
+                            runCatching {
+                                module.onEntityDamage(event)
+                            }.exceptionOrNull()
+
+                        thrown shouldBe null
+                        event.getDamage(EntityDamageEvent.DamageModifier.ARMOR) shouldBe
+                            (originalArmour plusOrMinus 0.0001)
+                        event.getDamage(EntityDamageEvent.DamageModifier.MAGIC) shouldBe
+                            (originalMagic plusOrMinus 0.0001)
+                        event.finalDamage shouldBe (originalFinalDamage plusOrMinus 0.0001)
+                    } finally {
+                        if (Bukkit.getPlayer(offlineFake.uuid) != null) {
+                            offlineFake.removePlayer()
+                        }
+                    }
+                }
+            }
+        }
+    })

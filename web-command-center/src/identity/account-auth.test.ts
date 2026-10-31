@@ -335,7 +335,7 @@ test('account HTTP failures are limited by IP and the exact case-sensitive login
     assert.equal(guard.recordedKeys[0].includes('account:casesensitive_1'), false);
 });
 
-test('game-code HTTP flow reveals first credentials once and uses a bound one-time ticket for later recovery', async (t) => {
+test('game-code HTTP flow refuses new registrations and recovers existing unbound-email accounts with a one-time ticket', async (t) => {
     const gameCodes = new Map<string, { steamId: string; name: string }>([
         ['FIRST1', { steamId: '76561198000000107', name: 'First Steam Name' }],
     ]);
@@ -348,14 +348,12 @@ test('game-code HTTP flow reveals first credentials once and uses a bound one-ti
     t.after(runtime.close);
 
     const first = await postJson(`${runtime.baseUrl}/api/account-recovery/game-code`, { gameCode: 'first1' });
-    assert.equal(first.status, 200);
-    assert.equal(first.body.flow, 'created');
-    assert.match(first.body.credentials.loginName, /^cc_/);
-    assert.match(first.body.credentials.initialPassword, /^[A-HJ-NP-Za-hj-km-np-z2-9]{14}$/);
-    assert.equal(JSON.stringify(runtime.store.snapshot()).includes(first.body.credentials.initialPassword), false);
-    assert.equal(typeof first.body.sessionBootstrapTicket, 'string');
-    const createdIdentityId = runtime.service.findIdentityBySteamId('76561198000000107')!.identityId;
-    assert.equal(runtime.bootstrapTickets.consume(first.body.sessionBootstrapTicket)?.identityId, createdIdentityId);
+    assert.equal(first.status, 400);
+    assert.equal(first.body.error, 'account_registration_on_web');
+    assert.equal(runtime.service.findIdentityBySteamId('76561198000000107'), undefined);
+    const legacy = await createTestLoginAccount(runtime.service, {
+        steamId: '76561198000000107', nickname: 'Legacy Player', password: 'legacy-password',
+    });
 
     const replay = await postJson(`${runtime.baseUrl}/api/account-recovery/game-code`, { gameCode: 'FIRST1' });
     assert.deepEqual({ status: replay.status, error: replay.body.error }, {
@@ -369,7 +367,7 @@ test('game-code HTTP flow reveals first credentials once and uses a bound one-ti
         'flow', 'loginName', 'recoveryTicket', 'recoveryTicketExpiresAt', 'success',
     ]);
     assert.equal(recovery.body.flow, 'recovery_required');
-    assert.equal(recovery.body.loginName, first.body.credentials.loginName);
+    assert.equal(recovery.body.loginName, legacy.account.loginName);
     assert.equal(JSON.stringify(recovery.body).match(/initialPassword|oldPassword|hash|salt/i), null);
 
     const mismatch = await postJson(`${runtime.baseUrl}/api/account-recovery/complete`, {
@@ -387,16 +385,16 @@ test('game-code HTTP flow reveals first credentials once and uses a bound one-ti
         confirmPassword: 'replacement-pass',
     });
     assert.equal(completed.status, 200);
-    assert.equal(completed.body.account.loginName, first.body.credentials.loginName);
+    assert.equal(completed.body.account.loginName, legacy.account.loginName);
     assert.equal(completed.body.revocation.revokeOtherPlayerCenterSessions, true);
     assert.equal(typeof completed.body.sessionBootstrapTicket, 'string');
     assert.equal(JSON.stringify(completed.body).match(/replacement-pass|hash|salt/i), null);
     assert.equal((await runtime.service.authenticateLoginAccount({
-        loginName: first.body.credentials.loginName,
-        password: first.body.credentials.initialPassword,
+        loginName: legacy.account.loginName,
+        password: legacy.password,
     })).ok, false);
     assert.equal((await runtime.service.authenticateLoginAccount({
-        loginName: first.body.credentials.loginName,
+        loginName: legacy.account.loginName,
         password: 'replacement-pass',
     })).ok, true);
 

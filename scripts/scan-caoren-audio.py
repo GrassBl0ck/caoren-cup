@@ -95,8 +95,8 @@ def scan(source_root, catalog_path, output_root, ffprobe=None, ffmpeg=None):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source',type=Path,default=REPO/'game-plugin/Features/InGameMenu/audio-source')
-    parser.add_argument('--catalog',type=Path,default=REPO/'game-plugin/Features/InGameMenu/audio-events.json')
+    parser.add_argument('--source',type=Path,default=REPO/'cs/game-plugin/Features/InGameMenu/audio-source')
+    parser.add_argument('--catalog',type=Path,default=REPO/'cs/game-plugin/Features/InGameMenu/audio-events.json')
     parser.add_argument('--output',type=Path,default=REPO/'release-build/ingamemenu-audio'/('scan-'+datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')))
     parser.add_argument('--ffprobe'); parser.add_argument('--ffmpeg')
     args=parser.parse_args()

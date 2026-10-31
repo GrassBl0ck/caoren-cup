@@ -1,0 +1,207 @@
+Compiled from "BowItem.java"
+public class net.minecraft.world.item.BowItem extends net.minecraft.world.item.ProjectileWeaponItem {
+  public static final int MAX_DRAW_DURATION;
+
+  public static final int DEFAULT_RANGE;
+
+  public net.minecraft.world.item.BowItem(net.minecraft.world.item.Item$Properties);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokespecial #3                  // Method net/minecraft/world/item/ProjectileWeaponItem."<init>":(Lnet/minecraft/world/item/Item$Properties;)V
+         5: return
+
+  public boolean releaseUsing(net.minecraft.world.item.ItemStack, net.minecraft.world.level.Level, net.minecraft.world.entity.LivingEntity, int);
+    Code:
+         0: aload_3
+         1: instanceof    #9                  // class net/minecraft/world/entity/player/Player
+         4: ifeq          16
+         7: aload_3
+         8: checkcast     #9                  // class net/minecraft/world/entity/player/Player
+        11: astore        5
+        13: goto          18
+        16: iconst_0
+        17: ireturn
+        18: aload         5
+        20: aload_1
+        21: invokevirtual #11                 // Method net/minecraft/world/entity/player/Player.getProjectile:(Lnet/minecraft/world/item/ItemStack;)Lnet/minecraft/world/item/ItemStack;
+        24: astore        6
+        26: aload         6
+        28: invokevirtual #15                 // Method net/minecraft/world/item/ItemStack.isEmpty:()Z
+        31: ifeq          36
+        34: iconst_0
+        35: ireturn
+        36: aload_0
+        37: aload_1
+        38: aload_3
+        39: invokevirtual #21                 // Method getUseDuration:(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/LivingEntity;)I
+        42: iload         4
+        44: isub
+        45: istore        7
+        47: iload         7
+        49: invokestatic  #27                 // Method getPowerForTime:(I)F
+        52: fstore        8
+        54: fload         8
+        56: f2d
+        57: ldc2_w        #31                 // double 0.1d
+        60: dcmpg
+        61: ifge          66
+        64: iconst_0
+        65: ireturn
+        66: aload_1
+        67: aload         6
+        69: aload         5
+        71: invokestatic  #33                 // Method draw:(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/LivingEntity;)Ljava/util/List;
+        74: astore        9
+        76: aload_2
+        77: instanceof    #37                 // class net/minecraft/server/level/ServerLevel
+        80: ifeq          134
+        83: aload_2
+        84: checkcast     #37                 // class net/minecraft/server/level/ServerLevel
+        87: astore        10
+        89: aload         9
+        91: invokeinterface #39,  1           // InterfaceMethod java/util/List.isEmpty:()Z
+        96: ifne          134
+        99: aload_0
+       100: aload         10
+       102: aload         5
+       104: aload         5
+       106: invokevirtual #42                 // Method net/minecraft/world/entity/player/Player.getUsedItemHand:()Lnet/minecraft/world/InteractionHand;
+       109: aload_1
+       110: aload         9
+       112: fload         8
+       114: ldc           #46                 // float 3.0f
+       116: fmul
+       117: fconst_1
+       118: fload         8
+       120: fconst_1
+       121: fcmpl
+       122: ifne          129
+       125: iconst_1
+       126: goto          130
+       129: iconst_0
+       130: aconst_null
+       131: invokevirtual #47                 // Method shoot:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/item/ItemStack;Ljava/util/List;FFZLnet/minecraft/world/entity/LivingEntity;)V
+       134: aload_2
+       135: aconst_null
+       136: aload         5
+       138: invokevirtual #51                 // Method net/minecraft/world/entity/player/Player.getX:()D
+       141: aload         5
+       143: invokevirtual #55                 // Method net/minecraft/world/entity/player/Player.getY:()D
+       146: aload         5
+       148: invokevirtual #58                 // Method net/minecraft/world/entity/player/Player.getZ:()D
+       151: getstatic     #61                 // Field net/minecraft/sounds/SoundEvents.ARROW_SHOOT:Lnet/minecraft/sounds/SoundEvent;
+       154: getstatic     #67                 // Field net/minecraft/sounds/SoundSource.PLAYERS:Lnet/minecraft/sounds/SoundSource;
+       157: fconst_1
+       158: fconst_1
+       159: aload_2
+       160: invokevirtual #73                 // Method net/minecraft/world/level/Level.getRandom:()Lnet/minecraft/util/RandomSource;
+       163: invokeinterface #79,  1           // InterfaceMethod net/minecraft/util/RandomSource.nextFloat:()F
+       168: ldc           #85                 // float 0.4f
+       170: fmul
+       171: ldc           #86                 // float 1.2f
+       173: fadd
+       174: fdiv
+       175: fload         8
+       177: ldc           #87                 // float 0.5f
+       179: fmul
+       180: fadd
+       181: invokevirtual #88                 // Method net/minecraft/world/level/Level.playSound:(Lnet/minecraft/world/entity/Entity;DDDLnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FF)V
+       184: aload         5
+       186: getstatic     #92                 // Field net/minecraft/stats/Stats.ITEM_USED:Lnet/minecraft/stats/StatType;
+       189: aload_0
+       190: invokevirtual #98                 // Method net/minecraft/stats/StatType.get:(Ljava/lang/Object;)Lnet/minecraft/stats/Stat;
+       193: invokevirtual #104                // Method net/minecraft/world/entity/player/Player.awardStat:(Lnet/minecraft/stats/Stat;)V
+       196: iconst_1
+       197: ireturn
+
+  protected void shootProjectile(net.minecraft.world.entity.LivingEntity, net.minecraft.world.entity.projectile.Projectile, int, float, float, float, net.minecraft.world.entity.LivingEntity);
+    Code:
+         0: aload_2
+         1: aload_1
+         2: aload_1
+         3: invokevirtual #108                // Method net/minecraft/world/entity/LivingEntity.getXRot:()F
+         6: aload_1
+         7: invokevirtual #113                // Method net/minecraft/world/entity/LivingEntity.getYRot:()F
+        10: fload         6
+        12: fadd
+        13: fconst_0
+        14: fload         4
+        16: fload         5
+        18: invokevirtual #116                // Method net/minecraft/world/entity/projectile/Projectile.shootFromRotation:(Lnet/minecraft/world/entity/Entity;FFFFF)V
+        21: return
+
+  public static float getPowerForTime(int);
+    Code:
+         0: iload_0
+         1: i2f
+         2: ldc           #122                // float 20.0f
+         4: fdiv
+         5: fstore_1
+         6: fload_1
+         7: fload_1
+         8: fmul
+         9: fload_1
+        10: fconst_2
+        11: fmul
+        12: fadd
+        13: ldc           #46                 // float 3.0f
+        15: fdiv
+        16: fstore_1
+        17: fload_1
+        18: fconst_1
+        19: fcmpl
+        20: ifle          25
+        23: fconst_1
+        24: fstore_1
+        25: fload_1
+        26: freturn
+
+  public int getUseDuration(net.minecraft.world.item.ItemStack, net.minecraft.world.entity.LivingEntity);
+    Code:
+         0: ldc           #125                // int 72000
+         2: ireturn
+
+  public net.minecraft.world.item.ItemUseAnimation getUseAnimation(net.minecraft.world.item.ItemStack);
+    Code:
+         0: getstatic     #126                // Field net/minecraft/world/item/ItemUseAnimation.BOW:Lnet/minecraft/world/item/ItemUseAnimation;
+         3: areturn
+
+  public net.minecraft.world.InteractionResult use(net.minecraft.world.level.Level, net.minecraft.world.entity.player.Player, net.minecraft.world.InteractionHand);
+    Code:
+         0: aload_2
+         1: aload_3
+         2: invokevirtual #132                // Method net/minecraft/world/entity/player/Player.getItemInHand:(Lnet/minecraft/world/InteractionHand;)Lnet/minecraft/world/item/ItemStack;
+         5: astore        4
+         7: aload_2
+         8: aload         4
+        10: invokevirtual #11                 // Method net/minecraft/world/entity/player/Player.getProjectile:(Lnet/minecraft/world/item/ItemStack;)Lnet/minecraft/world/item/ItemStack;
+        13: invokevirtual #15                 // Method net/minecraft/world/item/ItemStack.isEmpty:()Z
+        16: ifne          23
+        19: iconst_1
+        20: goto          24
+        23: iconst_0
+        24: istore        5
+        26: aload_2
+        27: invokevirtual #136                // Method net/minecraft/world/entity/player/Player.hasInfiniteMaterials:()Z
+        30: ifne          38
+        33: iload         5
+        35: ifeq          47
+        38: aload_2
+        39: aload_3
+        40: invokevirtual #139                // Method net/minecraft/world/entity/player/Player.startUsingItem:(Lnet/minecraft/world/InteractionHand;)V
+        43: getstatic     #143                // Field net/minecraft/world/InteractionResult.CONSUME:Lnet/minecraft/world/InteractionResult$Success;
+        46: areturn
+        47: getstatic     #149                // Field net/minecraft/world/InteractionResult.FAIL:Lnet/minecraft/world/InteractionResult$Fail;
+        50: areturn
+
+  public java.util.function.Predicate<net.minecraft.world.item.ItemStack> getAllSupportedProjectiles();
+    Code:
+         0: getstatic     #153                // Field ARROW_ONLY:Ljava/util/function/Predicate;
+         3: areturn
+
+  public int getDefaultProjectileRange();
+    Code:
+         0: bipush        15
+         2: ireturn
+}

@@ -1,0 +1,12 @@
+name: CrossEraProbe
+version: '${version}'
+main: com.caoren.crossera.probe.CrossEraProbe
+api-version: '26.3'
+description: Stage 03 development environment and damage observation probe.
+softdepend: [OldCombatMechanics]
+commands:
+  ceprobe:
+    description: 显示开发环境与伤害记录状态
+permissions:
+  crossera.probe:
+    default: op

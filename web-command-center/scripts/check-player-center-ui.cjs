@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'pages', 'cs.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'player-center.js'), 'utf8');
 const lobbyJs = fs.readFileSync(path.join(root, 'public', 'js', 'lobby-app.js'), 'utf8');
 const socketHandlers = fs.readFileSync(path.join(root, 'src', 'socket-handlers.ts'), 'utf8');
@@ -10,7 +10,7 @@ const accessAdminJs = fs.readFileSync(path.join(root, 'public', 'js', 'access-ad
 const audioJs = fs.readFileSync(path.join(root, 'public', 'js', 'caoren-audio-controller.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 
-if (!html.includes('/js/player-center.js?v=1.11.1-pcskin1')) {
+if (!html.includes('/js/player-center.js?v=2.0.0')) {
   throw new Error('player-center cache version must match the account session notification update');
 }
 if (!html.includes('/js/lobby-app.js?v=1.11.1-pcskin1')) {

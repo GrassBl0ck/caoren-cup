@@ -41,7 +41,7 @@ import {
 import { ADMIN_PASSWORD } from './game-constants';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds, normalizeDuelMap, normalizeDuelRoundTimeMinutes, normalizeDuelRounds, normalizeDuelUtilityMode, normalizeDuelWorkshopId } from './duel-config';
 import { registerIdentityAuthRoutes } from './identity/auth-routes';
-import { registerSteamAuthRoutes } from './identity/steam-auth-routes';
+import { registerBoardPages } from './portal-routes';
 import { normalizeUnbalancedRosterOptions } from './unbalanced-roster';
 import { GAME_MODE_MANIFESTS, normalizeGameModeId, normalizeGameModeOverrides, modeUsesUndercoverFlow, modeUsesUnbalancedRoster } from './game-mode';
 import { initializeIdentityRuntime, lobbyIdentityService, playerCenterBootstrapTickets, playerCenterMatchSocketTickets, playerCenterSessionStore } from './identity/identity-runtime';
@@ -62,6 +62,11 @@ import {
 const app = express();
 if (process.env.TRUST_PROXY === 'loopback') app.set('trust proxy', 'loopback');
 app.use(express.json({ limit: '1mb' }));
+registerBoardPages(app, {
+    service: lobbyIdentityService,
+    sessions: playerCenterSessionStore,
+    pagesDirectory: path.resolve(__dirname, '..', 'pages'),
+});
 app.use(express.static('public', {
     setHeaders: (res, filePath) => {
         const normalizedFilePath = filePath.replace(/\\/g, '/');
@@ -204,12 +209,6 @@ registerIdentityAuthRoutes(app, {
             saveSessionSnapshotNow();
         }
     },
-});
-registerSteamAuthRoutes(app, {
-    service: lobbyIdentityService,
-    sessions: playerCenterSessionStore,
-    bootstrapTickets: playerCenterBootstrapTickets,
-    publicBaseUrl: process.env.STEAM_AUTH_PUBLIC_BASE_URL,
 });
 
 const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {

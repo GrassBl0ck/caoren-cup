@@ -46,7 +46,7 @@ $zipRelative = "release-output/$baseName-$label-$Version.zip"
 if (Test-Path -LiteralPath (Resolve-ReleasePath $repoRoot $zipRelative)) { throw 'Package already exists; do not overwrite' }
 if ('CS2MiniGames' -in @($plugins.name)) {
     # Retain the existing mini-games test gate when moving its ZIP into the new scheme.
-    & dotnet test (Resolve-ReleasePath $repoRoot 'mini-games-plugin/CS2MiniGames.sln') -c Release --no-restore --verbosity quiet
+    & dotnet test (Resolve-ReleasePath $repoRoot 'cs/mini-games-plugin/CS2MiniGames.sln') -c Release --no-restore --verbosity quiet
     if ($LASTEXITCODE -ne 0) { throw 'Mini-games package tests failed' }
 }
 $buildRoot = Resolve-ReleasePath $repoRoot ('release-build/server-package-' + [Guid]::NewGuid().ToString('N'))
@@ -66,12 +66,12 @@ foreach ($plugin in $plugins) {
         $required += "$relative/LICENSE", "$relative/UPSTREAM.md", "$relative/MySqlConnector.dll", "$relative/data/skin-rarities.json"
         $gamedata = Resolve-ReleasePath $stage 'addons/counterstrikesharp/gamedata/weaponpaints.json'
         $null = New-Item -ItemType Directory -Path (Split-Path -Parent $gamedata) -Force
-        Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/gamedata/weaponpaints.json') -Destination $gamedata
+        Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/gamedata/weaponpaints.json') -Destination $gamedata
         $required += 'addons/counterstrikesharp/gamedata/weaponpaints.json'
     }
     if ($plugin.name -eq 'CS2MiniGames') {
-        Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'mini-games-plugin/LICENSE') -Destination (Join-Path $destination 'LICENSE')
-        & (Resolve-ReleasePath $repoRoot 'mini-games-plugin/scripts/Verify-Package.ps1') -OutputPath $destination
+        Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'cs/mini-games-plugin/LICENSE') -Destination (Join-Path $destination 'LICENSE')
+        & (Resolve-ReleasePath $repoRoot 'cs/mini-games-plugin/scripts/Verify-Package.ps1') -OutputPath $destination
         if (-not $?) { throw 'Existing mini-games package verification failed' }
         $required += "$relative/LICENSE", "$relative/Microsoft.Data.Sqlite.dll", "$relative/runtimes/linux-x64/native/libe_sqlite3.so"
     }
@@ -96,10 +96,10 @@ if ($hasAudio) {
 if ($hasFunCommands) {
     $example = Resolve-ReleasePath $stage 'examples/module-configs/presets.grass.json'
     $null = New-Item -ItemType Directory -Path (Split-Path -Parent $example) -Force
-    Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'game-plugin/module-configs/presets.grass.json') -Destination $example
+    Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'cs/game-plugin/module-configs/presets.grass.json') -Destination $example
 }
 if ('CaorenCupGamemode_RUSH' -in @($plugins.name)) {
-    $assetRoot = 'game-plugin/PluginSplit/CaorenCupGamemode_RUSH/AssetTools/'
+    $assetRoot = 'cs/game-plugin/PluginSplit/CaorenCupGamemode_RUSH/AssetTools/'
     foreach ($relative in @('README.md', 'addoninfo.txt', 'build_neutral_decider.py', 'VpkPack/Program.cs', 'VpkPack/VpkPack.csproj')) {
         $target = Resolve-ReleasePath $stage ('tools/rush/' + $relative)
         $null = New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force
@@ -112,7 +112,7 @@ Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'LICENSE') -Destination (J
 Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'docs/release-installation.md') -Destination (Join-Path $stage 'INSTALL.md')
 $sourceText = "Source repository: https://github.com/GrassBl0ck/caoren-cup" + [Environment]::NewLine +
     "Release tag: $Version (verify the published tag before distribution)." + [Environment]::NewLine +
-    "GPL-3.0 components, when included: mini-games-plugin/; game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/." + [Environment]::NewLine +
+    "GPL-3.0 components, when included: cs/mini-games-plugin/; cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/." + [Environment]::NewLine +
     "Corresponding source must be available at the release tag; each component retains its own license."
 [IO.File]::WriteAllText((Join-Path $stage 'SOURCE.md'), $sourceText, (New-Object Text.UTF8Encoding($false)))
 $contracts = @(Get-ChildItem -LiteralPath $stage -File -Recurse -Filter 'CaorenCupContracts.dll')

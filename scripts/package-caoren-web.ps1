@@ -10,8 +10,12 @@ Import-Module (Join-Path $PSScriptRoot 'CaorenRelease.psm1') -Force
 
 # Fail before creating output; do not silently rewrite deferred authentication.
 Assert-WebReleaseBoundary $repoRoot $Version
-$dataRoot = Resolve-ReleasePath $repoRoot 'game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
+$dataRoot = Resolve-ReleasePath $repoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
 if (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'skin-rarities.json'))) { throw 'Missing webpage item data' }
+$webEntries = @('src/server.ts', 'public/index.html', 'pages/cs.html', 'pages/mc.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', '.env.example', 'ACCOUNT-SETUP.md')
+foreach ($entry in $webEntries) {
+    if (-not (Test-Path -LiteralPath (Resolve-ReleasePath $repoRoot ('web-command-center/' + $entry)) -PathType Leaf)) { throw "Missing unified portal entry: $entry" }
+}
 if ($ValidateOnly) {
     Write-Output 'PASS: web release boundary and item data; no files or ZIP generated.'
     exit 0
@@ -21,7 +25,7 @@ if (Test-Path -LiteralPath (Resolve-ReleasePath $repoRoot $zipRelative)) { throw
 $stage = Resolve-ReleasePath $repoRoot ('release-build/web-package-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $stage
 Copy-ReleaseWebTree $repoRoot $stage $Version
-$required = @('package.json', 'package-lock.json', 'tsconfig.json', 'src/server.ts', 'public/index.html', 'weaponpaints-data/skin-rarities.json')
+$required = @('package.json', 'package-lock.json', 'tsconfig.json', 'pages/cs.html', 'pages/mc.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', 'src/server.ts', 'public/index.html', 'weaponpaints-data/skin-rarities.json')
 Assert-ReleaseTree $stage $required
 Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'LICENSE') -Destination (Join-Path $stage 'LICENSE')
 Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'docs/release-installation.md') -Destination (Join-Path $stage 'INSTALL.md')
@@ -29,4 +33,4 @@ Write-ReleaseFileManifest $stage $Version @('CaorenCupWeb') @()
 $result = New-PortableReleaseZip $repoRoot $stage $zipRelative
 Write-Output "Created: $($result.Path)"
 Write-Output "SHA256: $($result.SHA256)"
-Write-Output 'Bridge DLL is provided by CaorenCupServer; no third mandatory ZIP was generated.'
+Write-Output 'Bridge DLL is provided by CaorenCupServer; Minecraft content is provided separately by CaorenCupMC.'

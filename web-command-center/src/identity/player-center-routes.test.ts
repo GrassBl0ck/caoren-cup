@@ -193,9 +193,12 @@ test('bootstrap ticket creates an HttpOnly browser session and current identity 
     assert.deepEqual(current.body, {
         success: true,
         profile: {
+            displayName: identity.displayName,
             steamNickname: identity.steamNickname || identity.displayName,
             loginName: account.loginName,
             hasBackupPassword: true,
+            emailVerified: false,
+            hasSteamBinding: true,
         },
         matchStatus: 'started',
         joinAvailable: false,
@@ -296,9 +299,12 @@ test('login-name change verifies the current password, keeps this session, and r
     assert.deepEqual(changed.body, {
         success: true,
         profile: {
+            displayName: identity.displayName,
             steamNickname: identity.steamNickname || identity.displayName,
             loginName: 'Renamed_Player',
             hasBackupPassword: true,
+            emailVerified: false,
+            hasSteamBinding: true,
         },
         revocation: {
             revokeOtherPlayerCenterSessions: true,

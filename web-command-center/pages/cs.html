@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[草人杯] CS 大厅</title>
+    <!-- Stage 3.14.1: voice QA scoring records + map voters shown on BP cards -->
+    <script src="/socket.io/socket.io.js"></script>
+<script>
+/* v1.3.3 socket capture start */
+(function () {
+  if (window.__v1333SocketCaptureInstalled) return;
+  window.__v1333SocketCaptureInstalled = true;
+
+  function rememberSocket(sock) {
+    if (sock && typeof sock.emit === 'function') {
+      window.__caorenCupSocket = sock;
+    }
+    return sock;
+  }
+
+  window.__v1333RememberSocket = rememberSocket;
+
+  if (typeof window.io === 'function' && !window.io.__v1333Wrapped) {
+    var originalIo = window.io;
+    var wrappedIo = function () {
+      return rememberSocket(originalIo.apply(this, arguments));
+    };
+    for (var key in originalIo) {
+      try { wrappedIo[key] = originalIo[key]; } catch (_err) {}
+    }
+    wrappedIo.__v1333Wrapped = true;
+    window.io = wrappedIo;
+  }
+})();
+/* v1.3.3 socket capture end */
+</script>
+    <script defer src="/js/caoren-audio-controller.js"></script>
+    <link rel="stylesheet" href="/css/app.css?v=1.9.7-psb1">
+    <link rel="stylesheet" href="/css/update-announcements.css">
+    <link rel="stylesheet" href="/css/caoren-mod-panel.css">
+    <link rel="stylesheet" href="/css/caoren-motion.css">
+    <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9.2-skinpromo1">
+    <link rel="stylesheet" href="/css/caoren-2026.css?v=20261019-visual1">
+    <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
+</head>
+<body class="caoren-modifiers-disabled">
+    <div class="page-shell">
+    <header class="site-header">
+        <a class="site-brand" href="/" aria-label="草人杯对局指挥台首页">
+            <span class="brand-mark" aria-hidden="true">草</span>
+            <span class="brand-text">
+                <strong>草人杯</strong>
+                <small>CAOREN CUP · CS2</small>
+            </span>
+        </a>
+        <div class="site-header-actions">
+            <a class="header-text-link" href="/">返回板块选择</a>
+            <a id="rules-guide-link" class="header-text-link" href="/rules.html">赛前指引</a>
+            <button id="update-announcement-trigger" class="header-text-link update-announcement-trigger" type="button" aria-haspopup="dialog" aria-controls="update-announcement-drawer">
+                更新公告
+                <span id="update-announcement-unread-dot" class="update-announcement-unread-dot" hidden aria-label="有未读更新"></span>
+            </button>
+            <button id="theme-toggle" class="theme-toggle" type="button" onclick="toggleTheme()">深色模式</button>
+        </div>
+    </header>
+    <div id="login-area">
+        <section class="lobby-hero" aria-labelledby="lobby-hero-title">
+            <div class="lobby-hero-copy">
+                <h1 id="lobby-hero-title">草人杯<br>对局指挥台</h1>
+                <p class="hero-lede">玩家在这里登录、加入本场对局并连接服务器；管理员在同一页面分队、禁选地图、推进比赛阶段。</p>
+                <ul class="hero-facts">
+                    <li>竞技、RUSH 与单挑</li>
+                    <li>5v5 与 1v1</li>
+                    <li>网页与游戏内状态同步</li>
+                </ul>
+            </div>
+            <div class="map-mosaic" role="img" aria-label="草人杯比赛地图实拍：Mirage、Anubis、Nuke、Inferno">
+                <figure>
+                    <img src="/assets/maps/de_mirage.jpg" alt="Mirage 地图中的木箱与拱门近景" width="632" height="360" decoding="async">
+                    <figcaption>Mirage <span>de_mirage</span></figcaption>
+                </figure>
+                <figure>
+                    <img src="/assets/maps/de_anubis.jpg" alt="Anubis 地图的水路与石墙近景" width="632" height="360" decoding="async">
+                    <figcaption>Anubis <span>de_anubis</span></figcaption>
+                </figure>
+                <figure>
+                    <img src="/assets/maps/de_nuke.jpg" alt="Nuke 地图的仓库与货箱近景" width="632" height="360" decoding="async">
+                    <figcaption>Nuke <span>de_nuke</span></figcaption>
+                </figure>
+                <figure>
+                    <img src="/assets/maps/de_inferno.jpg" alt="Inferno 地图的巷道与阳台近景" width="632" height="360" decoding="async">
+                    <figcaption>Inferno <span>de_inferno</span></figcaption>
+                </figure>
+            </div>
+        </section>
+
+        <div class="lobby-desk">
+            <div class="lobby-desk-main">
+        <section id="player-center-entry" class="panel player-center-entry" aria-labelledby="player-center-entry-title">
+            <div class="login-panel-header">
+                <div>
+                    <span class="section-eyebrow">草人杯 2.0.0</span>
+                    <h2 id="player-center-entry-title">玩家中心</h2>
+                    <p>账号登录只进入玩家中心，不会自动加入比赛。</p>
+                </div>
+                <span class="status-chip">账号密码登录</span>
+            </div>
+            <div class="player-center-auth-stack">
+                <div id="player-center-login" class="player-center-auth-panel">
+                    <label>登录账号<input id="player-center-login-name" type="text" maxlength="32" autocomplete="username" placeholder="例如 cc_Abc234xy"></label>
+                    <label>密码<input id="player-center-login-password" type="password" maxlength="128" autocomplete="current-password"></label>
+                    <div class="player-center-login-save-options" style="display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:13px;">
+                        <label><input id="player-center-save-login-name" type="checkbox"> 保存账号</label>
+                    </div>
+                    <label id="player-center-remember-device-row" hidden><input id="player-center-remember-device" type="checkbox"> 记住此设备（仅桌面客户端）</label>
+                    <button id="player-center-login-btn" class="primary-btn" type="button">登录玩家中心</button>
+                    <button id="player-center-game-code-toggle" class="header-text-link" type="button">使用 <code>/cclogin</code> 游戏码</button>
+                </div>
+                <div id="player-center-game-code-panel" class="player-center-auth-panel" hidden>
+                    <p>新用户请先返回首页，用邮箱注册草人杯账户。尚未绑定邮箱的老账号，可在 CS2 输入 <code>/cclogin</code> 获取一次性游戏码，在这里恢复账号。</p>
+                    <label>一次性游戏码<input id="player-center-game-code" type="text" maxlength="16" autocomplete="one-time-code"></label>
+                    <button id="player-center-game-code-btn" class="primary-btn" type="button">验证游戏码</button>
+                </div>
+                <div id="player-center-created" class="player-center-auth-panel player-center-credential-card" hidden>
+                    <h3>账号已创建，请立即保存</h3>
+                    <p>以下随机密码只显示这一次。保存后才能进入玩家中心。</p>
+                    <div><span>登录账号</span><strong id="player-center-created-login-name"></strong><button id="player-center-copy-login-name" type="button">复制账号</button></div>
+                    <div><span>随机密码</span><strong id="player-center-created-password"></strong><button id="player-center-copy-password" type="button">复制密码</button></div>
+                    <button id="player-center-credentials-saved" class="primary-btn" type="button">确认已保存</button>
+                </div>
+                <div id="player-center-recovery" class="player-center-auth-panel" hidden>
+                    <h3>恢复账号</h3>
+                    <p>现有账号：<strong id="player-center-recovery-login-name"></strong></p>
+                    <label>新密码<input id="player-center-recovery-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                    <label>再次输入新密码<input id="player-center-recovery-confirm-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                    <button id="player-center-recovery-btn" class="primary-btn" type="button">设置新密码并进入</button>
+                </div>
+            </div>
+            <aside class="login-side" aria-label="登录说明">
+                <h3>登录说明</h3>
+                <ul>
+                    <li><strong>保持登录</strong>连续 7 天未使用，或满 30 天，需要重新登录。</li>
+                    <li><strong>不保存密码</strong>网站只保留登录状态，不保存密码原文。</li>
+                    <li><strong>公共电脑</strong>使用后请退出账号，避免下一位玩家沿用你的会话。</li>
+                </ul>
+                <p class="login-side-note">新用户请在首页注册；已绑定邮箱可通过邮箱找回密码。未绑邮箱的老用户仍可使用 <code>/cclogin</code> 恢复账号。</p>
+            </aside>
+            <div id="player-center-entry-error" class="player-center-message" aria-live="polite"></div>
+        </section>
+
+        <section id="player-center-home" class="panel player-center-home" hidden aria-labelledby="player-center-home-title">
+            <div class="login-panel-header">
+                <div><span class="section-eyebrow">账号会话</span><h2 id="player-center-home-title">玩家中心</h2></div>
+                <button id="player-center-logout-btn" type="button">退出账号</button>
+            </div>
+            <div class="player-center-profile-grid">
+                <div><span>Steam 昵称</span><strong id="player-center-steam-nickname">—</strong></div>
+                <div><span>登录账号</span><strong id="player-center-account-name">—</strong></div>
+                <div><span>比赛状态</span><strong id="player-center-match-status">等待中</strong></div>
+            </div>
+            <div class="player-center-actions">
+                <button id="player-center-join-btn" class="player-center-match-action primary-btn" type="button">加入本场比赛</button>
+                <button id="player-center-forget-device-btn" type="button" hidden>退出账号并忘记此设备</button>
+            </div>
+            <details id="player-center-security" class="player-center-security">
+                <summary>账号与安全</summary>
+                <div class="player-center-settings-grid">
+                    <form id="player-center-login-name-form">
+                        <h3>修改登录账号</h3>
+                        <label>当前密码<input id="player-center-change-login-current-password" type="password" maxlength="128" autocomplete="current-password"></label>
+                        <label>新登录账号<input id="player-center-change-login-name" type="text" maxlength="32" autocomplete="username"></label>
+                        <button id="player-center-change-login-btn" type="submit">保存新账号</button>
+                    </form>
+                    <form id="player-center-password-form">
+                        <h3>修改密码</h3>
+                        <label>当前密码<input id="player-center-change-password-current" type="password" maxlength="128" autocomplete="current-password"></label>
+                        <label>新密码<input id="player-center-change-password" type="password" maxlength="128" autocomplete="new-password"></label>
+                        <label>再次输入新密码<input id="player-center-change-password-confirm" type="password" maxlength="128" autocomplete="new-password"></label>
+                        <button id="player-center-change-password-btn" type="submit">保存新密码</button>
+                    </form>
+                </div>
+            </details>
+            <div id="player-center-home-message" class="player-center-message" aria-live="polite"></div>
+            <p class="muted-line">等待中 / 已开始 / 已结束仅为公开简单状态；未加入比赛时不会显示名单、比分或比赛私密数据。</p>
+        </section>
+
+        <section id="lobby-announcement-public" class="lobby-announcement" style="display:none;" aria-live="polite">
+            <div class="lobby-announcement-header">
+                <span class="status-chip">大厅公告</span>
+                <h3 id="lobby-announcement-title">大厅公告</h3>
+            </div>
+            <div id="lobby-announcement-body" class="lobby-announcement-body"></div>
+        </section>
+            </div><!-- /lobby-desk-main -->
+            <aside class="desk-rail" aria-label="服务器与客户端入口">
+                <div class="rail-block">
+                    <h3>服务器</h3>
+                    <div class="login-utility-row">
+                        <div class="server-status-line" aria-live="polite">
+                            <span id="v1333-server-dot" class="server-status-dot" aria-hidden="true"></span>
+                            <strong id="v1333-server-status">正在读取服务器状态...</strong>
+                        </div>
+                        <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草人杯服务器</button>
+                    </div>
+                    <p class="rail-note">点击后通过 Steam 启动 CS2，并加入当前对局服务器。</p>
+                </div>
+                <div class="rail-block">
+                    <h3>客户端</h3>
+                    <details class="download-menu">
+                        <summary>客户端下载</summary>
+                        <div class="download-menu-content">
+                            <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.11.1.zip" download>下载桌面客户端</a>
+                            <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.11.1" target="_blank" rel="noopener">GitHub 备用下载</a>
+                        </div>
+                    </details>
+                    <p class="rail-note">仅桌面客户端支持记住设备登录。</p>
+                </div>
+                <div class="rail-block">
+                    <h3>管理员</h3>
+                    <details id="admin-login-entry" class="admin-login-entry">
+                        <summary>管理员登录</summary>
+                        <p>管理员认证是独立流程；登录管理员不会创建玩家账号，也不会自动参赛。</p>
+                        <div class="admin-login-row">
+                            <input id="admin-login-password" type="password" maxlength="128" autocomplete="current-password" placeholder="管理员密码">
+                            <button id="admin-login-btn" type="button">登录管理台</button>
+                        </div>
+                        <div id="admin-login-error" class="player-center-message" aria-live="polite"></div>
+                    </details>
+                </div>
+            </aside>
+        </div><!-- /lobby-desk -->
+    </div>
+    <!-- 换肤入口由玩家中心账号会话或管理员会话控制，必须位于大厅容器之外，未参赛时也可显示。 -->
+    <button id="weaponpaints-open-btn" class="weaponpaints-promo" type="button" aria-label="打开换肤中心" aria-controls="weaponpaints-panel" hidden>
+        <span class="weaponpaints-promo-slides" aria-hidden="true">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_knife_butterfly-38.png" alt="" decoding="async">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_awp-344.png" alt="" decoding="async">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_ak47-180.png" alt="" decoding="async">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_m4a1-309.png" alt="" decoding="async">
+            <img class="weaponpaints-promo-slide" src="/weaponpaints/base/images/weapon_knife_karambit-415.png" alt="" decoding="async">
+        </span>
+        <span class="weaponpaints-promo-label">换肤中心</span>
+    </button>
+    <div id="lobby-area" style="display:none;">
+        <div class="toolbar-row panel identity-toolbar">
+            <div id="player-summary" class="player-session-summary">
+                <div class="status-chip">当前身份</div>
+                <p class="identity-welcome">欢迎，<span id="my-name"></span></p>
+            </div>
+            <div id="admin-summary" class="admin-session-summary" hidden>
+                <div class="status-chip">管理员会话</div>
+                <p class="identity-welcome">Admin <span class="admin-role-label">管理员</span></p>
+                <p class="muted-line">管理当前大厅、玩家准入与比赛流程</p>
+            </div>
+            <div class="identity-toolbar-actions">
+                <div id="lobby-phase-summary" class="lobby-phase-summary">当前阶段读取中</div>
+                <button id="v1333-lobby-connect-server-btn" type="button" disabled>连接 CS2</button>
+                <button id="device-logout-btn" type="button" style="display:none;">退出设备登录</button>
+                <div id="timer-display"></div><div id="lobby-notification-display" style="display:none;"></div>
+            </div>
+        </div>
+        <p id="my-identity" class="my-identity-line"></p>
+        <section id="pregame-readiness-card" class="pregame-readiness-card" aria-live="polite" hidden>
+            <div class="pregame-readiness-heading">
+                <div>
+                    <span class="section-eyebrow">进入正式比赛前</span>
+                    <h3>赛前准备</h3>
+                </div>
+                <strong id="pregame-readiness-summary">读取中</strong>
+            </div>
+            <p id="pregame-readiness-detail" class="pregame-readiness-detail"></p>
+            <div id="pregame-readiness-blockers" class="pregame-readiness-blockers"></div>
+            <div class="pregame-readiness-actions">
+                <button id="force-test-bots-ready-btn" type="button" class="secondary-btn" hidden>强制完成测试 BOT 准备</button>
+            </div>
+        </section>
+        <div id="admin-controls" class="lobby-workspace" style="display:none;">
+            <section id="flow-undo-safety-bar" class="flow-undo-safety-bar" aria-live="polite" hidden>
+                <div class="flow-undo-summary">
+                    <span class="section-eyebrow">流程安全</span>
+                    <div class="flow-phase-grid">
+                        <div><strong>当前阶段：</strong><span id="flow-undo-current-phase">读取中</span></div>
+                        <div><strong>下一阶段：</strong><span id="flow-next-phase">读取中</span></div>
+                    </div>
+                    <div><strong>最近操作：</strong><span id="flow-undo-latest-action">暂无可撤销操作</span></div>
+                    <div class="flow-undo-meta">可撤销 <span id="flow-undo-count">0</span> 步 · <span id="flow-undo-reason">当前没有可撤销的操作。</span></div>
+                </div>
+                <div class="flow-undo-actions">
+                    <button id="advance-phase-btn" type="button" onclick="advancePhase()">推进阶段</button>
+                    <button id="flow-undo-btn" type="button" class="secondary-btn" onclick="undoFlowAction()" disabled>撤销上一步</button>
+                    <button id="flow-audio-cue-btn" type="button" class="secondary-btn" onclick="playAdminAudioCue()">发送提示音</button>
+                </div>
+            </section>
+            <div class="admin-mobile-nav">
+                <label for="admin-view-select">管理模块</label>
+                <select id="admin-view-select" onchange="switchAdminView(this.value)">
+                    <option value="overview">总览</option>
+                    <option value="access">玩家与准入</option>
+                    <option value="setup">比赛设置</option>
+                    <option value="announcement">公告</option>
+                    <option value="tasks">卧底任务</option>
+                    <option value="mods">娱乐修改</option>
+                </select>
+            </div>
+            <div class="admin-shell">
+                <aside class="admin-sidebar" aria-label="管理员控制区">
+                    <div class="admin-sidebar-heading"><strong>管理员控制区</strong><span>当前对局工作台</span></div>
+                    <nav class="admin-nav" aria-label="管理员功能">
+                        <button type="button" class="admin-nav-btn" data-admin-view="overview" aria-controls="admin-overview" onclick="switchAdminView('overview')">总览</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="access" aria-controls="admin-access" onclick="switchAdminView('access')">玩家与准入</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="setup" aria-controls="admin-tab-setup" onclick="switchAdminView('setup')">比赛设置</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="announcement" aria-controls="admin-tab-announcement" onclick="switchAdminView('announcement')">公告</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="tasks" aria-controls="admin-tab-tasks" onclick="switchAdminView('tasks')">卧底任务</button>
+                        <button type="button" class="admin-nav-btn" data-admin-view="mods" aria-controls="admin-tab-mods" onclick="switchAdminView('mods')">娱乐修改</button>
+                    </nav>
+                </aside>
+                <main id="admin-workspace" class="admin-workspace">
+                    <section id="admin-overview" class="admin-view-panel" data-admin-view-panel="overview" aria-labelledby="admin-overview-title">
+                        <div class="admin-view-heading"><div><span class="section-eyebrow">对局概况</span><h2 id="admin-overview-title">总览</h2></div><button type="button" onclick="refreshIdentityAdmin()">刷新状态</button></div>
+                        <div class="overview-metrics">
+                            <div class="overview-metric"><span>当前阶段</span><strong id="overview-phase">读取中</strong></div>
+                            <div class="overview-metric"><span>大厅玩家</span><strong id="overview-player-count">0</strong></div>
+                            <div class="overview-metric"><span>待确认</span><strong id="overview-pending-count">0</strong></div>
+                            <div class="overview-metric"><span>服务器</span><strong id="overview-server-status">正在检测</strong></div>
+                        </div>
+                        <div class="overview-actions">
+                            <button type="button" class="primary-btn" onclick="switchAdminView('access')">管理玩家与准入</button>
+                        </div>
+                    </section>
+                    <section id="stage-content" class="stage-content admin-view-panel public-stage-panel" data-admin-view-panel="overview" aria-label="当前阶段内容">
+                        <div id="phase-info"></div>
+                        <div id="extra-info"></div>
+                    </section>
+
+                    <div class="player-list admin-view-panel public-roster-panel" id="player-list" data-admin-view-panel="access"></div>
+                    <section id="admin-access" class="identity-admin-panel admin-view-panel" data-admin-view-panel="access" aria-labelledby="admin-access-title">
+                <div class="identity-admin-header"><div><span class="section-eyebrow">玩家准入</span><h2 id="admin-access-title">已加入玩家与设备</h2></div><div><button type="button" onclick="refreshIdentityAdmin()">刷新</button></div></div>
+                <div id="identity-admin-list" class="muted-line">身份状态读取中</div>
+                    </section>
+
+            <div id="admin-tab-announcement" class="admin-view-panel" data-admin-view-panel="announcement" role="tabpanel">
+            <div id="lobby-announcement-admin-panel" class="match-options-panel lobby-announcement-admin-panel">
+                <h4>大厅公告设置</h4>
+                <div id="lobby-announcement-admin-status" class="match-options-status">公告状态读取中……</div>
+                <label class="match-options-row lobby-announcement-enabled-row">
+                    <input type="checkbox" id="lobby-announcement-enabled">
+                    <div>
+                        <div class="match-options-title">展示大厅公告</div>
+                        <div class="match-options-desc">开启后，未进入大厅的玩家会在登录区域看到这段内容。</div>
+                    </div>
+                </label>
+                <label class="lobby-announcement-title-field">
+                    标题
+                    <input id="lobby-announcement-title-input" type="text" maxlength="40" placeholder="例如：更新公告">
+                </label>
+                <div class="lobby-rich-toolbar" role="toolbar" aria-label="公告富文本工具栏">
+                    <button type="button" onclick="formatLobbyAnnouncement('bold')"><b>B</b></button>
+                    <button type="button" onclick="formatLobbyAnnouncement('italic')"><i>I</i></button>
+                    <button type="button" onclick="formatLobbyAnnouncement('underline')"><u>U</u></button>
+                    <button type="button" onclick="formatLobbyAnnouncementBlock('h3')">H</button>
+                    <button type="button" onclick="formatLobbyAnnouncementBlock('p')">P</button>
+                    <button type="button" onclick="formatLobbyAnnouncement('insertUnorderedList')">列表</button>
+                    <button type="button" onclick="formatLobbyAnnouncement('insertOrderedList')">编号</button>
+                    <button type="button" onclick="formatLobbyAnnouncementLink()">链接</button>
+                    <button type="button" onclick="formatLobbyAnnouncement('removeFormat')">清除格式</button>
+                </div>
+                <div id="lobby-announcement-editor" class="lobby-announcement-editor" contenteditable="true"></div>
+                <div class="match-options-actions">
+                    <button type="button" class="primary-btn" onclick="saveLobbyAnnouncement()">保存公告</button>
+                    <button type="button" class="secondary-btn" onclick="refreshLobbyAnnouncement()">刷新公告</button>
+                </div>
+            </div>
+            <section id="update-announcement-admin-panel" class="match-options-panel update-announcement-admin-panel" aria-labelledby="update-announcement-admin-title">
+                <div class="update-announcement-admin-header">
+                    <div>
+                        <span class="section-eyebrow">长期版本历史</span>
+                        <h4 id="update-announcement-admin-title">更新公告管理</h4>
+                    </div>
+                    <div class="update-announcement-admin-actions">
+                        <select id="update-announcement-filter" aria-label="筛选更新公告状态">
+                            <option value="all">全部状态</option>
+                            <option value="draft">草稿</option>
+                            <option value="published">已发布</option>
+                            <option value="hidden">隐藏</option>
+                        </select>
+                        <button id="update-announcement-refresh-btn" type="button">刷新</button>
+                        <button id="update-announcement-new-btn" class="primary-btn" type="button">新增公告</button>
+                    </div>
+                </div>
+                <div id="update-announcement-admin-status" class="match-options-status" aria-live="polite">更新公告尚未读取。</div>
+                <div id="update-announcement-admin-list" class="update-announcement-admin-list"></div>
+
+                <section id="update-announcement-editor-form" class="update-announcement-editor-form" hidden aria-labelledby="update-announcement-editor-title">
+                    <div class="update-announcement-editor-heading">
+                        <h5 id="update-announcement-editor-title">新建更新公告</h5>
+                        <button id="update-announcement-cancel-btn" type="button">取消编辑</button>
+                    </div>
+                    <input id="update-announcement-id-input" type="hidden">
+                    <div class="update-announcement-admin-row">
+                        <label>版本号<input id="update-announcement-version-input" type="text" maxlength="32" placeholder="例如 v1.8.5"></label>
+                        <label>标题<input id="update-announcement-title-input" type="text" maxlength="40" placeholder="40 个字符以内"></label>
+                    </div>
+
+                    <section class="update-announcement-section-editor">
+                        <h6>一、网页端</h6>
+                        <div class="update-announcement-rich-toolbar" role="toolbar" aria-label="网页端内容格式">
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('webHtml', 'bold')"><strong>B</strong></button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('webHtml', 'insertUnorderedList')">项目符号</button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('webHtml', 'insertOrderedList')">编号</button>
+                            <button type="button" onclick="linkUpdateAnnouncementEditor('webHtml')">链接</button>
+                        </div>
+                        <div id="update-announcement-web-editor" class="update-announcement-rich-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+                    </section>
+
+                    <section class="update-announcement-section-editor">
+                        <h6>二、游戏插件</h6>
+                        <div class="update-announcement-rich-toolbar" role="toolbar" aria-label="游戏插件内容格式">
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('gamePluginHtml', 'bold')"><strong>B</strong></button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('gamePluginHtml', 'insertUnorderedList')">项目符号</button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('gamePluginHtml', 'insertOrderedList')">编号</button>
+                            <button type="button" onclick="linkUpdateAnnouncementEditor('gamePluginHtml')">链接</button>
+                        </div>
+                        <div id="update-announcement-game-plugin-editor" class="update-announcement-rich-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+                    </section>
+
+                    <section class="update-announcement-section-editor">
+                        <h6>三、桥接插件</h6>
+                        <div class="update-announcement-rich-toolbar" role="toolbar" aria-label="桥接插件内容格式">
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('bridgePluginHtml', 'bold')"><strong>B</strong></button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('bridgePluginHtml', 'insertUnorderedList')">项目符号</button>
+                            <button type="button" onclick="formatUpdateAnnouncementEditor('bridgePluginHtml', 'insertOrderedList')">编号</button>
+                            <button type="button" onclick="linkUpdateAnnouncementEditor('bridgePluginHtml')">链接</button>
+                        </div>
+                        <div id="update-announcement-bridge-plugin-editor" class="update-announcement-rich-editor" contenteditable="true" role="textbox" aria-multiline="true"></div>
+                    </section>
+
+                    <label class="update-announcement-reminder-option">
+                        <input id="update-announcement-remind-again" type="checkbox">
+                        <span><strong>重新提醒玩家</strong><small>仅在已发布或曾发布的公告中使用。</small></span>
+                    </label>
+                    <div class="update-announcement-editor-actions">
+                        <button id="update-announcement-save-btn" class="primary-btn" type="button">保存</button>
+                    </div>
+                </section>
+            </section>
+            </div>
+
+            <div id="admin-tab-setup" class="admin-view-panel" data-admin-view-panel="setup" role="tabpanel">
+            <div id="match-options-panel" class="match-options-panel">
+                <h4>本局模式设置</h4>
+                <div id="match-options-status" class="match-options-status">当前阶段：读取中……</div>
+
+                <div class="match-options-row" id="game-mode-selection-row">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;width:100%;">
+                        <label>
+                            <div class="match-options-title">游戏模式</div>
+                            <select id="game-mode-id">
+                                <option value="competitive">Competitive（竞技）</option>
+                                <option value="rush">RUSH</option>
+                                <option value="duel">Duel（单挑）</option>
+                                <option value="ability">Ability（异能）</option>
+                                <option value="undercover" disabled>Undercover（卧底，尚未加载）</option>
+                                <option value="unbalanced" disabled>Unbalanced（非对称，尚未加载）</option>
+                            </select>
+                        </label>
+                        <label>
+                            <div class="match-options-title">Warmup 秒数</div>
+                            <input id="game-mode-warmup-seconds" type="number" min="1" max="300" step="1" value="15">
+                        </label>
+                    </div>
+                    <div class="match-options-desc" style="margin-top:6px;">网页完成阵容和模式设置后，由管理员开始；Warmup 结束后由 Gamemode 自动开始正式比赛。</div>
+                </div>
+
+                <label class="match-options-row" style="display:none;" aria-hidden="true">
+                    <input type="checkbox" id="match-option-duel">
+                    <div>
+                        <div class="match-options-title">&#21551;&#29992;&#21333;&#25361;&#27169;&#24335;</div>
+                        <div class="match-options-desc">&#24320;&#21551;&#21518;&#65292;&#26412;&#23616;&#21482;&#21462;&#21069;&#20004;&#21517;&#29609;&#23478;&#36827;&#34892; 1v1&#65292;&#36339;&#36807;&#38431;&#38271;&#36873;&#20154;&#12289;&#22320;&#22270; BP&#12289;&#36873;&#36793;&#21644;&#21351;&#24213;&#27969;&#31243;&#12290;&#27491;&#24335;&#24320;&#22987;&#26102;&#20250;&#19979;&#21457;&#30701;&#22238;&#21512;&#21333;&#25361;&#35268;&#21017;&#12290;</div>
+                    </div>
+                </label>
+
+                <div class="match-options-row" id="duel-options-row">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;width:100%;">
+                        <label>
+                            <div class="match-options-title">&#21333;&#25361;&#22320;&#22270;</div>
+                            <select id="match-option-duel-map">
+                                <option value="5e_akm4_aim_duel" data-workshop-id="3250543760">5e_akm4_aim_duel</option>
+                                <option value="AIM Map" data-workshop-id="3084291314">AIM Map</option>
+                                <option value="aim_awp [CS2 Port]" data-workshop-id="3444237717">aim_awp [CS2 Port]</option>
+                                <option value="The_Arena" data-workshop-id="3529094738">The_Arena</option>
+                                <option value="5e_awp_space" data-workshop-id="3250550000">5e_awp_space</option>
+                                <option value="AIM TRAINING DUEL" data-workshop-id="3714852830">AIM TRAINING DUEL</option>
+                                <option value="AimDuel" data-workshop-id="3581460570">AimDuel</option>
+                            </select>
+                            <div id="duel-map-workshop-notice" class="match-options-desc" style="margin-top:6px;"></div>
+                        </label>
+                        <label>
+                            <div class="match-options-title">&#22238;&#21512;&#20998;&#38047;</div>
+                            <input id="match-option-duel-round-time" type="number" min="0.25" max="5" step="0.25" value="1">
+                        </label>
+                        <label>
+                            <div class="match-options-title">手枪回合</div>
+                            <input id="match-option-duel-pistol-rounds" type="number" min="0" max="99" step="1" value="8">
+                        </label>
+                        <label>
+                            <div class="match-options-title">步枪回合</div>
+                            <input id="match-option-duel-rifle-rounds" type="number" min="0" max="99" step="1" value="16">
+                        </label>
+                        <label>
+                            <div class="match-options-title">狙击回合</div>
+                            <input id="match-option-duel-sniper-rounds" type="number" min="0" max="99" step="1" value="12">
+                        </label>
+                        <label>
+                            <div class="match-options-title">道具模式</div>
+                            <select id="match-option-duel-utility-mode">
+                                <option value="none">不启用道具</option>
+                                <option value="random1">每回合随机 1 道具</option>
+                                <option value="random2">每回合随机 2 道具</option>
+                                <option value="random3">每回合随机 3 道具</option>
+                                <option value="full">每回合 4 道具</option>
+                            </select>
+                            <div class="match-options-desc">不含诱饵弹，闪光最多 1 个。</div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="match-options-row" id="match-option-test-bots-row" style="display:none;">
+                    <div style="width:100%;">
+                        <div class="match-options-title">&#27979;&#35797;BOT</div>
+                        <div class="match-options-actions" style="margin-top:8px;">
+                            <button type="button" class="secondary-btn" onclick="adminAddTestBots(2)">&#28155;&#21152;2&#20010;&#27979;&#35797;BOT</button>
+                            <button type="button" class="secondary-btn" onclick="adminAddTestBots(6)">&#28155;&#21152;6&#20010;&#27979;&#35797;BOT</button>
+                            <button type="button" class="secondary-btn" onclick="adminClearTestBots()">&#28165;&#29702;&#27979;&#35797;BOT</button>
+                        </div>
+                        <div class="match-options-desc" style="margin-top:6px;">&#21482;&#29992;&#20110;&#32593;&#39029;&#27969;&#31243;&#27979;&#35797;&#65292;&#19981;&#20250;&#36827;&#20837; CS2 &#26381;&#21153;&#22120;&#65292;&#20063;&#19981;&#20250;&#20135;&#29983;&#30495;&#23454;&#20987;&#26432;&#25968;&#25454;&#12290;</div>
+                    </div>
+                </div>
+
+                <div class="match-options-row" id="unbalanced-options-row" style="display:none;">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;width:100%;">
+                        <label>
+                            <div class="match-options-title">不平衡竞技目标</div>
+                            <select id="match-option-unbalanced">
+                                <option value="false">平衡竞技</option>
+                                <option value="true">不平衡竞技</option>
+                            </select>
+                        </label>
+                        <label><div class="match-options-title">A 队人数</div><input id="match-option-team-a-size" type="number" min="1" step="1" value="3"></label>
+                        <label><div class="match-options-title">B 队人数</div><input id="match-option-team-b-size" type="number" min="1" step="1" value="5"></label>
+                    </div>
+                    <div class="match-options-desc" style="margin-top:6px;">不平衡竞技会在分队、地图 BP、赛前准备和锁队同步前校验目标人数。</div>
+                </div>
+
+                <label class="match-options-row" id="legacy-undercover-option" style="display:none;" aria-hidden="true">
+                    <input type="checkbox" id="match-option-undercover">
+                    <div>
+                        <div class="match-options-title">启用卧底模式</div>
+                        <div class="match-options-desc">
+                            开启：照常分配 Soldier / Undercover / Detective，并启用卧底任务、侦探问答、赛后指认和卧底相关计分。<br>
+                            关闭：本局所有玩家按普通比赛处理，不分配卧底/侦探，不生成卧底任务，比赛结束后直接进入积分结算。
+                        </div>
+                    </div>
+                </label>
+
+                <label class="match-options-row">
+                    <input type="checkbox" id="match-option-caoren">
+                    <div>
+                        <div class="match-options-title">启用 CaorenCup 修改</div>
+                        <div class="match-options-desc">第一阶段只记录本局是否启用。第二阶段再接入网页可视化修改面板和游戏内插件下发。</div>
+                    </div>
+                </label>
+
+                <div class="match-options-actions">
+                    <button type="button" class="primary-btn" id="start-game-mode-btn" onclick="startSelectedGameMode()">开始 Warmup</button>
+                    <button type="button" class="secondary-btn" id="stop-game-mode-btn" onclick="stopSelectedGameMode()">停止模式</button>
+                </div>
+                <div class="match-options-actions">
+                    <button type="button" class="primary-btn" id="save-match-options-btn" onclick="saveMatchOptions()">保存本局模式</button>
+                    <button type="button" class="secondary-btn" id="refresh-match-options-btn" onclick="refreshMatchOptions()">刷新状态</button>
+                </div>
+                <div class="match-options-warning">只能在大厅阶段修改；进入队长选择后，本局模式会锁定。</div>
+            </div>
+                <div class="admin-action-row">
+                    <button id="template-config-btn" class="secondary-btn" onclick="openTemplateModal()" style="font-size:15px; padding:9px 16px;">配置任务模板</button>
+                </div>
+
+                <div id="team-lock-panel" class="match-options-panel">
+                <h4>网页强制分队</h4>
+                <div id="team-lock-status" class="match-options-status">按网页 A/B 队和选边结果，把玩家同步到游戏内 CT/T，并锁定防止自行换边。</div>
+                <div class="match-options-actions">
+                    <button type="button" class="primary-btn" onclick="syncTeamLock()">同步并锁队</button>
+                    <button type="button" class="secondary-btn" onclick="clearTeamLock()">解除锁队</button>
+                </div>
+                <div class="match-options-warning">第 13 回合开始会自动按半场换边重新同步；如插件重载，可手动再点一次同步。</div>
+                </div>
+                <div class="admin-danger-zone">
+                    <div>
+                        <strong>本局管理</strong>
+                        <p>终止本局会踢出所有玩家并清空房间，所有人需要重新进入。</p>
+                    </div>
+                    <button id="terminate-game-btn" class="danger-btn" type="button"
+                        data-caoren-confirm
+                        data-confirm-title="确认终止本局游戏"
+                        data-confirm-message="这会立即踢出所有玩家并清空当前房间，所有人都需要重新进入。"
+                        data-confirm-text="确认终止"
+                        data-confirm-tone="danger"
+                        data-confirm-event="caoren:terminate-confirmed">终止本局游戏</button>
+                </div>
+            </div>
+
+            <div id="admin-tab-tasks" class="admin-view-panel" data-admin-view-panel="tasks" role="tabpanel">
+                <div id="admin-undercover-task-panel" class="match-options-panel admin-undercover-task-panel">
+                    <h4>卧底任务查看</h4>
+                    <div id="admin-undercover-task-status" class="match-options-status">任务状态读取中……</div>
+                    <p id="admin-undercover-task-visibility" class="match-options-desc">保密范围：管理员可查看全部卧底任务；身份发放后，每名卧底只能看到自己的任务；其他玩家需等到最终结算才能查看复盘。</p>
+                    <div id="admin-undercover-task-body"></div>
+                    <div class="match-options-actions">
+                        <button type="button" id="task-template-config-btn" class="secondary-btn" onclick="openTemplateModal()">配置任务模板</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-tab-mods" class="admin-view-panel" data-admin-view-panel="mods" role="tabpanel">
+                <div id="admin-mods-empty-state" class="match-options-panel admin-mods-empty-state">
+                    <h4>CaorenCup 修改</h4>
+                    <div class="match-options-status">本局未启用 CaorenCup 修改。需要使用娱乐修改时，先到“本局设置”里开启并保存。</div>
+                </div>
+            <div id="caoren-mod-panel" class="caoren-mod-panel" style="display:none;">
+                <h4>CaorenCup 修改可视化面板</h4>
+                <div id="caoren-mod-status" class="caoren-mod-status">请先在“本局模式设置”中启用 CaorenCup 修改。</div>
+                <div class="caoren-mod-grid">
+                    <div class="caoren-mod-card">
+                        <h5>无中生有：弹药 / 道具概率</h5>
+                        <p>对应 <code>css_ammo</code>。例如：所有人开枪 50% 不耗弹，扔雷 20% 不消耗。</p>
+                        <label class="caoren-mod-field">阵营 <select id="caoren-ammo-target"><option value="all">所有人</option><option value="t">T</option><option value="ct">CT</option></select></label>
+                        <label class="caoren-mod-field">开枪不耗弹 % <input id="caoren-ammo-bullet" type="number" min="0" max="100" step="1" value="50"></label>
+                        <label class="caoren-mod-field">道具不消耗 % <input id="caoren-ammo-grenade" type="number" min="0" max="100" step="1" value="20"></label>
+                        <div class="caoren-mod-actions"><button onclick="sendCaorenModCommand('ammo','apply')">应用</button><button class="secondary" onclick="sendCaorenModCommand('ammo','disable')">禁用</button></div>
+                    </div>
+
+                    <div class="caoren-mod-card">
+                        <h5>防弹衣耐久</h5>
+                        <p>对应 <code>css_armor</code>。设置购买防弹衣后的护甲值。</p>
+                        <label class="caoren-mod-field">阵营 <select id="caoren-armor-target"><option value="all">所有人</option><option value="t">T</option><option value="ct">CT</option></select></label>
+                        <label class="caoren-mod-field">护甲值 <input id="caoren-armor-value" type="number" min="0" max="999" step="1" value="150"></label>
+                        <div class="caoren-mod-actions"><button onclick="sendCaorenModCommand('armor','apply')">应用</button><button class="secondary" onclick="sendCaorenModCommand('armor','disable')">禁用</button></div>
+                    </div>
+
+                    <div class="caoren-mod-card">
+                        <h5>剑气效果</h5>
+                        <p>对应 <code>css_aura</code>。设置刀击远程剑气、击退联动和伤害衰减。</p>
+                        <label class="caoren-mod-field">阵营 <select id="caoren-aura-target"><option value="all">所有人</option><option value="t">T</option><option value="ct">CT</option></select></label>
+                        <label class="caoren-mod-field">击退联动 <input id="caoren-aura-knockback" type="checkbox" checked></label>
+                        <label class="caoren-mod-field">衰减倍率 <input id="caoren-aura-decay" type="number" min="0" max="5" step="0.1" value="0.5"></label>
+                        <label class="caoren-mod-field">最低伤害 <input id="caoren-aura-min" type="number" min="0" max="200" step="1" value="15"></label>
+                        <div class="caoren-mod-actions"><button onclick="sendCaorenModCommand('aura','apply')">应用</button><button class="secondary" onclick="sendCaorenModCommand('aura','disable')">禁用</button></div>
+                    </div>
+
+                    <div class="caoren-mod-card">
+                        <h5>经济倍率</h5>
+                        <p>对应 <code>css_cash</code>。设置经济倍率，可选择是否影响回合奖励。</p>
+                        <label class="caoren-mod-field">阵营 <select id="caoren-cash-target"><option value="all">所有人</option><option value="t">T</option><option value="ct">CT</option></select></label>
+                        <label class="caoren-mod-field">倍率 <input id="caoren-cash-multiplier" type="number" min="0" max="10" step="0.1" value="1.5"></label>
+                        <label class="caoren-mod-field">回合奖励 <input id="caoren-cash-round" type="checkbox" checked></label>
+                        <div class="caoren-mod-actions"><button onclick="sendCaorenModCommand('cash','apply')">应用</button><button class="secondary" onclick="sendCaorenModCommand('cash','disable')">禁用</button></div>
+                    </div>
+
+                    <div class="caoren-mod-card">
+                        <h5>玩家 FOV</h5>
+                        <p>对应 <code>css_fov</code>。调整玩家视野范围。</p>
+                        <label class="caoren-mod-field">阵营 <select id="caoren-fov-target"><option value="all">所有人</option><option value="t">T</option><option value="ct">CT</option></select></label>
+                        <label class="caoren-mod-field">FOV <input id="caoren-fov-value" type="number" min="30" max="150" step="1" value="100"></label>
+                        <div class="caoren-mod-actions"><button onclick="sendCaorenModCommand('fov','apply')">应用</button><button class="secondary" onclick="sendCaorenModCommand('fov','disable')">禁用</button></div>
+                    </div>
+
+                    <div class="caoren-mod-card">
+                        <h5>二段跳 / 多段跳</h5>
+                        <p>对应 <code>css_dj</code>。设置额外跳跃次数与向上推力。</p>
+                        <label class="caoren-mod-field">阵营 <select id="caoren-dj-target"><option value="all">所有人</option><option value="t">T</option><option value="ct">CT</option></select></label>
+                        <label class="caoren-mod-field">跳跃次数 <input id="caoren-dj-jumps" type="number" min="1" max="8" step="1" value="2"></label>
+                        <label class="caoren-mod-field">向上推力 <input id="caoren-dj-force" type="number" min="0" max="2000" step="10" value="300"></label>
+                        <div class="caoren-mod-actions"><button onclick="sendCaorenModCommand('doublejump','apply')">应用</button><button class="secondary" onclick="sendCaorenModCommand('doublejump','disable')">禁用</button></div>
+                    </div>
+
+                    <div class="caoren-mod-card">
+                        <h5>全局血量上下限</h5>
+                        <p>对应 <code>css_hpcap</code>。供流血 / 回血等模块共用。</p>
+                        <label class="caoren-mod-field">最低血量 <input id="caoren-hpcap-min" type="number" min="0" max="999" step="1" value="1"></label>
+                        <label class="caoren-mod-field">最高血量 <input id="caoren-hpcap-max" type="number" min="1" max="999" step="1" value="150"></label>
+                        <div class="caoren-mod-actions"><button onclick="sendCaorenModCommand('hpcap','apply')">应用</button></div>
+                    </div>
+
+                    <div class="caoren-mod-card">
+                        <h5>一键重置修改</h5>
+                        <p>对应 <code>reset_plu</code>。会重置娱乐插件本体的修改状态，建议赛前确认后使用。</p>
+                        <div class="caoren-mod-actions"><button class="danger" onclick="sendCaorenModCommand('reset_all','apply')">重置所有修改</button></div>
+                    </div>
+                </div>
+            </div>
+
+            </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务模板编辑弹窗 -->
+    <div id="template-modal" class="modal">
+        <div class="modal-content template-modal-content">
+            <span class="close" onclick="closeTemplateModal()">&times;</span>
+            <h2 class="template-modal-title">任务模板编辑器</h2>
+            <div class="template-tab-row">
+                <button id="btn-tab-visual" class="template-tab-btn active" type="button" onclick="switchTemplateTab('visual')">可视化编辑</button>
+                <button id="btn-tab-json" class="template-tab-btn" type="button" onclick="switchTemplateTab('json')">JSON 导入 / 导出</button>
+            </div>
+            <div id="task-preset-panel" class="task-preset-panel">
+                <label for="task-preset-select">任务预设：</label>
+                <select id="task-preset-select" style="min-width:180px;" onchange="updateTaskPresetButtonState()"></select>
+                <button type="button" onclick="applySelectedTaskPreset()">应用</button>
+                <button type="button" onclick="createTaskPresetFromEditor()">新建预设</button>
+                <button id="task-preset-rename-btn" type="button" onclick="renameSelectedTaskPreset()">重命名</button>
+                <button id="task-preset-delete-btn" type="button" onclick="deleteSelectedTaskPreset()">删除</button>
+            </div>
+
+            <div id="template-visual-tab" style="display:block;">
+                <div class="tpl-editor-layout">
+                    <!-- 左侧预览区 -->
+                    <div class="tpl-preview-area">
+                        <h4 class="template-preview-title">点击左侧格子开始编辑</h4>
+                        <div id="tpl-preview-grid" class="task-grid" style="margin:0 auto;"></div>
+                        <div id="tpl-preview-replacement" class="template-replacement-preview" onclick="selectTplCell('rep')">
+                            <b>[备用任务]</b> <span id="tpl-prev-rep-desc">备用任务</span>
+                        </div>
+                    </div>
+                    <!-- 右侧编辑区 -->
+                    <div class="tpl-form-area" id="tpl-edit-form">
+                        <h3 id="tpl-edit-title" class="template-edit-title">请先在左侧选择一个格子</h3>
+                        <div id="tpl-edit-fields" style="display:none;">
+                            <div class="tpl-form-group">
+                                <label>任务描述 (选中文字使用上方工具栏可改样式)：</label>
+                                <div class="format-toolbar">
+                                    <button class="format-btn" type="button" onclick="undoTaskTemplateEdit()">撤销 Ctrl+Z</button>
+                                    <button class="format-btn" type="button" onclick="redoTaskTemplateEdit()">重做 Ctrl+Y</button>
+                                    <button class="format-btn" onclick="applyTplFormat('b')"><b>加粗</b></button>
+                                    <button class="format-btn" onclick="applyTplFormat('u')"><u>下划线</u></button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#00B050')" style="color:#00B050">绿(1级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#0070C0')" style="color:#0070C0">蓝(2级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#E36C09')" style="color:#E36C09">橙(3级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#7030A0')" style="color:#7030A0">紫(4级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#FF0000')" style="color:#FF0000">红(5级)</button>
+                                    <button class="format-btn" onclick="applyTplFormat('color', '#C00000')" style="color:#C00000">深红(6级)</button>
+                                </div>
+                                <textarea id="tpl-edit-desc" rows="4" oninput="handleTplInput()"></textarea>
+                            </div>
+
+                            <div class="tpl-form-group" id="tpl-edit-hint-group">
+                                <label>提示文本（留空表示该任务没有提示）：</label>
+                                <textarea id="tpl-edit-hint" rows="3" maxlength="500" oninput="handleTplInput()" placeholder="由管理员填写；默认留空"></textarea>
+                            </div>
+
+                            <div style="display:flex; gap:15px;" id="tpl-edit-basic-row">
+                                <div class="tpl-form-group" style="flex:1;">
+                                    <label>任务类型</label>
+                                    <select id="tpl-edit-ntype" onchange="handleTplInput()">
+                                        <option value="none">普通任务</option>
+                                        <option value="3N_multi">多回合累计 N 任务</option>
+                                        <option value="3N_single">单回合达成 N 任务</option>
+                                        <option value="5_4N_single">连续递增 N 任务（如 5/4N）</option>
+                                    </select>
+                                </div>
+                                <div class="tpl-form-group" style="flex:1;" id="tpl-edit-level-group">
+                                    <label>任务等级</label>
+                                    <select id="tpl-edit-level" onchange="handleTplInput()">
+                                        <option value="1">1级</option>
+                                        <option value="2">2级</option>
+                                        <option value="3">3级</option>
+                                        <option value="4">4级</option>
+                                        <option value="5">5级</option>
+                                        <option value="6">6级</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div id="tpl-edit-n-simple" class="template-n-panel template-n-panel-simple" style="display:none;">
+                                <div class="tpl-form-group" style="margin-bottom:0;">
+                                    <label>最大 N 值</label>
+                                    <input type="number" id="tpl-edit-nmax" min="1" max="9" oninput="handleTplInput()" placeholder="例如 3 或 4">
+                                </div>
+                                <p style="font-size:13px; color:#607d8b; margin:8px 0 0;">说明：系统会自动显示为“等级N”，例如 3级 + 最大N=4 会显示为 3N。</p>
+                            </div>
+
+                            <div id="tpl-edit-nfields" class="template-n-panel template-n-panel-streak" style="display:none;">
+                                <div style="display:flex; gap:10px;">
+                                    <div class="tpl-form-group" style="flex:1; margin-bottom:0;">
+                                        <label>首个 N 分值</label>
+                                        <input type="number" id="tpl-edit-baseLevel" min="1" max="9" oninput="handleTplInput()" placeholder="例如 5">
+                                    </div>
+                                    <div class="tpl-form-group" style="flex:1; margin-bottom:0;">
+                                        <label>后续每个 N 分值</label>
+                                        <input type="number" id="tpl-edit-extraLevel" min="1" max="9" oninput="handleTplInput()" placeholder="例如 4">
+                                    </div>
+                                    <div class="tpl-form-group" style="flex:1; margin-bottom:0;">
+                                        <label>最大 N 值</label>
+                                        <input type="number" id="tpl-edit-streak-nmax" min="1" max="9" oninput="handleTplInput()" placeholder="例如 4">
+                                    </div>
+                                </div>
+                                <p style="font-size:13px; color:var(--cc-muted); margin:8px 0 0;">说明：适合“连续击杀/连续达成”类任务，系统会自动显示为“首个/后续N”，例如 5/4N。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="template-modal-actions">
+                    <button onclick="saveTemplate()" style="background:var(--cc-ink); color:var(--cc-sheet); font-size:16px; padding:12px 26px; border-radius:4px;">保存并应用模板</button>
+                    <button onclick="downloadTemplateJson()" style="background:transparent; color:var(--cc-ink); font-size:15px; padding:11px 22px; border:1px solid var(--cc-line-strong); border-radius:4px;">导出为 JSON 文件</button>
+                    <button onclick="saveTemplateToLocal()" style="background:transparent; color:var(--cc-ink); font-size:15px; padding:11px 22px; border:1px solid var(--cc-line-strong); border-radius:4px;">保存到浏览器本地</button>
+                </div>
+            </div>
+
+            <div id="template-json-tab" style="display:none;">
+                <p style="font-size:14px; color:var(--cc-muted);">你可以在这里导出、复制、备份或导入任务模板 JSON。</p>
+                <textarea id="template-json-textarea" style="width: 100%; height: 400px; font-family: var(--cc-font); font-size: 13px; border:1px solid var(--cc-line-strong); padding:10px; box-sizing:border-box;"></textarea>
+                <div class="json-toolbar">
+                    <button onclick="saveTemplateFromJson()" style="background:var(--cc-ink); color:var(--cc-sheet); font-size:15px;">解析并应用 JSON</button>
+                    <button onclick="downloadTemplateJson()" style="background:transparent; color:var(--cc-ink); font-size:15px;">导出为 JSON 文件</button>
+                    <button onclick="copyTemplateJson()" style="background:var(--cc-signal); color:var(--cc-signal-ink); font-size:15px;">复制 JSON</button>
+                    <button onclick="saveTemplateToLocal()" style="background:transparent; color:var(--cc-ink); font-size:15px;">保存到浏览器本地</button>
+                    <button onclick="loadTemplateFromLocal()" style="background:transparent; color:var(--cc-ink); font-size:15px;">读取本地备份</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <dialog id="caoren-dialog" class="caoren-dialog" aria-labelledby="caoren-dialog-title" aria-describedby="caoren-dialog-message">
+        <section class="caoren-dialog-card">
+            <header class="caoren-dialog-header">
+                <span class="caoren-dialog-icon" aria-hidden="true">!</span>
+                <div>
+                    <span class="section-eyebrow">草人杯操作确认</span>
+                    <h2 id="caoren-dialog-title">请确认操作</h2>
+                </div>
+            </header>
+            <p id="caoren-dialog-message" class="caoren-dialog-message" aria-live="polite"></p>
+            <label id="caoren-dialog-input-wrap" class="caoren-dialog-input-wrap" hidden>
+                <span id="caoren-dialog-input-label">请输入内容</span>
+                <input id="caoren-dialog-input" type="text" autocomplete="off">
+                <small id="caoren-dialog-input-error" role="alert" hidden></small>
+            </label>
+            <footer class="caoren-dialog-actions">
+                <button id="caoren-dialog-cancel" type="button" class="secondary-btn">取消</button>
+                <button id="caoren-dialog-confirm" type="button" class="caoren-dialog-confirm">确认</button>
+            </footer>
+        </section>
+    </dialog>
+
+    <!-- 须知模态框 -->
+    <div id="rules-modal" class="modal">
+        <div class="modal-content" style="max-width:600px;">
+            <span class="close" onclick="closeRules()">&times;</span>
+            <div id="rules-content"></div>
+            <div id="rules-navigation" style="margin-top: 15px;"></div>
+            <button id="rules-ready" style="display:none; margin-top: 15px; background:#2196f3; color:#fff;" onclick="readyPlayer()">我准备好了</button>
+        </div>
+    </div>
+
+    <!-- 退出确认弹窗 -->
+    <div id="quit-modal" class="modal">
+        <div class="modal-content" style="max-width:400px;">
+            <p>确定要取消本场参赛吗？账号仍保持登录。</p>
+            <button onclick="doQuit()" style="background:#f44336; color:#fff;">确认取消参赛</button>
+            <button onclick="closeQuit()">取消</button>
+        </div>
+    </div>
+
+    <section id="weaponpaints-panel" class="weaponpaints-panel panel" hidden aria-labelledby="weaponpaints-title">
+        <header class="weaponpaints-header">
+            <div><span class="section-eyebrow">Caoren Cup v1.9</span><h2 id="weaponpaints-title">换肤工坊</h2><p>网页与桌面客户端共用；保存后会按回合安全规则应用。</p></div>
+            <button id="weaponpaints-close-btn" type="button" aria-label="关闭换肤工坊">关闭</button>
+        </header>
+        <div id="weaponpaints-health" class="weaponpaints-health" aria-live="polite">正在检查换肤服务...</div>
+        <div id="weaponpaints-admin-bar" class="weaponpaints-admin-bar" hidden>
+            <label>代管玩家<select id="weaponpaints-target"></select></label>
+            <button id="weaponpaints-reset-btn" type="button" class="danger-btn">重置当前玩家</button>
+            <button id="weaponpaints-force-btn" type="button">管理员强刷</button>
+        </div>
+        <div class="weaponpaints-team-bar" role="tablist" aria-label="阵营配置">
+            <button type="button" class="active" data-wp-team="3">CT 配置</button>
+            <button type="button" data-wp-team="2">T 配置</button>
+            <button id="weaponpaints-reset-team-btn" class="danger-btn weaponpaints-reset-team-btn" type="button">清空当前 CT 配置</button>
+        </div>
+        <div class="weaponpaints-layout">
+            <nav id="weaponpaints-categories" class="weaponpaints-categories" aria-label="换肤分类"></nav>
+            <main class="weaponpaints-browser">
+                <div class="weaponpaints-search-row"><input id="weaponpaints-search" type="search" placeholder="搜索当前阵营的武器、涂装名称或 ID"><button id="weaponpaints-search-btn" type="button">搜索</button></div>
+                <div id="weaponpaints-grid" class="weaponpaints-grid" aria-live="polite"></div>
+                <button id="weaponpaints-more-btn" type="button" hidden>加载更多</button>
+            </main>
+            <aside id="weaponpaints-editor" class="weaponpaints-editor"><p class="muted-line">选择枪皮或刀皮后，可在这里调整高级参数。</p></aside>
+        </div>
+        <div id="weaponpaints-notice" class="weaponpaints-toast" aria-live="polite"></div>
+        <div id="weaponpaints-unsaved-dialog" class="weaponpaints-unsaved-dialog" hidden>
+            <section role="dialog" aria-modal="true" aria-labelledby="weaponpaints-unsaved-title">
+                <h3 id="weaponpaints-unsaved-title">当前修改尚未保存</h3>
+                <p id="weaponpaints-unsaved-description">继续操作会丢失当前武器或装饰配置的修改。</p>
+                <p id="weaponpaints-unsaved-error" class="weaponpaints-dialog-error" aria-live="polite"></p>
+                <div class="weaponpaints-dialog-actions">
+                    <button id="weaponpaints-unsaved-save" class="primary-btn" type="button">保存并继续</button>
+                    <button id="weaponpaints-unsaved-discard" type="button">放弃更改</button>
+                    <button id="weaponpaints-unsaved-cancel" type="button">返回编辑</button>
+                </div>
+            </section>
+        </div>
+        <div id="weaponpaints-reset-team-dialog" class="weaponpaints-unsaved-dialog" hidden>
+            <section role="dialog" aria-modal="true" aria-labelledby="weaponpaints-reset-team-title">
+                <h3 id="weaponpaints-reset-team-title">确认清空当前阵营配置？</h3>
+                <p id="weaponpaints-reset-team-description"></p>
+                <p>枪皮、刀具、手套、探员、音乐盒、徽章、印花和挂件都会恢复默认；另一阵营不受影响。</p>
+                <p id="weaponpaints-reset-team-error" class="weaponpaints-dialog-error" aria-live="polite"></p>
+                <div class="weaponpaints-dialog-actions">
+                    <button id="weaponpaints-reset-team-confirm" class="danger-btn" type="button">确认清空</button>
+                    <button id="weaponpaints-reset-team-cancel" type="button">取消</button>
+                </div>
+            </section>
+        </div>
+    </section>
+
+    <div id="update-announcement-backdrop" class="update-announcement-backdrop" hidden></div>
+    <aside id="update-announcement-drawer" class="update-announcement-drawer" role="dialog" aria-modal="true" aria-labelledby="update-announcement-drawer-title" hidden>
+        <div class="update-announcement-drawer-header">
+            <div><span class="section-eyebrow">版本历史</span><h2 id="update-announcement-drawer-title">更新公告</h2></div>
+            <button id="update-announcement-close" type="button" aria-label="关闭更新公告">关闭</button>
+        </div>
+        <div id="update-announcement-status" class="muted-line" aria-live="polite">正在读取更新公告……</div>
+        <div id="update-announcement-list" class="update-announcement-list"></div>
+    </aside>
+
+    <footer class="site-legal-footer" aria-label="网站备案信息">
+        <p class="footer-brand">草人杯 · CS2 自定义娱乐赛</p>
+        <div class="footer-legal-links">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">冀ICP备2026043660号-1</a>
+        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=13102402000558" target="_blank" rel="noreferrer">
+            <img src="/assets/beian-police.png" width="18" height="20" alt="">
+            <span>冀公网安备13102402000558号</span>
+        </a>
+        </div>
+    </footer>
+    <script src="/js/update-announcement-read-state.js"></script>
+    <script src="/js/caoren-dialog.js?v=1.9.2-modern-dialog11"></script>
+    <script src="/js/task-template-history.js?v=undercover-ui1"></script>
+    <script src="/js/lobby-app.js?v=1.11.1-pcskin1"></script>
+    <script src="/js/update-announcement-public.js"></script>
+    <script src="/js/update-announcement-admin-mutation-state.js"></script>
+    <script src="/js/update-announcement-admin.js?v=1.9.2-modern-dialog8"></script>
+    </div>
+<!-- PHASE2_UNIFIED_CAOREN_MOD_PANEL_V4_START -->
+<script src="/js/caoren-unified-mod-panel.js"></script>
+<!-- PHASE2_UNIFIED_CAOREN_MOD_PANEL_V4_END -->
+
+
+
+
+
+
+<!-- PHASE2_SAFE_ADMIN_VISIBILITY_V3_START -->
+<script src="/js/admin-visibility.js"></script>
+<!-- PHASE2_SAFE_ADMIN_VISIBILITY_V3_END -->
+
+
+<script src="/js/access-admin.js?v=1.9.2-modern-dialog8"></script>
+<script src="/js/player-center.js?v=2.0.0"></script>
+<script src="/js/weaponpaints-draft.js?v=1.9.2-qol2"></script>
+<script src="/js/weaponpaints-entry.js?v=1.11.1-pcskin1"></script>
+<script src="/js/weaponpaints-app.js?v=1.11.1-pcskin1"></script>
+</body>
+</html>

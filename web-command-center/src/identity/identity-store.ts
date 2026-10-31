@@ -3,9 +3,10 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { generateRandomLoginName, validateLoginName } from './account-foundation';
 import { IdentityStoreData, IdentityStoreDataLegacy, LoginAccountRecord } from './identity-types';
+import { normalizeEmail } from './email-address';
 
 const createEmptyData = (): IdentityStoreData => ({
-    schemaVersion: 3,
+    schemaVersion: 4,
     identities: {},
     accounts: {},
     memberships: {},
@@ -100,6 +101,7 @@ const validateCurrentData = (parsed: Record<string, unknown>): IdentityStoreData
     }
 
     const loginNames = new Set<string>();
+    const verifiedEmails = new Set<string>();
     for (const [identityId, accountValue] of Object.entries(parsed.accounts)) {
         const identity = identities[identityId];
         if (!isRecord(accountValue) || accountValue.identityId !== identityId || !isRecord(identity) ||
@@ -107,9 +109,18 @@ const validateCurrentData = (parsed: Record<string, unknown>): IdentityStoreData
             typeof accountValue.updatedAt !== 'number') {
             throw new Error('login account schema is invalid');
         }
-        if (typeof identity.steamId !== 'string' || !/^7656119\d{10}$/.test(identity.steamId)) {
+        if (accountValue.email !== undefined || accountValue.emailVerifiedAt !== undefined) {
+            const email = normalizeEmail(accountValue.email);
+            if (email !== accountValue.email || typeof accountValue.emailVerifiedAt !== 'number' ||
+                !Number.isFinite(accountValue.emailVerifiedAt) || accountValue.emailVerifiedAt <= 0 || verifiedEmails.has(email)) {
+                throw new Error('login account email is invalid or duplicated');
+            }
+            verifiedEmails.add(email);
+        }
+        if (!identity.steamId && !accountValue.emailVerifiedAt) {
             throw new Error('login account identity has no trusted SteamID');
         }
+        if (!identity.steamId && accountValue.passwordState !== 'active') throw new Error('website account has no active password');
         const loginName = validateLoginName(accountValue.loginName);
         if (loginNames.has(loginName)) throw new Error('login account name is duplicated');
         loginNames.add(loginName);
@@ -150,7 +161,7 @@ const migrateLegacyData = (legacy: IdentityStoreDataLegacy, randomBytes: (size: 
         };
     }
     return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         identities,
         accounts,
         memberships: legacy.memberships,
@@ -163,8 +174,15 @@ const parseData = (text: string, randomBytes: (size: number) => Buffer): { data:
     if (!isRecord(parsed) || !isRecord(parsed.identities) || !isRecord(parsed.memberships) || !isRecord(parsed.deviceTokens)) {
         throw new Error('identity store schema is invalid');
     }
-    if (parsed.schemaVersion === 3) {
+    if (parsed.schemaVersion === 4) {
         return { data: validateCurrentData(parsed), migrated: false };
+    }
+    if (parsed.schemaVersion === 3) {
+        try {
+            return { data: validateCurrentData({ ...parsed, schemaVersion: 4 }), migrated: true };
+        } catch (error) {
+            throw new IdentityMigrationError(error instanceof Error ? error.message : 'identity migration failed');
+        }
     }
     if (parsed.schemaVersion === 1 || parsed.schemaVersion === 2) {
         try {

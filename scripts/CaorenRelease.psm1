@@ -166,7 +166,7 @@ function Copy-ReleaseWebTree {
         $null = New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force
         Copy-Item -LiteralPath $item.FullName -Destination $target
     }
-    $data = Resolve-ReleasePath $RepoRoot 'game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
+    $data = Resolve-ReleasePath $RepoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
     foreach ($item in Get-ChildItem -LiteralPath $data -File -Recurse -Filter '*.json') {
         $relative = $item.FullName.Substring($data.Length).TrimStart('\', '/')
         $null = Resolve-ReleasePath $data $relative
@@ -174,7 +174,7 @@ function Copy-ReleaseWebTree {
         $null = New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force
         Copy-Item -LiteralPath $item.FullName -Destination $target
     }
-    $component = Resolve-ReleasePath $RepoRoot 'game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints'
+    $component = Resolve-ReleasePath $RepoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints'
     foreach ($name in @('LICENSE', 'UPSTREAM.md')) {
         Copy-Item -LiteralPath (Join-Path $component $name) -Destination (Resolve-ReleasePath $Destination ('weaponpaints-data/' + $name))
     }

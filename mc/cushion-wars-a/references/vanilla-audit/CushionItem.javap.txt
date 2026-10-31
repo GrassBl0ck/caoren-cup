@@ -1,0 +1,193 @@
+Compiled from "CushionItem.java"
+public class net.minecraft.world.item.CushionItem extends net.minecraft.world.item.Item {
+  private static final double COLLISION_SHAPE_RAYCAST_EPSILON;
+
+  public net.minecraft.world.item.CushionItem(net.minecraft.world.item.Item$Properties);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokespecial #1                  // Method net/minecraft/world/item/Item."<init>":(Lnet/minecraft/world/item/Item$Properties;)V
+         5: return
+
+  public net.minecraft.world.InteractionResult useOn(net.minecraft.world.item.context.UseOnContext);
+    Code:
+         0: aload_1
+         1: invokestatic  #7                  // Method recalculateContextForSpecialCollisionShapes:(Lnet/minecraft/world/item/context/UseOnContext;)Lnet/minecraft/world/item/context/UseOnContext;
+         4: astore_2
+         5: aload_1
+         6: invokevirtual #13                 // Method net/minecraft/world/item/context/UseOnContext.getLevel:()Lnet/minecraft/world/level/Level;
+         9: astore_3
+        10: aload_2
+        11: invokevirtual #19                 // Method net/minecraft/world/item/context/UseOnContext.getClickedFace:()Lnet/minecraft/core/Direction;
+        14: astore        4
+        16: aload         4
+        18: getstatic     #23                 // Field net/minecraft/core/Direction.UP:Lnet/minecraft/core/Direction;
+        21: if_acmpeq     28
+        24: getstatic     #29                 // Field net/minecraft/world/InteractionResult.FAIL:Lnet/minecraft/world/InteractionResult$Fail;
+        27: areturn
+        28: new           #35                 // class net/minecraft/world/item/context/BlockPlaceContext
+        31: dup
+        32: aload_2
+        33: invokespecial #37                 // Method net/minecraft/world/item/context/BlockPlaceContext."<init>":(Lnet/minecraft/world/item/context/UseOnContext;)V
+        36: astore        5
+        38: aload         5
+        40: invokevirtual #40                 // Method net/minecraft/world/item/context/BlockPlaceContext.getClickedPos:()Lnet/minecraft/core/BlockPos;
+        43: astore        6
+        45: aload         6
+        47: aload_2
+        48: invokevirtual #44                 // Method net/minecraft/world/item/context/UseOnContext.getClickLocation:()Lnet/minecraft/world/phys/Vec3;
+        51: getfield      #48                 // Field net/minecraft/world/phys/Vec3.y:D
+        54: invokestatic  #54                 // Method net/minecraft/world/phys/Vec3.atCenterOfWithY:(Lnet/minecraft/core/Vec3i;D)Lnet/minecraft/world/phys/Vec3;
+        57: astore        7
+        59: getstatic     #58                 // Field net/minecraft/world/entity/EntityTypes.CUSHION:Lnet/minecraft/world/entity/EntityType;
+        62: aload         7
+        64: invokevirtual #64                 // Method net/minecraft/world/entity/EntityType.getSpawnAABB:(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/AABB;
+        67: astore        8
+        69: aload_3
+        70: aload         8
+        72: invokestatic  #70                 // Method net/minecraft/world/entity/decoration/Cushion.canBePlacedAt:(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/phys/AABB;)Z
+        75: ifne          82
+        78: getstatic     #29                 // Field net/minecraft/world/InteractionResult.FAIL:Lnet/minecraft/world/InteractionResult$Fail;
+        81: areturn
+        82: aload_1
+        83: invokevirtual #76                 // Method net/minecraft/world/item/context/UseOnContext.getItemInHand:()Lnet/minecraft/world/item/ItemStack;
+        86: astore        9
+        88: aload_3
+        89: instanceof    #80                 // class net/minecraft/server/level/ServerLevel
+        92: ifeq          254
+        95: aload_3
+        96: checkcast     #80                 // class net/minecraft/server/level/ServerLevel
+        99: astore        10
+       101: aload         10
+       103: ldc           #71                 // class net/minecraft/world/entity/decoration/Cushion
+       105: aload         8
+       107: invokevirtual #82                 // Method net/minecraft/server/level/ServerLevel.getEntitiesOfClass:(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;
+       110: invokeinterface #86,  1           // InterfaceMethod java/util/List.isEmpty:()Z
+       115: ifne          122
+       118: getstatic     #29                 // Field net/minecraft/world/InteractionResult.FAIL:Lnet/minecraft/world/InteractionResult$Fail;
+       121: areturn
+       122: aload         10
+       124: aload         9
+       126: aload_1
+       127: invokevirtual #92                 // Method net/minecraft/world/item/context/UseOnContext.getPlayer:()Lnet/minecraft/world/entity/player/Player;
+       130: invokestatic  #96                 // Method net/minecraft/world/entity/EntityType.createDefaultStackConfig:(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/LivingEntity;)Lnet/minecraft/world/entity/PostSpawnProcessor;
+       133: astore        11
+       135: getstatic     #58                 // Field net/minecraft/world/entity/EntityTypes.CUSHION:Lnet/minecraft/world/entity/EntityType;
+       138: aload         10
+       140: aload         11
+       142: aload         6
+       144: getstatic     #100                // Field net/minecraft/world/entity/EntitySpawnReason.SPAWN_ITEM_USE:Lnet/minecraft/world/entity/EntitySpawnReason;
+       147: iconst_1
+       148: iconst_1
+       149: invokevirtual #106                // Method net/minecraft/world/entity/EntityType.create:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/PostSpawnProcessor;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/entity/EntitySpawnReason;ZZ)Lnet/minecraft/world/entity/Entity;
+       152: checkcast     #71                 // class net/minecraft/world/entity/decoration/Cushion
+       155: astore        12
+       157: aload         12
+       159: ifnonnull     166
+       162: getstatic     #29                 // Field net/minecraft/world/InteractionResult.FAIL:Lnet/minecraft/world/InteractionResult$Fail;
+       165: areturn
+       166: aload         12
+       168: aload         7
+       170: aload         5
+       172: invokevirtual #110                // Method net/minecraft/world/item/context/BlockPlaceContext.getRotation:()F
+       175: f2d
+       176: invokestatic  #114                // Method net/minecraft/core/Direction.fromYRot:(D)Lnet/minecraft/core/Direction;
+       179: invokevirtual #118                // Method net/minecraft/core/Direction.toYRot:()F
+       182: fconst_0
+       183: invokevirtual #121                // Method net/minecraft/world/entity/decoration/Cushion.snapTo:(Lnet/minecraft/world/phys/Vec3;FF)V
+       186: aload         10
+       188: aload         12
+       190: invokevirtual #125                // Method net/minecraft/server/level/ServerLevel.addFreshEntity:(Lnet/minecraft/world/entity/Entity;)Z
+       193: pop
+       194: aload         12
+       196: aload         10
+       198: invokevirtual #129                // Method net/minecraft/world/entity/decoration/Cushion.destroyIfInFire:(Lnet/minecraft/server/level/ServerLevel;)V
+       201: aload_3
+       202: aconst_null
+       203: aload         12
+       205: invokevirtual #133                // Method net/minecraft/world/entity/decoration/Cushion.getX:()D
+       208: aload         12
+       210: invokevirtual #137                // Method net/minecraft/world/entity/decoration/Cushion.getY:()D
+       213: aload         12
+       215: invokevirtual #140                // Method net/minecraft/world/entity/decoration/Cushion.getZ:()D
+       218: getstatic     #143                // Field net/minecraft/sounds/SoundEvents.CUSHION_PLACE:Lnet/minecraft/sounds/SoundEvent;
+       221: getstatic     #149                // Field net/minecraft/sounds/SoundSource.BLOCKS:Lnet/minecraft/sounds/SoundSource;
+       224: ldc           #155                // float 0.75f
+       226: ldc           #156                // float 0.8f
+       228: invokevirtual #157                // Method net/minecraft/world/level/Level.playSound:(Lnet/minecraft/world/entity/Entity;DDDLnet/minecraft/sounds/SoundEvent;Lnet/minecraft/sounds/SoundSource;FF)V
+       231: aload         12
+       233: getstatic     #163                // Field net/minecraft/world/level/gameevent/GameEvent.ENTITY_PLACE:Lnet/minecraft/core/Holder$Reference;
+       236: aload_1
+       237: invokevirtual #92                 // Method net/minecraft/world/item/context/UseOnContext.getPlayer:()Lnet/minecraft/world/entity/player/Player;
+       240: invokevirtual #169                // Method net/minecraft/world/entity/decoration/Cushion.gameEvent:(Lnet/minecraft/core/Holder;Lnet/minecraft/world/entity/Entity;)V
+       243: aload         9
+       245: iconst_1
+       246: aload         5
+       248: invokevirtual #173                // Method net/minecraft/world/item/context/BlockPlaceContext.getPlayer:()Lnet/minecraft/world/entity/player/Player;
+       251: invokevirtual #174                // Method net/minecraft/world/item/ItemStack.consume:(ILnet/minecraft/world/entity/LivingEntity;)V
+       254: getstatic     #180                // Field net/minecraft/world/InteractionResult.SUCCESS:Lnet/minecraft/world/InteractionResult$Success;
+       257: areturn
+
+  private static net.minecraft.world.item.context.UseOnContext recalculateContextForSpecialCollisionShapes(net.minecraft.world.item.context.UseOnContext);
+    Code:
+         0: aload_0
+         1: invokevirtual #92                 // Method net/minecraft/world/item/context/UseOnContext.getPlayer:()Lnet/minecraft/world/entity/player/Player;
+         4: astore_1
+         5: aload_1
+         6: ifnonnull     11
+         9: aload_0
+        10: areturn
+        11: aload_0
+        12: invokevirtual #13                 // Method net/minecraft/world/item/context/UseOnContext.getLevel:()Lnet/minecraft/world/level/Level;
+        15: astore_2
+        16: aload_0
+        17: invokevirtual #184                // Method net/minecraft/world/item/context/UseOnContext.getClickedPos:()Lnet/minecraft/core/BlockPos;
+        20: astore_3
+        21: aload_2
+        22: aload_3
+        23: invokevirtual #185                // Method net/minecraft/world/level/Level.getBlockState:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        26: astore        4
+        28: aload         4
+        30: getstatic     #189                // Field net/minecraft/tags/BlockTags.CUSHION_USES_COLLISION_SHAPE:Lnet/minecraft/tags/TagKey;
+        33: invokevirtual #195                // Method net/minecraft/world/level/block/state/BlockState.is:(Lnet/minecraft/tags/TagKey;)Z
+        36: ifne          41
+        39: aload_0
+        40: areturn
+        41: aload_1
+        42: invokevirtual #201                // Method net/minecraft/world/entity/player/Player.getEyePosition:()Lnet/minecraft/world/phys/Vec3;
+        45: astore        5
+        47: aload_0
+        48: invokevirtual #44                 // Method net/minecraft/world/item/context/UseOnContext.getClickLocation:()Lnet/minecraft/world/phys/Vec3;
+        51: aload         5
+        53: invokevirtual #206                // Method net/minecraft/world/phys/Vec3.subtract:(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;
+        56: astore        6
+        58: aload_0
+        59: invokevirtual #44                 // Method net/minecraft/world/item/context/UseOnContext.getClickLocation:()Lnet/minecraft/world/phys/Vec3;
+        62: aload         6
+        64: invokevirtual #210                // Method net/minecraft/world/phys/Vec3.normalize:()Lnet/minecraft/world/phys/Vec3;
+        67: ldc2_w        #213                // double 0.001d
+        70: invokevirtual #215                // Method net/minecraft/world/phys/Vec3.scale:(D)Lnet/minecraft/world/phys/Vec3;
+        73: invokevirtual #219                // Method net/minecraft/world/phys/Vec3.add:(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;
+        76: astore        7
+        78: aload         4
+        80: aload_2
+        81: aload_3
+        82: invokevirtual #222                // Method net/minecraft/world/level/block/state/BlockState.getCollisionShape:(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/shapes/VoxelShape;
+        85: aload         5
+        87: aload         7
+        89: aload_3
+        90: invokevirtual #226                // Method net/minecraft/world/phys/shapes/VoxelShape.clip:(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/phys/BlockHitResult;
+        93: astore        8
+        95: aload         8
+        97: ifnonnull     102
+       100: aload_0
+       101: areturn
+       102: new           #14                 // class net/minecraft/world/item/context/UseOnContext
+       105: dup
+       106: aload_1
+       107: aload_0
+       108: invokevirtual #232                // Method net/minecraft/world/item/context/UseOnContext.getHand:()Lnet/minecraft/world/InteractionHand;
+       111: aload         8
+       113: invokespecial #236                // Method net/minecraft/world/item/context/UseOnContext."<init>":(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)V
+       116: areturn
+}

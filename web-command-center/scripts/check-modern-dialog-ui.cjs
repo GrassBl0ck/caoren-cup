@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'pages', 'cs.html'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 const jsDir = path.join(root, 'public', 'js');
 const nativeDialogPattern = /\b(?:confirm|prompt|alert)\s*\(/g;

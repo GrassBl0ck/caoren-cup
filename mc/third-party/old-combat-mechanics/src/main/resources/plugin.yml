@@ -1,0 +1,56 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+main: kernitus.plugin.OldCombatMechanics.OCMMain
+name: OldCombatMechanics
+version: ${pluginVersion}
+authors: [kernitus, Rayzr522]
+description: Reverts to pre-1.9 combat mechanics
+website: https://github.com/kernitus/BukkitOldCombatMechanics
+load: POSTWORLD
+softdepend: [PlaceholderAPI, MythicMobs]
+api-version: 1.13
+
+commands:
+  oldcombatmechanics:
+   description: OldCombatMechanics's main command
+   aliases: [ocm]
+   permission: oldcombatmechanics.commands
+   
+permissions:
+  oldcombatmechanics.*:
+    description: Gives access to all OCM permissions
+    default: op
+    children:
+      oldcombatmechanics.commands: true
+      oldcombatmechanics.notify: true
+      oldcombatmechanics.mode: true
+      oldcombatmechanics.mode.own: true
+      oldcombatmechanics.mode.others: true
+      oldcombatmechanics.modeset.*: true
+      oldcombatmechanics.swordblock: true
+  oldcombatmechanics.commands:
+    description: Allows the usage of OCM commands
+    default: op
+  oldcombatmechanics.notify:
+    description: Notifies of new OCM updates
+    default: op
+  oldcombatmechanics.mode:
+    description: Allows player to use /ocm mode to check own modeset
+    default: op
+  oldcombatmechanics.mode.own:
+    description: Allows player to use /ocm mode to change own modeset
+    default: op
+    children:
+      oldcombatmechanics.mode: true
+  oldcombatmechanics.mode.others:
+    description: Allows player to use /ocm mode to change other players' modeset
+    default: op
+    children:
+      oldcombatmechanics.mode: true
+  oldcombatmechanics.modeset.*:
+    description: Allows access to all named OCM modesets when mode permissions are enabled
+    default: op
+  oldcombatmechanics.swordblock:
+    description: Allows players to block with sword
+    default: op

@@ -13,9 +13,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$resources = Join-Path $repo 'game-plugin\Features\InGameMenu\resources'
-if (-not $Catalog) { $Catalog = Join-Path $repo 'game-plugin\Features\InGameMenu\audio-events.json' }
-if (-not $SourceDirectory) { $SourceDirectory = Join-Path $repo 'game-plugin\Features\InGameMenu\audio-source' }
+$resources = Join-Path $repo 'cs\game-plugin\Features\InGameMenu\resources'
+if (-not $Catalog) { $Catalog = Join-Path $repo 'cs\game-plugin\Features\InGameMenu\audio-events.json' }
+if (-not $SourceDirectory) { $SourceDirectory = Join-Path $repo 'cs\game-plugin\Features\InGameMenu\audio-source' }
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repo ('release-build\ingamemenu-audio\build-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fffffff')) }
 function Assert-InDirectory([string]$Path, [string]$Root) {
     $absolute = [IO.Path]::GetFullPath($Path)

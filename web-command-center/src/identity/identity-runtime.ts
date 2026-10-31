@@ -8,6 +8,8 @@ import {
 import { LobbyIdentityService } from './identity-service';
 import { IdentityStore } from './identity-store';
 import { PlayerCenterSessionStore } from './player-center-session-store';
+import { EmailCodeService } from './email-codes';
+import { smtpDelivery } from './smtp-mail';
 
 const identityStorePath = process.env.IDENTITY_STORE_PATH
     ? path.resolve(process.env.IDENTITY_STORE_PATH)
@@ -23,6 +25,7 @@ export const lobbyIdentityService = new LobbyIdentityService(identityStore);
 export const playerCenterBootstrapTickets = new EphemeralTicketService<PlayerCenterBootstrapTicket>();
 export const playerCenterMatchSocketTickets = new EphemeralTicketService<PlayerCenterMatchSocketTicket>();
 export const accountRecoveryTickets = new EphemeralTicketService<AccountRecoveryTicket>();
+export const accountEmailCodes = new EmailCodeService({ deliver: smtpDelivery() });
 
 let initializePromise: Promise<void> | undefined;
 

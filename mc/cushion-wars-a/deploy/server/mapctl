@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+#
+# 草人杯 MC 分杯服 · 地图（世界）切换工具
+#
+# 设计：一个地图 = 一个独立世界容器（maps/<id>/world）。
+#      启动时用 --universe maps/<id> --world world 指定加载哪张地图，
+#      地图自己的数据包放在 maps/<id>/world/datapacks/，互不影响。
+#      插件、白名单、OP、权限、日志全部共享（在同一份服务端根目录下）。
+#
+# 该脚本同时是 systemd 的 ExecStart（mapctl start）。
+set -euo pipefail
+
+BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MAPS="$BASE/maps"
+JAVA_BIN="${JAVA_BIN:-/usr/lib/jvm/java-25-openjdk-amd64/bin/java}"
+JAR="${JAR:-$BASE/purpur-26.3-2651.jar}"
+UNIT="${UNIT:-caoren-mc}"
+WORLD_DIR_NAME="world"
+
+die() { echo "错误：$*" >&2; exit 1; }
+
+need_root() {
+    [ "$(id -u)" -eq 0 ] || die "「$1」需要 root 权限，请用 sudo mapctl $1 ..."
+}
+
+active_id() {
+    [ -f "$MAPS/active" ] || return 1
+    tr -d '[:space:]' < "$MAPS/active"
+}
+
+meta() { # meta <id> <key>
+    local f="$MAPS/$1/map.conf"
+    [ -f "$f" ] || return 0
+    sed -n "s/^$2=//p" "$f" | head -n1
+}
+
+usage() {
+    cat <<'EOF'
+草人杯 MC 分杯服 · 地图切换
+
+  mapctl list                        列出全部地图（* 为当前启用）
+  mapctl status                      当前地图、服务状态、世界大小
+  mapctl use <地图id>                切换地图并重启服务端
+  mapctl use <地图id> --no-restart   只改启用项，不重启
+  mapctl create <地图id> [标题]       新建一张空地图（不切换，首次启动时生成世界）
+  mapctl start                       按当前启用项启动（systemd 调用，不要手动跑）
+  mapctl log [行数]                  查看当前服务日志（默认 40 行）
+
+目录约定
+  地图目录   maps/<id>/world          该地图的世界存档
+  地图数据包 maps/<id>/world/datapacks 只在这张地图生效
+  地图元数据 maps/<id>/map.conf        id / title / 备注
+  当前启用   maps/active              纯文本，内容是地图 id
+
+新增一张地图的最短流程
+  sudo mapctl create my-game "我的新小游戏"
+  把数据包放进 maps/my-game/world/datapacks/
+  依赖插件的，插件侧用 -Dcw.map=<id> 判断是否启用（mapctl start 会自动传）
+  sudo mapctl use my-game
+EOF
+}
+
+list_maps() {
+    local cur; cur="$(active_id || true)"
+    printf '%-14s %-4s %-8s %s\n' "地图" "启用" "世界" "标题"
+    local found=0
+    for d in "$MAPS"/*/; do
+        [ -d "$d/$WORLD_DIR_NAME" ] || continue
+        found=1
+        local id size mark title
+        id="$(basename "$d")"
+        size="$(du -sh "$d/$WORLD_DIR_NAME" 2>/dev/null | cut -f1)"
+        mark=" "
+        [ "$id" = "$cur" ] && mark="*"
+        title="$(meta "$id" title)"
+        printf '%-14s %-4s %-8s %s\n' "$id" "$mark" "${size:-?}" "${title:-（无标题）}"
+    done
+    [ "$found" -eq 1 ] || echo "（maps/ 下还没有任何地图，用 mapctl create <id> 新建）"
+}
+
+status() {
+    local cur
+    cur="$(active_id || echo '（未设置）')"
+    echo "当前地图      ：$cur"
+    echo "标题          ：$(meta "$cur" title)"
+    echo "世界目录      ：$MAPS/$cur/$WORLD_DIR_NAME"
+    echo "数据包数量    ：$(ls -1 "$MAPS/$cur/$WORLD_DIR_NAME/datapacks" 2>/dev/null | wc -l | tr -d ' ')"
+    echo "服务状态      ：$(systemctl is-active "$UNIT" 2>/dev/null || true)（开机自启：$(systemctl is-enabled "$UNIT" 2>/dev/null || true)）"
+    if systemctl is-active --quiet "$UNIT" 2>/dev/null; then
+        local pid
+        pid="$(systemctl show -p MainPID --value "$UNIT" 2>/dev/null || true)"
+        echo "主进程 PID    ：$pid"
+        echo "监听端口      ：$(ss -lntp 2>/dev/null | awk '/'"$pid"'/ {print $4}' | paste -sd' ' -)"
+        echo "进程内存      ：$(awk '/VmRSS/ {printf "%.1f MB", $2/1024}' /proc/"$pid"/status 2>/dev/null || echo '?')"
+    fi
+    local cache="$MAPS/$cur/world/.cw-last-start"
+    [ -f "$cache" ] && echo "上次启动      ：$(cat "$cache")"
+}
+
+restart_service() {
+    echo "重启 $UNIT ..."
+    systemctl restart "$UNIT"
+    sleep 4
+    if systemctl is-active --quiet "$UNIT"; then
+        echo "服务已启动（systemctl status $UNIT 查看详情）。"
+    else
+        echo "服务启动失败，查看：journalctl -u $UNIT -n 60 --no-pager" >&2
+        exit 1
+    fi
+}
+
+use_map() {
+    need_root "切换地图"
+    local id="${1:-}"
+    [ -n "$id" ] || die "用法：mapctl use <地图id> [--no-restart]"
+    shift
+    local restart=1
+    for a in "$@"; do
+        case "$a" in
+            --no-restart) restart=0 ;;
+            *) die "未知参数：$a" ;;
+        esac
+    done
+    [ -d "$MAPS/$id/$WORLD_DIR_NAME" ] || die "地图 $id 不存在（缺 $MAPS/$id/$WORLD_DIR_NAME）"
+
+    local prev
+    prev="$(active_id || true)"
+
+    if [ "$prev" = "$id" ]; then
+        echo "当前已经启用 $id。"
+        [ "$restart" -eq 1 ] && restart_service
+        return 0
+    fi
+
+    # 归档上一份日志，避免 latest.log 被覆盖后查不到上次运行记录
+    if [ -f "$BASE/logs/latest.log" ]; then
+        mkdir -p "$BASE/logs/archive"
+        gzip -c "$BASE/logs/latest.log" \
+            > "$BASE/logs/archive/$(date +%Y%m%d-%H%M%S)-${prev:-unknown}.log.gz" || true
+        echo "上一次日志已归档：logs/archive/$(date +%Y%m%d)-*-${prev:-unknown}.log.gz"
+    fi
+
+    printf '%s\n' "$id" > "$MAPS/active"
+    chown caoren-mc:caoren-mc "$MAPS/active" 2>/dev/null || true
+    chmod 644 "$MAPS/active" 2>/dev/null || true
+    echo "已切换：${prev:-（无）} → $id（$(meta "$id" title)）"
+
+    if [ "$restart" -eq 1 ]; then
+        restart_service
+    else
+        echo "未重启。要让地图生效请执行：systemctl restart $UNIT"
+    fi
+}
+
+create_map() {
+    need_root "新建地图"
+    local id="${1:-}"
+    local title="${2:-$1}"
+    [ -n "$id" ] || die "用法：mapctl create <地图id> [标题]"
+    [[ "$id" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "地图 id 只能用小写字母、数字、- 与 _"
+    [ -e "$MAPS/$id" ] && die "地图 $id 已存在"
+    mkdir -p "$MAPS/$id/$WORLD_DIR_NAME/datapacks"
+    cat > "$MAPS/$id/map.conf" <<EOF
+id=$id
+title=$title
+created=$(date +%Y-%m-%d)
+# 这张地图的世界存档在 maps/$id/world，专属数据包放 maps/$id/world/datapacks/。
+# 首次 mapctl use $id 时由服务端生成的新世界；要预置地形可临时改 server.properties 的 level-type。
+EOF
+    chown -R caoren-mc:caoren-mc "$MAPS/$id"
+    echo "已创建地图 $id（$title）。世界会在第一次启用时生成。"
+    echo "下一步：把数据包放进 $MAPS/$id/$WORLD_DIR_NAME/datapacks/ ，然后 sudo mapctl use $id"
+}
+
+start_server() {
+    local id
+    id="$(active_id || true)"
+    [ -n "$id" ] || die "maps/active 未设置（用 mapctl use <地图id> 指定）"
+    [ -d "$MAPS/$id/$WORLD_DIR_NAME" ] || die "地图 $id 的世界目录不存在：$MAPS/$id/$WORLD_DIR_NAME"
+    cd "$BASE"
+    date '+%Y-%m-%d %H:%M:%S' > "$MAPS/$id/$WORLD_DIR_NAME/.cw-last-start" 2>/dev/null || true
+    echo "[mapctl] 启动地图：$id（$(meta "$id" title)）"
+    echo "[mapctl] 世界容器：$MAPS/$id"
+    exec "$JAVA_BIN" -Xms1G -Xmx3G -Dfile.encoding=UTF-8 \
+        -Dcw.map="$id" \
+        -jar "$JAR" --nogui \
+        --universe "$MAPS/$id" \
+        --world "$WORLD_DIR_NAME"
+}
+
+show_log() {
+    local n="${1:-40}"
+    journalctl -u "$UNIT" -n "$n" --no-pager 2>/dev/null \
+        || tail -n "$n" "$BASE/logs/latest.log"
+}
+
+case "${1:-}" in
+    list)    list_maps ;;
+    status)  status ;;
+    use)     shift; use_map "$@" ;;
+    create)  shift; create_map "$@" ;;
+    start)   start_server ;;
+    log)     shift; show_log "${1:-40}" ;;
+    ""|-h|--help|help) usage ;;
+    *)       echo "未知子命令：$1" >&2; echo; usage; exit 1 ;;
+esac

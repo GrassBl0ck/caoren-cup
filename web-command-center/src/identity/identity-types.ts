@@ -8,7 +8,7 @@ export interface IdentityRecord {
     displayName: string;
     steamId?: string;
     steamNickname?: string;
-    // 仅由可信 CS2 桥接路径写入；账号密码登录要求该标记存在。
+    // 仅由可信 CS2 桥接路径写入；CS 参赛要求可信游戏身份，网站账户可独立注册。
     gameBoundAt?: number;
     createdAt: number;
     updatedAt: number;
@@ -22,6 +22,8 @@ export interface LoginAccountRecord {
     enabled: boolean;
     passwordState: LoginAccountPasswordState;
     password?: PasswordCredential;
+    email?: string;
+    emailVerifiedAt?: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -75,7 +77,7 @@ export interface DeviceTokenRecord {
 }
 
 export interface IdentityStoreData {
-    schemaVersion: 3;
+    schemaVersion: 4;
     identities: Record<string, IdentityRecord>;
     accounts: Record<string, LoginAccountRecord>;
     memberships: Record<string, LobbyMembershipRecord>;

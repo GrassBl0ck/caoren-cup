@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'node:crypto';
 import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { Player, WsEvents } from './types';
@@ -27,10 +28,10 @@ const v1333MakeGameLoginCode = (): string => {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     for (let attempt = 0; attempt < 20; attempt++) {
         let code = '';
-        for (let index = 0; index < 6; index++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+        for (let index = 0; index < 6; index++) code += alphabet[crypto.randomInt(alphabet.length)];
         if (!v1333GameLoginTickets.has(code)) return code;
     }
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    throw new Error('game_code_capacity');
 };
 
 const v1333CleanupGameLoginTickets = () => {
@@ -58,7 +59,7 @@ export const v1333IssueGameLoginCode = (steamIdRaw: unknown, nameRaw: unknown): 
     return ticket;
 };
 
-// /cclogin 的单次游戏码只允许由账号开户/恢复 HTTP 接口消费。
+// /cclogin 的单次游戏码只允许由已登录身份绑定、未绑邮箱的老账号恢复接口消费。
 export const v1333ConsumeGameLoginTicket = (codeRaw: unknown): GameLoginTicket | undefined => {
     v1333CleanupGameLoginTickets();
     const code = normalizeLoginText(codeRaw).toUpperCase();
@@ -98,19 +99,7 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
         if (!PLUGIN_TOKEN || token !== PLUGIN_TOKEN) {
             return res.status(401).json({ success: false, error: '插件认证失败' });
         }
-        try {
-            const result = await identityService.registerAccountFromGame({
-                steamId: req.body?.steamId,
-                steamNickname: req.body?.name,
-                loginName: req.body?.loginName,
-                password: req.body?.password,
-            });
-            return res.json({ success: true, loginName: result.account.loginName });
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : 'account_register_failed';
-            const status = reason === 'account_exists' || reason === 'login_name_taken' ? 409 : 400;
-            return res.status(status).json({ success: false, error: reason });
-        }
+        return res.status(410).json({ success: false, error: 'account_registration_on_web' });
     });
 
     app.post('/api/plugin/game-login-code', (req, res) => {

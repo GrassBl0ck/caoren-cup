@@ -1,8 +1,16 @@
-# Caoren Cup / 草人杯 CS2 自定义娱乐赛事系统
+# Caoren Cup / 草人杯
 
-Caoren Cup 是一个面向 CS2 自定义娱乐赛的赛事系统。
+草人杯分为 CS 与 MC 两个板块，共用网站和草人杯账户。登录后可随时切换，CS 保留现有赛事大厅，MC 提供游戏介绍、玩法和正版入服指引。
 
-当前项目包含四个运行中的部分，另保留一个已归档项目：
+2.0.0 提供统一入口、邮箱验证码注册与账号恢复，并将 CS / MC 源码归入同一仓库；详见 [2.0.0 更新说明](docs/releases/v2.0.0.md)。
+
+- [CS 板块源码与构建](cs/README.md)
+- [MC 板块、源码与资源](mc/README.md)
+- [统一账户与网易邮箱 SMTP 配置](web-command-center/ACCOUNT-SETUP.md)
+
+新用户使用邮箱验证码注册，自行设置账号和密码；不提供 Steam 快捷登录。老账号保留并可补绑邮箱，CS 游戏身份单独验证。
+
+CS 板块包含以下运行组件，另保留既有归档：
 
 1. **CS2 娱乐玩法插件**
 2. **网页赛事指挥台 / 网页端**
@@ -26,45 +34,29 @@ https://github.com/GrassBl0ck/caoren-cup
 
 ```text
 caoren-cup/
-├─ game-plugin/
-│  ├─ CS2 娱乐玩法插件本体
-│  └─ PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/
-│     └─ 独立 GPL-3.0 游戏内皮肤与饰品插件
-│
-├─ web-command-center/
-│  ├─ src/
-│  ├─ public/
-│  └─ CaorenCupPlugin/
-│     └─ CS2 网页端服务器插件 / 网页桥接插件
-│
-├─ mini-games-plugin/
-│  └─ CS2 小游戏插件
-│
-├─ archive/friberg-v1.11-paused-20261002/friberg-game/
-│  └─ 独立 AGPL-3.0 选手猜测游戏（已归档，半永久暂停）
-│
-├─ docs/
-│  └─ 项目文档
-│
-├─ .github/workflows/
-│  └─ GitHub Actions 自动检查
-│
+├─ cs/                       CS2 娱乐、小游戏、单挑与桥接插件
+├─ mc/                       坐垫战争、跨时代 PvP、小游戏合集及来源许可
+├─ web-command-center/       共用网站、账户及 CS / MC 页面
+├─ desktop-client/           现有网页桌面壳
+├─ scripts/                  按组件构建、验证与打包
+├─ docs/                     项目文档与 CS 完整规则
+├─ archive/                  既有归档，保持暂停状态
+├─ .github/workflows/        自动检查
 ├─ README.md
-├─ LICENSE
-├─ SECURITY.md
+├─ LICENSE                   自研部分 MIT，第三方保留各自许可
 └─ .gitignore
 ```
 
 ---
 
-## 四个核心模块
+## CS 核心模块
 
 ### 1. CS2 娱乐玩法插件本体
 
 目录：
 
 ```text
-game-plugin/
+cs/game-plugin/
 ```
 
 Release 包名：
@@ -144,7 +136,7 @@ CaorenCupWeb-网页端-vX.X.X.zip
 目录：
 
 ```text
-web-command-center/CaorenCupPlugin/
+cs/web-bridge/CaorenCupPlugin/
 ```
 
 Release 包名：
@@ -364,7 +356,7 @@ dotnet publish -c Release -o ./publish
 发布产物位于：
 
 ```text
-game-plugin/publish/
+cs/game-plugin/publish/
 ```
 
 ---
@@ -374,7 +366,7 @@ game-plugin/publish/
 进入桥接插件目录：
 
 ```bash
-cd web-command-center/CaorenCupPlugin
+cd cs/web-bridge/CaorenCupPlugin
 ```
 
 还原依赖：
@@ -398,7 +390,7 @@ dotnet publish -c Release -o ./publish
 发布产物位于：
 
 ```text
-web-command-center/CaorenCupPlugin/publish/
+cs/web-bridge/CaorenCupPlugin/publish/
 ```
 
 ---
@@ -446,13 +438,13 @@ PORT
 示例配置文件：
 
 ```text
-web-command-center/CaorenCupPlugin/caoren_config.example.json
+cs/web-bridge/CaorenCupPlugin/caoren_config.example.json
 ```
 
 复制为真实配置：
 
 ```bash
-cp web-command-center/CaorenCupPlugin/caoren_config.example.json web-command-center/CaorenCupPlugin/caoren_config.json
+cp cs/web-bridge/CaorenCupPlugin/caoren_config.example.json cs/web-bridge/CaorenCupPlugin/caoren_config.json
 ```
 
 需要修改：
@@ -776,14 +768,15 @@ Release 包和源码仓库是两回事：
 
 ## Release 包命名规则
 
-统一版本从 1.10 起使用两个主包：
+1.x 版本使用 CS 服务器与网页两个主包；2.0.0 起新增 MC 内容包，共三个主包：
 
     CaorenCupServer-服务器插件合集-vX.X.X.zip
     CaorenCupWeb-网页端-vX.X.X.zip
+    CaorenCupMC-服务器内容-vX.X.X.zip
 
 服务器插件合集按安装对象组装，DLL 仍保持独立。桥接、单挑、小游戏和换肤均放在服务器主包的对应分类下，共享契约仅保留一份。局部更新按需另发，以 CaorenCupUpdate-<模块>-局部更新-vX.X.X.zip 明确命名；桌面客户端仅在壳本身变更时单独发包。
 
-## 两个 Release 包说明
+## 三个 Release 包说明
 
 ### 1. 服务器插件合集
 
@@ -799,7 +792,7 @@ Release 包和源码仓库是两回事：
     ├─ shared/CaorenCupContracts/
     └─ gamedata/weaponpaints.json
 
-明确清单见 scripts/server-package-manifest.json，目前有 13 个可从仓库构建的主插件，包含单挑、桥接、CS2MiniGames 和换肤。CS2Snake 的公开分发来源／许可尚待核对，暂列外部组件；其他框架及 MatchZy/MAM 不随包自动安装。运行服务器有 14 个草人杯插件，不意味着 ZIP 可直接复制这 14 个生产目录。
+明确清单见 scripts/server-package-manifest.json，2.0.0 保持现有 14 个可从仓库构建的主插件，包含单挑、桥接、CS2MiniGames 和换肤。CS2Snake 的公开分发来源／许可尚待核对，暂列外部组件；其他框架及 MatchZy/MAM 不随包自动安装。运行环境与公开包的组件范围分别核对，不能直接复制生产插件目录补包。
 
 只检查清单，不构建或创建 ZIP：
 
@@ -826,7 +819,15 @@ Release 包和源码仓库是两回事：
 
 1.10 的登录升级延期至 1.11；打包脚本检测到未隔离的 Steam/OpenID 入口或身份变更时拒绝创建 1.10 网页包，不能用过滤文件名伪装已完成版本隔离。保留现有账号登录方式，鉴权源码的隔离需独立处理和验证。
 
-### 3. 局部更新与发布范围
+### 3. MC 服务器内容包
+
+    CaorenCupMC-服务器内容-vX.X.X.zip
+
+包内按坐垫战争、小游戏合集和跨时代实验分目录，包含自研插件 JAR、数据包、固定资源下载工具与完整收录源码。OCM 以参考源码提供，实验内容默认不启用。安装说明见 [MC INSTALL](mc/INSTALL.md)。完成 MC 插件编译后构建：
+
+    python scripts/package-caoren-mc.py --version vX.Y.Z
+
+### 4. 局部更新与发布范围
 
     .\scripts\package-caoren-server.ps1 -Version vX.X.X -Modules CaorenDuel
     .\scripts\package-caoren-minigames.ps1 -Version vX.X.X -ValidateOnly
@@ -835,7 +836,7 @@ Release 包和源码仓库是两回事：
 
 弗一把 v1.11 已于 2026-10-02 进入半永久暂停状态，完整实现和相关文档已归档到 `archive/friberg-v1.11-paused-20261002/`，不纳入当前版本、发布、部署或生产验收。未来仍可能在重新确认时间成本、资料审核和发布范围后恢复，但目前不应把它视为进行中的功能。其授权数据署名为 `hltv.org`，允许公开展示但不得进入公开代码仓库；真实资料仍只保存在受控环境。ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 不进入 1.10；已验收的试听素材仍按完整资源清单保留。工坊发布与源码 ZIP 分开维护；完整 OGG 源素材、生产配置与运行备份不得从运维目录直接混入公开包。
 
-两包构建规则和包内容以确认的发布清单为准。加载成功、测试通过及真人验收分别记录；ZIP 生成成功不表示已提交、发布、部署或完成游戏内验收。
+三个主包的构建规则和包内容以确认的发布清单为准。加载成功、测试通过及真人验收分别记录；ZIP 生成成功不表示已提交、发布、部署或完成游戏内验收。
 
 打包器回归检查入口为 scripts/test-release-packaging.ps1，测试仅在忽略的 release-build/ 下创建隔离夹具，不发布测试包。
 
@@ -961,13 +962,14 @@ Tag: vX.X.X
 Title: Caoren Cup vX.X.X
 ```
 
-统一上传两个主包；服务器只部署实际改动组件，局部包按需另行附加。
+统一上传三个主包；服务器只部署实际改动组件，局部包按需另行附加。
 
-上传两个主包：
+上传三个主包：
 
 ```text
 CaorenCupServer-服务器插件合集-vX.X.X.zip
 CaorenCupWeb-网页端-vX.X.X.zip
+CaorenCupMC-服务器内容-vX.X.X.zip
 ```
 
 然后点击发布。
@@ -1128,7 +1130,7 @@ module-configs/*.json
 - `CaorenCupWeb-网页端-vX.X.X.zip`
 - `CaorenCupServer-服务器插件合集-vX.X.X.zip`
 
-统一 Release 按确认清单生成两个主包；局部更新单独标注。服务器仅部署实际改动组件，不因取得合集就覆盖所有插件或数据。
+统一 Release 按确认清单生成三个主包；局部更新单独标注。服务器仅部署实际改动组件，不因取得合集就覆盖所有插件或数据。
 
 ## Credits / Third-party Code / 第三方代码说明
 

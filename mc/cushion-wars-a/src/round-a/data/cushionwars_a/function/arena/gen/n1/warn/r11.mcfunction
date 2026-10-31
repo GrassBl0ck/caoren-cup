@@ -1,0 +1,37 @@
+# 由 tools/gen_map.py v2.0.0 从 tools/layout.py 生成，请勿手改。
+# 坐标：相对坐标 (x,z) + 中心偏移 (20000,20000)；y199 地面层，y200 站立/坐垫层。
+
+# N=1 第 11 回合预警：第 12 回合将清除半宽 4 的一圈。
+# 只播撒粒子，不放置方块、不改变碰撞与射线。
+particle minecraft:flame 19996.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 19997.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 19998.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 19999.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 20000.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 20001.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 20002.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 20003.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 19996.5 0 0 0 0 1 normal
+particle minecraft:flame 19996.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 19997.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 19998.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 19999.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 20000.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 20001.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 20002.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 20003.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 20004.5 0 0 0 0 1 normal
+particle minecraft:flame 19996.5 200.2 19997.5 0 0 0 0 1 normal
+particle minecraft:flame 19996.5 200.2 19998.5 0 0 0 0 1 normal
+particle minecraft:flame 19996.5 200.2 19999.5 0 0 0 0 1 normal
+particle minecraft:flame 19996.5 200.2 20000.5 0 0 0 0 1 normal
+particle minecraft:flame 19996.5 200.2 20001.5 0 0 0 0 1 normal
+particle minecraft:flame 19996.5 200.2 20002.5 0 0 0 0 1 normal
+particle minecraft:flame 19996.5 200.2 20003.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 19997.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 19998.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 19999.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 20000.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 20001.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 20002.5 0 0 0 0 1 normal
+particle minecraft:flame 20004.5 200.2 20003.5 0 0 0 0 1 normal

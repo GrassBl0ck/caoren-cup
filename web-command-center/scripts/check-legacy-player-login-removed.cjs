@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 const activeFiles = [
-  'public/index.html',
+  'pages/cs.html',
   'public/js/access-admin.js',
   'public/js/player-center.js',
   'src/types.ts',
@@ -47,7 +47,7 @@ for (const pattern of forbidden) {
 assert.equal(fs.existsSync(path.join(root, 'src', 'identity', 'lobby-access.ts')), false, 'invite implementation must be deleted');
 assert.equal(fs.existsSync(path.join(root, 'src', 'identity', 'lobby-access.test.ts')), false, 'invite-only tests must be deleted');
 
-const index = read('public/index.html');
+const index = read('pages/cs.html');
 const playerCenter = read('public/js/player-center.js');
 const socketHandlers = read('src/socket-handlers.ts');
 const gameCodeLogin = read('src/v1333-game-login.ts');

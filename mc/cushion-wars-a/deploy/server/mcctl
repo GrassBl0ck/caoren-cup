@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+"""通过 RCON 向本机 Minecraft 服务端发送命令并打印回显。
+
+用法：
+    mcctl 'list'
+    mcctl 'gamerule'            # 试探某个命令是否存在
+    mcctl -f commands.txt       # 逐行发送
+
+密码从 /opt/caoren-mc-26.3/.rcon-password 读取（由部署脚本生成，权限 600）。
+只连 127.0.0.1，不对外开放。
+"""
+import os
+import socket
+import struct
+import sys
+
+HOST = "127.0.0.1"
+PORT = int(os.environ.get("RCON_PORT", "25575"))
+PASSWORD_FILE = "/opt/caoren-mc-26.3/.rcon-password"
+
+
+def pack(req_id: int, ptype: int, body: str) -> bytes:
+    payload = body.encode("utf-8") + b"\x00\x00"
+    return struct.pack("<iii", 8 + len(payload), req_id, ptype) + payload
+
+
+def read_packet(sock: socket.socket):
+    raw = b""
+    while len(raw) < 4:
+        chunk = sock.recv(4 - len(raw))
+        if not chunk:
+            raise ConnectionError("连接被关闭")
+        raw += chunk
+    (length,) = struct.unpack("<i", raw)
+    data = b""
+    while len(data) < length:
+        chunk = sock.recv(length - len(data))
+        if not chunk:
+            raise ConnectionError("连接被关闭")
+        data += chunk
+    req_id, ptype = struct.unpack("<ii", data[:8])
+    return req_id, ptype, data[8:-2].decode("utf-8", "replace")
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    if not args:
+        print(__doc__)
+        return 2
+
+    commands = []
+    if args[0] == "-f":
+        with open(args[1], encoding="utf-8") as handle:
+            commands = [line.strip() for line in handle if line.strip()]
+    else:
+        # 每个参数当作一条命令：mcctl 'list' 'time set day'
+        commands = args
+
+    with open(PASSWORD_FILE, encoding="utf-8") as handle:
+        password = handle.read().strip()
+
+    with socket.create_connection((HOST, PORT), timeout=10) as sock:
+        sock.sendall(pack(1, 3, password))
+        rid, _, _ = read_packet(sock)
+        if rid == -1:
+            print("登录失败：密码不对", file=sys.stderr)
+            return 1
+        for cmd in commands:
+            sock.sendall(pack(2, 2, cmd))
+            _, _, body = read_packet(sock)
+            print(f"> {cmd}")
+            if body.strip():
+                print(body)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

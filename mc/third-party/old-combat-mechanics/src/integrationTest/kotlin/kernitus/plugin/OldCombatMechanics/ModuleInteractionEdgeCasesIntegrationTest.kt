@@ -1,0 +1,650 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+package kernitus.plugin.OldCombatMechanics
+
+import com.cryptomorin.xseries.XPotion
+import com.google.common.base.Function
+import io.kotest.assertions.withClue
+import io.kotest.common.ExperimentalKotest
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.doubles.plusOrMinus
+import io.kotest.matchers.shouldBe
+import kernitus.plugin.OldCombatMechanics.module.ModuleOldArmourDurability
+import kernitus.plugin.OldCombatMechanics.module.ModuleOldArmourStrength
+import kernitus.plugin.OldCombatMechanics.module.ModulePlayerKnockback
+import kernitus.plugin.OldCombatMechanics.module.ModuleShieldDamageReduction
+import kernitus.plugin.OldCombatMechanics.utilities.Config
+import kernitus.plugin.OldCombatMechanics.utilities.potions.PotionEffects
+import kernitus.plugin.OldCombatMechanics.utilities.reflection.Reflector
+import kernitus.plugin.OldCombatMechanics.utilities.reflection.VersionCompatUtils
+import kotlinx.coroutines.suspendCancellableCoroutine
+import org.bukkit.Bukkit
+import org.bukkit.Location
+import org.bukkit.Material
+import org.bukkit.entity.Cow
+import org.bukkit.entity.FishHook
+import org.bukkit.entity.Player
+import org.bukkit.event.EventHandler
+import org.bukkit.event.EventPriority
+import org.bukkit.event.HandlerList
+import org.bukkit.event.Listener
+import org.bukkit.event.entity.EntityDamageByEntityEvent
+import org.bukkit.event.entity.EntityDamageEvent
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause
+import org.bukkit.event.entity.EntityDamageEvent.DamageModifier
+import org.bukkit.event.entity.EntityRegainHealthEvent
+import org.bukkit.event.entity.ProjectileHitEvent
+import org.bukkit.event.player.PlayerItemDamageEvent
+import org.bukkit.event.player.PlayerVelocityEvent
+import org.bukkit.inventory.ItemStack
+import org.bukkit.plugin.java.JavaPlugin
+import org.bukkit.potion.PotionEffect
+import org.bukkit.scheduler.BukkitTask
+import org.bukkit.util.Vector
+import java.util.EnumMap
+import kotlin.coroutines.resume
+
+/** Focused reproductions: constructed events unless a test explicitly calls LivingEntity.damage. */
+@Suppress("DEPRECATION")
+@OptIn(ExperimentalKotest::class)
+class ModuleInteractionEdgeCasesIntegrationTest :
+    FunSpec({
+        val testPlugin = JavaPlugin.getPlugin(OCMTestMain::class.java)
+        val ocm = JavaPlugin.getPlugin(OCMMain::class.java)
+        extensions(MainThreadDispatcherExtension(testPlugin))
+        lateinit var attackerFake: FakePlayer
+        lateinit var victimFake: FakePlayer
+        lateinit var attacker: Player
+        lateinit var victim: Player
+
+        fun absorptionAmount(player: Player): Double =
+            try {
+                player.absorptionAmount
+            } catch (_: NoSuchMethodError) {
+                VersionCompatUtils.getAbsorptionAmount(player).toDouble()
+            }
+
+        fun setAbsorptionAmount(
+            player: Player,
+            amount: Double,
+        ) {
+            try {
+                player.absorptionAmount = amount
+            } catch (_: NoSuchMethodError) {
+                val handle = Reflector.invokeMethod<Any>(Reflector.getMethod(player.javaClass, "getHandle"), player)
+                val setter = checkNotNull(Reflector.getMethod(handle.javaClass, "setAbsorptionHearts", 1))
+                Reflector.invokeMethod<Any?>(setter, handle, amount.toFloat())
+            }
+        }
+
+        lateinit var originalConfig: String
+        val modules = ModuleLoader.getModules()
+        val shield = modules.filterIsInstance<ModuleShieldDamageReduction>().single()
+        val armour = modules.filterIsInstance<ModuleOldArmourStrength>().single()
+        val knockback = modules.filterIsInstance<ModulePlayerKnockback>().single()
+        val durability = modules.filterIsInstance<ModuleOldArmourDurability>().single()
+
+        val ground = mutableMapOf<org.bukkit.block.Block, Material>()
+
+        fun preventFalling(entity: Cow) {
+            try {
+                entity.setGravity(false)
+            } catch (_: NoSuchMethodError) {
+                val location = entity.location
+                for (x in location.blockX - 1..location.blockX + 1) {
+                    for (z in location.blockZ - 1..location.blockZ + 1) {
+                        val block = entity.world.getBlockAt(x, location.blockY - 1, z)
+                        ground.putIfAbsent(block, block.type)
+                        block.type = Material.STONE
+                    }
+                }
+            }
+        }
+
+        fun runSync(action: () -> Unit) {
+            if (Bukkit.isPrimaryThread()) {
+                action()
+            } else {
+                Bukkit.getScheduler().callSyncMethod(testPlugin, java.util.concurrent.Callable { action() }).get()
+            }
+        }
+
+        fun configure(vararg enabled: String) {
+            ocm.config.set("always_enabled_modules", enabled.toList())
+            ocm.config.set("disabled_modules", ModuleLoader.getConfigurableModuleNames().filterNot { it in enabled })
+            ocm.config.set("modesets", null)
+            ocm.config.createSection("modesets", mapOf("test" to emptyList<String>()))
+            ocm.config.set("worlds", null)
+            ocm.config.createSection("worlds", mapOf("world" to listOf("test")))
+            ocm.saveConfig()
+            Config.reload()
+        }
+
+        suspend fun ticks(count: Long) {
+            suspendCancellableCoroutine<Unit> { continuation ->
+                Bukkit.getScheduler().runTaskLater(testPlugin, Runnable { continuation.resume(Unit) }, count)
+            }
+        }
+
+        fun field(
+            instance: Any,
+            name: String,
+        ): java.lang.reflect.Field = instance.javaClass.getDeclaredField(name).also { it.isAccessible = true }
+
+        fun cache(
+            instance: Any,
+            name: String,
+        ): MutableMap<*, *> = field(instance, name).get(instance) as MutableMap<*, *>
+
+        fun resetCache(
+            instance: Any,
+            mapName: String,
+            taskName: String,
+            clockName: String,
+        ) {
+            (field(instance, taskName).get(instance) as? BukkitTask)?.cancel()
+            field(instance, taskName).set(instance, null)
+            cache(instance, mapName).clear()
+            field(instance, clockName).setLong(instance, 0)
+        }
+
+        fun blockedHit(
+            armourPoints: Double = 0.0,
+            toughness: Double = 0.0,
+        ): EntityDamageByEntityEvent {
+            val modifiers = EnumMap<DamageModifier, Double>(DamageModifier::class.java)
+            val functions = EnumMap<DamageModifier, Function<in Double, Double>>(DamageModifier::class.java)
+            DamageModifier.values().forEach {
+                modifiers[it] = 0.0
+                functions[it] = Function { 0.0 }
+            }
+            modifiers[DamageModifier.BASE] = 10.0
+            modifiers[DamageModifier.BLOCKING] = -10.0
+            functions[DamageModifier.BLOCKING] = Function { damage -> -damage }
+            val resistance = PotionEffects.getOrNull(victim, checkNotNull(XPotion.RESISTANCE.get()))
+            val resistanceFactor = if (resistance == null) 0.0 else minOf(1.0, (resistance.amplifier + 1) * 0.2)
+            functions[DamageModifier.ARMOR] =
+                Function { damage ->
+                    val effectiveArmour =
+                        minOf(
+                            20.0,
+                            maxOf(
+                                armourPoints / 5.0,
+                                armourPoints - damage / (2.0 + toughness / 4.0),
+                            ),
+                        )
+                    -damage * effectiveArmour / 25.0
+                }
+            functions[DamageModifier.RESISTANCE] = Function { damage -> -damage * resistanceFactor }
+            val absorption = absorptionAmount(victim)
+            functions[DamageModifier.ABSORPTION] = Function { damage -> -minOf(absorption, maxOf(0.0, damage)) }
+            return EntityDamageByEntityEvent(attacker, victim, DamageCause.ENTITY_ATTACK, modifiers, functions)
+        }
+
+        beforeSpec {
+            runSync {
+                originalConfig = ocm.config.saveToString()
+                val world = checkNotNull(Bukkit.getWorld("world"))
+                attackerFake = FakePlayer(testPlugin)
+                victimFake = FakePlayer(testPlugin)
+                attackerFake.spawn(Location(world, 0.0, 100.0, 0.0))
+                victimFake.spawn(Location(world, 3.0, 100.0, 0.0))
+                attacker = checkNotNull(Bukkit.getPlayer(attackerFake.uuid))
+                victim = checkNotNull(Bukkit.getPlayer(victimFake.uuid))
+                attacker.setGravity(false)
+                victim.setGravity(false)
+            }
+            // Legacy players expose login immunity through getNoDamageTicks, but its setter
+            // only clears ordinary hit immunity. Let the native login countdown finish.
+            ticks(maxOf(attacker.noDamageTicks, victim.noDamageTicks).toLong() + 1)
+            attacker.noDamageTicks shouldBe 0
+            victim.noDamageTicks shouldBe 0
+        }
+
+        beforeTest {
+            runSync {
+                configure()
+                resetCache(knockback, "pendingKnockback", "pendingCleanupTask", "pendingTickCounter")
+                resetCache(shield, "fullyBlocked", "fullyBlockedCleanupTask", "fullyBlockedTickCounter")
+                resetCache(durability, "explosionDamaged", "explosionCleanupTask", "explosionTickCounter")
+                listOf(attacker, victim).forEach {
+                    it.inventory.clear()
+                    it.activePotionEffects.forEach { effect -> it.removePotionEffect(effect.type) }
+                    it.noDamageTicks = 0
+                    it.lastDamage = 0.0
+                    it.velocity = Vector()
+                    it.fireTicks = 0
+                    setAbsorptionAmount(it, 0.0)
+                    it.health = it.maxHealth
+                }
+            }
+        }
+
+        afterTest {
+            runSync {
+                ground.forEach { (block, material) -> block.type = material }
+                ground.clear()
+            }
+        }
+
+        afterSpec {
+            runSync {
+                configure()
+                resetCache(knockback, "pendingKnockback", "pendingCleanupTask", "pendingTickCounter")
+                resetCache(shield, "fullyBlocked", "fullyBlockedCleanupTask", "fullyBlockedTickCounter")
+                resetCache(durability, "explosionDamaged", "explosionCleanupTask", "explosionTickCounter")
+                ocm.config.loadFromString(originalConfig)
+                ocm.saveConfig()
+                Config.reload()
+                attackerFake.removePlayer()
+                victimFake.removePlayer()
+            }
+        }
+
+        test("shield reduction preserves full resistance with old armour disabled") {
+            configure("shield-damage-reduction")
+            ocm.config.set("shield-damage-reduction.generalDamageReductionAmount", 1)
+            ocm.config.set("shield-damage-reduction.generalDamageReductionPercentage", 50)
+            shield.reload()
+            victim.addPotionEffect(PotionEffect(checkNotNull(XPotion.RESISTANCE.get()), 200, 4))
+            val event = blockedHit()
+            Bukkit.getPluginManager().callEvent(event)
+            event.getDamage(DamageModifier.BLOCKING) shouldBe (-4.5 plusOrMinus 0.0001)
+            withClue("full resistance: expected final=0, actual=${event.finalDamage}") {
+                event.finalDamage shouldBe (0.0 plusOrMinus 0.0001)
+            }
+        }
+
+        test("shield reduction uses modern armour resistance and absorption when old armour is disabled") {
+            configure("shield-damage-reduction")
+            ocm.config.set("shield-damage-reduction.generalDamageReductionAmount", 1)
+            ocm.config.set("shield-damage-reduction.generalDamageReductionPercentage", 50)
+            shield.reload()
+            victim.addPotionEffect(PotionEffect(checkNotNull(XPotion.RESISTANCE.get()), 200, 0))
+            victim.addPotionEffect(PotionEffect(checkNotNull(XPotion.ABSORPTION.get()), 200, 0))
+            setAbsorptionAmount(victim, 1.0)
+            absorptionAmount(victim) shouldBe (1.0 plusOrMinus 0.0001)
+            val event = blockedHit(armourPoints = 20.0, toughness = 8.0)
+            Bukkit.getPluginManager().callEvent(event)
+            // 5.5 after blocking, 1.4025 after modern armour, 1.122 after resistance, then 1 absorption.
+            event.finalDamage shouldBe (0.122 plusOrMinus 0.0001)
+        }
+
+        test("shield reduction preserves an earlier plugin flat magic adjustment") {
+            val listener =
+                object : Listener {
+                    @EventHandler(priority = EventPriority.LOWEST)
+                    fun onDamage(event: EntityDamageByEntityEvent) {
+                        if (event.entity == victim) event.setDamage(DamageModifier.MAGIC, -0.25)
+                    }
+                }
+            Bukkit.getPluginManager().registerEvents(listener, testPlugin)
+            try {
+                configure("shield-damage-reduction")
+                ocm.config.set("shield-damage-reduction.generalDamageReductionAmount", 1)
+                ocm.config.set("shield-damage-reduction.generalDamageReductionPercentage", 50)
+                shield.reload()
+                val event = blockedHit()
+                Bukkit.getPluginManager().callEvent(event)
+                event.getDamage(DamageModifier.MAGIC) shouldBe (-0.25 plusOrMinus 0.0001)
+                event.finalDamage shouldBe (5.25 plusOrMinus 0.0001)
+            } finally {
+                HandlerList.unregisterAll(listener)
+            }
+        }
+
+        test("re-enabling shield reduction through reload preserves defence order and damage") {
+            configure("shield-damage-reduction", "old-armour-strength")
+            ocm.config.set("shield-damage-reduction.generalDamageReductionAmount", 1)
+            ocm.config.set("shield-damage-reduction.generalDamageReductionPercentage", 50)
+            shield.reload()
+            victim.addPotionEffect(PotionEffect(checkNotNull(XPotion.RESISTANCE.get()), 200, 4))
+            val before = blockedHit()
+            Bukkit.getPluginManager().callEvent(before)
+            before.finalDamage shouldBe (0.0 plusOrMinus 0.0001)
+            configure("old-armour-strength")
+            configure("shield-damage-reduction", "old-armour-strength")
+            victim.noDamageTicks = 0
+            val after = blockedHit()
+            Bukkit.getPluginManager().callEvent(after)
+            val order =
+                EntityDamageEvent
+                    .getHandlerList()
+                    .registeredListeners
+                    .filter { it.listener === shield || it.listener === armour }
+                    .map { it.listener.javaClass.simpleName }
+            withClue("order=$order; damage=${before.finalDamage} -> ${after.finalDamage}") {
+                after.finalDamage shouldBe (before.finalDamage plusOrMinus 0.0001)
+            }
+        }
+
+        test("unchanged reload preserves listener registrations and later plugin adjustments") {
+            configure("shield-damage-reduction", "old-armour-strength")
+            ocm.config.set("shield-damage-reduction.generalDamageReductionAmount", 1)
+            ocm.config.set("shield-damage-reduction.generalDamageReductionPercentage", 50)
+            shield.reload()
+            var calls = 0
+            val listener =
+                object : Listener {
+                    @EventHandler(priority = EventPriority.NORMAL)
+                    fun onDamage(event: EntityDamageByEntityEvent) {
+                        if (event.entity == victim) {
+                            calls++
+                            event.setDamage(DamageModifier.BASE, event.damage + 2.0)
+                        }
+                    }
+                }
+            Bukkit.getPluginManager().registerEvents(listener, testPlugin)
+            try {
+                val beforeListeners = EntityDamageEvent.getHandlerList().registeredListeners.toList()
+                val before = blockedHit()
+                Bukkit.getPluginManager().callEvent(before)
+                before.finalDamage shouldBe (7.5 plusOrMinus 0.0001)
+                configure("shield-damage-reduction", "old-armour-strength")
+                EntityDamageEvent.getHandlerList().registeredListeners.toList() shouldBe beforeListeners
+                victim.noDamageTicks = 0
+                val after = blockedHit()
+                Bukkit.getPluginManager().callEvent(after)
+                val modifiers =
+                    DamageModifier
+                        .values()
+                        .filter {
+                            after.isApplicable(
+                                it,
+                            )
+                        }.associateWith { after.getDamage(it) }
+                withClue(
+                    "reload modifiers=$modifiers; cancelled=${after.isCancelled}; " +
+                        "effects=${victim.activePotionEffects}; config=${shield.module().getValues(false)}",
+                ) {
+                    after.finalDamage shouldBe (7.5 plusOrMinus 0.0001)
+                }
+                calls shouldBe 2
+            } finally {
+                HandlerList.unregisterAll(listener)
+            }
+        }
+
+        test("cancelled damage preserves the previous accepted baseline") {
+            configure("old-armour-strength")
+            val target = victim.world.spawn(Location(victim.world, 12.0, 100.0, 0.0), Cow::class.java)
+            val source = victim.world.spawn(Location(victim.world, 15.0, 100.0, 0.0), Cow::class.java)
+            target.setAI(false)
+            source.setAI(false)
+            preventFalling(target)
+            preventFalling(source)
+            var cancelHit = false
+            var cancellations = 0
+            val listener =
+                object : Listener {
+                    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+                    fun onDamage(event: EntityDamageByEntityEvent) {
+                        if (event.entity == target && cancelHit) {
+                            event.isCancelled = true
+                            cancellations++
+                        }
+                    }
+                }
+            Bukkit.getPluginManager().registerEvents(listener, testPlugin)
+            try {
+                val initial = target.health
+                target.damage(4.0, source)
+                target.health shouldBe (initial - 4.0 plusOrMinus 0.0001)
+                ticks(2)
+                cancelHit = true
+                target.damage(10.0, source)
+                cancellations shouldBe 1
+                target.health shouldBe (initial - 4.0 plusOrMinus 0.0001)
+                ticks(2)
+                cancelHit = false
+                withClue("the third hit must still be inside the original immunity window") {
+                    (target.noDamageTicks > target.maximumNoDamageTicks / 2) shouldBe true
+                }
+                target.damage(6.0, source)
+                withClue("third hit health: expected=${initial - 6.0}, actual=${target.health}") {
+                    target.health shouldBe (initial - 6.0 plusOrMinus 0.0001)
+                }
+            } finally {
+                HandlerList.unregisterAll(listener)
+                target.remove()
+                source.remove()
+            }
+        }
+
+        test("cancelled outer damage preserves nested accepted damage") {
+            configure("old-armour-strength")
+            val target = victim.world.spawn(Location(victim.world, 12.0, 100.0, 0.0), Cow::class.java)
+            val source = victim.world.spawn(Location(victim.world, 15.0, 100.0, 0.0), Cow::class.java)
+            target.setAI(false)
+            source.setAI(false)
+            preventFalling(target)
+            preventFalling(source)
+            var replaceHit = false
+            var nested = false
+            val listener =
+                object : Listener {
+                    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+                    fun onDamage(event: EntityDamageByEntityEvent) {
+                        if (event.entity == target && replaceHit && !nested) {
+                            nested = true
+                            try {
+                                target.damage(8.0, source)
+                                event.isCancelled = true
+                            } finally {
+                                nested = false
+                            }
+                        }
+                    }
+                }
+            Bukkit.getPluginManager().registerEvents(listener, testPlugin)
+            try {
+                val initial = target.health
+                target.damage(4.0, source)
+                ticks(2)
+                replaceHit = true
+                target.damage(10.0, source)
+                withClue(
+                    "nested 8-damage hit should add 4 above the accepted baseline, despite the outer cancelled 10",
+                ) {
+                    target.health shouldBe (initial - 8.0 plusOrMinus 0.0001)
+                }
+                ticks(2)
+                replaceHit = false
+                target.damage(7.0, source)
+                target.health shouldBe (initial - 8.0 plusOrMinus 0.0001)
+            } finally {
+                HandlerList.unregisterAll(listener)
+                target.remove()
+                source.remove()
+            }
+        }
+
+        for (kind in listOf("knockback", "shield", "explosion")) {
+            test("$kind cache expires after one tick when its cleanup task restarts") {
+                configure("old-player-knockback", "shield-damage-reduction", "old-armour-durability")
+                ocm.config.set("shield-damage-reduction.generalDamageReductionAmount", 0)
+                ocm.config.set("shield-damage-reduction.generalDamageReductionPercentage", 100)
+                shield.reload()
+                victim.inventory.setChestplate(ItemStack(Material.DIAMOND_CHESTPLATE))
+                val instance: Any
+                val mapName: String
+                val taskName: String
+                val clockName: String
+                val add: () -> Unit
+                when (kind) {
+                    "knockback" -> {
+                        instance = knockback
+                        mapName = "pendingKnockback"
+                        taskName = "pendingCleanupTask"
+                        clockName =
+                            "pendingTickCounter"
+                        add =
+                            {
+                                knockback.onEntityDamageEntity(
+                                    EntityDamageByEntityEvent(attacker, victim, DamageCause.ENTITY_ATTACK, 4.0),
+                                )
+                            }
+                    }
+
+                    "shield" -> {
+                        instance = shield
+                        mapName = "fullyBlocked"
+                        taskName = "fullyBlockedCleanupTask"
+                        clockName =
+                            "fullyBlockedTickCounter"
+                        add = { shield.onHit(blockedHit()) }
+                    }
+
+                    else -> {
+                        instance = durability
+                        mapName = "explosionDamaged"
+                        taskName = "explosionCleanupTask"
+                        clockName =
+                            "explosionTickCounter"
+                        add =
+                            {
+                                durability.onPlayerExplosionDamage(
+                                    EntityDamageEvent(victim, DamageCause.BLOCK_EXPLOSION, 4.0),
+                                )
+                            }
+                    }
+                }
+                // Exercise populate and cleanup cycles to advance the clock naturally; never seed its value.
+                repeat(5) {
+                    add()
+                    ticks(1)
+                }
+                ticks(2)
+                cache(instance, mapName).isEmpty() shouldBe true
+                field(instance, taskName).get(instance) shouldBe null
+                val previousClock = field(instance, clockName).getLong(instance)
+                (previousClock > 0) shouldBe true
+                add()
+                cache(instance, mapName).containsKey(victim.uniqueId) shouldBe true
+                ticks(1)
+                val retained = cache(instance, mapName).containsKey(victim.uniqueId)
+                when (kind) {
+                    "knockback" -> {
+                        val externalVelocity = Vector(1.0, 2.0, 3.0)
+                        val event = PlayerVelocityEvent(victim, externalVelocity.clone())
+                        knockback.onPlayerVelocityEvent(event)
+                        withClue("clock=$previousClock; retained=$retained; velocity=${event.velocity}") {
+                            event.velocity shouldBe externalVelocity
+                        }
+                    }
+
+                    "shield" -> {
+                        val event = PlayerItemDamageEvent(victim, checkNotNull(victim.inventory.chestplate), 4)
+                        shield.onItemDamage(event)
+                        withClue("clock=$previousClock; retained=$retained; cancelled=${event.isCancelled}") {
+                            event.isCancelled shouldBe false
+                        }
+                    }
+
+                    else -> {
+                        ocm.config.set("old-armour-durability.reduction", 1)
+                        val event = PlayerItemDamageEvent(victim, checkNotNull(victim.inventory.chestplate), 4)
+                        durability.onItemDamage(event)
+                        withClue("clock=$previousClock; retained=$retained; wear=${event.damage}, expected=1") {
+                            event.damage shouldBe 1
+                        }
+                    }
+                }
+                cache(instance, mapName).isEmpty() shouldBe true
+            }
+        }
+
+        test("fishing knockback respects another plugin cancelling the real damage event") {
+            configure("old-fishing-knockback")
+            // Let temporary join protection expire before testing a real player damage event.
+            ticks(80)
+            victim.noDamageTicks = 0
+            victim.isInvulnerable = false
+            var cancellations = 0
+            val listener =
+                object : Listener {
+                    @EventHandler(priority = EventPriority.HIGHEST)
+                    fun onDamage(event: EntityDamageByEntityEvent) {
+                        if (event.entity == victim) {
+                            event.isCancelled = true
+                            cancellations++
+                        }
+                    }
+                }
+            Bukkit.getPluginManager().registerEvents(listener, testPlugin)
+            useProjectileItem(attacker, Material.FISHING_ROD)
+            val hook = nativeTestProjectiles(attacker).filterIsInstance<FishHook>().single()
+            try {
+                victim.velocity = Vector()
+                val initialHealth = victim.health
+                Bukkit.getPluginManager().callEvent(constructedHookHit(hook, victim))
+                cancellations shouldBe 1
+                victim.health shouldBe (initialHealth plusOrMinus 0.0001)
+                withClue("cancelled damage count=$cancellations; health=$initialHealth; velocity=${victim.velocity}") {
+                    victim.velocity.lengthSquared() shouldBe (0.0 plusOrMinus 0.0001)
+                }
+            } finally {
+                removeNativeTestProjectile(hook)
+                HandlerList.unregisterAll(listener)
+            }
+        }
+
+        for (resistance in listOf(false, true)) {
+            test("fishing knockback still applies to an accepted hit with resistance=$resistance") {
+                configure("old-fishing-knockback")
+                ticks(80)
+                victim.noDamageTicks = 0
+                victim.isInvulnerable = false
+                if (resistance) {
+                    victim.addPotionEffect(PotionEffect(checkNotNull(XPotion.RESISTANCE.get()), 200, 4))
+                }
+                var accepted = 0
+                val listener =
+                    object : Listener {
+                        @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+                        fun onDamage(event: EntityDamageByEntityEvent) {
+                            if (event.entity == victim) accepted++
+                        }
+                    }
+                Bukkit.getPluginManager().registerEvents(listener, testPlugin)
+                useProjectileItem(attacker, Material.FISHING_ROD)
+                val hook = nativeTestProjectiles(attacker).filterIsInstance<FishHook>().single()
+                try {
+                    victim.velocity = Vector()
+                    val initialHealth = victim.health
+                    Bukkit.getPluginManager().callEvent(constructedHookHit(hook, victim))
+                    accepted shouldBe 1
+                    victim.velocity.y shouldBe (0.4 plusOrMinus 0.0001)
+                    if (resistance) victim.health shouldBe (initialHealth plusOrMinus 0.0001)
+                } finally {
+                    removeNativeTestProjectile(hook)
+                    HandlerList.unregisterAll(listener)
+                }
+            }
+        }
+
+        test("regen exhaustion correction preserves an intervening plugin cost") {
+            // Use native food processing: constructed SATIATED events have no native charge,
+            // and the old airborne victim fixture could consume exhaustion before correction.
+            val fixture = RegenerationFixture()
+            try {
+                fixture.start(250, 2.0, 1.0)
+                fixture.player.health = 10.0
+                fixture.player.exhaustion = 0.5f
+                fixture.edit = { fixture.player.exhaustion += 0.75f }
+                fixture.ticks(7)
+                fixture.heals.size shouldBe 1
+                fixture.player.health shouldBe (12.0 plusOrMinus 0.0001)
+                withClue(
+                    "exhaustion: expected=2.25 (0.5 + regen 1.0 + plugin 0.75), actual=${fixture.player.exhaustion}",
+                ) {
+                    fixture.player.exhaustion.toDouble() shouldBe (2.25 plusOrMinus 0.0001)
+                }
+            } finally {
+                fixture.close()
+            }
+        }
+    })

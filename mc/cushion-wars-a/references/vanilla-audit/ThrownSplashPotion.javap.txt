@@ -1,0 +1,195 @@
+Compiled from "ThrownSplashPotion.java"
+public class net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion extends net.minecraft.world.entity.projectile.throwableitemprojectile.AbstractThrownPotion {
+  public net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion(net.minecraft.world.entity.EntityType<? extends net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion>, net.minecraft.world.level.Level);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: invokespecial #1                  // Method net/minecraft/world/entity/projectile/throwableitemprojectile/AbstractThrownPotion."<init>":(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/level/Level;)V
+         6: return
+
+  public net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion(net.minecraft.world.level.Level, net.minecraft.world.entity.LivingEntity, net.minecraft.world.item.ItemStack);
+    Code:
+         0: aload_0
+         1: getstatic     #7                  // Field net/minecraft/world/entity/EntityTypes.SPLASH_POTION:Lnet/minecraft/world/entity/EntityType;
+         4: aload_1
+         5: aload_2
+         6: aload_3
+         7: invokespecial #13                 // Method net/minecraft/world/entity/projectile/throwableitemprojectile/AbstractThrownPotion."<init>":(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;)V
+        10: return
+
+  public net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownSplashPotion(net.minecraft.world.level.Level, double, double, double, net.minecraft.world.item.ItemStack);
+    Code:
+         0: aload_0
+         1: getstatic     #7                  // Field net/minecraft/world/entity/EntityTypes.SPLASH_POTION:Lnet/minecraft/world/entity/EntityType;
+         4: aload_1
+         5: dload_2
+         6: dload         4
+         8: dload         6
+        10: aload         8
+        12: invokespecial #16                 // Method net/minecraft/world/entity/projectile/throwableitemprojectile/AbstractThrownPotion."<init>":(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/level/Level;DDDLnet/minecraft/world/item/ItemStack;)V
+        15: return
+
+  protected net.minecraft.world.item.Item getDefaultItem();
+    Code:
+         0: getstatic     #19                 // Field net/minecraft/world/item/Items.SPLASH_POTION:Lnet/minecraft/world/item/Item;
+         3: areturn
+
+  public void onHitAsPotion(net.minecraft.server.level.ServerLevel, net.minecraft.world.item.ItemStack, net.minecraft.world.phys.HitResult);
+    Code:
+         0: aload_2
+         1: getstatic     #24                 // Field net/minecraft/core/component/DataComponents.POTION_CONTENTS:Lnet/minecraft/core/component/DataComponentType;
+         4: getstatic     #30                 // Field net/minecraft/world/item/alchemy/PotionContents.EMPTY:Lnet/minecraft/world/item/alchemy/PotionContents;
+         7: invokevirtual #36                 // Method net/minecraft/world/item/ItemStack.getOrDefault:(Lnet/minecraft/core/component/DataComponentType;Ljava/lang/Object;)Ljava/lang/Object;
+        10: checkcast     #31                 // class net/minecraft/world/item/alchemy/PotionContents
+        13: astore        4
+        15: aload_2
+        16: getstatic     #42                 // Field net/minecraft/core/component/DataComponents.POTION_DURATION_SCALE:Lnet/minecraft/core/component/DataComponentType;
+        19: fconst_1
+        20: invokestatic  #45                 // Method java/lang/Float.valueOf:(F)Ljava/lang/Float;
+        23: invokevirtual #36                 // Method net/minecraft/world/item/ItemStack.getOrDefault:(Lnet/minecraft/core/component/DataComponentType;Ljava/lang/Object;)Ljava/lang/Object;
+        26: checkcast     #46                 // class java/lang/Float
+        29: invokevirtual #51                 // Method java/lang/Float.floatValue:()F
+        32: fstore        5
+        34: aload         4
+        36: invokevirtual #55                 // Method net/minecraft/world/item/alchemy/PotionContents.getAllEffects:()Ljava/lang/Iterable;
+        39: astore        6
+        41: aload_0
+        42: invokevirtual #59                 // Method getBoundingBox:()Lnet/minecraft/world/phys/AABB;
+        45: aload_3
+        46: invokevirtual #65                 // Method net/minecraft/world/phys/HitResult.getLocation:()Lnet/minecraft/world/phys/Vec3;
+        49: aload_0
+        50: invokevirtual #71                 // Method position:()Lnet/minecraft/world/phys/Vec3;
+        53: invokevirtual #74                 // Method net/minecraft/world/phys/Vec3.subtract:(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/Vec3;
+        56: invokevirtual #80                 // Method net/minecraft/world/phys/AABB.move:(Lnet/minecraft/world/phys/Vec3;)Lnet/minecraft/world/phys/AABB;
+        59: astore        7
+        61: aload         7
+        63: ldc2_w        #86                 // double 4.0d
+        66: ldc2_w        #88                 // double 2.0d
+        69: ldc2_w        #86                 // double 4.0d
+        72: invokevirtual #90                 // Method net/minecraft/world/phys/AABB.inflate:(DDD)Lnet/minecraft/world/phys/AABB;
+        75: astore        8
+        77: aload_0
+        78: invokevirtual #94                 // Method level:()Lnet/minecraft/world/level/Level;
+        81: ldc           #98                 // class net/minecraft/world/entity/LivingEntity
+        83: aload         8
+        85: invokevirtual #100                // Method net/minecraft/world/level/Level.getEntitiesOfClass:(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;
+        88: astore        9
+        90: aload_0
+        91: invokestatic  #106                // Method net/minecraft/world/entity/projectile/ProjectileUtil.computeMargin:(Lnet/minecraft/world/entity/Entity;)F
+        94: fstore        10
+        96: aload         9
+        98: invokeinterface #112,  1          // InterfaceMethod java/util/List.isEmpty:()Z
+       103: ifne          349
+       106: aload_0
+       107: invokevirtual #118                // Method getEffectSource:()Lnet/minecraft/world/entity/Entity;
+       110: astore        11
+       112: aload         9
+       114: invokeinterface #122,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       119: astore        12
+       121: aload         12
+       123: invokeinterface #126,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       128: ifeq          349
+       131: aload         12
+       133: invokeinterface #131,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       138: checkcast     #98                 // class net/minecraft/world/entity/LivingEntity
+       141: astore        13
+       143: aload         13
+       145: invokevirtual #135                // Method net/minecraft/world/entity/LivingEntity.isAffectedByPotions:()Z
+       148: ifne          154
+       151: goto          121
+       154: aload         7
+       156: aload         13
+       158: invokevirtual #138                // Method net/minecraft/world/entity/LivingEntity.getBoundingBox:()Lnet/minecraft/world/phys/AABB;
+       161: fload         10
+       163: f2d
+       164: invokevirtual #139                // Method net/minecraft/world/phys/AABB.inflate:(D)Lnet/minecraft/world/phys/AABB;
+       167: invokevirtual #142                // Method net/minecraft/world/phys/AABB.distanceToSqr:(Lnet/minecraft/world/phys/AABB;)D
+       170: dstore        14
+       172: dload         14
+       174: ldc2_w        #146                // double 16.0d
+       177: dcmpg
+       178: ifge          346
+       181: dconst_1
+       182: dload         14
+       184: invokestatic  #148                // Method java/lang/Math.sqrt:(D)D
+       187: ldc2_w        #86                 // double 4.0d
+       190: ddiv
+       191: dsub
+       192: dstore        16
+       194: aload         6
+       196: invokeinterface #154,  1          // InterfaceMethod java/lang/Iterable.iterator:()Ljava/util/Iterator;
+       201: astore        18
+       203: aload         18
+       205: invokeinterface #126,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       210: ifeq          346
+       213: aload         18
+       215: invokeinterface #131,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       220: checkcast     #157                // class net/minecraft/world/effect/MobEffectInstance
+       223: astore        19
+       225: aload         19
+       227: invokevirtual #159                // Method net/minecraft/world/effect/MobEffectInstance.getEffect:()Lnet/minecraft/core/Holder;
+       230: astore        20
+       232: aload         20
+       234: invokeinterface #163,  1          // InterfaceMethod net/minecraft/core/Holder.value:()Ljava/lang/Object;
+       239: checkcast     #168                // class net/minecraft/world/effect/MobEffect
+       242: invokevirtual #170                // Method net/minecraft/world/effect/MobEffect.isInstantaneous:()Z
+       245: ifeq          279
+       248: aload         20
+       250: invokeinterface #163,  1          // InterfaceMethod net/minecraft/core/Holder.value:()Ljava/lang/Object;
+       255: checkcast     #168                // class net/minecraft/world/effect/MobEffect
+       258: aload_1
+       259: aload_0
+       260: aload_0
+       261: invokevirtual #173                // Method getOwner:()Lnet/minecraft/world/entity/Entity;
+       264: aload         13
+       266: aload         19
+       268: invokevirtual #176                // Method net/minecraft/world/effect/MobEffectInstance.getAmplifier:()I
+       271: dload         16
+       273: invokevirtual #180                // Method net/minecraft/world/effect/MobEffect.applyInstantaneousEffect:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/entity/LivingEntity;ID)V
+       276: goto          343
+       279: aload         19
+       281: dload         16
+       283: fload         5
+       285: invokedynamic #184,  0            // InvokeDynamic #0:get:(DF)Lit/unimi/dsi/fastutil/ints/Int2IntFunction;
+       290: invokevirtual #188                // Method net/minecraft/world/effect/MobEffectInstance.mapDuration:(Lit/unimi/dsi/fastutil/ints/Int2IntFunction;)I
+       293: istore        21
+       295: new           #157                // class net/minecraft/world/effect/MobEffectInstance
+       298: dup
+       299: aload         20
+       301: iload         21
+       303: aload         19
+       305: invokevirtual #176                // Method net/minecraft/world/effect/MobEffectInstance.getAmplifier:()I
+       308: aload         19
+       310: invokevirtual #192                // Method net/minecraft/world/effect/MobEffectInstance.isAmbient:()Z
+       313: aload         19
+       315: invokevirtual #195                // Method net/minecraft/world/effect/MobEffectInstance.isVisible:()Z
+       318: invokespecial #198                // Method net/minecraft/world/effect/MobEffectInstance."<init>":(Lnet/minecraft/core/Holder;IIZZ)V
+       321: astore        22
+       323: aload         22
+       325: bipush        20
+       327: invokevirtual #203                // Method net/minecraft/world/effect/MobEffectInstance.endsWithin:(I)Z
+       330: ifne          343
+       333: aload         13
+       335: aload         22
+       337: aload         11
+       339: invokevirtual #207                // Method net/minecraft/world/entity/LivingEntity.addEffect:(Lnet/minecraft/world/effect/MobEffectInstance;Lnet/minecraft/world/entity/Entity;)Z
+       342: pop
+       343: goto          203
+       346: goto          121
+       349: return
+
+  private static int lambda$onHitAsPotion$0(double, float, int);
+    Code:
+         0: dload_0
+         1: iload_3
+         2: i2d
+         3: dmul
+         4: fload_2
+         5: f2d
+         6: dmul
+         7: ldc2_w        #211                // double 0.5d
+        10: dadd
+        11: d2i
+        12: ireturn
+}

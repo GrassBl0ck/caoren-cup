@@ -1,0 +1,511 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+package kernitus.plugin.OldCombatMechanics.utilities.damage;
+
+import com.cryptomorin.xseries.XAttribute;
+import com.cryptomorin.xseries.XEnchantment;
+import com.cryptomorin.xseries.XPotion;
+import kernitus.plugin.OldCombatMechanics.utilities.reflection.Reflector;
+import kernitus.plugin.OldCombatMechanics.utilities.potions.PotionEffects;
+import kernitus.plugin.OldCombatMechanics.utilities.reflection.SpigotFunctionChooser;
+import kernitus.plugin.OldCombatMechanics.utilities.reflection.VersionCompatUtils;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeModifier;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.inventory.EntityEquipment;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
+
+import java.util.Collection;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Supplier;
+
+import static kernitus.plugin.OldCombatMechanics.utilities.Messenger.debug;
+
+/**
+ * Utilities for calculating damage reduction from armour and status effects.
+ * Defence order is armour defence -> resistance -> armour enchants ->
+ * absorption
+ * BASE -> HARD_HAT -> BLOCKING -> ARMOUR -> RESISTANCE -> MAGIC -> ABSORPTION
+ * This class just deals with everything from armour onwards
+ */
+public class DefenceUtils {
+    private static final double REDUCTION_PER_ARMOUR_POINT = 0.04;
+    private static final double REDUCTION_PER_RESISTANCE_LEVEL = 0.2;
+
+    private static final Set<EntityDamageEvent.DamageCause> ARMOUR_IGNORING_CAUSES = EnumSet.of(
+            EntityDamageEvent.DamageCause.FIRE_TICK,
+            EntityDamageEvent.DamageCause.SUFFOCATION,
+            EntityDamageEvent.DamageCause.DROWNING,
+            EntityDamageEvent.DamageCause.STARVATION,
+            EntityDamageEvent.DamageCause.FALL,
+            EntityDamageEvent.DamageCause.VOID,
+            EntityDamageEvent.DamageCause.CUSTOM,
+            EntityDamageEvent.DamageCause.MAGIC,
+            EntityDamageEvent.DamageCause.WITHER,
+            // From 1.9
+            EntityDamageEvent.DamageCause.FLY_INTO_WALL,
+            EntityDamageEvent.DamageCause.DRAGON_BREATH
+    // In 1.19 FIRE bypasses armour, but it doesn't in 1.8 so we don't add it here
+    );
+    private static final Set<String> warnedUnknownArmourEnchants = new HashSet<>();
+    private static final Set<Enchantment> VANILLA_ENCHANTMENTS = initVanillaEnchantments();
+    private static final Material POINTED_DRIPSTONE = Material.matchMaterial("POINTED_DRIPSTONE");
+
+    // Stalagmite ignores armour but other blocks under CONTACT do not, explicitly
+    // checked below
+    static {
+        addDamageCauseIfPresent(ARMOUR_IGNORING_CAUSES, "CRAMMING");
+        addDamageCauseIfPresent(ARMOUR_IGNORING_CAUSES, "FREEZE");
+    }
+
+    // Method added in 1.15
+    private static final SpigotFunctionChooser<LivingEntity, Object, Double> getAbsorptionAmount = SpigotFunctionChooser
+            .apiCompatCall(
+                    (le, params) -> le.getAbsorptionAmount(),
+                    (le, params) -> Double.valueOf(VersionCompatUtils.getAbsorptionAmount(le)));
+
+    /**
+     * Calculates the reduction by armour, resistance, armour enchantments and
+     * absorption.
+     * The values are updated directly in the map for each damage modifier.
+     *
+     * @param damagedEntity   The entity that was damaged
+     * @param damageModifiers A map of the damage modifiers and their values from
+     *                        the event
+     * @param event           The original damage event
+     */
+    @SuppressWarnings("deprecation")
+    public static void calculateDefenceDamageReduction(LivingEntity damagedEntity,
+            Map<EntityDamageEvent.DamageModifier, Double> damageModifiers,
+            EntityDamageEvent event,
+            boolean randomness) {
+        final EntityDamageEvent.DamageCause damageCause = event.getCause();
+        final DamageTypeTags tags = DamageTypeTags.from(event);
+
+        final double armourPoints = getArmourPoints(damagedEntity);
+        // Make sure we don't go over 100% protection
+        final double armourReductionFactor = Math.min(1.0, armourPoints * REDUCTION_PER_ARMOUR_POINT);
+
+        // applyArmorModifier() calculations from NMS
+        // Apply armour damage reduction after hard hat (wearing helmet & hit by block)
+        // and blocking reduction
+        double currentDamage = damageModifiers.get(EntityDamageEvent.DamageModifier.BASE) +
+                damageModifiers.getOrDefault(EntityDamageEvent.DamageModifier.HARD_HAT, 0.0) +
+                damageModifiers.getOrDefault(EntityDamageEvent.DamageModifier.BLOCKING, 0.0);
+        if (damageModifiers.containsKey(EntityDamageEvent.DamageModifier.ARMOR)) {
+            double armourReduction = 0;
+            // If the damage cause does not ignore armour
+            // If the block they are in is a stalagmite, also ignore armour
+            final boolean legacyBypass = ARMOUR_IGNORING_CAUSES.contains(damageCause) ||
+                    (POINTED_DRIPSTONE != null && damageCause == EntityDamageEvent.DamageCause.CONTACT &&
+                            damagedEntity.getLocation().getBlock().getType() == POINTED_DRIPSTONE);
+            // Armour protected against direct vanilla fire in 1.8; custom fire types retain their tags.
+            final boolean legacyDirectFire = damageCause == EntityDamageEvent.DamageCause.FIRE &&
+                    (tags.getKey() == null || "minecraft:in_fire".equals(tags.getKey()));
+            if (legacyDirectFire || !tags.matches("bypasses_armor", legacyBypass)) {
+                armourReduction = currentDamage * -armourReductionFactor;
+            }
+            damageModifiers.put(EntityDamageEvent.DamageModifier.ARMOR, armourReduction);
+            currentDamage += armourReduction;
+        }
+
+        // Preserve the 1.8 resistance and enchantment formulae, using source tags when available.
+        final boolean bypassEffects = tags.matches("bypasses_effects", damageCause == EntityDamageEvent.DamageCause.STARVATION);
+        if (damageModifiers.containsKey(EntityDamageEvent.DamageModifier.RESISTANCE)) {
+            double resistanceReduction = 0;
+            if (!bypassEffects && !tags.matches("bypasses_resistance", damageCause == EntityDamageEvent.DamageCause.VOID) &&
+                    damagedEntity.hasPotionEffect(XPotion.RESISTANCE.get())) {
+                final int level = PotionEffects.getOrNull(damagedEntity, XPotion.RESISTANCE.get()).getAmplifier() + 1;
+                resistanceReduction = -Math.min(1.0, level * REDUCTION_PER_RESISTANCE_LEVEL) * currentDamage;
+            }
+            damageModifiers.put(EntityDamageEvent.DamageModifier.RESISTANCE, resistanceReduction);
+            currentDamage += resistanceReduction;
+        }
+        // Always replace MAGIC, including zero damage and sources which bypass enchantments (#621).
+        if (damageModifiers.containsKey(EntityDamageEvent.DamageModifier.MAGIC)) {
+            double enchantsReduction = 0;
+            if (currentDamage > 0 && !bypassEffects && !tags.matches("bypasses_enchantments", false)) {
+                enchantsReduction = -currentDamage * calculateArmourEnchantmentReductionFactor(
+                        damagedEntity.getEquipment().getArmorContents(), damageCause, randomness, tags);
+            }
+            damageModifiers.put(EntityDamageEvent.DamageModifier.MAGIC, enchantsReduction);
+            currentDamage += enchantsReduction;
+        }
+        if (damageCause != EntityDamageEvent.DamageCause.STARVATION) {
+            // Absorption
+            if (damageModifiers.containsKey(EntityDamageEvent.DamageModifier.ABSORPTION)) {
+                final double absorptionAmount = getAbsorptionAmount.apply(damagedEntity);
+                double absorptionReduction = -Math.min(absorptionAmount, currentDamage);
+                damageModifiers.put(EntityDamageEvent.DamageModifier.ABSORPTION, absorptionReduction);
+            }
+        }
+    }
+
+    /**
+     * Return the damage after applying armour, resistance, and armour enchants
+     * protections, following 1.8 algorithm.
+     *
+     * @param defender       The entity that is being attacked
+     * @param baseDamage     The base damage done by the event, including weapon
+     *                       enchants, potions, crits
+     * @param armourContents The 4 pieces of armour contained in the armour slots
+     * @param damageCause    The source of damage
+     * @param randomness     Whether to apply random multiplier
+     * @return The damage done to the entity after armour is taken into account
+     */
+    public static double getDamageAfterArmour1_8(LivingEntity defender, double baseDamage, ItemStack[] armourContents,
+            EntityDamageEvent.DamageCause damageCause, boolean randomness) {
+        double armourPoints = getArmourPoints(armourContents);
+
+        final double reductionFactor = armourPoints * REDUCTION_PER_ARMOUR_POINT;
+
+        // Apply armour damage reduction
+        double finalDamage = baseDamage
+                - (ARMOUR_IGNORING_CAUSES.contains(damageCause) ? 0 : (baseDamage * reductionFactor));
+
+        // Calculate resistance
+        if (defender.hasPotionEffect(XPotion.RESISTANCE.get())) {
+            int resistanceLevel = PotionEffects.getOrNull(defender, XPotion.RESISTANCE.get()).getAmplifier() + 1;
+            finalDamage *= 1.0 - (resistanceLevel * 0.2);
+        }
+
+        // Don't calculate enchantment reduction if damage is already 0. NMS 1.8 does it
+        // this way.
+        final double enchantmentReductionFactor = calculateArmourEnchantmentReductionFactor(armourContents, damageCause,
+                randomness);
+        if (finalDamage > 0) {
+            finalDamage -= finalDamage * enchantmentReductionFactor;
+        }
+
+        debug("Reductions: Armour %.0f%%, Ench %.0f%%, Total %.2f%%, Start dmg: %.2f Final: %.2f",
+                reductionFactor * 100,
+                enchantmentReductionFactor * 100,
+                (reductionFactor + (1 - reductionFactor) * enchantmentReductionFactor) * 100,
+                baseDamage, finalDamage);
+
+        return finalDamage;
+    }
+
+    private static double getArmourPoints(LivingEntity damagedEntity) {
+        final double attributeArmourPoints = damagedEntity.getAttribute(XAttribute.ARMOR.get()).getValue();
+        if (attributeArmourPoints > 0) {
+            return attributeArmourPoints;
+        }
+
+        final EntityEquipment equipment = damagedEntity.getEquipment();
+        if (equipment == null) {
+            return attributeArmourPoints;
+        }
+
+        return getArmourPoints(equipment.getArmorContents());
+    }
+
+    private static double getArmourPoints(ItemStack[] armourContents) {
+        double armourPoints = 0;
+        for (int i = 0; i < armourContents.length; i++) {
+            final ItemStack itemStack = armourContents[i];
+            if (itemStack == null)
+                continue;
+            final EquipmentSlot slot = new EquipmentSlot[] { EquipmentSlot.FEET, EquipmentSlot.LEGS,
+                    EquipmentSlot.CHEST, EquipmentSlot.HEAD }[i];
+            armourPoints += getArmourPoints(itemStack.getType(), slot);
+        }
+        return armourPoints;
+    }
+
+    private static double getArmourPoints(Material material, EquipmentSlot slot) {
+        try {
+            final Attribute armourAttribute = XAttribute.ARMOR.get();
+            if (armourAttribute != null) {
+                return getAttributeModifierSum(material.getDefaultAttributeModifiers(slot).get(armourAttribute));
+            }
+        } catch (NoSuchMethodError ignored) {
+            // Material#getDefaultAttributeModifiers is absent on legacy Bukkit APIs.
+        }
+        return getLegacyArmourPoints(material);
+    }
+
+    private static double getLegacyArmourPoints(Material material) {
+        if (material == null) return 0;
+        switch (material.name()) {
+            case "LEATHER_HELMET":
+                return 1;
+            case "GOLD_HELMET":
+            case "GOLDEN_HELMET":
+            case "CHAINMAIL_HELMET":
+            case "IRON_HELMET":
+                return 2;
+            case "DIAMOND_HELMET":
+                return 3;
+            case "LEATHER_CHESTPLATE":
+                return 3;
+            case "GOLD_CHESTPLATE":
+            case "GOLDEN_CHESTPLATE":
+            case "CHAINMAIL_CHESTPLATE":
+                return 5;
+            case "IRON_CHESTPLATE":
+                return 6;
+            case "DIAMOND_CHESTPLATE":
+                return 8;
+            case "LEATHER_LEGGINGS":
+                return 2;
+            case "GOLD_LEGGINGS":
+            case "GOLDEN_LEGGINGS":
+                return 3;
+            case "CHAINMAIL_LEGGINGS":
+                return 4;
+            case "IRON_LEGGINGS":
+                return 5;
+            case "DIAMOND_LEGGINGS":
+                return 6;
+            case "LEATHER_BOOTS":
+            case "GOLD_BOOTS":
+            case "GOLDEN_BOOTS":
+            case "CHAINMAIL_BOOTS":
+                return 1;
+            case "IRON_BOOTS":
+                return 2;
+            case "DIAMOND_BOOTS":
+                return 3;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Applies all the operations for the attribute modifiers of a specific
+     * attribute.
+     * Does not take into account the base value.
+     */
+    private static double getAttributeModifierSum(Collection<AttributeModifier> modifiers) {
+        double sum = 0;
+        for (AttributeModifier modifier : modifiers) {
+            final double value = modifier.getAmount();
+            switch (modifier.getOperation()) {
+                case ADD_SCALAR:
+                    sum += Math.abs(value);
+                    break;
+                case ADD_NUMBER:
+                    sum += value;
+                    break;
+                case MULTIPLY_SCALAR_1:
+                    sum *= value;
+                    break;
+            }
+        }
+        return sum;
+    }
+
+    private static double calculateArmourEnchantmentReductionFactor(ItemStack[] armourContents,
+            EntityDamageEvent.DamageCause cause, boolean randomness) {
+        return calculateArmourEnchantmentReductionFactor(armourContents, cause, randomness, null);
+    }
+
+    private static double calculateArmourEnchantmentReductionFactor(ItemStack[] armourContents,
+            EntityDamageEvent.DamageCause cause, boolean randomness, DamageTypeTags tags) {
+        int totalEpf = 0;
+        for (ItemStack armourItem : armourContents) {
+            if (armourItem != null && armourItem.getType() != Material.AIR) {
+                warnOnUnknownArmourEnchantments(armourItem);
+                for (EnchantmentType enchantmentType : EnchantmentType.values()) {
+                    int enchantmentLevel = armourItem.getEnchantmentLevel(enchantmentType.getEnchantment());
+                    if (enchantmentLevel > 0 && enchantmentType.protectsAgainst(cause, tags)) {
+                        totalEpf += enchantmentType.getEpf(enchantmentLevel);
+                    }
+                }
+            }
+        }
+
+        // Cap at 25
+        totalEpf = Math.min(25, totalEpf);
+
+        // Multiply by random value between 50% and 100%, then round up
+        double multiplier = randomness ? ThreadLocalRandom.current().nextDouble(0.5, 1) : 1.0;
+        totalEpf = (int) Math.ceil(totalEpf * multiplier);
+
+        // Cap at 20
+        totalEpf = Math.min(20, totalEpf);
+
+        return REDUCTION_PER_ARMOUR_POINT * totalEpf;
+    }
+
+    private static void warnOnUnknownArmourEnchantments(ItemStack armourItem) {
+        if (armourItem.getEnchantments().isEmpty()) {
+            return;
+        }
+        for (Enchantment enchantment : armourItem.getEnchantments().keySet()) {
+            if (enchantment == null || isModelledArmourEnchantment(enchantment)) {
+                continue;
+            }
+            if (!shouldWarnOnUnknownEnchantment(enchantment)) {
+                continue;
+            }
+            final String name = enchantment.getName();
+            if (warnedUnknownArmourEnchants.add(name)) {
+                kernitus.plugin.OldCombatMechanics.utilities.Messenger.warn(
+                        "Armour enchantment '%s' is not modelled by OCM damage reduction; results may differ",
+                        name);
+            }
+        }
+    }
+
+    private static boolean shouldWarnOnUnknownEnchantment(Enchantment enchantment) {
+        try {
+            final NamespacedKey key = enchantment.getKey();
+            if (key != null) {
+                return !"minecraft".equals(key.getNamespace());
+            }
+        } catch (NoSuchMethodError | NoClassDefFoundError ignored) {
+            // Legacy servers do not expose NamespacedKey; fall back to known vanilla list.
+        }
+        return !isVanillaEnchantment(enchantment);
+    }
+
+    private static Set<Enchantment> initVanillaEnchantments() {
+        final Set<Enchantment> enchantments = new HashSet<>();
+        for (XEnchantment xEnchantment : XEnchantment.values()) {
+            final Enchantment enchantment = xEnchantment.getEnchant();
+            if (enchantment != null) {
+                enchantments.add(enchantment);
+            }
+        }
+        return enchantments;
+    }
+
+    private static boolean isVanillaEnchantment(Enchantment enchantment) {
+        return VANILLA_ENCHANTMENTS.contains(enchantment);
+    }
+
+    private static boolean isModelledArmourEnchantment(Enchantment enchantment) {
+        for (EnchantmentType enchantmentType : EnchantmentType.values()) {
+            if (enchantmentType.getEnchantment().equals(enchantment)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void addDamageCauseIfPresent(Set<EntityDamageEvent.DamageCause> damageCauses, String name) {
+        final EntityDamageEvent.DamageCause cause = getDamageCause(name);
+        if (cause != null) {
+            damageCauses.add(cause);
+        }
+    }
+
+    private static EntityDamageEvent.DamageCause getDamageCause(String name) {
+        try {
+            return EntityDamageEvent.DamageCause.valueOf(name);
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
+    }
+
+    private enum EnchantmentType {
+        // Data from https://minecraft.fandom.com/wiki/Armor#Mechanics
+        PROTECTION(() -> {
+            EnumSet<EntityDamageEvent.DamageCause> damageCauses = EnumSet.of(
+                    EntityDamageEvent.DamageCause.CONTACT,
+                    EntityDamageEvent.DamageCause.ENTITY_ATTACK,
+                    EntityDamageEvent.DamageCause.PROJECTILE,
+                    EntityDamageEvent.DamageCause.FALL,
+                    EntityDamageEvent.DamageCause.FIRE,
+                    EntityDamageEvent.DamageCause.LAVA,
+                    EntityDamageEvent.DamageCause.BLOCK_EXPLOSION,
+                    EntityDamageEvent.DamageCause.ENTITY_EXPLOSION,
+                    EntityDamageEvent.DamageCause.LIGHTNING,
+                    EntityDamageEvent.DamageCause.POISON,
+                    EntityDamageEvent.DamageCause.MAGIC,
+                    EntityDamageEvent.DamageCause.WITHER,
+                    EntityDamageEvent.DamageCause.FALLING_BLOCK,
+                    EntityDamageEvent.DamageCause.THORNS,
+                    EntityDamageEvent.DamageCause.DRAGON_BREATH);
+            addDamageCauseIfPresent(damageCauses, "HOT_FLOOR");
+            addDamageCauseIfPresent(damageCauses, "ENTITY_SWEEP_ATTACK");
+
+            return damageCauses;
+        },
+                0.75, XEnchantment.PROTECTION.getEnchant()),
+        FIRE_PROTECTION(() -> {
+            EnumSet<EntityDamageEvent.DamageCause> damageCauses = EnumSet.of(
+                    EntityDamageEvent.DamageCause.FIRE,
+                    EntityDamageEvent.DamageCause.FIRE_TICK,
+                    EntityDamageEvent.DamageCause.LAVA);
+
+            addDamageCauseIfPresent(damageCauses, "HOT_FLOOR");
+
+            return damageCauses;
+        }, 1.25, XEnchantment.FIRE_PROTECTION.getEnchant()),
+        BLAST_PROTECTION(() -> EnumSet.of(
+                EntityDamageEvent.DamageCause.ENTITY_EXPLOSION,
+                EntityDamageEvent.DamageCause.BLOCK_EXPLOSION), 1.5, XEnchantment.BLAST_PROTECTION.getEnchant()),
+        PROJECTILE_PROTECTION(() -> EnumSet.of(
+                EntityDamageEvent.DamageCause.PROJECTILE), 1.5, XEnchantment.PROJECTILE_PROTECTION.getEnchant()),
+        FALL_PROTECTION(() -> EnumSet.of(
+                EntityDamageEvent.DamageCause.FALL), 2.5, XEnchantment.FEATHER_FALLING.getEnchant());
+
+        private final Set<EntityDamageEvent.DamageCause> protection;
+        private final double typeModifier;
+        private final Enchantment enchantment;
+
+        EnchantmentType(Supplier<Set<EntityDamageEvent.DamageCause>> protection, double typeModifier,
+                Enchantment enchantment) {
+            this.protection = protection.get();
+            this.typeModifier = typeModifier;
+            this.enchantment = enchantment;
+        }
+
+        /**
+         * Returns whether the armour protects against the given damage cause.
+         *
+         * @param cause the damage cause
+         * @return true if the armour protects against the given damage cause
+         */
+        public boolean protectsAgainst(EntityDamageEvent.DamageCause cause, DamageTypeTags tags) {
+            final boolean fallback = protection.contains(cause);
+            if (tags == null) return fallback;
+            switch (this) {
+                case PROTECTION:
+                    final Boolean bypass = tags.contains("bypasses_enchantments");
+                    return bypass == null ? fallback : !bypass;
+                case FIRE_PROTECTION: return tags.matches("is_fire", fallback);
+                case BLAST_PROTECTION: return tags.matches("is_explosion", fallback);
+                case PROJECTILE_PROTECTION: return tags.matches("is_projectile", fallback);
+                case FALL_PROTECTION: return tags.matches("is_fall", fallback);
+                default: return fallback;
+            }
+        }
+
+        /**
+         * Returns the bukkit enchantment.
+         *
+         * @return the bukkit enchantment
+         */
+        public Enchantment getEnchantment() {
+            return enchantment;
+        }
+
+        /**
+         * Returns the enchantment protection factor (EPF).
+         *
+         * @param level the level of the enchantment
+         * @return the EPF
+         */
+        public int getEpf(int level) {
+            // floor ( (6 + level^2) * TypeModifier / 3 )
+            return (int) Math.floor((6 + level * level) * typeModifier / 3);
+        }
+    }
+}

@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'pages', 'cs.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'lobby-app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8');
 const taskSystem = fs.readFileSync(path.join(root, 'src', 'task-system.ts'), 'utf8');

@@ -35,7 +35,7 @@ function Invoke-CheckedStep {
 
 function Test-GamePluginChanged {
     try {
-        $changed = & git -C $repoRoot status --short -- game-plugin 2>$null
+        $changed = & git -C $repoRoot status --short -- cs/game-plugin 2>$null
         return -not [string]::IsNullOrWhiteSpace(($changed -join "`n"))
     }
     catch {
@@ -44,9 +44,9 @@ function Test-GamePluginChanged {
 }
 
 $webRoot = Join-Path $repoRoot 'web-command-center'
-$bridgeRoot = Join-Path $webRoot 'CaorenCupPlugin'
-$bridgeTestsRoot = Join-Path $webRoot 'CaorenCupPlugin.Tests'
-$gamePluginRoot = Join-Path $repoRoot 'game-plugin'
+$bridgeRoot = Join-Path $repoRoot 'cs/web-bridge/CaorenCupPlugin'
+$bridgeTestsRoot = Join-Path $repoRoot 'cs/web-bridge/CaorenCupPlugin.Tests'
+$gamePluginRoot = Join-Path $repoRoot 'cs/game-plugin'
 
 Write-Host "Duel mode local test gate" -ForegroundColor Green
 Write-Host "Repo: $repoRoot"
@@ -93,7 +93,7 @@ if ($shouldBuildGamePlugin) {
 else {
     Write-Host ""
     Write-Host "==> Game plugin build skipped" -ForegroundColor Yellow
-    Write-Host "    Use -IncludeGamePlugin if this release also changes game-plugin/."
+    Write-Host "    Use -IncludeGamePlugin if this release also changes cs/game-plugin/."
 }
 
 Write-Host ""

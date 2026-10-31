@@ -1,0 +1,10 @@
+{
+  "pack": {
+    "pack_format": 121,
+    "description": "Cushion Wars P0 probes / 坐垫战争 P0 能力探针（隔离、不含玩法）",
+    "supported_formats": {
+      "min_inclusive": 121,
+      "max_inclusive": 121
+    }
+  }
+}

@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
 const files = [
-  'public/index.html',
+  'pages/cs.html',
   'public/js/player-center.js',
   'public/js/lobby-app.js',
   'src/types.ts',

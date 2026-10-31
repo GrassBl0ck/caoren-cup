@@ -3,7 +3,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 
 const root = path.resolve(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'pages', 'cs.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'public', 'js', 'weaponpaints-app.js'), 'utf8');
 const lobbyJs = fs.readFileSync(path.join(root, 'public', 'js', 'lobby-app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public', 'css', 'weaponpaints.css'), 'utf8');
