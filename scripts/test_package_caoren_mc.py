@@ -43,10 +43,19 @@ class McPackageTests(unittest.TestCase):
         with self.assertRaises(FileExistsError): package.pack_datapack(source,output)
         self.assertEqual(output.read_bytes(),b'original')
     def test_source_selection_preserves_wrappers_but_rejects_worlds_secrets_and_builds(self):
-        for name in ['cushion-wars-a/plugin/src/main/java/Game.java','third-party/old-combat-mechanics/gradle/wrapper/gradle-wrapper.jar','cushion-wars-a/deploy/server/mapctl']:
+        for name in ['cushion-wars/cushion-wars-a/plugin/src/main/java/Game.java','third-party/old-combat-mechanics/gradle/wrapper/gradle-wrapper.jar','cushion-wars/cushion-wars-a/deploy/server/mapctl']:
             self.assertTrue(package.is_source_file(Path(name)),name)
-        for name in ['minigames/.assets/world/level.dat','cushion-wars-a/plugin/lib/paper.jar','cross-era-pvp/stage03/build/libs/Probe.jar','server.properties','ops.json','.env','world/playerdata/a.dat']:
+        for name in ['minigames/.assets/world/level.dat','cushion-wars/cushion-wars-a/plugin/lib/paper.jar','cross-era-pvp/stage03/build/libs/Probe.jar','server.properties','ops.json','.env','world/playerdata/a.dat']:
             self.assertFalse(package.is_source_file(Path(name)),name)
+    def test_imported_sources_are_selected_after_directory_migration(self):
+        manifest=json.loads((ROOT/'mc/source-manifest.json').read_text(encoding='utf-8-sig'))
+        layout=json.loads((ROOT/'mc/source-layout.json').read_text(encoding='utf-8'))
+        expected=package.imported_current_paths(manifest,layout)
+        selected={p.relative_to(ROOT/'mc').as_posix() for p in package.source_files(ROOT/'mc')}
+        self.assertTrue(expected.issubset(selected),sorted(expected-selected))
+        self.assertEqual(len(expected),len(manifest['files']))
+        missing=next(iter(expected))
+        self.assertFalse(expected.issubset(selected-{missing}))
     def test_bundle_manifest_paths_hashes_and_exclusive_output(self):
         stage=self.root/'stage';stage.mkdir();(stage/'INSTALL.md').write_text('install\n',encoding='utf-8')
         target=self.root/'bundle.zip';package.write_bundle(stage,target,'v2.0.0',{'experimentalDefaultEnabled':False})

@@ -20,6 +20,13 @@ def safe_relative(relative):
     value=str(relative).replace(os.sep,'/')
     if PurePosixPath(value).is_absolute() or '..' in PurePosixPath(value).parts or '\\' in value or ':' in value: raise ValueError('Unsafe package path')
     return value
+def imported_current_paths(manifest,layout):
+    def current(original):
+        if original in layout['paths']: return layout['paths'][original]
+        for prefix,replacement in layout['prefixes'].items():
+            if original.startswith(prefix): return replacement+original[len(prefix):]
+        return original
+    return {current(entry['path']) for entry in manifest['files']}
 def source_files(root):
     return [p for p in sorted(root.rglob('*')) if p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(root.resolve()) and is_source_file(p.relative_to(root))]
 def write_zip(files,output):
@@ -69,7 +76,7 @@ def validate_plugin(file,name,version=None,expected_sha=None):
         if field('main').replace('.','/')+'.class' not in z.namelist(): raise ValueError('Plugin main class absent')
 def compile_probe(work):
     classes=work/'probe-classes';classes.mkdir()
-    jars=sorted((MC/'cushion-wars-a/plugin/lib').glob('*.jar'))
+    jars=sorted((MC/'cushion-wars/cushion-wars-a/plugin/lib').glob('*.jar'))
     if not jars: raise ValueError('Prepare JDK 25 and the documented Paper API compile dependencies first')
     sources=sorted((MC/'cross-era-pvp/stage03/src/main/java').rglob('*.java'))
     with (work/'probe-build.log').open('wb') as log:
@@ -91,24 +98,24 @@ def main():
     if not re.fullmatch(r'v\d+\.\d+\.\d+',args.version): raise ValueError('Use a concrete vX.Y.Z release version')
     output=ROOT/'release-output'/('CaorenCupMC-服务器内容-'+args.version+'.zip')
     if output.exists(): raise FileExistsError(output.name)
-    cushion=MC/'cushion-wars-a/dist/CushionWarsProbe-0.1.0.jar'
+    cushion=MC/'cushion-wars/cushion-wars-a/dist/CushionWarsProbe-0.1.0.jar'
     validate_plugin(cushion,'CushionWarsProbe','0.1.0')
     work=ROOT/'release-build'/('mc-package-'+uuid.uuid4().hex);work.mkdir(parents=True)
     stage=work/'stage';stage.mkdir()
     imported=json.loads((MC/'source-manifest.json').read_text(encoding='utf-8-sig'))
     selected=source_files(MC)
     names={p.relative_to(MC).as_posix() for p in selected}
-    if not {entry['path'] for entry in imported['files']}.issubset(names): raise ValueError('Source selection omitted an imported file')
+    if not imported_current_paths(imported,json.loads((MC/'source-layout.json').read_text(encoding='utf-8'))).issubset(names): raise ValueError('Source selection omitted an imported file')
     for file in selected: copy(file,stage/'source'/file.relative_to(MC))
     copy(MC/'INSTALL.md',stage/'INSTALL.md')
     copy(cushion,stage/'cushion-wars/plugins'/cushion.name)
-    pack_datapack(MC/'cushion-wars-a/src/round-a',stage/'cushion-wars/datapacks/cushionwars-a.zip')
-    pack_datapack(MC/'cushion-wars-a/deploy/server/cw-entry',stage/'cushion-wars/datapacks/cw-entry.zip')
+    pack_datapack(MC/'cushion-wars/cushion-wars-a/src/round-a',stage/'cushion-wars/datapacks/cushionwars-a.zip')
+    pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server/cw-entry',stage/'cushion-wars/datapacks/cw-entry.zip')
     for name in ['cw-autoverify','cw-maptest']:
-        pack_datapack(MC/'cushion-wars-a/deploy/server'/name,stage/'cushion-wars/diagnostics/datapacks'/(name+'.zip'))
-    pack_datapack(MC/'cushion-wars-a/prototypes/round-a-p0',stage/'cushion-wars/diagnostics/datapacks/cw-p0-probes.zip')
-    pack_datapack(MC/'cushion-wars-a/deploy/server/cw-maps-menu',stage/'shared/datapacks/cw-maps-menu.zip')
-    for name in ['mapctl','mcctl']: copy(MC/'cushion-wars-a/deploy/server'/name,stage/'shared/tools'/name,lf=True)
+        pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'cushion-wars/diagnostics/datapacks'/(name+'.zip'))
+    pack_datapack(MC/'cushion-wars/cushion-wars-a/prototypes/round-a-p0',stage/'cushion-wars/diagnostics/datapacks/cw-p0-probes.zip')
+    pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server/cw-maps-menu',stage/'shared/datapacks/cw-maps-menu.zip')
+    for name in ['mapctl','mcctl']: copy(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'shared/tools'/name,lf=True)
     copy(MC/'minigames/fetch-assets.py',stage/'minigames/fetch-assets.py')
     (stage/'minigames/README.md').write_text('小游戏合集来自 wifi-left，保留 CC BY-NC-SA 4.0 与原作者附加条款，见 LISENCE。\n数据包源码见 ../source/minigames/source/。\n在本目录运行 python fetch-assets.py --extract 获取固定版本地图及音频，下载后核对 SHA-256。工具仅写入新的 .assets/world-template，不自动安装或覆盖任何玩家世界。\n',encoding='utf-8')
     copy(MC/'minigames/source/LISENCE',stage/'minigames/LISENCE')

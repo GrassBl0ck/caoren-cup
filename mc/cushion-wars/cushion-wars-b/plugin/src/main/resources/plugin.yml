@@ -1,0 +1,18 @@
+name: CushionWarsRealtime
+version: '0.1.0'
+main: com.caoren.cushionwars.realtime.CushionWarsRealtimePlugin
+api-version: '26.3'
+description: 坐垫战争即时制 B（1v1—8v8，独立地图入口 cushion-wars-b）
+author: cushion-wars-b
+folia-supported: false
+commands:
+  cwb:
+    description: 坐垫战争即时制对局命令
+    usage: /cwb help
+permissions:
+  cushionwarsb.play:
+    description: 允许加入对局、选择出生点和查看公共战况
+    default: true
+  cushionwarsb.admin:
+    description: 允许开局、中止、改人数、重建与编辑地图
+    default: op

@@ -1,0 +1,9 @@
+# Generated builds, local dependency cache and runtime data (B only)
+build/
+dist/
+plugin/lib/*.jar
+checks/
+runtime/
+arenas/
+recovery/
+*.tmp

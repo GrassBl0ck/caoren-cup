@@ -1,0 +1,6 @@
+id=cushion-wars-b
+title=坐垫战争（即时制 B）
+created=2026-11-01
+# 独立地图入口；仅在服务端启动参数 -Dcw.map=cushion-wars-b 时启用 CushionWarsRealtime。
+# 实际世界名、棋盘原点与地面 Y 必须与插件 config.yml 的 board.* 一致，不能从 A 的配置推断。
+# 本轮只提供示例，不写服务器地图容器、不复制现服存档、不重启服务端。

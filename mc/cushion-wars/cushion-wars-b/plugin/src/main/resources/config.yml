@@ -1,0 +1,11 @@
+# 坐垫战争即时制 B：所有配置在启用时校验，非法配置拒绝启用，不回退其他世界。
+board:
+  # 必须是实际加载的独立地图世界；仅在 -Dcw.map=cushion-wars-b 时启用。
+  world: cushion-wars-b
+  # 棋盘中心的绝对方块坐标；ground-y 是地面格所在 Y（站立方块为其上一层）。
+  center-x: 0
+  center-z: 0
+  ground-y: 100
+rules:
+  # 每队人数 1—8；默认 4v4。改人数使用 /cwb size，不要只改文件后热改。
+  team-size: 4

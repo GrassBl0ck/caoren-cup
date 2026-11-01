@@ -22,7 +22,7 @@
 1. 准备 Java 25 与兼容 Paper API 26.3 的独立测试实例，先验证服务端本体能够正常启动。
 2. 将 `cushion-wars/plugins/CushionWarsProbe-0.1.0.jar` 放到该实例的 `plugins/`；将 `cushion-wars/datapacks/` 下两个 ZIP 放到对应独立世界的 `datapacks/`。
 3. 由管理员启动或重启该测试实例，检查插件加载及 `/cw help`、`/cw status`。原版 Java 客户端即可参加，不要求客户端 Mod。
-4. 管理员设置每队人数 `/cw size N`（1—8）；按游戏提示入队和开局。完整规则及当前试玩边界见 `source/cushion-wars-a/`。
+4. 管理员设置每队人数 `/cw size N`（1—8）；按游戏提示入队和开局。完整规则及当前试玩边界见 `source/cushion-wars/cushion-wars-a/`。
 
 建图命令会在棋盘范围内清理并重建方块，因此应使用专门的世界；在已有世界试用前先做好备份。诊断数据包只在隔离验证时按需装入，避免自动测试干扰真实对局。
 

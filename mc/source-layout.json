@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-01",
+  "purpose": "Original manifest paths and hashes stay historical. Resolve moved files and explicit reference-only integration edits.",
+  "prefixes": {
+    "cushion-wars-a/": "cushion-wars/cushion-wars-a/",
+    "cushion-wars-b/": "cushion-wars/cushion-wars-b/",
+    "cushion-wars-design/": "cushion-wars/shared/"
+  },
+  "paths": {
+    "cushion-wars-design/references/坐垫战争-即时制-B-V1.0-设计确认版.md": "cushion-wars/cushion-wars-b/references/坐垫战争-即时制-B-V1.0-设计确认版.md",
+    "cushion-wars-design/references/坐垫战争-回合制-A-V1.0-设计确认版.md": "cushion-wars/cushion-wars-a/references/original-design-copy/坐垫战争-回合制-A-V1.0-设计确认版.md",
+    "cushion-wars-a/references/坐垫战争-26.3事实核验与验收清单.md": "cushion-wars/shared/references/imported-a-copy/坐垫战争-26.3事实核验与验收清单.md",
+    "cushion-wars-a/references/坐垫战争-即时制-B-V1.0-设计确认版.md": "cushion-wars/cushion-wars-b/references/imported-a-copy/坐垫战争-即时制-B-V1.0-设计确认版.md",
+    "cushion-wars-a/references/坐垫战争-设计确认汇总-V1.0.md": "cushion-wars/shared/references/imported-a-copy/坐垫战争-设计确认汇总-V1.0.md"
+  },
+  "integrationChanges": {}
+}
