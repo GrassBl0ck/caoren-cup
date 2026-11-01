@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:multi_action",
+  "title": "[草人杯] 地图传送",
+  "external_title": "[草人杯] 地图传送",
+  "columns": 1,
+  "can_close_with_escape": true,
+  "pause": false,
+  "body": [{
+    "type": "minecraft:plain_message",
+    "contents": {"text": "[草人杯] 选择要前往的地图。切换时MC服务会重新启动，所有人需要稍后重新连接。只有管理员可以切换。", "color": "green"}
+  }],
+  "actions": [
+    {"label": {"text": "跨时代战争（战斗验证）", "color": "green"}, "action": {"type": "minecraft:run_command", "command": "/maps goto cross-era"}},
+    {"label": {"text": "坐垫战争（回合制 A）", "color": "aqua"}, "action": {"type": "minecraft:run_command", "command": "/maps goto cushion-wars"}},
+    {"label": {"text": "草人杯小游戏合集", "color": "gold"}, "action": {"type": "minecraft:run_command", "command": "/maps goto minigames"}},
+    {"label": {"text": "查看当前地图", "color": "white"}, "action": {"type": "minecraft:run_command", "command": "/maps list"}}
+  ]
+}

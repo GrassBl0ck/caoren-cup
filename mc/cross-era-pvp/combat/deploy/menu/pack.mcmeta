@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "pack_format": 121,
+    "supported_formats": {"min_inclusive": 121, "max_inclusive": 121},
+    "description": "[草人杯] 单实例地图切换入口"
+  }
+}

@@ -1,0 +1,10 @@
+# [草人杯] 实验原型；首次配置后完整重启，不使用 /reload。
+experimental-enabled: false
+allowed-worlds: []
+backend: ocm
+profiles:
+  old: cross-era-old
+  modern: cross-era-modern
+journal:
+  # 有界队列，异步批量落盘；满时拒绝记录并告警，不等待磁盘。
+  queue-capacity: 2048

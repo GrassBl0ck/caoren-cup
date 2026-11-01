@@ -1,0 +1,86 @@
+# [草人杯] 仅用于全新的实验环境。OCM v2.8.0 / config schema 79。
+# 手写的最小近战配置，未复制上游默认配置；其他数值由固定版本 JAR 的默认值补足。
+# 不覆盖在用配置；worlds 中的世界名称须与 CrossEraCombat allowed-worlds 一致。
+config-version: 79
+always_enabled_modules: []
+disabled_modules:
+  - attack-frequency
+  - attack-range
+  - chorus-fruit
+  - disable-attack-sounds
+  - disable-crafting
+  - disable-enderpearl-cooldown
+  - disable-offhand
+  - disable-sword-sweep-particles
+  - fishing-rod-velocity
+  - old-brewing-stand
+  - old-burn-delay
+  - old-fishing-knockback
+  - old-golden-apples
+  - old-player-regen
+  - old-potion-effects
+  - old-potion-throwing
+  - old-projectile-trajectory
+  - projectile-knockback
+  - projectile-shoot-offset
+  - relative-projectile-velocity
+  - shield-damage-reduction
+  - sword-blocking
+  - update-checker
+modesets:
+  cross-era-modern: []
+  cross-era-old:
+    - disable-attack-cooldown
+    - disable-sword-sweep
+    - old-tool-damage
+    - old-critical-hits
+    - old-armour-strength
+    - old-armour-durability
+    - old-player-knockback
+worlds:
+  __default__: [cross-era-modern]
+  cross-era-test: [cross-era-modern, cross-era-old]
+mode-permissions:
+  enabled: false
+mode-messages:
+  mode-status: ''
+  message-usage: ''
+  invalid-modeset: ''
+  no-permission-modeset: ''
+  invalid-player: ''
+  mode-set: ''
+message-prefix: '&a[草人杯]&r'
+disable-attack-cooldown:
+  generic-attack-speed: 40
+attack-frequency:
+  # 此模块已禁用：保留原生受伤间隔，不采用上游默认 18/16。
+  playerDelay: 20
+  mobDelay: 20
+old-tool-damage:
+  old-sharpness: true
+  tooltip:
+    enabled: false
+    native-attribute: false
+  damages:
+    DIAMOND_SWORD: 8
+old-critical-hits:
+  multiplier: 1.5
+  allow-sprinting: true
+old-armour-strength:
+  randomness: true
+old-armour-durability:
+  reduction: 1
+old-player-knockback:
+  knockback-horizontal: 0.4
+  knockback-friction: 2.0
+  knockback-vertical: 0.4
+  knockback-vertical-limit: 0.4
+  knockback-extra-horizontal: 0.5
+  knockback-extra-vertical: 0.1
+  enable-knockback-resistance: false
+update-checker:
+  auto-update: false
+command-completer:
+  enabled: false
+debug:
+  enabled: false

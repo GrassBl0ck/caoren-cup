@@ -1,0 +1,9 @@
+# [草人杯] 启用示例；只有确认存在且专用于测试的世界才加入列表。
+experimental-enabled: true
+allowed-worlds: [cross-era-test]
+backend: ocm
+profiles:
+  old: cross-era-old
+  modern: cross-era-modern
+journal:
+  queue-capacity: 2048

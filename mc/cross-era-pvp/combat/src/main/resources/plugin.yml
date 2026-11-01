@@ -1,0 +1,13 @@
+name: CrossEraCombat
+version: '${version}'
+main: com.caoren.crossera.bukkit.CrossEraCombatPlugin
+api-version: '26.3'
+softdepend: [OldCombatMechanics]
+description: Experimental cross-era melee adapter; vanilla PvP fidelity is not yet accepted.
+commands:
+  cecombat:
+    description: Cross-era experimental administrator controls
+permissions:
+  cross-era.combat.admin:
+    description: Configure and inspect experimental player combat profiles
+    default: op
