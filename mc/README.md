@@ -69,3 +69,9 @@ python mc/cushion-wars/cushion-wars-a/tools/verify_plugin.py
 - Gradle Wrapper 和编译依赖属于相应上游项目，不因放在自研目录内而改为 MIT。
 
 后续开发按上述约定及每个任务已确认的范围执行。规范文档不自动授权提交、合并、推送、发布、部署、重启、删除或修改既有游戏规则。
+
+## 2.2.0 新增内容
+
+- [坐垫战争即时制 B](cushion-wars/cushion-wars-b/README.md)：独立 `/cwb` 插件，本地自动验证通过，真实服务端与玩家验收待完成。
+- [跨时代阶段04](cross-era-pvp/combat/README.md)：基于 OCM v2.8.0 的规则管理和观察原型，默认不启用，真实战斗与原版对照待验收。
+- A/B 专属文件与共用设计分目录，历史来源路径通过 `source-layout.json` 映射；完整发行说明见 [2.2.0](../docs/releases/v2.2.0.md)。

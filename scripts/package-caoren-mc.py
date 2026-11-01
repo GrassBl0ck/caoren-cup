@@ -55,7 +55,7 @@ def write_bundle(stage,output,version,provenance):
         rows.append({'path':name,'size':len(raw),'sha256':digest(raw)})
         executable=name.endswith('.sh') or path.name in {'mapctl','mcctl','gradlew'}
         files.append((name,raw,executable))
-    manifest={'version':version,'modules':['CushionWars','MapMiniGames','CrossEraExperiments'],'provenance':provenance,'files':rows}
+    manifest={'version':version,'modules':['CushionWarsA','CushionWarsRealtime','MapMiniGames','CrossEraExperiments','CrossEraCombat'],'provenance':provenance,'files':rows}
     raw=(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n').encode('utf-8')
     (stage/'package-manifest.json').write_bytes(raw);files.append(('package-manifest.json',raw,False))
     write_zip(files,output)
@@ -100,6 +100,10 @@ def main():
     if output.exists(): raise FileExistsError(output.name)
     cushion=MC/'cushion-wars/cushion-wars-a/dist/CushionWarsProbe-0.1.0.jar'
     validate_plugin(cushion,'CushionWarsProbe','0.1.0')
+    realtime=MC/'cushion-wars/cushion-wars-b/dist/CushionWarsRealtime-0.1.0.jar'
+    combat=MC/'cross-era-pvp/combat/build/libs/CrossEraCombat-0.1.0-dev.jar'
+    validate_plugin(realtime,'CushionWarsRealtime','0.1.0')
+    validate_plugin(combat,'CrossEraCombat','0.1.0-dev')
     work=ROOT/'release-build'/('mc-package-'+uuid.uuid4().hex);work.mkdir(parents=True)
     stage=work/'stage';stage.mkdir()
     imported=json.loads((MC/'source-manifest.json').read_text(encoding='utf-8-sig'))
@@ -108,12 +112,14 @@ def main():
     if not imported_current_paths(imported,json.loads((MC/'source-layout.json').read_text(encoding='utf-8'))).issubset(names): raise ValueError('Source selection omitted an imported file')
     for file in selected: copy(file,stage/'source'/file.relative_to(MC))
     copy(MC/'INSTALL.md',stage/'INSTALL.md')
-    copy(cushion,stage/'cushion-wars/plugins'/cushion.name)
-    pack_datapack(MC/'cushion-wars/cushion-wars-a/src/round-a',stage/'cushion-wars/datapacks/cushionwars-a.zip')
-    pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server/cw-entry',stage/'cushion-wars/datapacks/cw-entry.zip')
+    copy(cushion,stage/'cushion-wars/cushion-wars-a/plugins'/cushion.name)
+    copy(realtime,stage/'cushion-wars/cushion-wars-b/plugins'/realtime.name)
+    (stage/'cushion-wars/cushion-wars-b/README.md').write_text('坐垫战争即时制 B，本地自动验证通过，真实服务端与玩家验收待完成。需要 Java 25、Paper API 26.3，主命令 /cwb；仅在显式设置 -Dcw.map=cushion-wars-b 且配置有效时启用。不要同时启用 A 与 B。完整配置与安装条件见 ../../source/cushion-wars/cushion-wars-b/README.md。\n',encoding='utf-8')
+    pack_datapack(MC/'cushion-wars/cushion-wars-a/src/round-a',stage/'cushion-wars/cushion-wars-a/datapacks/cushionwars-a.zip')
+    pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server/cw-entry',stage/'cushion-wars/cushion-wars-a/datapacks/cw-entry.zip')
     for name in ['cw-autoverify','cw-maptest']:
-        pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'cushion-wars/diagnostics/datapacks'/(name+'.zip'))
-    pack_datapack(MC/'cushion-wars/cushion-wars-a/prototypes/round-a-p0',stage/'cushion-wars/diagnostics/datapacks/cw-p0-probes.zip')
+        pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'cushion-wars/cushion-wars-a/diagnostics/datapacks'/(name+'.zip'))
+    pack_datapack(MC/'cushion-wars/cushion-wars-a/prototypes/round-a-p0',stage/'cushion-wars/cushion-wars-a/diagnostics/datapacks/cw-p0-probes.zip')
     pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server/cw-maps-menu',stage/'shared/datapacks/cw-maps-menu.zip')
     for name in ['mapctl','mcctl']: copy(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'shared/tools'/name,lf=True)
     copy(MC/'minigames/fetch-assets.py',stage/'minigames/fetch-assets.py')
@@ -122,13 +128,16 @@ def main():
     pins={'schemaVersion':1,'purpose':'Pinned resources for this release. Imported source provenance is in source/source-manifest.json.','mapUpstream':imported['mapUpstream']}
     (stage/'source-manifest.json').write_text(json.dumps(pins,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     probe=compile_probe(work);copy(probe,stage/'experiments/cross-era/plugins'/probe.name)
+    copy(combat,stage/'experiments/cross-era/plugins'/combat.name)
+    for example in ['combat-config.yml','ocm-config.yml']:
+        copy(MC/'cross-era-pvp/combat/examples'/example,stage/'experiments/cross-era/examples'/example)
     packs=MC/'cross-era-pvp/stage02/datapacks'
     for folder in sorted(packs.iterdir()):
         if folder.is_dir() and (folder/'pack.mcmeta').is_file(): pack_datapack(folder,stage/'experiments/cross-era/datapacks'/(folder.name+'.zip'))
-    (stage/'experiments/cross-era/README.md').write_text('研究与观察原型，默认不启用。这里提供阶段03观察探针和阶段02实验数据包，不代表已还原旧版战斗。仅在独立测试实例中按源码说明选择安装。OCM 完整参考源码、原许可及 Gradle 构建入口位于 ../../source/third-party/old-combat-mechanics/；本包不提供 OCM 组合 JAR。源码构建及第三方依赖声明按原工程维护。\n',encoding='utf-8')
+    (stage/'experiments/cross-era/README.md').write_text('研究与观察原型，默认不启用。新增阶段04 CrossEraCombat 管理插件，需要单独准备 OCM v2.8.0；配置示例仅供手动核对，不自动覆盖现有配置。阶段03探针和阶段02数据包继续保留。当前未完成真实战斗与原版对照，不代表已还原旧版战斗。按单实例、只启用当前地图插件的边界选择安装，详见 ../../source/cross-era-pvp/combat/README.md。OCM 完整参考源码、原许可及构建入口位于 ../../source/third-party/old-combat-mechanics/；本包不提供 OCM 组合 JAR。\n',encoding='utf-8')
     for source,name in [(ROOT/'LICENSE','CaorenCup-MIT.txt'),(MC/'third-party/old-combat-mechanics/LICENCE','OldCombatMechanics-MPL-2.0.txt'),(MC/'minigames/source/LISENCE','MapMiniGames-LICENSE.txt'),(MC/'third-party/gradle-wrapper-LICENSE.txt','Gradle-Wrapper-LICENSE.txt')]: copy(source,stage/'licenses'/name)
     (stage/'SOURCE.md').write_text('对应源码：https://github.com/GrassBl0ck/caoren-cup/tree/'+args.version+'/mc\n本包 source/ 同时保留全部收录源码及第三方原许可。自研 MIT 不覆盖第三方组件。\n',encoding='utf-8')
-    provenance={'java':25,'paperApi':'26.3','experimentalDefaultEnabled':False,'sourceFiles':len(selected),'mapUpstream':imported['mapUpstream'],'cushionJarSha256':digest(cushion.read_bytes()),'probeJarSha256':digest(probe.read_bytes()),'ocmBuild':'Complete reference source and Gradle build entry; no bundled shaded OCM binary'}
+    provenance={'java':25,'paperApi':'26.3','experimentalDefaultEnabled':False,'sourceFiles':len(selected),'mapUpstream':imported['mapUpstream'],'cushionJarSha256':digest(cushion.read_bytes()),'realtimeJarSha256':digest(realtime.read_bytes()),'combatJarSha256':digest(combat.read_bytes()),'probeJarSha256':digest(probe.read_bytes()),'ocmBuild':'Complete reference source and Gradle build entry; no bundled shaded OCM binary'}
     write_bundle(stage,output,args.version,provenance)
     print(json.dumps({'path':str(output),'sha256':digest(output.read_bytes()),'sourceFiles':len(selected),'experimentalDefaultEnabled':False},ensure_ascii=False))
 
