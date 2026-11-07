@@ -292,8 +292,8 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
 
         Server.ExecuteCommand("gamemode ability");
         Server.ExecuteCommand("gamemode start");
-        if (player is not null) CaorenCupChat.PrintToChat(player, "已选择 Ability，正在进入 Warmup。");
-        else Console.WriteLine("[草人杯] Ability selected; entering Warmup.");
+        if (player is not null) CaorenCupChat.PrintToChat(player, "已请求选择并启动异能模式，实际结果请看模式通知。");
+        else CaorenCupChat.PrintToConsole("已请求选择并启动异能模式，实际结果请看模式通知。");
     }
 
     private void OnAssignCommand(CCSPlayerController? player, CommandInfo info)
@@ -330,14 +330,16 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             return;
         }
 
-        Reply(player, $"已为 {target.PlayerName} 分配职业 {abilityId}。{SeatSyncHint()}");
+        var catalog = AbilityDefinitionCatalog.CreateProduction();
+        var roleName = catalog.TryGet(abilityId, out var definition) ? definition.Name : abilityId;
+        CaorenCupChat.PrintToChatAll($"{target.PlayerName} 的异能职业已设为 {roleName}。{SeatSyncHint()}");
         if (target.IsBot)
             Reply(player, $"注意：bot 按名字识别（{AbilityIdentity.KeyFor(target)}），同名 bot 会被视为同一身份。");
     }
 
     /// <summary>运行时进行中时的席位同步提示（分配不会当场生效）。</summary>
     private string SeatSyncHint() =>
-        _adapter.IsRuntimeRunning ? "异能模式已在进行，将在下一回合开始时生效。" : string.Empty;
+        _adapter.IsRuntimeRunning ? "将在下一回合开始时生效。" : "将在下次异能模式启动时生效。";
 
     /// <summary>玩家自查当前异能职业；绿色消息，仅执行者本人可见。</summary>
     private void OnMyRoleCommand(CCSPlayerController? player, CommandInfo info)
@@ -401,9 +403,8 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
         }
 
         var removed = RemoveAssignment(AbilityIdentity.KeyFor(target));
-        Reply(player, removed
-            ? $"已清除 {target.PlayerName} 的异能职业分配。{SeatSyncHint()}"
-            : $"{target.PlayerName} 当前没有异能职业分配。");
+        if (removed) CaorenCupChat.PrintToChatAll($"已清除 {target.PlayerName} 的异能职业分配。{SeatSyncHint()}");
+        else Reply(player, $"{target.PlayerName} 当前没有异能职业分配。");
     }
 
     private void OnClearCommand(CCSPlayerController? player, CommandInfo info)
@@ -414,14 +415,16 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             return;
         }
 
+        var count = Assignments.Count;
         ClearAssignments();
-        Reply(player, $"已清空所有异能职业分配。{SeatSyncHint()}");
+        if (count > 0) CaorenCupChat.PrintToChatAll($"已清空所有异能职业分配（共 {count} 条）。{SeatSyncHint()}");
+        else Reply(player, "当前没有异能职业分配，无需清空。");
     }
 
     private static void Reply(CCSPlayerController? player, string message)
     {
         if (player is not null) CaorenCupChat.PrintToChat(player, message);
-        else Console.WriteLine($"[草人杯] {message}");
+        else CaorenCup.Contracts.CaorenCupChat.PrintToConsole(message);
     }
 
     /// <summary>解析分配目标；允许 bot，按名字或 #userId 匹配。同名 bot 取第一个。</summary>

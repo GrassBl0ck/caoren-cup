@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -60,15 +60,15 @@ public class KillHealFeature : ICaorenFeature
                 }
                 else
                 {
-                    player.PrintToConsole("========== [草人杯] 击杀状态变更 (KillHeal) ==========");
-                    player.PrintToConsole($"当前状态: {GetStatusInfo()}");
-                    player.PrintToConsole("用法: css_kh <t/ct/all/vip/0> [变动数值]");
-                    player.PrintToConsole("  输入 0 直接禁用此模块。");
-                    player.PrintToConsole("  变动数值: 可为正数(回血)或负数(扣血)，默认 25。");
-                    player.PrintToConsole("  血量上下限: 统一使用 css_hpcap <min> <max> 设置。");
-                    player.PrintToConsole("范例1: css_hpcap 1 200；css_kh t 50 (T方每次击杀回50，最多到200血)");
-                    player.PrintToConsole("范例2: css_hpcap 10 100；css_kh all -10 (所有人击杀反而扣10血，最低扣到10血)");
-                    player.PrintToConsole("======================================================");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "========== [草人杯] 击杀状态变更 (KillHeal) ==========");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, $"当前状态: {GetStatusInfo()}");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "用法: css_kh <t/ct/all/vip/0> [变动数值]");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  输入 0 直接禁用此模块。");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  变动数值: 可为正数(回血)或负数(扣血)，默认 25。");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  血量上下限: 统一使用 css_hpcap <min> <max> 设置。");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例1: css_hpcap 1 200；css_kh t 50 (T方每次击杀回50，最多到200血)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例2: css_hpcap 10 100；css_kh all -10 (所有人击杀反而扣10血，最低扣到10血)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "======================================================");
                 }
             }
             return;
@@ -92,7 +92,7 @@ public class KillHealFeature : ICaorenFeature
 
         if (mode == -1)
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "参数错误: 目标必须是 t/ct/all/vip/0。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "参数错误: 目标必须是 t/ct/all/vip/0。");
             return;
         }
 
@@ -100,7 +100,7 @@ public class KillHealFeature : ICaorenFeature
         int amount = _settings.HealAmount;
         if (info.ArgCount >= 3 && !CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), _settings.HealAmount, out amount))
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的变动数值。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的变动数值。");
             return;
         }
 

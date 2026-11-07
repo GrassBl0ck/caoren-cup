@@ -37,7 +37,7 @@ public sealed class CaorenCupConfigStore(string groupDirectory)
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CaorenCupCore] Legacy config read failed: {ex.Message}");
+                Console.WriteLine($"[草人杯] Legacy config read failed: {ex.Message}");
             }
         }
 
@@ -58,7 +58,7 @@ public sealed class CaorenCupConfigStore(string groupDirectory)
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CaorenCupCore] Module config read failed: {item.Path} | {ex.Message}");
+                Console.WriteLine($"[草人杯] Module config read failed: {item.Path} | {ex.Message}");
             }
         }
         EnsureConfigObjects();

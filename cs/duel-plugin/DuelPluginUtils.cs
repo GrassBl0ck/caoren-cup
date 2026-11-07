@@ -184,13 +184,13 @@ internal static class DuelPluginUtils
             .Trim();
 
     internal static string FormatPrivateChatMessage(string message) =>
-        $" {ChatColors.Green}[草人杯]{ChatColors.Default} {StripChatTag(message)}";
+        CaorenCup.Contracts.CaorenCupChat.FormatPrivateMessage(StripChatTag(message));
 
     internal static string FormatGlobalChatMessage(string message) =>
-        $" {ChatColors.Red}[草人杯]{ChatColors.Default} {StripChatTag(message)}";
+        CaorenCup.Contracts.CaorenCupChat.FormatGlobalMessage(StripChatTag(message));
 
     internal static void PrintToAllPlayers(string message) =>
-        Server.PrintToChatAll(FormatGlobalChatMessage(message));
+        CaorenCup.Contracts.CaorenCupChat.PrintToChatAll(StripChatTag(message));
 }
 
 internal sealed class PlayerEquipmentSnapshot

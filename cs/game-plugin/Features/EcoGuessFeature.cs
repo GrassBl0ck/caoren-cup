@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -76,10 +76,15 @@ public class EcoGuessFeature : ICaorenFeature
                 SetEnabled(false);
                 CaorenCupUtils.PrintToChatAll("\u0002已禁用\u0001 经济谛听模块。");
             }
+            else CaorenCup.Contracts.CaorenCupChat.Reply(player, "该操作需要游戏内管理员权限。");
             return;
         }
 
-        if (!_config.EcoGuess.Enabled) return;
+        if (!_config.EcoGuess.Enabled)
+        {
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "经济谛听模块当前未启用。");
+            return;
+        }
 
         if (player == null || !player.IsValid) return;
 

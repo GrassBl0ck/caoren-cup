@@ -22,7 +22,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         _personalSurface = new CustomHudMenuSurface("panorama/layout/custom_game/caoren_player_menu.xml");
         _preferences = new MenuPreferences(Path.Combine(ModuleDirectory, "data", "menu-user-preferences.json"), useCore: true);
         _playerCommands = CommandHelpCatalog.LoadPlayer();
-        Console.WriteLine("[CaorenCupInGameMenu] 玩家对局指令目录已加载：" + _playerCommands.Entries.Count + " 项（" + string.Join("、", _playerCommands.Entries.Select(entry => entry.Name)) + "）。");
+        Console.WriteLine("[草人杯] 玩家对局指令目录已加载：" + _playerCommands.Entries.Count + " 项（" + string.Join("、", _playerCommands.Entries.Select(entry => entry.Name)) + "）。");
         AddCommand("css_crcmenu", "打开普通玩家菜单", OnPersonalMenuCommand);
         AddCommand("css_cm", "打开普通玩家菜单", OnPersonalMenuCommand);
     }
@@ -31,7 +31,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         if (CaorenCup.Contracts.CaorenCupPreferencesAccess.TryGet() is not { } core) return;
         try { _preferences.EnsureImported(core); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
-        { Console.WriteLine("[CaorenCupInGameMenu] 个人偏好迁移停止，旧数据保留：" + ex.Message); }
+        { Console.WriteLine("[草人杯] 个人偏好迁移停止，旧数据保留：" + ex.Message); }
     }
     private void OnPersonalMenuCommand(CCSPlayerController? player, CommandInfo info)
     {

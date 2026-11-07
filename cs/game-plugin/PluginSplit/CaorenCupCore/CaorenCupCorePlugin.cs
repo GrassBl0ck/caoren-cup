@@ -36,7 +36,7 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CaorenCupCore] Fatal config load error; using defaults: {ex.Message}");
+                Console.WriteLine($"[草人杯] Fatal config load error; using defaults: {ex.Message}");
                 _configStore.UseDefaults();
             }
             CaorenCupCoreAccess.RetainRuntimeState(
@@ -52,7 +52,7 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
             (seconds, callback) => AddTimer(seconds, callback),
             command => CounterStrikeSharp.API.Server.ExecuteCommand(command),
             () => CounterStrikeSharp.API.Server.MapName,
-            message => Console.WriteLine($"[CaorenCupCore] {message}"));
+            message => CaorenCupChat.PrintToChatAll(message));
         CaorenCupCoreAccess.Publish(this);
         _preferences = new PlayerPreferenceStore(Path.Combine(ModuleDirectory, "data", "player-preferences.json"));
         CaorenCupPreferencesAccess.Publish(_preferences);
@@ -88,7 +88,7 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CaorenCupCore] Failed to save config: {ex.Message}");
+            Console.WriteLine($"[草人杯] Failed to save config: {ex.Message}");
         }
     }
 }

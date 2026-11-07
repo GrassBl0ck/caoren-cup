@@ -81,7 +81,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                 skipReset ? null : () => feature.SetEnabled(false)));
         }
 
-        Console.WriteLine($"[CaorenCup] FunCommands loaded. Config seed: {LegacyConfigPath}");
+        Console.WriteLine($"[草人杯] FunCommands loaded. Config seed: {LegacyConfigPath}");
     }
 
     public override void Unload(bool hotReload)

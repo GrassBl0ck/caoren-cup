@@ -243,7 +243,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
                 // 原生事件仅发给本玩家，不依赖该玩家是否已安装菜单 VPK。
                 var audio = CaorenCup.Contracts.CaorenCupAudioAccess.Play("vote.started", [human]);
                 if (!audio.Success) Logger.LogWarning("Vote prompt sound failed: {Message}", audio.Message);
-                Chat(human.SteamID.ToString(), "新投票已开始，30 秒内输入 /crcvote 打开，或输入 /crcvote A（B/C/D）投票。");
+                CaorenCup.Contracts.CaorenCupChat.PrintToGroup([human], "新投票已开始，30 秒内输入 /crcvote 打开，或输入 /crcvote A（B/C/D）投票。");
             }
         }
         EnsureAdminMenu(player); SetAdminVoteView(player, AdminVoteView.Management);
@@ -398,8 +398,9 @@ public sealed partial class CaorenCupInGameMenuPlugin
         foreach (var player in VoteHumans())
         {
             RenderVoteNotice(player, true);
-            Chat(player.SteamID.ToString(), ResultHeadline(result) + "；/crcvote result 可查看完整结果。");
+
         }
+        CaorenCup.Contracts.CaorenCupChat.PrintToChatAll(ResultHeadline(result) + "；/crcvote result 可查看完整结果。");
         RaiseVoteCompleted(result);
     }
 

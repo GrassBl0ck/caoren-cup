@@ -62,11 +62,11 @@ public sealed partial class CaorenCupInGameMenuPlugin
         {
             var directory = Path.Combine(ModuleDirectory, "data", "player-stats");
             var path = PlayerStatsCsvExporter.Export(export, directory);
-            Console.WriteLine($"[CaorenCupInGameMenu] 正式比赛统计已导出：{path}");
+            Console.WriteLine($"[草人杯] 正式比赛统计已导出：{path}");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
-            Console.WriteLine($"[CaorenCupInGameMenu] 正式比赛统计导出失败：{ex.Message}");
+            Console.WriteLine($"[草人杯] 正式比赛统计导出失败：{ex.Message}");
         }
     }
 

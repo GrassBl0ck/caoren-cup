@@ -65,7 +65,7 @@ public class ModifierFeature : ICaorenFeature
         if (IsResetArg(action))
         {
             SetEnabled(false);
-            Reply(player, "Modifier 已恢复默认。");
+            Announce("Modifier 已恢复默认。");
             return;
         }
 
@@ -115,7 +115,7 @@ public class ModifierFeature : ICaorenFeature
         if (target == "0")
         {
             SetEnabled(false);
-            Reply(player, "Modifier 已恢复默认。");
+            Announce("Modifier 已恢复默认。");
             return;
         }
 
@@ -219,7 +219,7 @@ public class ModifierFeature : ICaorenFeature
 
     private static void Reply(CCSPlayerController? player, string message)
     {
-        if (player == null) Console.WriteLine($"[CaorenCup][Mod] {message}");
+        if (player == null) CaorenCup.Contracts.CaorenCupChat.PrintToConsole($"[Mod] {message}");
         else CaorenCupUtils.PrintToChat(player, message);
     }
 

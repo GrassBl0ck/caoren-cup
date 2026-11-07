@@ -1,3 +1,4 @@
+using CaorenCup.Contracts;
 using System.Diagnostics;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
@@ -90,14 +91,14 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
             player.SteamID);
         if (!steamId.HasValue)
         {
-            command.ReplyToCommand("[小游戏] Steam 身份尚未验证，请稍后重试。");
+            CaorenCupChat.Reply(player, "小游戏：Steam 身份尚未验证，请稍后重试。");
             return;
         }
 
         var slot = player.Slot;
         if (_manager.TryGet(slot, out _))
         {
-            command.ReplyToCommand("[小游戏] 你已经在进行一局游戏，请先按 Tab 退出。");
+            CaorenCupChat.Reply(player, "小游戏：你已经在进行一局游戏，请先按 Tab 退出。");
             return;
         }
 
@@ -140,7 +141,7 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
                 Logger.LogError(error, "启动玩家槽位 {Slot} 的俄罗斯方块时发生错误。", slot));
         if (!committed)
         {
-            command.ReplyToCommand("[小游戏] 当前游戏无法开始，请稍后再试。");
+            CaorenCupChat.Reply(player, "小游戏：当前游戏无法开始，请稍后再试。");
         }
     }
 
@@ -149,22 +150,22 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
     {
         if (_repository is null)
         {
-            command.ReplyToCommand("[小游戏] 排行榜尚未准备好。");
+            CaorenCupChat.Reply(player, "小游戏：排行榜尚未准备好。");
             return;
         }
 
         var top = _repository.GetTop(TetrisGameName, 10);
-        command.ReplyToCommand("[俄罗斯方块] 全服排行榜 Top 10");
+        CaorenCupChat.Reply(player, "俄罗斯方块：全服排行榜 Top 10");
         if (top.Count == 0)
         {
-            command.ReplyToCommand("暂无记录，完成一局后即可上榜。");
+            CaorenCupChat.Reply(player, "暂无记录，完成一局后即可上榜。");
         }
         else
         {
             for (var index = 0; index < top.Count; index++)
             {
                 var entry = top[index];
-                command.ReplyToCommand(
+                CaorenCupChat.Reply(player,
                     $"{index + 1}. {entry.PlayerName} - {entry.Score} 分 / {entry.Lines} 行 / Lv.{entry.Level}");
             }
         }
@@ -179,12 +180,12 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
             player.SteamID);
         if (!steamId.HasValue)
         {
-            command.ReplyToCommand("你的 Steam 身份尚未验证，暂时无法查询个人最佳。");
+            CaorenCupChat.Reply(player, "你的 Steam 身份尚未验证，暂时无法查询个人最佳。");
             return;
         }
 
         var best = _repository.GetPlayerBest(TetrisGameName, steamId.Value);
-        command.ReplyToCommand(
+        CaorenCupChat.Reply(player,
             best is null
                 ? "你的最佳成绩：暂无。输入 css_tetris 开始挑战。"
                 : $"你的最佳成绩：{best.Score} 分 / {best.Lines} 行 / Lv.{best.Level}");
@@ -192,13 +193,13 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
 
     [ConsoleCommand("css_tetrishelp", "查看俄罗斯方块操作说明")]
     public void OnTetrisHelpCommand(CCSPlayerController? player, CommandInfo command) =>
-        command.ReplyToCommand(
-            "[俄罗斯方块] A/D 移动，S 软降，Space 硬降，E 顺时针，R 逆时针/重开，W 暂存，Tab 退出。");
+        CaorenCupChat.Reply(player,
+            "俄罗斯方块：A/D 移动，S 软降，Space 硬降，E 顺时针，R 逆时针/重开，W 暂存，Tab 退出。");
 
     [ConsoleCommand("css_minigames", "查看小游戏列表")]
     public void OnMiniGamesCommand(CCSPlayerController? player, CommandInfo command) =>
-        command.ReplyToCommand(
-            "[小游戏] 当前可用：俄罗斯方块（css_tetris）。帮助：css_tetrishelp；排行榜：css_toptetris。");
+        CaorenCupChat.Reply(player,
+            "小游戏：当前可用：俄罗斯方块（css_tetris）。帮助：css_tetrishelp；排行榜：css_toptetris。");
 
     private TetrisGameOptions CreateGameOptions() =>
         new(
@@ -214,13 +215,13 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
     {
         if (player is null)
         {
-            command.ReplyToCommand("[小游戏] 该命令只能由游戏内玩家使用。");
+            CaorenCupChat.Reply(player, "小游戏：该命令只能由游戏内玩家使用。");
             return false;
         }
 
         if (!player.IsValid || player.IsBot)
         {
-            command.ReplyToCommand("[小游戏] 机器人无法开始小游戏。");
+            CaorenCupChat.Reply(player, "小游戏：机器人无法开始小游戏。");
             return false;
         }
 
@@ -336,9 +337,9 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
 
     private static void PrintControls(CCSPlayerController player)
     {
-        player.PrintToChat(
-            "[俄罗斯方块] A/D 移动｜S 软降｜Space 硬降｜E 顺时针｜R 逆时针/重开｜W 暂存｜Tab 退出");
-        player.PrintToChat("[俄罗斯方块] 输入 css_toptetris 查看排行榜。");
+        CaorenCupChat.PrintToChat(player,
+            "俄罗斯方块：A/D 移动｜S 软降｜Space 硬降｜E 顺时针｜R 逆时针/重开｜W 暂存｜Tab 退出");
+        CaorenCupChat.PrintToChat(player, "俄罗斯方块：输入 css_toptetris 查看排行榜。");
     }
 
     private sealed record RuntimeBinding(

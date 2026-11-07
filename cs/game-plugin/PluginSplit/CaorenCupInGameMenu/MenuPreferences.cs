@@ -34,7 +34,7 @@ public sealed class MenuPreferences
         {
             _readError = ex.Message;
             // 保留坏文件，避免个人偏好损坏导致整个菜单插件无法加载。
-            Console.WriteLine("[CaorenCup InGameMenu] 个人偏好读取失败，本次使用默认值；原文件未删除：" + ex.Message);
+            Console.WriteLine("[草人杯] 个人偏好读取失败，本次使用默认值；原文件未删除：" + ex.Message);
             return new();
         }
     }

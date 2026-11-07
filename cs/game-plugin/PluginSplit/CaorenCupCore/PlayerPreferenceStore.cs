@@ -25,7 +25,7 @@ public sealed class PlayerPreferenceStore : ICaorenCupPreferences
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             _values = new(); ReadError = ex.Message;
-            Console.WriteLine($"[CaorenCupCore] 偏好读取失败，原文件进入只读保护：{ex.Message}");
+            Console.WriteLine($"[草人杯] 偏好读取失败，原文件进入只读保护：{ex.Message}");
         }
     }
     public CaorenCupPreference Get(string steamId) => (_values.GetValueOrDefault(steamId) ?? new()).Clamp();

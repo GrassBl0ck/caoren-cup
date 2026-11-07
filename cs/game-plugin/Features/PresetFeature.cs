@@ -212,7 +212,7 @@ public class PresetFeature : ICaorenFeature
 
                 _plugin.ManagedCvars.ResetAll();
                 ExecuteResetBase();
-                CaorenCupUtils.PrintToChatAll($"{ChatColors.Green}[草人杯]{ChatColors.Default} 已执行 preset reset-base。");
+                CaorenCupUtils.PrintToChatAll($"{ChatColors.Green}[草人杯]{ChatColors.Default} 已下发 preset reset-base 恢复请求，实际结果以各模块提示为准。");
                 return;
             case "reload":
                 if (!HasPermission(player, "@css/root"))
@@ -352,7 +352,7 @@ public class PresetFeature : ICaorenFeature
         }
 
         ExecuteCommands(preset.Commands, preset.Name);
-        CaorenCupUtils.PrintToChatAll($"{ChatColors.Green}[草人杯]{ChatColors.Default} 已应用预设: {ChatColors.Green}{preset.Name}{ChatColors.Default} ({preset.Title})");
+        CaorenCupUtils.PrintToChatAll($"{ChatColors.Green}[草人杯]{ChatColors.Default} 已下发预设执行请求（实际结果以各模块提示为准）: {ChatColors.Green}{preset.Name}{ChatColors.Default} ({preset.Title})");
     }
 
     private void ExecuteResetBase()
@@ -369,7 +369,7 @@ public class PresetFeature : ICaorenFeature
 
             if (_settings.LogExecutedCommands)
             {
-                Console.WriteLine($"[CaorenCup][Preset] {source}: {trimmed}");
+                Console.WriteLine($"[草人杯][Preset] {source}: {trimmed}");
             }
 
             Server.ExecuteCommand(trimmed);
@@ -384,7 +384,7 @@ public class PresetFeature : ICaorenFeature
         string path = Path.Combine(_plugin.ConfigModulesDirectory, _settings.PresetFileName);
         if (!File.Exists(path))
         {
-            Console.WriteLine($"[CaorenCup][Preset] Preset file not found: {path}");
+            Console.WriteLine($"[草人杯][Preset] Preset file not found: {path}");
             _library = new PresetLibrary();
             return;
         }
@@ -400,12 +400,12 @@ public class PresetFeature : ICaorenFeature
                 _presets[preset.Name.Trim()] = preset.Normalize();
             }
 
-            Console.WriteLine($"[CaorenCup][Preset] Loaded {_presets.Count} presets from {path}");
+            Console.WriteLine($"[草人杯][Preset] Loaded {_presets.Count} presets from {path}");
         }
         catch (Exception ex)
         {
             _library = new PresetLibrary();
-            Console.WriteLine($"[CaorenCup][Preset] Failed to load presets: {ex.Message}");
+            Console.WriteLine($"[草人杯][Preset] Failed to load presets: {ex.Message}");
         }
     }
 
@@ -511,7 +511,7 @@ public class PresetFeature : ICaorenFeature
     {
         if (player == null)
         {
-            Console.WriteLine($"[CaorenCup][Preset] {message}");
+            CaorenCup.Contracts.CaorenCupChat.PrintToConsole($"[Preset] {message}");
         }
         else
         {

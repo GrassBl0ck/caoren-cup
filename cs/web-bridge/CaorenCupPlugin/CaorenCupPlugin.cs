@@ -253,7 +253,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         if (!IsRealPlayer(player))
         {
-            command.ReplyToCommand("[草人杯] 这条指令只能由玩家在游戏内执行。");
+            CaorenCupChat.PrintToConsole("这条指令只能由玩家在游戏内执行。");
             return;
         }
 
@@ -368,7 +368,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         if (!IsRealPlayer(player))
         {
-            command.ReplyToCommand("[草人杯] 这条指令只能由玩家在游戏内执行。");
+            CaorenCupChat.PrintToConsole("这条指令只能由玩家在游戏内执行。");
             return;
         }
 
@@ -430,7 +430,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (!ShouldPublishMatchTelemetry())
         {
             const string disabledMessage = "[草人杯] 游戏内独立单挑期间，网页比赛快照已禁用。";
-            if (player == null) command.ReplyToCommand($"[草人杯] {StripChatTag(disabledMessage)}");
+            if (player == null) CaorenCupChat.PrintToConsole(StripChatTag(disabledMessage));
             else ReplyToPlayer(player, disabledMessage);
             return;
         }
@@ -462,7 +462,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         if (!IsRealPlayer(player))
         {
-            command.ReplyToCommand("[草人杯] 这条指令只能由玩家在游戏内执行。");
+            CaorenCupChat.PrintToConsole("这条指令只能由玩家在游戏内执行。");
             return;
         }
 
@@ -486,7 +486,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         _lobbyRemindersEnabled = enabled;
-        ReplyToPlayer(player, $"[草人杯] 大厅验证提醒已{(enabled ? "开启" : "关闭")}。");
+        PrintToAllPlayers($"大厅验证提醒已{(enabled ? "开启" : "关闭")}。");
     }
 
     private string BuildNoticeMessage(CommandInfo command)
@@ -1271,7 +1271,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         _lastNoticeMissingTargets.Clear();
         targetLabel = target switch
         {
-            "all" => "全体玩家",
+            "all" => "本场网页名单中的在线玩家",
             "undercover" or "und" => "卧底玩家",
             "detective" or "det" => "侦探玩家",
             "task" or "nor" => "未确认任务玩家",
@@ -1327,11 +1327,10 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             if (!player.IsValid) return;
-            player.PrintToChat(FormatPrivateChatMessage("================ Notice ================"));
-            player.PrintToChat(FormatPrivateChatMessage($" {ChatColors.Red}[重要提醒]{ChatColors.Default} {ChatColors.Green}{targetLabel}{ChatColors.Default}"));
-            player.PrintToChat(FormatPrivateChatMessage($" {ChatColors.Yellow}{message}{ChatColors.Default}"));
+            CaorenCup.Contracts.CaorenCupChat.PrintToGroup([player],
+                $"[重要提醒] {targetLabel}\n{message}");
             var audio = CaorenCup.Contracts.CaorenCupAudioAccess.Play("bridge.notice", [player]);
-            if (!audio.Success) Console.WriteLine("[CaorenCupBridge] " + audio.Message);
+            if (!audio.Success) Console.WriteLine("[草人杯] " + audio.Message);
         });
     }
 
@@ -1839,7 +1838,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             if (_isUnloading) return;
             EnforceTeamAssignments();
-            PrintToAllPlayers($"网页强制分队已同步：{_teamAssignments.Count} 名玩家。");
+            PrintToAllPlayers($"强制分队已同步：{_teamAssignments.Count} 名玩家。");
         });
     }
 
@@ -1861,7 +1860,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         Server.NextFrame(() =>
         {
             if (_isUnloading) return;
-            PrintToAllPlayers("网页强制分队已解除。");
+            PrintToAllPlayers("强制分队已解除。");
         });
     }
 
@@ -1881,7 +1880,7 @@ public sealed class CaorenCupPlugin : BasePlugin
             {
                 _teamAssignmentBypass.Add(steamId);
                 player.ChangeTeam(targetTeam);
-                player.PrintToChat(FormatPrivateChatMessage($"已按网页分队将你调整到 {TeamLabel(targetTeam)}。"));
+                CaorenCupChat.PrintToChat(player, $"已按分队设置将你调整到 {TeamLabel(targetTeam)}。");
             }
             catch (Exception ex)
             {
@@ -1904,7 +1903,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         if (!IsTeamAssignmentActiveForCurrentRound()) return HookResult.Continue;
         if (!_teamAssignments.TryGetValue(steamId, out var targetTeam)) return HookResult.Continue;
 
-        player.PrintToChat(FormatPrivateChatMessage($"本局已按网页分队锁定，不能自行换边。你应在 {TeamLabel(targetTeam)}。"));
+        CaorenCupChat.PrintToChat(player, $"本局已按分队设置锁定，不能自行换边。你应在 {TeamLabel(targetTeam)}。");
         if (player.Team != targetTeam && player.TeamNum != (int)targetTeam)
         {
             Server.NextFrame(EnforceTeamAssignments);
@@ -2014,7 +2013,7 @@ public sealed class CaorenCupPlugin : BasePlugin
                     if (!BridgeServerCommandPolicy.ShouldBroadcast(serverCommand)) return;
                     try
                     {
-                        PrintToAllPlayers($"网页修改已下发：{label}");
+                        PrintToAllPlayers($"服务器修改请求已下发：{label}");
                     }
                     catch (Exception ex)
                     {
@@ -2251,20 +2250,20 @@ public sealed class CaorenCupPlugin : BasePlugin
         CaorenCupChat.FormatPrivateMessage(StripChatTag(message));
 
     internal static string FormatGlobalChatMessage(string message) =>
-        $" {ChatColors.Red}[草人杯]{ChatColors.Default} {StripChatTag(message)}";
+        CaorenCupChat.FormatGlobalMessage(StripChatTag(message));
 
     private static void PrintToAllPlayers(string message) =>
-        Server.PrintToChatAll(FormatGlobalChatMessage(message));
+        CaorenCupChat.PrintToChatAll(StripChatTag(message));
 
     private void ReplyToPlayer(CCSPlayerController? player, string message)
     {
-        if (player == null) return;
+        if (player == null) { CaorenCupChat.PrintToConsole(message); return; }
         Server.NextFrame(() =>
         {
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             try
             {
-                if (player.IsValid) player.PrintToChat(FormatPrivateChatMessage(message));
+                if (player.IsValid) CaorenCupChat.PrintToChat(player, StripChatTag(message));
             }
             catch (Exception ex)
             {

@@ -186,7 +186,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[CaorenCup] Invalid ability runtime command: {ex.Message}");
+            Console.WriteLine($"[草人杯] Invalid ability runtime command: {ex.Message}");
         }
     }
 
@@ -240,7 +240,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
         var result = Controller.HandleAsync(envelope).GetAwaiter().GetResult();
             if (!result.Ok)
             {
-                Console.WriteLine($"[CaorenCup] Ability runtime command rejected: {result.Code} {result.Message}");
+                Console.WriteLine($"[草人杯] Ability runtime command rejected: {result.Code} {result.Message}");
                 return;
             }
             if (expectedAction is "start" or "round_start" or "restore")

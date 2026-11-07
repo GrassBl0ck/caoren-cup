@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -214,7 +214,7 @@ public class AccuracyFeature : ICaorenFeature
         if (IsOffArg(target))
         {
             SetEnabled(false);
-            Reply(player, $"{ChatColors.LightRed}武器精准模块已关闭。{ChatColors.Default}");
+            CaorenCupUtils.PrintToChatAll("武器精准模块已关闭，已恢复模块托管的武器参数。");
             return;
         }
 
@@ -679,6 +679,6 @@ public class AccuracyFeature : ICaorenFeature
             return;
         }
 
-        Console.WriteLine(message);
+        CaorenCup.Contracts.CaorenCupChat.PrintToConsole(message);
     }
 }

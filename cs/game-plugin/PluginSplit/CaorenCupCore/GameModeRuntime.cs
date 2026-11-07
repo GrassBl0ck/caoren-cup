@@ -72,7 +72,9 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
             Error = null,
             Revision = _state.Revision + 1,
         };
-        return GameModeResult.Ok($"已选择模式：{provider.Descriptor.DisplayName}");
+        var message = $"已选择模式：{provider.Descriptor.DisplayName}，尚未启动。";
+        _notify(message);
+        return GameModeResult.Ok(message);
     }
 
     private static string NormalizeModeId(string? modeId) => modeId?.Trim().ToLowerInvariant() switch
@@ -101,7 +103,9 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
         if (!validation.Success) return validation;
 
         _overrides[definition.Name] = value;
-        return GameModeResult.Ok($"已设置 {definition.Name} = {value}");
+        var message = $"模式 {_activeProvider.Descriptor.DisplayName} 参数 {definition.Name} = {value}，将在模式启动时应用。";
+        _notify(message);
+        return GameModeResult.Ok(message);
     }
 
     public GameModeResult Start(string? mapName = null, int? warmupSeconds = null)
@@ -198,6 +202,7 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
         if (!result.Success)
         {
             Fail(result.Message);
+            _notify("模式进入正式比赛失败，已进入错误状态并恢复托管参数，请管理员检查日志。");
             return;
         }
 

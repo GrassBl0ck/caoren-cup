@@ -17,6 +17,17 @@ public sealed class BridgeServerCommandPolicyTests
         Assert.Equal(expected, BridgeServerCommandPolicy.IsAllowed(command));
     }
 
+    [Theory]
+    [InlineData("css_fov t 120")]
+    [InlineData("CSS_DJ all 2 300 true")]
+    [InlineData("reset_plu")]
+    [InlineData("css_hpcap 1 150")]
+    public void Managed_command_results_are_announced_by_the_module_without_a_bridge_duplicate(string command)
+    {
+        Assert.True(BridgeServerCommandPolicy.IsAllowed(command));
+        Assert.False(BridgeServerCommandPolicy.ShouldBroadcast(command));
+    }
+
     [Fact]
     public void CosmeticRefreshDoesNotBroadcastPrivatePlayerChangeToAllPlayers()
     {

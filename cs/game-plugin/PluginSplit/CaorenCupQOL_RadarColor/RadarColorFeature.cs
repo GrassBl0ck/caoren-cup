@@ -23,6 +23,8 @@ public sealed class CaorenCupRadarColorPlugin : BasePlugin
 
     private readonly Dictionary<string, int?> _schemaOffsetCache = new();
     private bool _warnedSchemaUnavailable;
+    private int _lastApplied;
+    private int _lastFailed;
 
     public override void Load(bool hotReload)
     {
@@ -59,12 +61,12 @@ public sealed class CaorenCupRadarColorPlugin : BasePlugin
             case "on":
             case "enable":
                 ApplyAllRadarColors();
-                Reply(player, "小地图/头像框颜色修复已常开，并已重新分配颜色。");
+                ReportApplication(player);
                 break;
             case "apply":
             case "fix":
                 ApplyAllRadarColors();
-                Reply(player, "已重新分配当前玩家的小地图/头像框颜色。");
+                ReportApplication(player);
                 break;
             case "status":
                 Reply(player, "小地图/头像框颜色修复：代码常开，无法通过指令关闭。");
@@ -91,6 +93,8 @@ public sealed class CaorenCupRadarColorPlugin : BasePlugin
 
     private void ApplyAllRadarColors()
     {
+        _lastApplied = 0;
+        _lastFailed = 0;
         ApplyTeamColors((byte)CsTeam.CounterTerrorist);
         ApplyTeamColors((byte)CsTeam.Terrorist);
     }
@@ -107,7 +111,8 @@ public sealed class CaorenCupRadarColorPlugin : BasePlugin
         for (int i = 0; i < players.Count; i++)
         {
             int color = ColorOrder[i % ColorOrder.Length];
-            TrySetRadarColor(players[i], color);
+            if (TrySetRadarColor(players[i], color)) _lastApplied++;
+            else _lastFailed++;
         }
     }
 
@@ -187,7 +192,14 @@ public sealed class CaorenCupRadarColorPlugin : BasePlugin
     {
         if (_warnedSchemaUnavailable) return;
         _warnedSchemaUnavailable = true;
-        Console.WriteLine($"[CaorenCup] RadarColor: schema field {SchemaClass}.{ColorField} is unavailable; teammate colors were not changed.");
+        Console.WriteLine($"[草人杯] RadarColor: schema field {SchemaClass}.{ColorField} is unavailable; teammate colors were not changed.");
+    }
+
+    private void ReportApplication(CCSPlayerController? player)
+    {
+        if (_lastApplied > 0)
+            CaorenCupChat.PrintToChatAll($"小地图/头像框颜色写入：成功 {_lastApplied} 名，未成功 {_lastFailed} 名。");
+        else Reply(player, _lastFailed > 0 ? "颜色写入失败，请管理员检查日志。" : "当前没有可重新分配颜色的玩家。");
     }
 
     private void Reply(CCSPlayerController? player, string message)
@@ -195,7 +207,7 @@ public sealed class CaorenCupRadarColorPlugin : BasePlugin
         if (player != null && player.IsValid)
             PrintToChat(player, message);
         else
-            Console.WriteLine($"[CaorenCup] RadarColor: {message}");
+            Console.WriteLine($"[草人杯] RadarColor: {message}");
     }
 
     public string GetHelpEntry()
@@ -223,6 +235,6 @@ public sealed class CaorenCupRadarColorPlugin : BasePlugin
     {
         if (!player.IsValid) return;
         string body = message.Replace("[草人杯]", string.Empty, StringComparison.Ordinal).Trim();
-        player.PrintToChat($" {ChatColors.Green}[草人杯]{ChatColors.Default} {body}");
+        CaorenCupChat.PrintToChat(player, body);
     }
 }

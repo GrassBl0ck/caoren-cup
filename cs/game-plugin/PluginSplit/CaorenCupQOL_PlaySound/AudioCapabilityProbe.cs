@@ -416,10 +416,10 @@ public sealed partial class CaorenCupPlaySoundPlugin
             GroupVoices = _audioGroupVoices.Count, LastAppliedMenuVolume = _audioProbeLastMenuVolume,
             ProbeRevision = "menu-volume-v1" });
     }
-    private static void ProbeLog(string action, object data) => Console.WriteLine("[CaorenAudioProbe] " + action + " " + JsonSerializer.Serialize(data));
+    private static void ProbeLog(string action, object data) => Console.WriteLine("[草人杯][音频探测] " + action + " " + JsonSerializer.Serialize(data));
     private static void ProbeReply(CCSPlayerController? player, string message)
     {
-        if (player == null) Console.WriteLine("[CaorenAudioProbe] " + message);
+        if (player == null) Console.WriteLine("[草人杯][音频探测] " + message);
         else CaorenCupChat.PrintToChat(player, message);
     }
 }

@@ -282,8 +282,8 @@ public sealed class HeadSizeTests
         Assert.Contains("AdminManager.PlayerHasPermissions(player, \"@css/root\")", handler);
         Assert.True(handler.IndexOf("PlayerHasPermissions", StringComparison.Ordinal) < handler.IndexOf("_runtime.Execute", StringComparison.Ordinal));
         Assert.DoesNotContain("ReplyToCommand(", handler);
-        Assert.Contains("CaorenCupUtils.PrintToChat(player, message)", source);
-        Assert.Contains("command.ReplyToCommand($\"{CaorenCupUtils.Tag} {message}\")", source);
+        Assert.Contains("CaorenCup.Contracts.CaorenCupChat.Reply(player, message)", source);
+        Assert.Contains("CaorenCupUtils.PrintToChatAll", source);
         Assert.Contains("RegisterListener<Listeners.OnServerPostEntityThink>(OnTick)", source);
         Assert.Contains("new HeadSizeFeature()", File.ReadAllText(Path.Combine(root, "CaorenCupPlugin.cs")));
     }

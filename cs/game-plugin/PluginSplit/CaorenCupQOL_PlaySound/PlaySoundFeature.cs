@@ -52,7 +52,7 @@ public sealed partial class CaorenCupPlaySoundPlugin : BasePlugin
         catch (Exception ex)
         {
             _nativeAudio?.StopAll(); _nativeAudio = null; _audioAssets = null;
-            Console.WriteLine("[CaorenCupPlaySound] 自定义清单无效，保留原文件，仅加载内置音频：" + ex.Message);
+            Console.WriteLine("[草人杯] 自定义清单无效，保留原文件，仅加载内置音频：" + ex.Message);
             _audio = new CaorenAudioService();
         }
         CaorenCupAudioAccess.Publish(_audio);
@@ -97,8 +97,8 @@ public sealed partial class CaorenCupPlaySoundPlugin : BasePlugin
             result = control != null ? _audio.Control(channel, control.Value) : new(false, "未知控制操作。");
         }
         else result = new(false, "用法：/caudio status；/caudio play <事件ID>；/caudio pause|resume|stop|loopon|loopoff music|broadcast。影响范围：全服。");
-        if (player == null) Console.WriteLine("[CaorenCupAudio] " + result.Message);
-        else CaorenCupChat.PrintToChat(player, result.Message);
+        if (result.Success && operation != "status") CaorenCupChat.PrintToChatAll($"全服音频 {operation}：{result.Message}");
+        else CaorenCupChat.Reply(player, result.Message);
     }
 
     private void SetEnabled(bool enabled)
@@ -129,14 +129,14 @@ public sealed partial class CaorenCupPlaySoundPlugin : BasePlugin
                 }
                 else
                 {
-                    player.PrintToConsole("========== [草人杯] 全服音效广播 ==========");
-                    player.PrintToConsole($"当前状态: {GetStatusInfo()}");
-                    player.PrintToConsole("用法: css_ps <文件名/别名/完整路径>");
-                    player.PrintToConsole($"  默认前缀: {(_settings.DefaultPrefix == "" ? "无" : _settings.DefaultPrefix)}");
-                    player.PrintToConsole("  可用别名: " + string.Join(", ", _settings.Aliases.Keys));
-                    player.PrintToConsole("范例1(别名): css_ps win");
-                    player.PrintToConsole("范例2(自动补全): css_ps test (将自动补全前缀和 .vsnd_c 后缀)");
-                    player.PrintToConsole("==========================================");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "========== [草人杯] 全服音效广播 ==========");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, $"当前状态: {GetStatusInfo()}");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "用法: css_ps <文件名/别名/完整路径>");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, $"  默认前缀: {(_settings.DefaultPrefix == "" ? "无" : _settings.DefaultPrefix)}");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  可用别名: " + string.Join(", ", _settings.Aliases.Keys));
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例1(别名): css_ps win");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例2(自动补全): css_ps test (将自动补全前缀和 .vsnd_c 后缀)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "==========================================");
                 }
             }
             return;
@@ -192,15 +192,8 @@ public sealed partial class CaorenCupPlaySoundPlugin : BasePlugin
         // ------------------------
 
         var result = _audio?.PlayLegacyBroadcast(soundPath) ?? new CaorenAudioResult(false, "音频服务尚未加载。");
-        if (player == null) Console.WriteLine("[草人杯] " + result.Message);
-
-        if (player != null)
-        {
-            if (isChatCommand)
-                CaorenCupChat.PrintToChat(player, result.Message);
-            else
-                player.PrintToConsole($"[草人杯] {result.Message}");
-        }
+        if (result.Success) CaorenCupChat.PrintToChatAll($"全服音效播放：{result.Message}");
+        else CaorenCupChat.Reply(player, result.Message);
     }
 
     // --- 接口实现 ---

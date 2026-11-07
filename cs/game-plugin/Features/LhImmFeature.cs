@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -677,7 +677,7 @@ public class LhImmFeature : ICaorenFeature
         if (player != null && player.IsValid)
             CaorenCupUtils.PrintToChat(player, message);
         else
-            Console.WriteLine($"[草人杯] {message}");
+            CaorenCup.Contracts.CaorenCupChat.PrintToConsole(message);
     }
 
     public string GetHelpEntry()

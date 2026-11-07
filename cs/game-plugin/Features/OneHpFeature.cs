@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -100,19 +100,19 @@ public class OneHpFeature : ICaorenFeature
         {
             SetEnabled(false);
             string msg = "已 \u0002禁用\u0001 秽土转生模块。";
-            if (player != null) CaorenCupUtils.PrintToChatAll(msg); else Console.WriteLine(msg);
+            CaorenCupUtils.PrintToChatAll(msg);
             return;
         }
 
         if (targetArg != "t" && targetArg != "ct" && targetArg != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效阵营，请使用 \u0004t\u0001, \u0004ct\u0001, \u0004all\u0001，或使用 \u00040\u0001 禁用。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效阵营，请使用 \u0004t\u0001, \u0004ct\u0001, \u0004all\u0001，或使用 \u00040\u0001 禁用。");
             return;
         }
 
         if (argCount < 3 || !CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), _config.OneHp.Mode, out int mode) || mode < 1 || mode > 2)
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "模式代码错误，请使用 1 (转生) 或 2 (自爆)。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "模式代码错误，请使用 1 (转生) 或 2 (自爆)。");
             return;
         }
 

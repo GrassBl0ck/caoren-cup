@@ -66,7 +66,7 @@ public class LoadoutFeature : ICaorenFeature
         if (IsResetArg(action))
         {
             SetEnabled(false);
-            Reply(player, "Loadout 已恢复默认。");
+            Announce("Loadout 已恢复默认。");
             return;
         }
 
@@ -111,7 +111,7 @@ public class LoadoutFeature : ICaorenFeature
         if (target == "0")
         {
             SetEnabled(false);
-            Reply(player, "Loadout 已恢复默认。");
+            Announce("Loadout 已恢复默认。");
             return;
         }
 
@@ -152,7 +152,7 @@ public class LoadoutFeature : ICaorenFeature
         if (target == "0")
         {
             SetEnabled(false);
-            Reply(player, "Loadout 已恢复默认。");
+            Announce("Loadout 已恢复默认。");
             return;
         }
 
@@ -181,7 +181,7 @@ public class LoadoutFeature : ICaorenFeature
         if (target == "0")
         {
             SetEnabled(false);
-            Reply(player, "Loadout 已恢复默认。");
+            Announce("Loadout 已恢复默认。");
             return;
         }
 
@@ -253,7 +253,7 @@ public class LoadoutFeature : ICaorenFeature
         if (target == "0")
         {
             SetEnabled(false);
-            Reply(player, "Loadout 已恢复默认。");
+            Announce("Loadout 已恢复默认。");
             return;
         }
 
@@ -349,7 +349,7 @@ public class LoadoutFeature : ICaorenFeature
 
     private static void Reply(CCSPlayerController? player, string message)
     {
-        if (player == null) Console.WriteLine($"[CaorenCup][Loadout] {message}");
+        if (player == null) CaorenCup.Contracts.CaorenCupChat.PrintToConsole($"[Loadout] {message}");
         else CaorenCupUtils.PrintToChat(player, message);
     }
 

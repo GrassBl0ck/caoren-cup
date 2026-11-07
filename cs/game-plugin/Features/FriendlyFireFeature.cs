@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -77,19 +77,19 @@ public class FriendlyFireFeature : ICaorenFeature
         string target = arg1;
         if (target != "t" && target != "ct" && target != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的阵营，请使用 t, ct 或 all。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的阵营，请使用 t, ct 或 all。");
             return;
         }
 
         if (!float.TryParse(info.GetArg(2), out float multiplier))
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的倍数数值。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的倍数数值。");
             return;
         }
 
         if (!int.TryParse(info.GetArg(3), out int allowKillInt) || (allowKillInt != 0 && allowKillInt != 1))
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的保护参数，只能输入 1(允许击杀) 或 0(禁止击杀留1血)。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的保护参数，只能输入 1(允许击杀) 或 0(禁止击杀留1血)。");
             return;
         }
 

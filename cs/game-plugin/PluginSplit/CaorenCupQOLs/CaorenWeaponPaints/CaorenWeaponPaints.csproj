@@ -27,4 +27,7 @@
     <Content Include="README.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="UPSTREAM.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../CaorenCupContracts/CaorenCupChat.cs" Link="Shared/CaorenCupChat.cs" />
+  </ItemGroup>
 </Project>

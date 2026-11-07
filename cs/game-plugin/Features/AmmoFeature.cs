@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -70,13 +70,13 @@ public class AmmoFeature : ICaorenFeature
         {
             SetEnabled(false);
             string msg = "已 \u0002禁用\u0001 无中生有(弹药)模块。";
-            if (player != null) CaorenCupUtils.PrintToChatAll(msg); else Console.WriteLine(msg);
+            CaorenCupUtils.PrintToChatAll(msg);
             return;
         }
 
         if (targetArg != "t" && targetArg != "ct" && targetArg != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效阵营，请使用 \u0004t\u0001, \u0004ct\u0001, \u0004all\u0001，或使用 \u00040\u0001 禁用。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效阵营，请使用 \u0004t\u0001, \u0004ct\u0001, \u0004all\u0001，或使用 \u00040\u0001 禁用。");
             return;
         }
 

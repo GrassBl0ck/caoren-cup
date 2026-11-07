@@ -26,7 +26,9 @@ public sealed partial class CaorenCupInGameMenuPlugin
             var ids = _audioMenuIds.GetValueOrDefault(sid) ?? [];
             if (slot >= 0 && slot < ids.Length)
             {
-                var result = service.Play(ids[slot]); Chat(sid, result.Message);
+                var result = service.Play(ids[slot]);
+                if (result.Success) CaorenCupChat.PrintToChatAll($"全服音频播放：{result.Message}");
+                else Chat(sid, result.Message);
                 RenderAudioMenu(player);
             }
             return true;
@@ -39,7 +41,12 @@ public sealed partial class CaorenCupInGameMenuPlugin
             "resume" => CaorenAudioControl.Resume, "stop" => CaorenAudioControl.Stop, "loop" => CaorenAudioControl.LoopOn, _ => null };
         if (parts[2] == "loop" && service is ICaorenCupAudioStatus status
             && status.GetChannels().FirstOrDefault(s => s.Channel == channel)?.LoopEnabled == true) operation = CaorenAudioControl.LoopOff;
-        if (operation != null) Chat(sid, service.Control(channel, operation.Value).Message);
+        if (operation != null)
+        {
+            var result = service.Control(channel, operation.Value);
+            if (result.Success) CaorenCupChat.PrintToChatAll($"全服音频 {channel} {operation}：{result.Message}");
+            else Chat(sid, result.Message);
+        }
         RenderAudioMenu(player);
         return true;
     }

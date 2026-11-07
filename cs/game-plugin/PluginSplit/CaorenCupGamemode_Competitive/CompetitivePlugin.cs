@@ -50,7 +50,7 @@ public sealed class CaorenCupCompetitivePlugin : BasePlugin
         if (player is not null)
             CaorenCupChat.PrintToChat(player, "已选择 Competitive，正在进入 Warmup。");
         else
-            Console.WriteLine("[CaorenCup] Competitive selected; entering Warmup.");
+            Console.WriteLine("[草人杯] Competitive selected; entering Warmup.");
     }
 }
 

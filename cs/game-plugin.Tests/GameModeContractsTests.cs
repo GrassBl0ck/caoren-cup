@@ -3,6 +3,7 @@ using Xunit;
 
 namespace CaorenCup.GamePlugin.Tests;
 
+[Collection("Game mode state")]
 public sealed class GameModeContractsTests
 {
     [Fact]

@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Events;
@@ -86,7 +86,7 @@ public class SmokeFeature : ICaorenFeature
         string target = arg1;
         if (target != "t" && target != "ct" && target != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的阵营，请使用 t, ct 或 all。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的阵营，请使用 t, ct 或 all。");
             return;
         }
 
@@ -99,7 +99,7 @@ public class SmokeFeature : ICaorenFeature
         // 解析血量变动 (正数回血，负数扣血)
         if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), _settings.HealthChangePerSecond, out int hpChange))
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的血量变化数值。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的血量变化数值。");
             return;
         }
 

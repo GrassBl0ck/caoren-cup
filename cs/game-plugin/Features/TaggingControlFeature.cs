@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -61,15 +61,15 @@ public class TaggingControlFeature : ICaorenFeature
                 }
                 else
                 {
-                    player.PrintToConsole("========== [草人杯] 受击速度管理 (Tagging) ==========");
-                    player.PrintToConsole($"当前状态: {GetStatusInfo()}");
-                    player.PrintToConsole("用法: css_tag <目标/0> <倍率/df>");
-                    player.PrintToConsole("  输入 0 直接禁用此模块。");
-                    player.PrintToConsole("  目标: t, ct, all");
-                    player.PrintToConsole("  倍率: 0.0(定身) 到 1.0(无减速)，输入 df 恢复官方默认减速。");
-                    player.PrintToConsole("范例1: css_tag t 1.0 (T方被击中时完全不减速)");
-                    player.PrintToConsole("范例2: css_tag ct df (CT方恢复官方受击减速)");
-                    player.PrintToConsole("======================================================");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "========== [草人杯] 受击速度管理 (Tagging) ==========");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, $"当前状态: {GetStatusInfo()}");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "用法: css_tag <目标/0> <倍率/df>");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  输入 0 直接禁用此模块。");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  目标: t, ct, all");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  倍率: 0.0(定身) 到 1.0(无减速)，输入 df 恢复官方默认减速。");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例1: css_tag t 1.0 (T方被击中时完全不减速)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例2: css_tag ct df (CT方恢复官方受击减速)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "======================================================");
                 }
             }
             return;
@@ -89,7 +89,7 @@ public class TaggingControlFeature : ICaorenFeature
         {
             if (info.ArgCount < 3)
             {
-                if (player != null) CaorenCupUtils.PrintToChat(player, "参数不足，请指定数值 (0.0~1.0) 或 df。");
+                CaorenCup.Contracts.CaorenCupChat.Reply(player, "参数不足，请指定数值 (0.0~1.0) 或 df。");
                 return;
             }
 
@@ -107,7 +107,7 @@ public class TaggingControlFeature : ICaorenFeature
             }
             else
             {
-                if (player != null) CaorenCupUtils.PrintToChat(player, "数值错误，请输入 0.0~1.0 之间的数字，或 df。");
+                CaorenCup.Contracts.CaorenCupChat.Reply(player, "数值错误，请输入 0.0~1.0 之间的数字，或 df。");
                 return;
             }
 
@@ -126,7 +126,7 @@ public class TaggingControlFeature : ICaorenFeature
         }
         else
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "目标错误，请使用 t / ct / all / 0。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "目标错误，请使用 t / ct / all / 0。");
         }
     }
 

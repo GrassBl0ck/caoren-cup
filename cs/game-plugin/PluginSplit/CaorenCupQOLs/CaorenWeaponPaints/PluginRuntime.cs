@@ -197,11 +197,11 @@ public partial class CaorenWeaponPaintsPlugin
         {
             if (player is not null && !HasAdminPermission(player))
             {
-                info.ReplyToCommand(ChatMessageFormatter.Private("只有管理员可以查看健康状态。", Config.Prefix));
+                ChatMessageFormatter.Reply(player, "只有管理员可以查看健康状态。", Config.Prefix);
                 return;
             }
 
-            info.ReplyToCommand(ChatMessageFormatter.Private(CurrentHealth().ToChineseSummary(), Config.Prefix));
+            ChatMessageFormatter.Reply(player, CurrentHealth().ToChineseSummary(), Config.Prefix);
         });
     }
 
@@ -281,14 +281,14 @@ public partial class CaorenWeaponPaintsPlugin
     {
         if (caller is not null && !HasAdminPermission(caller))
         {
-            info.ReplyToCommand(ChatMessageFormatter.Private("权限不足。", Config.Prefix));
+            ChatMessageFormatter.Reply(caller, "权限不足。", Config.Prefix);
             return;
         }
 
         var target = info.ArgCount > 1 ? info.GetArg(1) : string.Empty;
         if (string.IsNullOrWhiteSpace(target))
         {
-            info.ReplyToCommand(ChatMessageFormatter.Private("用法：wp_refresh <SteamID64|all>", Config.Prefix));
+            ChatMessageFormatter.Reply(caller, "用法：wp_refresh <SteamID64|all>", Config.Prefix);
             return;
         }
 
@@ -301,23 +301,23 @@ public partial class CaorenWeaponPaintsPlugin
                 _ = ReloadAndRequestRefreshAsync(player, !safe);
             }
 
-            info.ReplyToCommand(ChatMessageFormatter.Private(safe
+            ChatMessageFormatter.Reply(caller, safe
                 ? $"已请求安全重载 {players.Length} 名玩家；正式回合存活玩家将在下次出生应用。"
-                : $"已请求强制重载并刷新 {players.Length} 名玩家。", Config.Prefix));
+                : $"已请求强制重载并刷新 {players.Length} 名玩家。", Config.Prefix);
             return;
         }
 
         var found = players.FirstOrDefault(player => player.SteamID.ToString() == target);
         if (found is null)
         {
-            info.ReplyToCommand(ChatMessageFormatter.Private("未找到该 SteamID64 的在线玩家。", Config.Prefix));
+            ChatMessageFormatter.Reply(caller, "未找到该 SteamID64 的在线玩家。", Config.Prefix);
             return;
         }
 
         _ = ReloadAndRequestRefreshAsync(found, !safe);
-        info.ReplyToCommand(ChatMessageFormatter.Private(safe
+        ChatMessageFormatter.Reply(caller, safe
             ? $"已请求安全重载 {found.PlayerName}；正式回合存活时将在下次出生应用。"
-            : $"已请求强制重载并刷新 {found.PlayerName}。", Config.Prefix));
+            : $"已请求强制重载并刷新 {found.PlayerName}。", Config.Prefix);
     }
 
     private async Task ReloadAndRequestRefreshAsync(CCSPlayerController player, bool force)
@@ -707,7 +707,7 @@ public partial class CaorenWeaponPaintsPlugin
 
     private void Print(CCSPlayerController player, string message)
     {
-        player.PrintToChat(ChatMessageFormatter.Private(message, Config.Prefix));
+        ChatMessageFormatter.Reply(player, message, Config.Prefix);
     }
 
     private static void ClearSlot(int slot)

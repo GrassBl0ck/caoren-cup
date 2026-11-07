@@ -97,19 +97,19 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
 
             if (!IsSafeAliasKey(aliasKey))
             {
-                Console.WriteLine($"[CaorenCup][Alias] 跳过非法别名: '{kvp.Key}'。别名只能包含英文字母、数字和下划线。");
+                Console.WriteLine($"[草人杯][Alias] 跳过非法别名: '{kvp.Key}'。别名只能包含英文字母、数字和下划线。");
                 continue;
             }
 
             if (ReservedAliasNames.Contains(aliasKey))
             {
-                Console.WriteLine($"[CaorenCup][Alias] 跳过保留别名: '{aliasKey}'。");
+                Console.WriteLine($"[草人杯][Alias] 跳过保留别名: '{aliasKey}'。");
                 continue;
             }
 
             if (string.IsNullOrWhiteSpace(targetCommand))
             {
-                Console.WriteLine($"[CaorenCup][Alias] 跳过空目标命令: /{aliasKey}");
+                Console.WriteLine($"[草人杯][Alias] 跳过空目标命令: /{aliasKey}");
                 continue;
             }
 
@@ -117,7 +117,7 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
 
             if (_registeredAliasCommands.ContainsKey(registeredCommand))
             {
-                Console.WriteLine($"[CaorenCup][Alias] 跳过重复别名: /{aliasKey}");
+                Console.WriteLine($"[草人杯][Alias] 跳过重复别名: /{aliasKey}");
                 continue;
             }
 
@@ -136,12 +136,12 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
 
             if (LooksLikeChatCommand(targetCommand))
             {
-                Console.WriteLine($"[CaorenCup][Alias] 警告: /{aliasKey} 的目标命令像聊天指令，不像控制台命令: {targetCommand}");
-                Console.WriteLine($"[CaorenCup][Alias]      目标应写成 mp_pause_match、mp_unpause_match、css_xxx 等服务器控制台可执行命令。");
+                Console.WriteLine($"[草人杯][Alias] 警告: /{aliasKey} 的目标命令像聊天指令，不像控制台命令: {targetCommand}");
+                Console.WriteLine($"[草人杯][Alias]      目标应写成 mp_pause_match、mp_unpause_match、css_xxx 等服务器控制台可执行命令。");
             }
         }
 
-        Console.WriteLine($"[CaorenCup][Alias] 已注册 {_registeredAliasCommands.Count} 个聊天别名。");
+        Console.WriteLine($"[草人杯][Alias] 已注册 {_registeredAliasCommands.Count} 个聊天别名。");
     }
 
     private void UnregisterAliasCommands()
@@ -159,7 +159,7 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CaorenCup][Alias] 移除别名命令失败: {item.Key} | {ex.Message}");
+                Console.WriteLine($"[草人杯][Alias] 移除别名命令失败: {item.Key} | {ex.Message}");
             }
         }
 
@@ -170,24 +170,24 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
     {
         if (!_settings.Enabled)
         {
-            Reply(info, "Alias 模块当前已禁用。");
+            Reply(player, info, "Alias 模块当前已禁用。");
             return;
         }
 
         if (player != null && !HasAliasPermission(player))
         {
-            Reply(info, $"{ChatColors.Red}你没有权限执行此 Alias 指令。");
+            Reply(player, info, $"{ChatColors.Red}你没有权限执行此 Alias 指令。");
             return;
         }
 
         if (LooksLikeChatCommand(commandTemplate))
         {
             Reply(
-                info,
+                player, info,
                 $"{ChatColors.Red}Alias 配置错误：目标命令必须是服务器控制台命令，不能以 /、! 或 . 开头。请把 /{aliasKey} 的目标改成例如 mp_pause_match 或 css_xxx。"
             );
 
-            Console.WriteLine($"[CaorenCup][Alias] 已拒绝聊天风格目标命令: /{aliasKey} -> {commandTemplate}");
+            Console.WriteLine($"[草人杯][Alias] 已拒绝聊天风格目标命令: /{aliasKey} -> {commandTemplate}");
             return;
         }
 
@@ -195,14 +195,14 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
 
         if (string.IsNullOrWhiteSpace(finalCommand))
         {
-            Reply(info, $"{ChatColors.Red}Alias 配置错误：/{aliasKey} 最终生成的控制台命令为空。");
+            Reply(player, info, $"{ChatColors.Red}Alias 配置错误：/{aliasKey} 最终生成的控制台命令为空。");
             return;
         }
 
         if (usedArgsPlaceholder && ContainsCommandSeparator(info.ArgString))
         {
-            Reply(info, $"{ChatColors.Red}Alias 参数中包含不安全的命令分隔符，已拒绝执行。");
-            Console.WriteLine($"[CaorenCup][Alias] 已拒绝包含分隔符的参数: /{aliasKey} args='{info.ArgString}'");
+            Reply(player, info, $"{ChatColors.Red}Alias 参数中包含不安全的命令分隔符，已拒绝执行。");
+            Console.WriteLine($"[草人杯][Alias] 已拒绝包含分隔符的参数: /{aliasKey} args='{info.ArgString}'");
             return;
         }
 
@@ -210,18 +210,18 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
         {
             Server.ExecuteCommand(finalCommand);
 
-            Reply(info, $"已以服务器控制台身份执行别名: {ChatColors.Green}/{aliasKey}{ChatColors.Default}");
+            Reply(player, info, $"已下发别名执行请求: {ChatColors.Green}/{aliasKey}{ChatColors.Default}");
 
             string source = player == null
                 ? "SERVER"
                 : $"{player.PlayerName} / {player.SteamID}";
 
-            Console.WriteLine($"[CaorenCup][Alias] {source} 执行 /{aliasKey} -> {finalCommand}");
+            Console.WriteLine($"[草人杯][Alias] {source} 执行 /{aliasKey} -> {finalCommand}");
         }
         catch (Exception ex)
         {
-            Reply(info, $"{ChatColors.Red}Alias 执行失败：{ex.Message}");
-            Console.WriteLine($"[CaorenCup][Alias] 执行失败: /{aliasKey} -> {finalCommand} | {ex}");
+            Reply(player, info, $"{ChatColors.Red}Alias 执行失败：{ex.Message}");
+            Console.WriteLine($"[草人杯][Alias] 执行失败: /{aliasKey} -> {finalCommand} | {ex}");
         }
     }
 
@@ -237,12 +237,12 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
             ? "无"
             : _settings.Permission;
 
-        Reply(info, $"=== Alias 控制台指令别名：{_registeredAliasCommands.Count}/{_settings.CommandMap.Count} ===");
-        Reply(info, $"状态: {state}{ChatColors.Default} | 权限: {permission}");
+        Reply(player, info, $"=== Alias 控制台指令别名：{_registeredAliasCommands.Count}/{_settings.CommandMap.Count} ===");
+        Reply(player, info, $"状态: {state}{ChatColors.Default} | 权限: {permission}");
 
         if (_settings.CommandMap.Count == 0)
         {
-            Reply(info, $"{ChatColors.Red}列表为空，请检查 CaorenCup.json 的 Alias.CommandMap。");
+            Reply(player, info, $"{ChatColors.Red}列表为空，请检查 CaorenCup.json 的 Alias.CommandMap。");
             return;
         }
 
@@ -255,7 +255,7 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
                 ? $"{ChatColors.Red}  [目标不是控制台命令]"
                 : string.Empty;
 
-            Reply(info, $" {ChatColors.Green}/{aliasKey}{ChatColors.Default} -> {targetCommand}{warning}");
+            Reply(player, info, $" {ChatColors.Green}/{aliasKey}{ChatColors.Default} -> {targetCommand}{warning}");
         }
     }
 
@@ -263,17 +263,17 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
     {
         if (player != null && !AdminManager.PlayerHasPermissions(player, "@css/root"))
         {
-            Reply(info, $"{ChatColors.Red}只有 @css/root 可以重载 Alias 配置。");
+            Reply(player, info, $"{ChatColors.Red}只有 @css/root 可以重载 Alias 配置。");
             return;
         }
 
         if (TryReloadAliasConfig(out string message))
         {
-            Reply(info, $"{ChatColors.Green}{message}");
+            Reply(player, info, $"{ChatColors.Green}{message}");
         }
         else
         {
-            Reply(info, $"{ChatColors.Red}{message}");
+            Reply(player, info, $"{ChatColors.Red}{message}");
         }
     }
 
@@ -312,13 +312,13 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
             RegisterAliasCommands();
 
             message = $"Alias 已重载，当前注册 {_registeredAliasCommands.Count} 个聊天别名。";
-            Console.WriteLine($"[CaorenCup][Alias] {message}");
+            CaorenCup.Contracts.CaorenCupChat.PrintToConsole($"[Alias] {message}");
             return true;
         }
         catch (Exception ex)
         {
             message = $"Alias 重载失败: {ex.Message}";
-            Console.WriteLine($"[CaorenCup][Alias] {message}");
+            CaorenCup.Contracts.CaorenCupChat.PrintToConsole($"[Alias] {message}");
             return false;
         }
     }
@@ -427,8 +427,8 @@ public sealed class CaorenCupAliasPlugin : BasePlugin
         return true;
     }
 
-    private static void Reply(CommandInfo info, string message)
+    private static void Reply(CCSPlayerController? player, CommandInfo info, string message)
     {
-        info.ReplyToCommand(CaorenCupChat.FormatPrivateMessage(message));
+        CaorenCupChat.Reply(player, message);
     }
 }

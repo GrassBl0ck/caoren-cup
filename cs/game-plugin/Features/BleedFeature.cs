@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -91,19 +91,19 @@ public class BleedFeature : ICaorenFeature
         string target = arg1;
         if (target != "t" && target != "ct" && target != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的阵营，请使用 t, ct 或 all。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的阵营，请使用 t, ct 或 all。");
             return;
         }
 
         if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), _settings.Interval, out float interval) || interval <= 0)
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的时间间隔。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的时间间隔。");
             return;
         }
 
         if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), _settings.Amount, out int amount))
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的血量变化数值。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的血量变化数值。");
             return;
         }
 

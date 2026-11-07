@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Cvars;
@@ -80,13 +80,13 @@ public class MoneyFeature : ICaorenFeature
         string target = arg1;
         if (target != "t" && target != "ct" && target != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的阵营，请使用 t, ct 或 all。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的阵营，请使用 t, ct 或 all。");
             return;
         }
 
         if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), _settings.Multiplier, out float multiplier) || multiplier < 0)
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的倍数数值 (需大于等于0)。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的倍数数值 (需大于等于0)。");
             return;
         }
 

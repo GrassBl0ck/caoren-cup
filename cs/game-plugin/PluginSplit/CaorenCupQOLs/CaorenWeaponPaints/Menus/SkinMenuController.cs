@@ -485,7 +485,7 @@ public sealed class SkinMenuController
 
     private void Print(CCSPlayerController player, string message)
     {
-        player.PrintToChat(ChatMessageFormatter.Private(message, _prefix));
+        ChatMessageFormatter.Reply(player, message, _prefix);
     }
 
     private static bool TryCurrentTeam(CCSPlayerController player, out TeamSide team)

@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -76,13 +76,13 @@ public class IncDmgFeature : ICaorenFeature
         {
             SetEnabled(false);
             string msg = "已 \x02禁用\x01 动态时间伤害。";
-            if (player != null) CaorenCupUtils.PrintToChatAll(msg); else Console.WriteLine(msg);
+            CaorenCupUtils.PrintToChatAll(msg);
             return;
         }
 
         if (targetArg != "t" && targetArg != "ct" && targetArg != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效阵营，请使用 \x04t\x01, \x04ct\x01, \x04all\x01，或使用 \x040\x01 禁用。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效阵营，请使用 \x04t\x01, \x04ct\x01, \x04all\x01，或使用 \x040\x01 禁用。");
             return;
         }
 
@@ -91,7 +91,7 @@ public class IncDmgFeature : ICaorenFeature
         {
             if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(2), rate, out rate))
             {
-                if (player != null) CaorenCupUtils.PrintToChat(player, "倍率格式错误，请输入有效的数字 (如 0.01 或 -0.01)。");
+                CaorenCup.Contracts.CaorenCupChat.Reply(player, "倍率格式错误，请输入有效的数字 (如 0.01 或 -0.01)。");
                 return;
             }
         }

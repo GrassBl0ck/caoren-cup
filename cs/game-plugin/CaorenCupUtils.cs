@@ -1,4 +1,4 @@
-﻿// 文件名: CaorenCupUtils.cs
+// 文件名: CaorenCupUtils.cs
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -10,21 +10,9 @@ public static class CaorenCupUtils
 {
     public const string Tag = "[草人杯]";
 
-    private static string FormatChatMessage(string message, string color)
-    {
-        string body = message.Replace(Tag, string.Empty, StringComparison.Ordinal)
-            .Trim();
-        return $" {color}{Tag}{ChatColors.Default} {body}";
-    }
-
-    public static string FormatPrivateMessage(string message) =>
-        FormatChatMessage(message, ChatColors.Green.ToString());
-
-    public static string FormatTeamMessage(string message) =>
-        FormatChatMessage(message, ChatColors.Yellow.ToString());
-
-    public static string FormatGlobalMessage(string message) =>
-        FormatChatMessage(message, ChatColors.Red.ToString());
+    public static string FormatPrivateMessage(string message) => CaorenCup.Contracts.CaorenCupChat.FormatPrivateMessage(message);
+    public static string FormatTeamMessage(string message) => CaorenCup.Contracts.CaorenCupChat.FormatTeamMessage(message);
+    public static string FormatGlobalMessage(string message) => CaorenCup.Contracts.CaorenCupChat.FormatGlobalMessage(message);
 
     public static bool TryParseOptionalFloat(string raw, float current, out float value)
     {
@@ -41,7 +29,7 @@ public static class CaorenCupUtils
     // 统一发送消息到所有玩家
     public static void PrintToChatAll(string message)
     {
-        Server.PrintToChatAll(FormatGlobalMessage(message));
+        CaorenCup.Contracts.CaorenCupChat.PrintToChatAll(message);
     }
 
     // 统一发送消息给指定玩家
@@ -49,7 +37,7 @@ public static class CaorenCupUtils
     {
         if (player.IsValid)
         {
-            player.PrintToChat(FormatPrivateMessage(message));
+            CaorenCup.Contracts.CaorenCupChat.PrintToChat(player, message);
         }
     }
 

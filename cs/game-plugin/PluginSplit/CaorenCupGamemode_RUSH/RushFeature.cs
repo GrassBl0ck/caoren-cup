@@ -64,7 +64,7 @@ public sealed class CaorenCupRushPlugin : BasePlugin
 
         Server.ExecuteCommand("gamemode rush");
         Server.ExecuteCommand("gamemode start");
-        Reply(player, "已选择 RUSH，正在进入 Warmup。");
+        Reply(player, "已请求选择并启动 RUSH，实际结果请看模式通知。");
     }
 
     private void OnMapStart(string mapName)
@@ -81,7 +81,7 @@ public sealed class CaorenCupRushPlugin : BasePlugin
         foreach (string command in RushModePlan.PostMapStartCommands)
             Server.ExecuteCommand(command);
 
-        Console.WriteLine("[CaorenCup] RUSH map loaded; official gamemode_rush.cfg reapplied.");
+        Console.WriteLine("[草人杯] RUSH map loaded; official gamemode_rush.cfg reapplied.");
     }
 
     private HookResult OnBeginNewMatch(EventBeginNewMatch @event, GameEventInfo info)
@@ -91,7 +91,7 @@ public sealed class CaorenCupRushPlugin : BasePlugin
         foreach (string command in RushModePlan.NewMatchCommands)
             Server.ExecuteCommand(command);
 
-        Console.WriteLine("[CaorenCup] RUSH new match; restored mp_maxrounds 15.");
+        Console.WriteLine("[草人杯] RUSH new match; restored mp_maxrounds 15.");
         return HookResult.Continue;
     }
 
@@ -100,13 +100,13 @@ public sealed class CaorenCupRushPlugin : BasePlugin
         if (player != null && player.IsValid)
             PrintToChat(player, message);
         else
-            Console.WriteLine($"[CaorenCup] RUSH: {message}");
+            Console.WriteLine($"[草人杯] RUSH: {message}");
     }
 
     private static void PrintToChat(CCSPlayerController player, string message)
     {
         if (!player.IsValid) return;
-        player.PrintToChat($" {ChatColors.Green}[草人杯]{ChatColors.Default} {message}");
+        CaorenCupChat.PrintToChat(player, message);
     }
 }
 

@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
@@ -127,18 +127,18 @@ public class SkillPointsFeature : ICaorenFeature
                 }
                 else
                 {
-                    player.PrintToConsole("========== [草人杯] 技能点系统 (SkillPoints) ==========");
-                    player.PrintToConsole($"系统状态: {GetStatusInfo()}");
-                    player.PrintToConsole($"当前点数: T={_pointsT} | CT={_pointsCT}");
-                    player.PrintToConsole("指令: css_sp <目标/操作> [数值或加减]");
-                    player.PrintToConsole("  输入 0 禁用系统并清空分数。");
-                    player.PrintToConsole("  输入 swap 交换双方当前点数。");
-                    player.PrintToConsole("  目标: t, ct, all");
-                    player.PrintToConsole("范例1(绝对赋值): css_sp t 50 (直接将T方点数设置为50)");
-                    player.PrintToConsole("范例2(相对增减): css_sp ct +10 (CT方点数增加10)");
-                    player.PrintToConsole("范例3(相对增减): css_sp all -5 (双方同时扣除5点，最低为0)");
-                    player.PrintToConsole("玩家使用: 在聊天框输入 .sp 1 (或3,5,rand) 消耗点数");
-                    player.PrintToConsole("=====================================================");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "========== [草人杯] 技能点系统 (SkillPoints) ==========");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, $"系统状态: {GetStatusInfo()}");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, $"当前点数: T={_pointsT} | CT={_pointsCT}");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "指令: css_sp <目标/操作> [数值或加减]");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  输入 0 禁用系统并清空分数。");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  输入 swap 交换双方当前点数。");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  目标: t, ct, all");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例1(绝对赋值): css_sp t 50 (直接将T方点数设置为50)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例2(相对增减): css_sp ct +10 (CT方点数增加10)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例3(相对增减): css_sp all -5 (双方同时扣除5点，最低为0)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "玩家使用: 在聊天框输入 .sp 1 (或3,5,rand) 消耗点数");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "=====================================================");
                 }
             }
             return;
@@ -177,7 +177,7 @@ public class SkillPointsFeature : ICaorenFeature
         {
             if (info.ArgCount < 3)
             {
-                if (player != null) CaorenCupUtils.PrintToChat(player, "参数不足，请提供点数或增减量。");
+                CaorenCup.Contracts.CaorenCupChat.Reply(player, "参数不足，请提供点数或增减量。");
                 return;
             }
 
@@ -187,7 +187,7 @@ public class SkillPointsFeature : ICaorenFeature
             // 过滤掉加号，以支持 int.TryParse 解析
             if (!int.TryParse(arg2.Replace("+", ""), out int val))
             {
-                if (player != null) CaorenCupUtils.PrintToChat(player, "数值格式错误。");
+                CaorenCup.Contracts.CaorenCupChat.Reply(player, "数值格式错误。");
                 return;
             }
 
@@ -201,11 +201,11 @@ public class SkillPointsFeature : ICaorenFeature
                 _pointsCT = Math.Max(0, isRelative ? _pointsCT + val : val);
 
             string actionStr = isRelative ? $"变化为" : "设置为";
-            CaorenCupUtils.PrintToChatAll($"\u0004[技能点]\u0001 管理员已将 \u0004{arg1.ToUpper()}\u0001 方点数{actionStr} -> \u0007T: {_pointsT} \u0001| \u000CCT: {_pointsCT}");
+            CaorenCupUtils.PrintToChatAll($"\u0004[技能点]\u0001 已将 \u0004{arg1.ToUpper()}\u0001 方点数{actionStr} -> \u0007T: {_pointsT} \u0001| \u000CCT: {_pointsCT}");
         }
         else
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效参数，请输入 /sp 查看帮助。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效参数，请输入 /sp 查看帮助。");
         }
     }
 
@@ -311,7 +311,7 @@ public class SkillPointsFeature : ICaorenFeature
     {
         if (!_settings.Enabled)
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "技能点系统当前未启用。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "技能点系统当前未启用。");
             return;
         }
 
@@ -580,7 +580,7 @@ public class SkillPointsFeature : ICaorenFeature
     {
         foreach (var p in GetTeamPlayers(teamNum))
         {
-            p.PrintToChat(CaorenCupUtils.FormatTeamMessage(message));
+            CaorenCup.Contracts.CaorenCupChat.PrintToGroup([p], message);
         }
     }
 

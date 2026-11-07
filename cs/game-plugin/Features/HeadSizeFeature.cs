@@ -99,7 +99,7 @@ public sealed class HeadSizeFeature : ICaorenFeature
         if (command.Mode == HeadSizeMode.Off)
         {
             var reset = ResetAll();
-            Reply(player, info, reset.Success
+            CaorenCupUtils.PrintToChatAll(reset.Success
                 ? (_schemaSupported == true
                     ? "头部模块已关闭，个人和队伍设置已清空，玩家头部已恢复 1x。"
                     : "头部模块已关闭，个人和队伍设置已清空；当前没有玩家需要恢复。")
@@ -126,12 +126,18 @@ public sealed class HeadSizeFeature : ICaorenFeature
             {
                 LogFailure(ex.Message);
                 ResetAll();
-                Reply(player, info, "原生大头开关启用失败，模块已关闭并尝试恢复 1x，请检查服务器日志。");
+                CaorenCupUtils.PrintToChatAll("原生大头开关启用失败，模块已关闭并尝试恢复 1x，请检查服务器日志。");
                 return;
             }
         }
         else if (_runtime.Mode == HeadSizeMode.Off) ResetAll();
-        foreach (var message in result.Messages) Reply(player, info, message);
+        foreach (var message in result.Messages)
+        {
+            if (result.Success) CaorenCupUtils.PrintToChatAll(message);
+            else Reply(player, info, message);
+        }
+        if (!result.Success && result.Update.Error != null)
+            CaorenCupUtils.PrintToChatAll("头部缩放设置未能完整应用，模块已关闭并尝试恢复 1x，请管理员检查日志。");
         if (result.Update.Error != null) LogFailure(result.Update.Error);
         _nextGateCheck = 0;
     }
@@ -313,8 +319,7 @@ public sealed class HeadSizeFeature : ICaorenFeature
 
     private static void Reply(CCSPlayerController? player, CommandInfo command, string message)
     {
-        if (player != null) CaorenCupUtils.PrintToChat(player, message);
-        else command.ReplyToCommand($"{CaorenCupUtils.Tag} {message}");
+        CaorenCup.Contracts.CaorenCupChat.Reply(player, message);
     }
 
     private void LogFailure(string message)

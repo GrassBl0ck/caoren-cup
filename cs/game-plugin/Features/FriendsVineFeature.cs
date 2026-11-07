@@ -46,7 +46,7 @@ public sealed class FriendsVineFeature : ICaorenFeature
         if (info.ArgCount == 2 && info.GetArg(1) == "0")
         {
             _runtime.StopAll();
-            Reply(player, info, "已停止所有玩家的循环缩放，并恢复原体型。");
+            CaorenCupUtils.PrintToChatAll("已停止所有玩家的循环缩放，并恢复原体型。");
             return;
         }
 
@@ -68,15 +68,14 @@ public sealed class FriendsVineFeature : ICaorenFeature
         _runtime.Start(player.TeamNum, cycle!, Server.EngineTime);
         OnTick();
         var team = player.TeamNum == (byte)CsTeam.Terrorist ? "T" : "CT";
-        Reply(player, info, FormattableString.Invariant(
+        CaorenCupUtils.PrintToChatAll(FormattableString.Invariant(
             $"{team} 阵营循环缩放：{cycle!.Min} → {cycle.Max} → {cycle.Min}，周期 {cycle.PeriodSeconds} 秒。/fv 0 全场停止。"));
     }
 
     private static void Reply(CCSPlayerController? player, CommandInfo command, string message)
     {
-        // 操作影响整队，回执仍只发给执行者，统一使用绿色私信前缀。
-        if (player != null) CaorenCupUtils.PrintToChat(player, message);
-        else command.ReplyToCommand($"{CaorenCupUtils.Tag} {message}");
+        // 用法、权限与失败只回复执行者；修改成功另走全服公示。
+        CaorenCup.Contracts.CaorenCupChat.Reply(player, message);
     }
 
     private void OnTick()

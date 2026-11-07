@@ -164,7 +164,7 @@ public class EspFeature : ICaorenFeature
 
         if (targetArg != "t" && targetArg != "ct" && targetArg != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效阵营，请使用 t, ct, all，或使用 0 禁用。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效阵营，请使用 t, ct, all，或使用 0 禁用。");
             return;
         }
 

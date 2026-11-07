@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Admin;
@@ -84,15 +84,15 @@ public class BombQuizFeature : ICaorenFeature
                 }
                 else
                 {
-                    player.PrintToConsole("========== [草人杯] 黑客攻防 (BombQuiz) ==========");
-                    player.PrintToConsole($"当前状态: {GetStatusInfo()}");
-                    player.PrintToConsole("用法: css_bq <题型组合/0> [强制秒数/0] [CT延迟秒数]");
-                    player.PrintToConsole("  输入 0 直接禁用此模块。省略后续参数将自动恢复动态平衡。");
-                    player.PrintToConsole("  题型: 1(两位+-), 2(两位*一位), 3(三位+-), 4(除法), 5(大除法), 6(两位*十几), 7(一位+一位)");
-                    player.PrintToConsole("  组合: 输入 147 即在 1, 4, 7 中随机抽取题目");
-                    player.PrintToConsole("范例: css_bq 147 (秒数和延迟全部随题型动态变化)");
-                    player.PrintToConsole("范例: css_bq 147 10 2 (强制所有题型10秒，CT强制定死延迟2秒)");
-                    player.PrintToConsole("==================================================");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "========== [草人杯] 黑客攻防 (BombQuiz) ==========");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, $"当前状态: {GetStatusInfo()}");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "用法: css_bq <题型组合/0> [强制秒数/0] [CT延迟秒数]");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  输入 0 直接禁用此模块。省略后续参数将自动恢复动态平衡。");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  题型: 1(两位+-), 2(两位*一位), 3(三位+-), 4(除法), 5(大除法), 6(两位*十几), 7(一位+一位)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "  组合: 输入 147 即在 1, 4, 7 中随机抽取题目");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例: css_bq 147 (秒数和延迟全部随题型动态变化)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "范例: css_bq 147 10 2 (强制所有题型10秒，CT强制定死延迟2秒)");
+                    CaorenCup.Contracts.CaorenCupChat.PrintToPlayerConsole(player, "==================================================");
                 }
             }
             return;
@@ -230,7 +230,7 @@ public class BombQuizFeature : ICaorenFeature
         {
             if (p != null && p.IsValid && p.TeamNum == (byte)team)
             {
-                p.PrintToChat(CaorenCupUtils.FormatTeamMessage($"{prefix} \u0001{action}: \u0004{question} = ? \u0001(限时 \u0002{Math.Round(remainingTime, 2)}秒\u0001)"));
+                CaorenCup.Contracts.CaorenCupChat.PrintToGroup([p], $"{prefix} \u0001{action}: \u0004{question} = ? \u0001(限时 \u0002{Math.Round(remainingTime, 2)}秒\u0001)");
             }
         }
     }

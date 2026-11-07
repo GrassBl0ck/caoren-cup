@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -94,7 +94,7 @@ public class DamageFeature : ICaorenFeature
         string target = arg1;
         if (target != "t" && target != "ct" && target != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的阵营，请使用 t, ct 或 all。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的阵营，请使用 t, ct 或 all。");
             return;
         }
 
@@ -107,14 +107,14 @@ public class DamageFeature : ICaorenFeature
         // 解析 Cap
         if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(3), _settings.Cap, out int cap) || cap < 0)
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的伤害上限(Cap)数值。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的伤害上限(Cap)数值。");
             return;
         }
 
         // 解析 Window
         if (!CaorenCupUtils.TryParseOptionalFloat(info.GetArg(4), _settings.CapWindow, out float window) || window <= 0)
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的时间窗口数值。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的时间窗口数值。");
             return;
         }
 
@@ -338,6 +338,6 @@ public class DamageFeature : ICaorenFeature
     public string GetFeatureDescription()
     {
         return " [Damage Scaler] 全局修改玩家受伤倍率以及时间窗口内的受伤上限。\n";
-               
+
     }
 }

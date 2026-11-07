@@ -158,7 +158,7 @@ public sealed class NativeManagedAudioBackend : IManagedAudioBackend
                 _nativeEffects.Remove(guid);
             _effects.RemoveAll(s => s.Timeline.Snapshot(Server.CurrentTime).State is AudioPlaybackState.Ended or AudioPlaybackState.Stopped);
         }
-        catch (Exception error) { Console.WriteLine("[CaorenCupAudio] tick failed: " + error.Message); }
+        catch (Exception error) { Console.WriteLine("[草人杯] tick failed: " + error.Message); }
     }
     private void Reconcile(Session session)
     {
@@ -203,7 +203,7 @@ public sealed class NativeManagedAudioBackend : IManagedAudioBackend
             _plugin.AddTimer(1f, () =>
             {
                 if (session.Voices.GetValueOrDefault(voice.SteamId) == voice && voice.Guid == 0)
-                { StopVoice(session, voice.SteamId); Console.WriteLine("[CaorenCupAudio] 声音未捕获启动 GUID，已清理实例。"); }
+                { StopVoice(session, voice.SteamId); Console.WriteLine("[草人杯] 声音未捕获启动 GUID，已清理实例。"); }
             }, CounterStrikeSharp.API.Modules.Timers.TimerFlags.STOP_ON_MAPCHANGE);
         }
         catch { StopVoice(session, player.SteamID); throw; }
@@ -238,7 +238,7 @@ public sealed class NativeManagedAudioBackend : IManagedAudioBackend
         message.SetBytes("packed_params", message.ReadBytes("packed_params")
             .Concat(AudioProbeWireCodec.PlaybackOffset(state.PositionSeconds)).Concat(AudioProbeWireCodec.VolumeScalar(volume)).ToArray());
         message.Recipients = new RecipientFilter(player);
-        Console.WriteLine($"[CaorenCupAudio] start channel={session.Audio.Channel} event={session.Audio.Id} guid={guid} slot={player.Slot} position={state.PositionSeconds:0.000} volume={volume:0.000}");
+        Console.WriteLine($"[草人杯] start channel={session.Audio.Channel} event={session.Audio.Id} guid={guid} slot={player.Slot} position={state.PositionSeconds:0.000} volume={volume:0.000}");
         return HookResult.Continue;
     }
     private HookResult GuidMessage(UserMessage message)

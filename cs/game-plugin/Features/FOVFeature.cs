@@ -1,4 +1,4 @@
-﻿using CounterStrikeSharp.API;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -82,13 +82,13 @@ public class FOVFeature : ICaorenFeature
         string target = arg1;
         if (target != "t" && target != "ct" && target != "all")
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的阵营，请使用 t, ct 或 all。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的阵营，请使用 t, ct 或 all。");
             return;
         }
 
         if (!CaorenCupUtils.TryParseOptionalInt(info.GetArg(2), _settings.FovValue, out int fovVal))
         {
-            if (player != null) CaorenCupUtils.PrintToChat(player, "无效的 FOV 数值。");
+            CaorenCup.Contracts.CaorenCupChat.Reply(player, "无效的 FOV 数值。");
             return;
         }
 

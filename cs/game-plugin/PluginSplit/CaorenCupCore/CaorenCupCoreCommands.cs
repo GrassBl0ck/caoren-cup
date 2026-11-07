@@ -63,8 +63,7 @@ public sealed partial class CaorenCupCorePlugin
 
     private static void Reply(CCSPlayerController? player, string message)
     {
-        if (player is null) Console.WriteLine($"[CaorenCup] {message}");
-        else CaorenCupChat.PrintToChat(player, message);
+        CaorenCupChat.Reply(player, message);
     }
 
     private void OnCommandHelp(CCSPlayerController? player, CommandInfo info)
@@ -100,7 +99,7 @@ public sealed partial class CaorenCupCorePlugin
         if (player is null) return;
         Reply(player, "=== 功能模块列表 ===");
         foreach (var module in CaorenCupModuleRegistry.Snapshot())
-            player.PrintToChat(CaorenCupChat.FormatHelpMenuLine(module.Help()));
+            CaorenCupChat.PrintToChat(player, CaorenCupChat.StripChatColors(module.Help()));
     }
 
     private void OnCommandStatus(CCSPlayerController? player, CommandInfo info)
@@ -168,20 +167,19 @@ public sealed partial class CaorenCupCorePlugin
             rules.Add($"全局血量保护: 模块回血最高到 {Config.HpCap.Max} HP，模块扣血最低到 {Config.HpCap.Min} HP");
         if (rules.Count == 0)
         {
-            CaorenCupChat.PrintToChatAll(" [草人杯] 当前服务器运行默认竞技规则，未开启特殊修改。");
+            Reply(player, " [草人杯] 当前服务器运行默认竞技规则，未开启特殊修改。");
             return;
         }
-        CaorenCupChat.PrintToChatAll(" \x10========== [草人杯] 当前特殊规则 ==========\x01");
+        Reply(player, " \x10========== [草人杯] 当前特殊规则 ==========\x01");
         foreach (string? rule in rules)
-            CaorenCupChat.PrintToChatAll($" {ChatColors.Green}>{ChatColors.Default} {rule}");
-        CaorenCupChat.PrintToChatAll(" \x10===========================================\x01");
+            Reply(player, $" {ChatColors.Green}>{ChatColors.Default} {rule}");
+        Reply(player, " \x10===========================================\x01");
     }
 
     [ConsoleCommand("css_reset_plu", "重置")]
     public void OnConsoleReset(CCSPlayerController? player, CommandInfo info)
     {
         if (!ResetCommandPolicy.Run(player is null, HasRoot(player), PerformReset)) { Reply(player, "无权操作。"); return; }
-        if (player is null) Console.WriteLine("[CaorenCup] 已重置。");
     }
 
     private void OnCommandReset(CCSPlayerController? player, CommandInfo info)
@@ -193,6 +191,7 @@ public sealed partial class CaorenCupCorePlugin
     private void PerformReset()
     {
         ManagedCvars.ResetAll();
+        var failed = new List<string>();
         foreach (var module in CaorenCupModuleRegistry.Snapshot())
         {
             try
@@ -201,11 +200,14 @@ public sealed partial class CaorenCupCorePlugin
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[CaorenCup] 模块 {module.Key} 重置暂未完成：{ex.Message}");
+                failed.Add(module.FeatureName);
+                CaorenCupChat.PrintToConsole($"模块 {module.Key} 重置暂未完成：{ex.Message}");
             }
         }
         Config.HpCap.Enabled = false;
-        CaorenCupChat.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 所有功能已重置为竞技状态。");
+        CaorenCupChat.PrintToChatAll(failed.Count == 0
+            ? "所有功能已重置为竞技状态。"
+            : $"已执行功能重置，但以下模块尚未完整恢复：{string.Join("、", failed)}。请管理员检查日志。");
         SaveConfig();
     }
 
@@ -256,14 +258,14 @@ public sealed partial class CaorenCupCorePlugin
     {
         if (!HasRoot(player)) { Reply(player, "无权操作。"); return; }
         SaveConfig();
-        if (player is not null) Reply(player, "配置已强制保存到插件目录。");
+        Reply(player, "配置已强制保存到插件目录。");
     }
 
     private HookResult OnNoclipCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player is null || _allowPlayerNoclip) return HookResult.Continue;
         Reply(player, "服务器已禁用 noclip，避免误触飞行。");
-        Console.WriteLine($"[CaorenCup] Blocked noclip from player {player.PlayerName} (slot {player.Slot}).");
+        Console.WriteLine($"[草人杯] Blocked noclip from player {player.PlayerName} (slot {player.Slot}).");
         return HookResult.Handled;
     }
 
@@ -289,8 +291,7 @@ public sealed partial class CaorenCupCorePlugin
     private void ReplyNoclipChanged(CCSPlayerController? player)
     {
         string message = $"[草人杯] 玩家 noclip 已设置为：{(_allowPlayerNoclip ? "允许" : "禁止")}。";
-        if (player is null) Console.WriteLine(message);
-        else CaorenCupChat.PrintToChatAll(message);
+        CaorenCupChat.PrintToChatAll(message);
     }
 
     private void ReplyNoclipStatus(CCSPlayerController? player) =>
@@ -312,7 +313,7 @@ public sealed partial class CaorenCupCorePlugin
         {
             if (spectator is null || !spectator.IsValid || spectator.IsBot || spectator.IsHLTV ||
                 spectator.Team != CsTeam.Spectator) continue;
-            spectator.PrintToChat($" [队伍 {side}] {name}: {message}");
+            CaorenCupChat.PrintToGroup([spectator], $"[队伍 {side}] {name}: {message}");
         }
         return HookResult.Continue;
     }
@@ -345,7 +346,7 @@ public sealed partial class CaorenCupCorePlugin
 
         var fileName = $"caoren_backup_round{round}.txt";
         Server.ExecuteCommand($"mp_backup_restore_load_file {fileName}");
-        Reply(player, $"已请求恢复第 {round} 回合备份：{fileName}。CS2 将按原生备份机制处理恢复。");
+        CaorenCupChat.PrintToChatAll($"已请求恢复第 {round} 回合备份：{fileName}。CS2 将按原生备份机制处理恢复。");
     }
 
     private void OnGameModeCommand(CCSPlayerController? player, CommandInfo info)
@@ -370,7 +371,8 @@ public sealed partial class CaorenCupCorePlugin
             "stop" => GameModes.Stop(),
             _ => GameModes.SelectMode(action),
         };
-        Reply(player, result.Message);
+        if (!result.Success || action == "status" || (action == "stop" && GameModes.State.ModeId is null))
+            Reply(player, result.Message);
     }
 
     private void OnGameModeCvarCommand(CCSPlayerController? player, CommandInfo info)
@@ -388,7 +390,8 @@ public sealed partial class CaorenCupCorePlugin
 
         string name = info.GetArg(1).Trim();
         string value = info.GetArg(2).Trim();
-        Reply(player, GameModes.SetOverride(name, value, webSource: false).Message);
+        var result = GameModes.SetOverride(name, value, webSource: false);
+        if (!result.Success) Reply(player, result.Message);
     }
 
 }

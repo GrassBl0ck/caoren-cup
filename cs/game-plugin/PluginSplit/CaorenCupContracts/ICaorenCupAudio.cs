@@ -50,7 +50,7 @@ public static class CaorenCupAudioAccess
         else if (LastFailures.GetValueOrDefault(eventId) != result.Message)
         {
             LastFailures[eventId] = result.Message;
-            Console.WriteLine($"[CaorenCupAudio] {eventId}: {result.Message}");
+            Console.WriteLine($"[草人杯] {eventId}: {result.Message}");
         }
         return result;
     }

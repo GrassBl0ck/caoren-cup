@@ -555,7 +555,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
             return;
         }
 
-        ReplyToDuelCaller(player, command, $"[草人杯] 配置已更新：{FormatDuelConfig(_duelSession.Config)}");
+        PrintToAllPlayers($"单挑配置已更新：{FormatDuelConfig(_duelSession.Config)}");
     }
 
     private void PauseGameManagedDuel(CCSPlayerController? player, CommandInfo command)
@@ -566,9 +566,8 @@ public sealed class CaorenDuelPlugin : BasePlugin
             return;
         }
 
-        PauseGameManagedDuel("管理员手动暂停");
+        PauseGameManagedDuel("已请求手动暂停");
         Logger.LogInformation("Game-managed duel paused by an administrator.");
-        ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑状态已暂停。");
     }
 
     private void PauseGameManagedDuel(string reason)
@@ -589,7 +588,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
 
         Server.ExecuteCommand("mp_unpause_match");
         Logger.LogInformation("Game-managed duel resumed by an administrator.");
-        ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑状态已恢复。");
+        PrintToAllPlayers("游戏内单挑已请求恢复。");
     }
 
     private void EvaluateGameManagedConnectivity()
@@ -616,7 +615,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
         {
             ReplyToDuelCaller(player, command, "[草人杯] 游戏内单挑已强制终止，本次不计算胜负。");
         }
-        AbortGameManagedDuel("管理员强制终止，本次不计算胜负");
+        AbortGameManagedDuel("本次不计算胜负");
     }
 
     private void SwitchDuelMap(CCSPlayerController? player, CommandInfo command, string input)
@@ -659,7 +658,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
 
         Server.ExecuteCommand($"host_workshop_map {map.WorkshopId}");
         Logger.LogInformation("Switching directly to duel workshop map {Map} ({WorkshopId}).", map.Name, map.WorkshopId);
-        ReplyToDuelCaller(player, command, $"[草人杯] 正在切换单挑地图：{map.Name} ({map.WorkshopId})。");
+        PrintToAllPlayers($"已请求切换单挑地图：{map.Name} ({map.WorkshopId})。");
     }
 
     private static bool IsDuelStartBlocked(
@@ -686,7 +685,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
     {
         if (player == null)
         {
-            command.ReplyToCommand($"[草人杯] {StripChatTag(message)}");
+            CaorenCup.Contracts.CaorenCupChat.PrintToConsole(StripChatTag(message));
             return;
         }
 
@@ -1010,7 +1009,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
                 var message = isParticipant
                     ? $"已恢复到本局固定队伍 {TeamLabel(targetTeam)}。"
                     : "本局参赛名单已经锁定，你只能在观察者席观看。";
-                player.PrintToChat(FormatPrivateChatMessage(message));
+                CaorenCup.Contracts.CaorenCupChat.PrintToChat(player, StripChatTag(message));
             }
             catch (Exception ex)
             {
@@ -1037,14 +1036,14 @@ public sealed class CaorenDuelPlugin : BasePlugin
             var requestedOriginalTeam = requestedTeam == ((int)gameManagedTeam).ToString();
             if (requestedOriginalTeam) return HookResult.Continue;
 
-            player.PrintToChat(FormatPrivateChatMessage(
-                $"本局参赛队伍已锁定，不能自行换队。你的固定队伍是 {TeamLabel(gameManagedTeam)}。"));
+            CaorenCup.Contracts.CaorenCupChat.PrintToChat(player,
+                $"本局参赛队伍已锁定，不能自行换队。你的固定队伍是 {TeamLabel(gameManagedTeam)}。");
             Server.NextFrame(EnforceTeamAssignments);
             return HookResult.Handled;
         }
 
         if (requestedTeam is not ("0" or "2" or "3")) return HookResult.Continue;
-        player.PrintToChat(FormatPrivateChatMessage("本局参赛名单已经锁定，非参赛者只能在观察者席观看。"));
+        CaorenCup.Contracts.CaorenCupChat.PrintToChat(player, "本局参赛名单已经锁定，非参赛者只能在观察者席观看。");
         return HookResult.Handled;
     }
 
@@ -1056,7 +1055,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
             return HookResult.Continue;
         }
 
-        player!.PrintToChat(FormatPrivateChatMessage("单挑期间不能丢弃枪械。"));
+        CaorenCup.Contracts.CaorenCupChat.PrintToChat(player!, "单挑期间不能丢弃枪械。");
         return HookResult.Handled;
     }
 
@@ -1146,7 +1145,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
 
         var message = "开局保护中，本次命中不造成伤害";
         try { attacker.PrintToCenter($"[草人杯] {message}"); } catch { }
-        try { attacker.PrintToChat(FormatPrivateChatMessage(message)); } catch { }
+        try { CaorenCup.Contracts.CaorenCupChat.PrintToChat(attacker, StripChatTag(message)); } catch { }
     }
 
     private void RequestDuelWeapon(CCSPlayerController player, string alias, string weapon)
@@ -1508,7 +1507,7 @@ public sealed class CaorenDuelPlugin : BasePlugin
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             try
             {
-                if (player.IsValid) player.PrintToChat(FormatPrivateChatMessage(message));
+                if (player.IsValid) CaorenCup.Contracts.CaorenCupChat.PrintToChat(player, StripChatTag(message));
             }
             catch (Exception ex)
             {

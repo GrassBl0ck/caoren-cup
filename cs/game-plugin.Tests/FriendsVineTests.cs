@@ -18,8 +18,8 @@ public sealed class FriendsVineTests
         Assert.DoesNotContain("ReplyToCommand(", commandBody);
         Assert.DoesNotContain(".PrintToChat(", commandBody);
         Assert.DoesNotContain("[FV]", source);
-        Assert.Contains("CaorenCupUtils.PrintToChat(player, message)", source);
-        Assert.Contains("CaorenCupUtils.Tag", source);
+        Assert.Contains("CaorenCup.Contracts.CaorenCupChat.Reply(player, message)", source);
+        Assert.Contains("CaorenCupUtils.PrintToChatAll", source);
     }
 
     private static string TestSourcePath([CallerFilePath] string path = "") => path;

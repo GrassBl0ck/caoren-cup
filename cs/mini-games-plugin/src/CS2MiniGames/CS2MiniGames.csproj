@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -14,4 +14,8 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 复用同一消息工具的源文件，保留小游戏现有 net8.0 运行目标，不引入 net10.0 DLL。 -->
+    <Compile Include="../../../game-plugin/PluginSplit/CaorenCupContracts/CaorenCupChat.cs" Link="Shared/CaorenCupChat.cs" />
+  </ItemGroup>
 </Project>

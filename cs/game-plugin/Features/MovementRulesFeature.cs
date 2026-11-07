@@ -65,7 +65,7 @@ public class MovementRulesFeature : ICaorenFeature
         if (IsResetArg(action))
         {
             SetEnabled(false);
-            Reply(player, "Move 已恢复默认。");
+            Announce("Move 已恢复默认。");
             return;
         }
 
@@ -138,7 +138,7 @@ public class MovementRulesFeature : ICaorenFeature
 
     private static void Reply(CCSPlayerController? player, string message)
     {
-        if (player == null) Console.WriteLine($"[CaorenCup][Move] {message}");
+        if (player == null) CaorenCup.Contracts.CaorenCupChat.PrintToConsole($"[Move] {message}");
         else CaorenCupUtils.PrintToChat(player, message);
     }
 
