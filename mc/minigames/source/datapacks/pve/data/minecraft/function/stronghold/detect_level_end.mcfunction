@@ -1,1 +1,0 @@
-execute unless entity @a[gamemode=adventure,team=stronghold] run function minecraft:stronghold/game/level_end

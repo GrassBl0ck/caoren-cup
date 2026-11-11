@@ -1,1 +1,0 @@
-give @s minecraft:stone_button[custom_data={gun_data:{is_bullet:true,type:2}},max_stack_size=99,item_name='狙击枪子弹'] 99

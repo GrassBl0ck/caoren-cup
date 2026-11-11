@@ -57,7 +57,7 @@ RUSH 的 DLL 与资源补丁是两个交付环节。tools/rush/ 只包含补丁�
 
 2.0.0 保留既有稳定线的 HTTPS、个人统计、换肤入口、单挑发装修复与 Friends Vine。弗一把目前已归档并半永久暂停，不随本包发布；ParticleMenu、私有 Diagnostics、接口探针插件、开发控件和音频能力探针代码、Wingman、Ultimates 也不随本包发布。弗一把未来是否恢复需要重新确认，不应从本发布说明推断其仍在开发。已验收的试听素材属于资源清单内容，不因排除能力探针代码而自动删除。
 
-MC 自研代码采用 MIT；OldCombatMechanics 保留 MPL-2.0，小游戏合集保留 CC BY-NC-SA 4.0 和作者附加条款。坐垫战争仍待真人玩法验收，跨时代 PvP 为实验与观察原型。地图、世界与音频资源按源码清单中的固定版本获取，不在 CS 服务器包中安装；第三方组件不能统一解释为 MIT。
+MC 自研代码采用 MIT；OldCombatMechanics 保留 MPL-2.0。坐垫战争仍待真人玩法验收，跨时代 PvP 为实验与观察原型。第三方游玩地图、世界、音频与其数据包源码不随当前仓库或发行包分发，由管理员自行准备，不在 CS 服务器包中安装；第三方组件不能统一解释为 MIT。
 
 CaorenCup 主体许可证见 licenses/CaorenCup-MIT.txt。CS2MiniGames 和 CaorenWeaponPaints 保留各自 GPL-3.0 许可证及上游说明，不能把它们整体标为 MIT；分发二进制时同时提供可获得的对应版本源码，位置见 SOURCE.md。
 

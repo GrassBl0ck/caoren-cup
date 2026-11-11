@@ -1,1 +1,0 @@
-execute unless items entity @s container.* fishing_rod run give @s fishing_rod[unbreakable={},enchantments={lure:3},custom_data={fishing:tool}]

@@ -1,1 +1,0 @@
-scoreboard players set stronghold.debug state 1

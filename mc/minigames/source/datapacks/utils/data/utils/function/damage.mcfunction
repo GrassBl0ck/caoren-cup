@@ -1,1 +1,0 @@
-$damage $(target) $(damage) $(type) by $(by)

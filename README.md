@@ -39,7 +39,7 @@ https://github.com/GrassBl0ck/caoren-cup
 ```text
 caoren-cup/
 ├─ cs/                       CS2 娱乐、小游戏、单挑与桥接插件
-├─ mc/                       坐垫战争、跨时代 PvP、小游戏合集及来源许可
+├─ mc/                       坐垫战争、跨时代 PvP、通用切图工具及来源许可
 ├─ web-command-center/       共用网站、账户及 CS / MC 页面
 ├─ desktop-client/           现有网页桌面壳
 ├─ scripts/                  按组件构建、验证与打包
@@ -829,7 +829,7 @@ Release 包和源码仓库是两回事：
 
     CaorenCupMC-服务器内容-vX.X.X.zip
 
-包内按坐垫战争、小游戏合集和跨时代实验分目录，包含自研插件 JAR、数据包、固定资源下载工具与完整收录源码。OCM 以参考源码提供，实验内容默认不启用。安装说明见 [MC INSTALL](mc/INSTALL.md)。完成 MC 插件编译后构建：
+包内按坐垫战争、共用地图工具和跨时代实验分目录，包含自研插件 JAR、数据包、通用切图工具与收录源码。第三方游玩地图及其源码不随包分发。OCM 以参考源码提供，实验内容默认不启用。安装说明见 [MC INSTALL](mc/INSTALL.md)。完成 MC 插件编译后构建：
 
     python scripts/package-caoren-mc.py --version vX.Y.Z
 

@@ -1,1 +1,0 @@
-execute if dimension overworld run kill @s

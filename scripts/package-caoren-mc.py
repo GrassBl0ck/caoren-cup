@@ -7,13 +7,14 @@ from deployment_guide import copy_deployment_guide, documentation_outputs
 ROOT=Path(__file__).resolve().parents[1]
 MC=ROOT/'mc'
 FIXED_TIME=(2026,1,1,0,0,0)
-EXCLUDED={'build','dist','bin','obj','.gradle','.kotlin','.cache','.runtime','.assets','runtime','__pycache__','playerdata','logs','checks','.git','node_modules'}
+EXCLUDED={'.local-maps','build','dist','bin','obj','.gradle','.kotlin','.cache','.runtime','.assets','runtime','__pycache__','playerdata','logs','checks','.git','node_modules'}
 FORBIDDEN={'server.properties','ops.json','whitelist.json','usercache.json','.env','caoren_config.json','ecosystem.config.cjs','AGENTS.md'}
 TEXT={'.java','.kt','.kts','.py','.ps1','.sh','.bat','.json','.mcfunction','.mcmeta','.md','.txt','.yml','.yaml','.xml','.properties','.toml','.gradle','.pom','.conf','.csv'}
 
 def digest(raw): return hashlib.sha256(raw).hexdigest()
 def is_source_file(relative):
     relative=Path(relative);parts=relative.parts
+    if parts and parts[0] == 'minigames': return False
     if any(p in EXCLUDED or p.startswith('backup_') or p.startswith('backup-') for p in parts) or relative.name in FORBIDDEN: return False
     if relative.suffix.lower()=='.jar': return tuple(parts[-3:])==('gradle','wrapper','gradle-wrapper.jar')
     return relative.suffix.lower() in TEXT|{'.png','.svg'} or relative.name in {'LICENSE','LICENCE','LISENCE','NOTICE','gradlew','mapctl','mcctl','.gitignore','.gitattributes','.editorconfig'}
@@ -27,7 +28,9 @@ def imported_current_paths(manifest,layout):
         for prefix,replacement in layout['prefixes'].items():
             if original.startswith(prefix): return replacement+original[len(prefix):]
         return original
-    return {current(entry['path']) for entry in manifest['files']}
+    return {current(entry['path']) for entry in manifest['files']
+            if entry['path'] not in layout.get('excludedPaths', {})
+            and not any(entry['path'].startswith(prefix) for prefix in layout.get('excludedPrefixes', {}))}
 def source_files(root):
     return [p for p in sorted(root.rglob('*')) if p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(root.resolve()) and is_source_file(p.relative_to(root))]
 def write_zip(files,output):
@@ -56,7 +59,7 @@ def write_bundle(stage,output,version,provenance):
         rows.append({'path':name,'size':len(raw),'sha256':digest(raw)})
         executable=name.endswith('.sh') or path.name in {'mapctl','mcctl','gradlew'}
         files.append((name,raw,executable))
-    manifest={'version':version,'modules':['CushionWarsA','CushionWarsRealtime','MapMiniGames','CrossEraExperiments','CrossEraCombat'],'provenance':provenance,'files':rows}
+    manifest={'version':version,'modules':['CushionWarsA','CushionWarsRealtime','CrossEraExperiments','CrossEraCombat'],'provenance':provenance,'files':rows}
     raw=(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n').encode('utf-8')
     (stage/'package-manifest.json').write_bytes(raw);files.append(('package-manifest.json',raw,False))
     write_zip(files,output)
@@ -124,11 +127,6 @@ def main():
     pack_datapack(MC/'cushion-wars/cushion-wars-a/prototypes/round-a-p0',stage/'cushion-wars/cushion-wars-a/diagnostics/datapacks/cw-p0-probes.zip')
     pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server/cw-maps-menu',stage/'shared/datapacks/cw-maps-menu.zip')
     for name in ['mapctl','mcctl']: copy(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'shared/tools'/name,lf=True)
-    copy(MC/'minigames/fetch-assets.py',stage/'minigames/fetch-assets.py')
-    (stage/'minigames/README.md').write_text('小游戏合集来自 wifi-left，保留 CC BY-NC-SA 4.0 与原作者附加条款，见 LISENCE。\n数据包源码见 ../source/minigames/source/。\n在本目录运行 python fetch-assets.py --extract 获取固定版本地图及音频，下载后核对 SHA-256。工具仅写入新的 .assets/world-template，不自动安装或覆盖任何玩家世界。\n',encoding='utf-8')
-    copy(MC/'minigames/source/LISENCE',stage/'minigames/LISENCE')
-    pins={'schemaVersion':1,'purpose':'Pinned resources for this release. Imported source provenance is in source/source-manifest.json.','mapUpstream':imported['mapUpstream']}
-    (stage/'source-manifest.json').write_text(json.dumps(pins,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     probe=compile_probe(work);copy(probe,stage/'experiments/cross-era/plugins'/probe.name)
     copy(combat,stage/'experiments/cross-era/plugins'/combat.name)
     for example in ['combat-config.yml','ocm-config.yml']:
@@ -137,9 +135,9 @@ def main():
     for folder in sorted(packs.iterdir()):
         if folder.is_dir() and (folder/'pack.mcmeta').is_file(): pack_datapack(folder,stage/'experiments/cross-era/datapacks'/(folder.name+'.zip'))
     (stage/'experiments/cross-era/README.md').write_text('研究与观察原型，默认不启用。新增阶段04 CrossEraCombat 管理插件，需要单独准备 OCM v2.8.0；配置示例仅供手动核对，不自动覆盖现有配置。阶段03探针和阶段02数据包继续保留。当前未完成真实战斗与原版对照，不代表已还原旧版战斗。按单实例、只启用当前地图插件的边界选择安装，详见 ../../source/cross-era-pvp/combat/README.md。OCM 完整参考源码、原许可及构建入口位于 ../../source/third-party/old-combat-mechanics/；本包不提供 OCM 组合 JAR。\n',encoding='utf-8')
-    for source,name in [(ROOT/'LICENSE','CaorenCup-MIT.txt'),(MC/'third-party/old-combat-mechanics/LICENCE','OldCombatMechanics-MPL-2.0.txt'),(MC/'minigames/source/LISENCE','MapMiniGames-LICENSE.txt'),(MC/'third-party/gradle-wrapper-LICENSE.txt','Gradle-Wrapper-LICENSE.txt')]: copy(source,stage/'licenses'/name)
+    for source,name in [(ROOT/'LICENSE','CaorenCup-MIT.txt'),(MC/'third-party/old-combat-mechanics/LICENCE','OldCombatMechanics-MPL-2.0.txt'),(MC/'third-party/gradle-wrapper-LICENSE.txt','Gradle-Wrapper-LICENSE.txt')]: copy(source,stage/'licenses'/name)
     (stage/'SOURCE.md').write_text('对应源码：https://github.com/GrassBl0ck/caoren-cup/tree/'+args.version+'/mc\n本包 source/ 同时保留全部收录源码及第三方原许可。自研 MIT 不覆盖第三方组件。\n',encoding='utf-8')
-    provenance={'java':25,'paperApi':'26.3','experimentalDefaultEnabled':False,'sourceFiles':len(selected),'mapUpstream':imported['mapUpstream'],'cushionJarSha256':digest(cushion.read_bytes()),'realtimeJarSha256':digest(realtime.read_bytes()),'combatJarSha256':digest(combat.read_bytes()),'probeJarSha256':digest(probe.read_bytes()),'ocmBuild':'Complete reference source and Gradle build entry; no bundled shaded OCM binary'}
+    provenance={'java':25,'paperApi':'26.3','experimentalDefaultEnabled':False,'sourceFiles':len(selected),'cushionJarSha256':digest(cushion.read_bytes()),'realtimeJarSha256':digest(realtime.read_bytes()),'combatJarSha256':digest(combat.read_bytes()),'probeJarSha256':digest(probe.read_bytes()),'ocmBuild':'Complete reference source and Gradle build entry; no bundled shaded OCM binary'}
     write_bundle(stage,output,args.version,provenance)
     print(json.dumps({'path':str(output),'sha256':digest(output.read_bytes()),'sourceFiles':len(selected),'experimentalDefaultEnabled':False},ensure_ascii=False))
 

@@ -1,1 +1,0 @@
-$execute as $(selector) in airworld positioned $(pos) run $(cmd)

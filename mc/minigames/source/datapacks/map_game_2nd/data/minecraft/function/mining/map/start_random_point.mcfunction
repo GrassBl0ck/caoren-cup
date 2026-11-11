@@ -1,1 +1,0 @@
-execute as @a[team=mining,gamemode=adventure] in airworld run function minecraft:mining/map/p_ready_to_start

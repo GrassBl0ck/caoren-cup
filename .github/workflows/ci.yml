@@ -112,8 +112,6 @@ jobs:
         run: |
           python mc/cushion-wars/cushion-wars-a/tools/verify_map.py
           python mc/cushion-wars/cushion-wars-a/tools/verify_pack.py
-      - name: Test pinned map resource extraction safety
-        run: python mc/minigames/test_fetch_assets.py
       - name: Test MC package content and output safety
         run: python -B scripts/test_package_caoren_mc.py
 

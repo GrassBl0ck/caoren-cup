@@ -1,1 +1,0 @@
-function minecraft:gun/hideseek_mace/shoot

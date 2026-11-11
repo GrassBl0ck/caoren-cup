@@ -1,1 +1,0 @@
-function minecraft:color/rancolor

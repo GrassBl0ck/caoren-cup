@@ -1,1 +1,0 @@
-$function utils:run_commands_arrs {commands:$(start_func)}

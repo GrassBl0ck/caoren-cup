@@ -12,7 +12,6 @@
 | `cushion-wars/cushion-wars-a/datapacks/` | 坐垫战争地图层与地图自举数据包 |
 | `cushion-wars/cushion-wars-a/diagnostics/` | 隔离验证用数据包；不作为普通玩法安装步骤 |
 | `cushion-wars/cushion-wars-b/plugins/` | 自研 CushionWarsRealtime 即时制 B；本地自动验证通过，真实服务端及玩家验收待完成 |
-| `minigames/` | 小游戏固定版本下载工具、作者署名和许可 |
 | `shared/` | 地图菜单数据包及 Linux 地图管理参考工具 |
 | `experiments/cross-era/` | CrossEraCombat 管理插件、伤害观察探针、阶段02实验数据包与配置示例，默认不启用 |
 | `source/` | 全部收录源码、设计参考、OCM 工程及各自许可；用于复现和研究 |
@@ -37,17 +36,9 @@
 
 2.2 起包内 A/B 分目录；升级时按各自路径选择组件，不把新增目录整层覆盖到旧安装目录。
 
-## 小游戏合集和大资源
+## 本地游玩地图
 
-在 `minigames/` 目录运行：
-
-```text
-python fetch-assets.py --extract
-```
-
-工具按固定提交下载并核对 SHA-256，解压到新的 `.assets/world-template/`；若目标存在会拒绝覆盖。下载得到的世界模板与音频需按上游说明另行安装到新的实例，不能直接覆盖玩家正在使用的世界。
-
-本包 `source/minigames/source/` 保留数据包源码。作者不承诺 Paper 等插件端的兼容性，实际安装需按所选玩法验证；不要把本项目已有环境的验证结果当成所有服务端的兼容保证。地图和其中部分不得销售，并须保留署名、许可及修改说明。
+第三方小游戏合集及其数据包源码、下载工具不随本包分发。管理员自行准备合法取得的地图。通用地图管理工具不绑定任何第三方地图，使用前按自己的地图 ID 配置菜单和元数据。
 
 ## 跨时代实验与 OCM
 
@@ -65,6 +56,6 @@ OldCombatMechanics 的完整参考源码、原 MPL-2.0 许可和 Gradle Wrapper 
 
 `package-manifest.json` 记录本包相对路径、大小、SHA-256、来源与组件状态。坐垫战争内部插件版本仍为 0.1.0，观察探针仍为 stage03；2.2.0 是草人杯整体发行版本。
 
-自研代码采用 MIT。OCM 源码保留 MPL-2.0；小游戏合集保留 CC BY-NC-SA 4.0 与作者附加条款；Gradle Wrapper 保留原许可。根 MIT 不覆盖这些第三方内容。
+自研代码采用 MIT。OCM 源码保留 MPL-2.0；Gradle Wrapper 保留原许可。根 MIT 不覆盖这些第三方内容。
 
 源码中的部署历史描述原环境，当前打包安装步骤以本文件为准。本包提供代码和安装内容，真人游戏体验仍按各玩法状态分别验收。

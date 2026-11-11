@@ -1,1 +1,0 @@
-$data modify $(target) set from $(from)[$(idx)]

@@ -46,7 +46,7 @@ class McPackageTests(unittest.TestCase):
     def test_source_selection_preserves_wrappers_but_rejects_worlds_secrets_and_builds(self):
         for name in ['cushion-wars/cushion-wars-a/plugin/src/main/java/Game.java','third-party/old-combat-mechanics/gradle/wrapper/gradle-wrapper.jar','cushion-wars/cushion-wars-a/deploy/server/mapctl']:
             self.assertTrue(package.is_source_file(Path(name)),name)
-        for name in ['minigames/.assets/world/level.dat','cushion-wars/cushion-wars-a/plugin/lib/paper.jar','cross-era-pvp/stage03/build/libs/Probe.jar','server.properties','ops.json','.env','world/playerdata/a.dat']:
+        for name in ['minigames/source/datapacks/example/data/a/function/tick.mcfunction','minigames/fetch-assets.py','.local-maps/minigames/source/README.md','minigames/.assets/world/level.dat','cushion-wars/cushion-wars-a/plugin/lib/paper.jar','cross-era-pvp/stage03/build/libs/Probe.jar','server.properties','ops.json','.env','world/playerdata/a.dat']:
             self.assertFalse(package.is_source_file(Path(name)),name)
     def test_imported_sources_are_selected_after_directory_migration(self):
         manifest=json.loads((ROOT/'mc/source-manifest.json').read_text(encoding='utf-8-sig'))
@@ -54,7 +54,11 @@ class McPackageTests(unittest.TestCase):
         expected=package.imported_current_paths(manifest,layout)
         selected={p.relative_to(ROOT/'mc').as_posix() for p in package.source_files(ROOT/'mc')}
         self.assertTrue(expected.issubset(selected),sorted(expected-selected))
-        self.assertEqual(len(expected),len(manifest['files']))
+        excluded = {entry['path'] for entry in manifest['files']
+                    if entry['path'] in layout.get('excludedPaths', {})
+                    or any(entry['path'].startswith(prefix) for prefix in layout.get('excludedPrefixes', {}))}
+        self.assertEqual(len(expected),len(manifest['files'])-len(excluded))
+        self.assertFalse(any(name.startswith('minigames/') for name in expected | selected))
         missing=next(iter(expected))
         self.assertFalse(expected.issubset(selected-{missing}))
     def test_bundle_manifest_paths_hashes_and_exclusive_output(self):
@@ -65,6 +69,7 @@ class McPackageTests(unittest.TestCase):
             self.assertEqual(manifest['version'],'v2.0.0')
             self.assertEqual([f['path'] for f in manifest['files']],['INSTALL.md'])
             self.assertFalse(manifest['provenance']['experimentalDefaultEnabled'])
+            self.assertNotIn('MapMiniGames', manifest['modules'])
         original=target.read_bytes()
         with self.assertRaises(FileExistsError): package.write_bundle(stage,target,'v2.0.0',{})
         self.assertEqual(target.read_bytes(),original)

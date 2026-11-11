@@ -1,1 +1,0 @@
-execute as @a[team=pillar,gamemode=survival] at @s run loot give @s loot lucky_pillar/demo

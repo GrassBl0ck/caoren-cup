@@ -1,2 +1,0 @@
-function minecraft:stronghold/reset/reset
-function minecraft:stronghold/reset/start_build

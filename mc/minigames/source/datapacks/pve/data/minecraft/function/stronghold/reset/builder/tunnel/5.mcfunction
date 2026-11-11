@@ -1,1 +1,0 @@
-function minecraft:stronghold/reset/builder/tunnel/4

@@ -1,1 +1,0 @@
-execute unless items entity @s weapon.offhand arrow run item replace entity @s weapon.offhand with arrow[custom_data={disaster.snow:"bomb_arrow"},item_name='']

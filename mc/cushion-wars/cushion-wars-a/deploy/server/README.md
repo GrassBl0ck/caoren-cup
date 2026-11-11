@@ -37,9 +37,11 @@ ssh root@123.206.213.166 'chown -R caoren-mc:caoren-mc /opt/caoren-mc-26.3/maps/
 cd /opt/caoren-mc-26.3
 ./mapctl list                     # 有哪些地图，当前是哪张
 ./mapctl status                   # 服务状态、世界大小、端口、内存
-sudo ./mapctl use minigames        # 切到小游戏合集（重启 25—35 秒）
+sudo ./mapctl use example-map      # 切到自行准备的地图（会重启服务端）
 sudo ./mapctl use cushion-wars     # 切回坐垫战争
 sudo ./mapctl create <id> "标题"    # 新建一张空地图
 ```
 
-完整说明见 `docs/10-多地图切换方案.md`。
+`maps/example-map/map.conf` 是配置示例，使用前先准备自己的世界，并同步修改地图 ID 和标题。菜单保留自研地图及列表入口；需要其他地图按钮时，按自己的地图 ID 添加。本仓库不附带第三方游玩地图。
+
+现有工具仍通过重启切图；免重启方案尚未接入。历史部署说明见 `docs/10-多地图切换方案.md`。

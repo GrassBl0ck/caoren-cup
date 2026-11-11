@@ -1,1 +1,0 @@
-summon minecraft:spider ~ ~ ~ {Health:10,CustomName:{text:"蜘蛛",color:yellow},CustomNameVisible:true,DeathLootTable:"minecraft:stronghold/death/zombie/1",Tags:["stronghold.mobs"]}

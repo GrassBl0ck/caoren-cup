@@ -1,1 +1,0 @@
-fill 69 -26 336 75 -23 336 air replace waxed_oxidized_copper_bars

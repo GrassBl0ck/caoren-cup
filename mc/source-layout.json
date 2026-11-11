@@ -13,5 +13,28 @@
     "cushion-wars-a/references/坐垫战争-即时制-B-V1.0-设计确认版.md": "cushion-wars/cushion-wars-b/references/imported-a-copy/坐垫战争-即时制-B-V1.0-设计确认版.md",
     "cushion-wars-a/references/坐垫战争-设计确认汇总-V1.0.md": "cushion-wars/shared/references/imported-a-copy/坐垫战争-设计确认汇总-V1.0.md"
   },
-  "integrationChanges": {}
+  "integrationChanges": {
+    "cushion-wars-a/deploy/server/README.md": {
+      "sha256": "b733944730962ab2de36198c593c1afb686c53a903df2bf256f86ba1ff322c5b",
+      "reason": "2026-11-12 owner requested generic map switching examples, no bundled third-party play map."
+    },
+    "cushion-wars-a/deploy/server/cw-maps-menu/pack.mcmeta": {
+      "sha256": "6396224815ccc64e807be505f100cc64fc9b3113d9e03778efd16058e6221841",
+      "reason": "2026-11-12 owner requested generic map switching examples, no bundled third-party play map."
+    },
+    "cushion-wars-a/deploy/server/cw-maps-menu/data/cw_menu/dialog/menu.json": {
+      "sha256": "2893167be0c9517a4dc6e9e5678a4c1c24ac4cd5dffaec9d5093a6db87f0604f",
+      "reason": "2026-11-12 owner requested generic map switching examples, no bundled third-party play map."
+    },
+    "cushion-wars-a/deploy/server/maps/cushion-wars/map.conf": {
+      "sha256": "a1fb3589f9751277668b98ab0b855ec864bf155602858fabefc80fda995678ba",
+      "reason": "2026-11-12 owner requested generic map switching examples, no bundled third-party play map."
+    }
+  },
+  "excludedPrefixes": {
+    "minigames/": "2026-11-12: Owner confirmed this third-party map is for local play only; moved to ignored mc/.local-maps/minigames, not distributed."
+  },
+  "excludedPaths": {
+    "cushion-wars-a/deploy/server/maps/minigames/map.conf": "2026-11-12: Local map registration retained locally; public examples use example-map."
+  }
 }

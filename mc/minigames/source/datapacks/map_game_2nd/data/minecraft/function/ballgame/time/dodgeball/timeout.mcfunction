@@ -1,2 +1,0 @@
-execute if score ballgame.state state matches 1 run return run function minecraft:ballgame/actions/dodgeball/roundwin/over
-execute if score ballgame.state state matches 3 run return run function minecraft:ballgame/actions/dodgeball/next_round

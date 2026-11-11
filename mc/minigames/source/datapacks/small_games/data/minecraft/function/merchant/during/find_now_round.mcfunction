@@ -1,1 +1,0 @@
-execute as @a[team=deskgame,tag=merchant.alive] if score @s order = desk.merchant.nowround order run gamemode adventure @s

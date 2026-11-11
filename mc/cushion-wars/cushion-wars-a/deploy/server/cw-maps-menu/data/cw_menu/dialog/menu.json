@@ -30,10 +30,6 @@
       "action": { "type": "minecraft:run_command", "command": "/maps goto cushion-wars" }
     },
     {
-      "label": { "text": "草人杯小游戏合集", "color": "gold" },
-      "action": { "type": "minecraft:run_command", "command": "/maps goto minigames" }
-    },
-    {
       "label": { "text": "查看当前在哪张地图", "color": "white" },
       "action": { "type": "minecraft:run_command", "command": "/maps list" }
     }

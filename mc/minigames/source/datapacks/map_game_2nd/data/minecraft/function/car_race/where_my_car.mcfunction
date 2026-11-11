@@ -1,1 +1,0 @@
-execute unless items entity @s container.* minecart[custom_data~{gcar:1b}] run give @s minecart[custom_data={gcar:1b},custom_name=[{"text":"\u00a7aGCAR \u00a77 - 放到\u00a7e副手"},"\u00a77使用"]] 1

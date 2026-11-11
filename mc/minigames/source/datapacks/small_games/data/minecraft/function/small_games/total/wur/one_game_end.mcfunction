@@ -1,1 +1,0 @@
-function minecraft:small_games/total/wur/detect_game_status

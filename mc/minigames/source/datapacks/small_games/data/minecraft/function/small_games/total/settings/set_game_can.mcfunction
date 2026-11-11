@@ -1,2 +1,0 @@
-$execute if data storage minecraft:temp {game_enable_state_tmp:{'g_$(id)':"1"}} run scoreboard players set total.settings.game.$(id) state 1
-$execute if data storage minecraft:temp {game_enable_state_tmp:{'g_$(id)':"0"}} run scoreboard players set total.settings.game.$(id) state 0

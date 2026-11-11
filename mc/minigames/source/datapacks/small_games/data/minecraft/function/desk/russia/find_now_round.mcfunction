@@ -1,1 +1,0 @@
-execute as @a[team=deskgame,gamemode=adventure] if score @s order = desk.russia.nowround order run tag @s add desk.russia.nowround

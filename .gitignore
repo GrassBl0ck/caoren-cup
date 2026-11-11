@@ -1,3 +1,7 @@
+# Local play maps and third-party snapshots are never distributed.
+/mc/.local-maps/
+/mc/minigames/
+
 # IDE / editor
 .vs/
 .idea/

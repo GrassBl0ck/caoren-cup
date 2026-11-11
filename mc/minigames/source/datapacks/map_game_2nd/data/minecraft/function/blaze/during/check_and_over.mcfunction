@@ -1,3 +1,0 @@
-execute if score blaze.state state matches 2..10 if score blaze.score.a board = blaze.score.b board run function minecraft:blaze/over/pingju
-execute if score blaze.state state matches 2..10 if score blaze.score.a board > blaze.score.b board run function minecraft:blaze/over/a
-execute if score blaze.state state matches 2..10 if score blaze.score.a board < blaze.score.b board run function minecraft:blaze/over/b
