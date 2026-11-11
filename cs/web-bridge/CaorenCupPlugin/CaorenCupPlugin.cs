@@ -20,13 +20,15 @@ namespace CaorenCupPlugin;
 public sealed class CaorenCupPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Command Center Bridge";
-    public override string ModuleVersion => "2.0.0";
+    public override string ModuleVersion => "2.2.2";
     public override string ModuleAuthor => "CaorenCup";
     public override string ModuleDescription => "Bridge trusted CS2 identity, score and match stats to the CaorenCup web command center.";
 
     private readonly HttpClient _http = new();
     private readonly DuelTelemetryIsolationState _duelTelemetryIsolation = new();
     private readonly HeartbeatResponseOrder _heartbeatResponseOrder = new();
+    private readonly string _heartbeatInstanceId = Guid.NewGuid().ToString("N");
+    private readonly string _heartbeatStartedAtTicks = DateTime.UtcNow.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private readonly HeartbeatCommandTransactionGate _heartbeatCommandTransactions = new();
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
     private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
@@ -46,6 +48,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private CaorenConfig _config = new();
     private string? _currentMatchId;
     private int _currentRound;
+    private long _randomLiveRevision = -1;
     private int _scoreCt;
     private int _scoreT;
     private long _eventSequence;
@@ -544,7 +547,18 @@ public sealed class CaorenCupPlugin : BasePlugin
     [GameEventHandler]
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
+        var mode = CaorenCupCoreAccess.TryGet()?.GameModes.State;
+        if (mode is { ModeId: "random", Lifecycle: GameModeLifecycleState.Live } && mode.Revision != _randomLiveRevision)
+        {
+            ResetLiveMatchStats(0);
+            _randomLiveRevision = mode.Revision;
+        }
         _currentRound++;
+        if (mode is { ModeId: "random", Lifecycle: GameModeLifecycleState.Live })
+        {
+            var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+            if (rules is not null) _currentRound = rules.TotalRoundsPlayed + 1;
+        }
         RefreshRoundHealthState();
         EnforceTeamAssignments();
         QueueEvent("round_start", new
@@ -856,8 +870,12 @@ public sealed class CaorenCupPlugin : BasePlugin
         {
             var response = await _http.PostAsJsonAsync("api/plugin/heartbeat", new
             {
+                heartbeatInstanceId = _heartbeatInstanceId,
+                heartbeatStartedAtTicks = _heartbeatStartedAtTicks,
+                heartbeatSequence = heartbeatRequest.Sequence,
                 mapName = SafeMapName(),
-                gameMode = CaorenCupCoreAccess.TryGet()?.GameModes.State,
+                gameMode = GameModeBridgePolicy.ToHeartbeatState(CaorenCupCoreAccess.TryGet()?.GameModes.State),
+                availableGameModes = CaorenCupCoreAccess.TryGet()?.GameModes.AvailableModes.Where(mode => mode.Available).Select(mode => mode.Id).ToArray(),
             }, _jsonOptions);
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
             var text = await response.Content.ReadAsStringAsync();
@@ -928,6 +946,9 @@ public sealed class CaorenCupPlugin : BasePlugin
             return HeartbeatResponseDisposition.Expired;
         }
 
+        if (!GameModeBridgePolicy.MatchesRandomHeartbeat(state, CaorenCupCoreAccess.TryGet()?.GameModes.State))
+            return HeartbeatResponseDisposition.Stale;
+
         var disposition = _duelTelemetryIsolation.ObserveHeartbeatState(state);
         if (disposition == HeartbeatResponseDisposition.Stale)
         {
@@ -978,7 +999,8 @@ public sealed class CaorenCupPlugin : BasePlugin
             _stats.Clear();
         }
 
-        if (state != null && ShouldApplyWebMatchCounters(_duelTelemetryIsolation.IsActive))
+        if (state != null && CaorenCupCoreAccess.TryGet()?.GameModes.State.ModeId != "random" &&
+            ShouldApplyWebMatchCounters(_duelTelemetryIsolation.IsActive))
         {
             _currentRound = Math.Max(0, state.CurrentRound);
             _scoreCt = Math.Max(0, state.ScoreCT);
@@ -1029,7 +1051,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void StopDemoRecording()
     {
-        Server.ExecuteCommand("tv_stop");
+        Server.ExecuteCommand("tv_stoprecord");
         Logger.LogInformation("Demo recording stopped: {DemoName}", _demoRecordingName ?? "unknown");
         _demoRecording = false;
         _demoRecordingName = null;
@@ -1680,6 +1702,11 @@ public sealed class CaorenCupPlugin : BasePlugin
 
         if (string.Equals(command.Type, "RESET_LIVE_MATCH_STATS", StringComparison.OrdinalIgnoreCase))
         {
+            if (CaorenCupCoreAccess.TryGet()?.GameModes.State.ModeId == "random")
+            {
+                Logger.LogWarning("Rejected web stats reset while Random owns the formal round counter.");
+                return Task.FromResult(true);
+            }
             var currentRound = 1;
             if (command.Payload.ValueKind == JsonValueKind.Object &&
                 command.Payload.TryGetProperty("currentRound", out var currentRoundElement) &&
@@ -1743,45 +1770,29 @@ public sealed class CaorenCupPlugin : BasePlugin
             return;
         }
 
-        string modeId = command.Payload.TryGetProperty("modeId", out var modeElement)
-            ? modeElement.GetString()?.Trim().ToLowerInvariant() ?? string.Empty
-            : string.Empty;
-        if (!string.IsNullOrWhiteSpace(modeId) && !GameModeCommandPolicy.IsAllowedMode(modeId))
+        var modeId = command.Payload.TryGetProperty("modeId", out var mode) && mode.ValueKind == JsonValueKind.String
+            ? mode.GetString()?.Trim().ToLowerInvariant() ?? string.Empty : string.Empty;
+        var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (command.Payload.TryGetProperty("cvarOverrides", out var values))
         {
-            Logger.LogWarning("Rejected unknown game mode from web: {ModeId}", modeId);
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(modeId) &&
-            (string.Equals(command.Type, "GAME_MODE_SELECT", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(command.Type, "GAME_MODE_START", StringComparison.OrdinalIgnoreCase)))
-        {
-            Server.ExecuteCommand($"gamemode {modeId}");
-            ApplyGameModeOverrides(command.Payload);
-        }
-
-        if (string.Equals(command.Type, "GAME_MODE_START", StringComparison.OrdinalIgnoreCase))
-            Server.ExecuteCommand("gamemode start");
-        else if (string.Equals(command.Type, "GAME_MODE_STOP", StringComparison.OrdinalIgnoreCase))
-            Server.ExecuteCommand("gamemode stop");
-    }
-
-    private void ApplyGameModeOverrides(JsonElement payload)
-    {
-        if (!payload.TryGetProperty("cvarOverrides", out var overrides) ||
-            overrides.ValueKind != JsonValueKind.Object) return;
-
-        foreach (var item in overrides.EnumerateObject())
-        {
-            string name = item.Name.Trim();
-            string value = item.Value.GetString()?.Trim() ?? string.Empty;
-            if (!GameModeCommandPolicy.IsAllowedCvar(name, value))
+            if (values.ValueKind != JsonValueKind.Object) return;
+            foreach (var item in values.EnumerateObject())
             {
-                Logger.LogWarning("Rejected game mode CVar override: {Name}", name);
-                continue;
+                if (item.Value.ValueKind != JsonValueKind.String || !overrides.TryAdd(item.Name, item.Value.GetString() ?? string.Empty))
+                    return;
             }
-            Server.ExecuteCommand($"gamemode_cvar {name} {value}");
         }
+        int? warmupSeconds = null;
+        if (command.Payload.TryGetProperty("warmupSeconds", out var seconds))
+        {
+            if (seconds.ValueKind != JsonValueKind.Number || !seconds.TryGetInt32(out var value)) return;
+            warmupSeconds = value;
+        }
+        var mapName = command.Payload.TryGetProperty("mapName", out var map) && map.ValueKind == JsonValueKind.String
+            ? map.GetString() : null;
+        var result = GameModeBridgePolicy.Apply(CaorenCupCoreAccess.TryGet()?.GameModes,
+            command.Type?.ToUpperInvariant() ?? string.Empty, modeId, overrides, warmupSeconds, mapName);
+        if (!result.Success) Logger.LogWarning("Rejected game mode command: {Reason}", result.Message);
     }
 
     private void ApplyTeamAssignments(JsonElement payload)
@@ -2471,6 +2482,12 @@ public sealed class PluginCommand
 
 public sealed class PluginHeartbeatResponse
 {
+    [JsonPropertyName("gameModeId")]
+    public string? GameModeId { get; set; }
+
+    [JsonPropertyName("gameModeRevision")]
+    public long? GameModeRevision { get; set; }
+
     [JsonPropertyName("matchId")]
     public string? MatchId { get; set; }
 

@@ -1,5 +1,7 @@
 # Caoren Cup / 草人杯
 
+首次开服请从[完整部署指南](docs/deployment/README.md)开始，涵盖 Windows 操作端、Ubuntu 与 Windows 服务端、CS、MC、网站及公网连接。Windows 服务端路线未验证，各组件证据范围见指南。
+
 草人杯分为 CS 与 MC 两个板块，共用网站和草人杯账户。登录后可随时切换，CS 保留现有赛事大厅，MC 提供游戏介绍、玩法和正版入服指引。
 
 2.2.1 统一 CS 消息前缀与颜色，补齐管理操作公示并减少重复通知；不改变既有玩法规则。详见 [2.2.1 更新说明](docs/releases/v2.2.1.md)。头部缩放与 MC 玩法的成熟状态、已知限制继续沿用 [2.2.0 更新说明](docs/releases/v2.2.0.md)。
@@ -277,18 +279,20 @@ Scoreboard
 
 ### 网页端
 
-- Node.js 20 或更新版本
+- 新部署采用 Node.js 22 LTS，版本与验证范围见完整部署指南
 - npm
 
 ### 插件端
 
-- .NET 8 SDK
+- 源码构建需要 .NET 10 SDK 与 .NET 8 SDK，按各工程 TargetFramework 核对
 - CounterStrikeSharp
 - CS2 Dedicated Server
 
 ---
 
 ## 快速开始
+
+以下各组件命令分别从仓库根目录开始。运行另一个组件前先返回仓库根目录，完整的新手路线见[部署指南](docs/deployment/README.md)。
 
 ### 1. 克隆项目
 
@@ -332,7 +336,7 @@ http://127.0.0.1:3000
 进入插件目录：
 
 ```bash
-cd game-plugin
+cd cs/game-plugin
 ```
 
 还原依赖：
@@ -673,7 +677,7 @@ npm run typecheck
 ### CS2 娱乐玩法插件
 
 ```bash
-cd game-plugin
+cd cs/game-plugin
 dotnet restore
 dotnet build -c Release
 dotnet publish -c Release -o ./publish
@@ -684,7 +688,7 @@ dotnet publish -c Release -o ./publish
 ### CS2 网页桥接插件
 
 ```bash
-cd web-command-center/CaorenCupPlugin
+cd cs/web-bridge/CaorenCupPlugin
 dotnet restore
 dotnet build -c Release
 dotnet publish -c Release -o ./publish
@@ -1022,11 +1026,11 @@ curl -I http://127.0.0.1:3000/assets/audio/manifest.json
 
 草人杯仓库主体使用 MIT License。
 
-许可证例外：`game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/` 基于 GPL-3.0 上游项目改造，该目录及其修改使用 GPL-3.0，不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/UPSTREAM.md`。
+许可证例外：`cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/` 基于 GPL-3.0 上游项目改造，该目录及其修改使用 GPL-3.0，不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见 `cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/UPSTREAM.md`。
 
 许可证例外：归档目录 `archive/friberg-v1.11-paused-20261002/friberg-game/` 基于 `shnlfriberg/csgofriberg` 的固定源码快照改造，该目录及其修改使用 GNU Affero General Public License v3.0（AGPL-3.0），不适用仓库根 MIT 许可证。上游来源、固定提交和改动说明见归档目录中的 `UPSTREAM.md`。通过网络向用户提供修改版服务时，必须按 AGPL-3.0 向相应用户提供对应源码获取方式；当前项目处于暂停状态，未作为当前发布组件提供。
 
-`mini-games-plugin/` 作为独立组件使用 GNU General Public License v3.0（GPL-3.0），其复制、修改和分发以该目录内的 `LICENSE` 为准。发布或再分发小游戏插件二进制时必须保留对应许可证与源码获取方式。
+`cs/mini-games-plugin/` 作为独立组件使用 GNU General Public License v3.0（GPL-3.0），其复制、修改和分发以该目录内的 `LICENSE` 为准。发布或再分发小游戏插件二进制时必须保留对应许可证与源码获取方式。
 
 你可以自由使用、修改和分发本项目，但需要保留原始版权声明和许可证内容。
 

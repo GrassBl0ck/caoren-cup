@@ -107,6 +107,7 @@ public class AmmoFeature : ICaorenFeature
 
         var player = @event.Userid;
         if (player == null || !player.IsValid || !player.PawnIsAlive) return HookResult.Continue;
+        if (CaorenCup.Contracts.CaorenCupPlayerEffectsAccess.Get(player) is not null) return HookResult.Continue;
 
         // 检查阵营
         bool isMatch = _config.Ammo.Target == "all" ||
@@ -133,10 +134,7 @@ public class AmmoFeature : ICaorenFeature
             if (activeWeapon != null && activeWeapon.IsValid)
             {
                 // CS2 引擎已经在开火时扣除了 1 发子弹，我们在此刻给它加回来
-                activeWeapon.Clip1 += 1;
-
-                // 【核心同步机制】强制通知客户端 UI 更新，防止右下角数字抖动卡死
-                Utilities.SetStateChanged(activeWeapon, "CBasePlayerWeapon", "m_iClip1");
+                CaorenCup.Contracts.CaorenCupWeaponAmmo.AddClip(activeWeapon, 1);
             }
         }
 
@@ -150,6 +148,7 @@ public class AmmoFeature : ICaorenFeature
 
         var player = @event.Userid;
         if (player == null || !player.IsValid || !player.PawnIsAlive) return HookResult.Continue;
+        if (CaorenCup.Contracts.CaorenCupPlayerEffectsAccess.Get(player) is not null) return HookResult.Continue;
 
         bool isMatch = _config.Ammo.Target == "all" ||
                       (_config.Ammo.Target == "t" && player.TeamNum == (byte)CsTeam.Terrorist) ||
@@ -174,7 +173,7 @@ public class AmmoFeature : ICaorenFeature
             {
                 if (player.IsValid && player.PawnIsAlive)
                 {
-                    player.GiveNamedItem(thrownWeapon);
+                    CaorenCup.Contracts.CaorenCupGrenadeSupply.TryGive(player, thrownWeapon);
                 }
             });
         }

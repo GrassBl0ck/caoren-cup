@@ -24,7 +24,7 @@ public sealed class CS2MiniGamesPlugin : BasePlugin, IPluginConfig<MiniGamesConf
 
     public override string ModuleName => "CS2 Mini Games";
 
-    public override string ModuleVersion => "0.1.0";
+    public override string ModuleVersion => "2.2.2";
 
     public override string ModuleAuthor => "GrassBl0ck";
 

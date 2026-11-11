@@ -337,6 +337,17 @@ Panel.Hidden, Label.Hidden, Button.Hidden { visibility: collapse; }
 .CaorenAudioItem .CaorenMenuButton:hover { background-color: #ffffff28; }
 .CaorenAudioItem .CaorenMenuButton Label { font-size: 18px; }
 
+/* 随机乱斗管理只读巡查，与玩家的选牌页面分开。 */
+.CaorenRandomAdminSummary { width: 100%; font-size: 21px; color: #eeeeee; margin-top: 10px; margin-bottom: 8px; }
+.CaorenRandomAdminRow { width: 100%; height: 46px; margin: 3px 0px; }
+.CaorenRandomAdminRow .CaorenMenuButton { background-color: #ffffff12; }
+.CaorenRandomAdminRow .CaorenMenuButton:hover { background-color: #ffffff28; }
+.CaorenRandomAdminRow .CaorenMenuButton Label { horizontal-align: left; text-align: left; padding-left: 16px; font-size: 18px; }
+.CaorenRandomAdminNav { width: 190px; height: 44px; margin-right: 12px; }
+.CaorenRandomAdminNav .CaorenMenuButton Label { font-size: 18px; }
+.CaorenRandomAdminDetail { flow-children: down; width: 100%; height: 330px; }
+.CaorenRandomAdminDescription { width: 100%; height: 275px; font-size: 22px; line-height: 29px; white-space: normal; color: #eeeeee; }
+
 /* 个人悬停声音分档，0% 保持无声；原生素材不写入资源包。 */
 .CaorenSettings.MenuVolume1 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover1"; }
 .CaorenSettings.MenuVolume2 Button.CaorenMenuButton:enabled:hover { sound: "caorencup.ui.hover2"; }

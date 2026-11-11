@@ -19,6 +19,8 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
+using CounterStrikeSharp.API.Modules.Cvars;
+using CaorenCup.Contracts;
 using System;
 
 namespace CaorenCup.Features
@@ -31,6 +33,8 @@ namespace CaorenCup.Features
         public int JumpsCount { get; set; }
         // 保留玩家个人关闭二段跳的功能，可通过其他途径触发，默认开启
         public bool PersonalEnabled { get; set; } = true;
+        public string Identity { get; set; } = "";
+        public int Round { get; set; }
     }
 
     public class DoubleJumpFeature : ICaorenFeature
@@ -187,25 +191,35 @@ namespace CaorenCup.Features
 
         private void OnTickCore()
         {
-            if (!_settings.Enabled || _settings.MaxJumps <= 1)
-                return;
-
             foreach (var player in Utilities.GetPlayers())
             {
                 // 校验玩家有效性 (替代 PlayerControllerEx.IsValid)
-                if (player == null || !player.IsValid || player.IsBot || !player.PawnIsAlive)
+                if (player == null || !player.IsValid || player.IsHLTV || !player.PawnIsAlive)
                     continue;
+
+                var personal = CaorenCupPlayerEffectsAccess.Get(player);
+                if (personal is not null)
+                {
+                    if (personal.ExtraJumps == 0) continue;
+                    var impulse = ConVar.Find("sv_jump_impulse");
+                    if (impulse is null) continue;
+                    ProcessPlayerJump(player, personal.ExtraJumps + 1,
+                        impulse.GetPrimitiveValue<float>(), true, personal);
+                    continue;
+                }
+                if (!_settings.Enabled || _settings.MaxJumps <= 1 || player.IsBot) continue;
 
                 // 校验目标队伍
                 var team = player.TeamNum; // 1=Spec, 2=T, 3=CT
                 if (_settings.Target == "t" && team != 2) continue;
                 if (_settings.Target == "ct" && team != 3) continue;
 
-                ProcessPlayerJump(player);
+                ProcessPlayerJump(player, _settings.MaxJumps, _settings.Velocity, _settings.AllowInstantJump, null);
             }
         }
 
-        private void ProcessPlayerJump(CCSPlayerController player)
+        private void ProcessPlayerJump(CCSPlayerController player, int maxJumps, float impulse,
+            bool allowInstant, CaorenCupPlayerEffects? personal)
         {
             var playerPawn = player.PlayerPawn.Value;
             if (playerPawn == null) return;
@@ -215,6 +229,19 @@ namespace CaorenCup.Features
 
             var currentFlags = (PlayerFlags)playerPawn.Flags;
             var currentButtons = player.Buttons;
+
+            if (personal is not null)
+            {
+                if (state.Identity != personal.Identity || state.Round != personal.Round)
+                {
+                    state.PrevFlags = currentFlags;
+                    state.PrevButtons = currentButtons;
+                    state.Identity = personal.Identity;
+                    state.Round = personal.Round;
+                }
+                // 次数由玩法保管，换槽位与重连继续沿用。
+                state.JumpsCount = 1 + personal.ExtraJumpsUsed;
+            }
 
             var wasGrounded = (state.PrevFlags & PlayerFlags.FL_ONGROUND) != 0;
             var isGrounded = (currentFlags & PlayerFlags.FL_ONGROUND) != 0;
@@ -231,17 +258,19 @@ namespace CaorenCup.Features
             // 触发二段跳条件判定
             if (!jumpWasPressed && jumpIsPressed &&
                 !wasGrounded && !isGrounded &&
-                state.JumpsCount < _settings.MaxJumps)
+                state.JumpsCount < maxJumps)
             {
-                state.JumpsCount++;
-
                 // 判断是否允许上升期跳跃，或者当前 Z 轴速度小于 0（正在下落）
-                if (_settings.AllowInstantJump || playerPawn.AbsVelocity.Z < 0)
+                if (allowInstant || playerPawn.AbsVelocity.Z < 0)
                 {
+                    state.JumpsCount++;
                     // 施加推力 (替代 PlayerPawnEx.ForceJump)
-                    playerPawn.AbsVelocity.Z = _settings.Velocity;
+                    playerPawn.AbsVelocity.Z = impulse;
                 }
             }
+
+            if (personal is not null)
+                CaorenCupPlayerEffectsAccess.TryGet()?.ReportExtraJumpsUsed(player, Math.Max(0, state.JumpsCount - 1));
 
             state.PrevFlags = currentFlags;
             state.PrevButtons = currentButtons;

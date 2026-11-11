@@ -8,7 +8,7 @@ namespace CaorenCup;
 public sealed class CaorenCupPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Fun Commands";
-    public override string ModuleVersion => "1.10.0";
+    public override string ModuleVersion => "2.2.2";
     public override string ModuleAuthor => "Graslock + AI";
 
     private ICaorenCupCoreApi Core => CaorenCupCoreAccess.TryGet()
@@ -81,11 +81,13 @@ public sealed class CaorenCupPlugin : BasePlugin
                 skipReset ? null : () => feature.SetEnabled(false)));
         }
 
+        CaorenCupPlayerEffectsAccess.RegisterConsumer(this);
         Console.WriteLine($"[草人杯] FunCommands loaded. Config seed: {LegacyConfigPath}");
     }
 
     public override void Unload(bool hotReload)
     {
+        CaorenCupPlayerEffectsAccess.UnregisterConsumer(this);
         CaorenCupModuleRegistry.Unregister(this);
         foreach (var feature in _features)
             feature.OnUnload();

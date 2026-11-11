@@ -18,7 +18,7 @@ import {
     normalizePluginRound,
     updateMatchFinishState,
     resolveRosterTeamByInitialSide,
-    markGameModeLiveFromRuntime,
+    synchronizeRandomModeRuntime,
 } from './game-flow-manager';
 import { ADMIN_PASSWORD, PLUGIN_TOKEN } from './game-constants';
 import { resolveDuelMapConfig } from './duel-config';
@@ -26,6 +26,8 @@ import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer } from './identity/session-integration';
 import { validateUnbalancedRosterForTeamLock } from './unbalanced-roster';
 import { getGameModeRoundRules } from './game-mode-rounds';
+import { GAME_MODE_MANIFESTS } from './game-mode';
+import { PluginHeartbeatOrder } from './plugin-heartbeat-order';
 
 type TeamAssignmentSide = 'CT' | 'T';
 
@@ -276,6 +278,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
     notifyMessage: (msg: string) => void;
 }) {
     const { broadcastState, requestStateBroadcast, flushStateBroadcast, notifyMessage } = deps;
+    const heartbeatOrder = new PluginHeartbeatOrder();
 
     app.get('/api/plugin/state', requirePluginAuth, (req, res) => {
         const session = getSession();
@@ -303,33 +306,45 @@ export function registerPluginRoutes(app: express.Express, deps: {
     });
 
     app.post('/api/plugin/heartbeat', requirePluginAuth, (req, res) => {
+        // Reject before touching the session or taking commands from the outbound queue.
+        if (!heartbeatOrder.accept(req.body)) {
+            return res.status(409).json({ success: false, ignored: true, error: '过期或无效的插件心跳' });
+        }
         const session = getSession();
         if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
-        session.liveGameData.pluginConnected = true;
-        session.liveGameData.lastPluginHeartbeatAt = Date.now();
-        if (req.body?.mapName) session.liveGameData.mapName = String(req.body.mapName);
+        if (Array.isArray(req.body?.availableGameModes)) {
+            session.availableGameModes = req.body.availableGameModes.filter((id: unknown): id is GameModeId =>
+                typeof id === 'string' && Object.prototype.hasOwnProperty.call(GAME_MODE_MANIFESTS, id));
+        } else if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'availableGameModes')) {
+            session.availableGameModes = [];
+        }
         const runtime = req.body?.gameMode;
         if (runtime && typeof runtime === 'object' &&
             typeof runtime.modeId === 'string' &&
-            typeof runtime.lifecycle === 'string' &&
+            Object.prototype.hasOwnProperty.call(GAME_MODE_MANIFESTS, runtime.modeId) &&
+            ['Lobby', 'Warmup', 'Live', 'Stopped', 'Error'].includes(runtime.lifecycle) &&
             Number.isFinite(Number(runtime.warmupSeconds)) &&
             Number.isFinite(Number(runtime.revision))) {
-            session.gameModeRuntime = {
+            synchronizeRandomModeRuntime({
                 modeId: runtime.modeId as GameModeId,
                 lifecycle: runtime.lifecycle as GameModeLifecycle,
                 warmupSeconds: Math.max(1, Math.floor(Number(runtime.warmupSeconds))),
                 revision: Math.max(0, Math.floor(Number(runtime.revision))),
                 ...(typeof runtime.error === 'string' ? { error: runtime.error } : {}),
-            };
-            if (runtime.lifecycle === 'Live') {
-                markGameModeLiveFromRuntime(runtime.modeId);
-            }
+            });
         }
+        // A newly confirmed Live transition replaces liveGameData; apply heartbeat
+        // metadata to the new object rather than the discarded pregame snapshot.
+        session.liveGameData.pluginConnected = true;
+        session.liveGameData.lastPluginHeartbeatAt = Date.now();
+        if (req.body?.mapName) session.liveGameData.mapName = String(req.body.mapName);
         broadcastState();
         res.json({
             success: true,
             matchId: session.matchId,
             phase: session.phase,
+            gameModeId: session.gameModeRuntime?.modeId,
+            gameModeRevision: session.gameModeRuntime?.revision,
             scoreCT: session.liveGameData.scoreCT || 0,
             scoreT: session.liveGameData.scoreT || 0,
             currentRound: session.liveGameData.currentRound || 0,
@@ -1310,7 +1325,7 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
     updateMatchFinishState();
     if (live.matchFinished) live.statsLocked = true;
     if (live.matchFinished && session.phase === GamePhase.LiveGame) {
-        const winnerLabel = live.winnerTeam === 'A' ? 'A队' : 'B队';
-        notify(`比赛结束：${winnerLabel} 获胜，比分 ${live.scoreA}:${live.scoreB}`);
+        const result = live.winnerTeam ? `${live.winnerTeam}队获胜` : '双方平局';
+        notify(`比赛结束：${result}，比分 ${live.scoreA}:${live.scoreB}`);
     }
 }

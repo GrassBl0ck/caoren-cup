@@ -1,5 +1,7 @@
 # 草人杯版本包安装说明
 
+首次安装请按[完整部署指南](deployment/README.md)选择系统和组件。发行包根目录 `INSTALL.md` 的此链接由打包器指向随包的 `guide/docs/deployment/README.md`。Windows 服务端路线未验证，Linux 新环境及玩法验收范围见指南。
+
 ## v2.0.0 双板块与账户升级
 
 本次增加共用账户的 CS / MC 入口、邮箱验证码注册、补绑及密码恢复，保留既有 CS 大厅与玩法。CS、MC 源码分别位于 `cs/`、`mc/`，共用网站仍位于 `web-command-center/`。Windows 桌面壳未变更，继续使用现有客户端。

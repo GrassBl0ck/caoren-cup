@@ -23,7 +23,7 @@ public class FireHealFeature : ICaorenFeature
         plugin.AddCommand("css_fh", "火疗/火焰伤害设置: css_fh <t/ct/all/0> <倍率>", OnCommandFh);
 
         // 伤害事件监听
-        plugin.RegisterEventHandler<EventPlayerHurt>(OnPlayerHurt);
+        plugin.RegisterListener<Listeners.OnEntityTakeDamagePre>(OnTakeDamage);
     }
 
     public void OnConfigParsed(CaorenCup.CaorenCupConfig config)
@@ -121,59 +121,26 @@ public class FireHealFeature : ICaorenFeature
         CaorenCupUtils.PrintToChat(player, $" 当前状态: {GetStatusInfo()}");
     }
 
-    // --- 游戏逻辑 (严格受击补偿计算) ---
+    // 在引擎扣血前缩放火焰伤害，免疫与回血同样覆盖致命伤。
 
-    private HookResult OnPlayerHurt(EventPlayerHurt @event, GameEventInfo info)
+    private HookResult OnTakeDamage(CEntityInstance entity, CTakeDamageInfo damage)
     {
-        if (!_settings.Enabled) return HookResult.Continue;
+        if (!entity.IsValid || entity.DesignerName != "player") return HookResult.Continue;
+        var pawn = entity.As<CCSPlayerPawn>();
+        var victim = pawn.Controller.Value?.As<CCSPlayerController>();
+        if (victim is not { IsValid: true } || !victim.PawnIsAlive) return HookResult.Continue;
+        if (!IsFireDamage(damage.Inflictor.Value?.DesignerName)) return HookResult.Continue;
 
-        var victim = @event.Userid;
-        if (victim == null || !victim.IsValid) return HookResult.Continue;
-
-        // 队伍检查
-        if (!IsTarget(victim)) return HookResult.Continue;
-
-        // 伤害类型检查 (燃烧弹/燃烧瓶)
-        if (!IsFireDamage(@event.Weapon)) return HookResult.Continue;
-
-        var pawn = victim.PlayerPawn.Value;
-        if (pawn == null || !pawn.IsValid) return HookResult.Continue;
-
-        int currentHp = pawn.Health; // 这是已经被引擎扣血【后】的血量
-        int dmg = @event.DmgHealth;  // 这次事件造成的真实伤害值
-        if (dmg <= 0) return HookResult.Continue;
-
-        // 如果玩家已经被火刚好烧死了，并且我们设定的不是回血/免疫(<=0)，那就不干预，让他死。
-        // 注：受制于CS2底层机制，如果残血瞬间被烧致死(Hp <= 0)，我们无法在PlayerHurt里复活他。
-        //     但对于绝大多数情况，我们的公式都能完美修正血量。
-        if (currentHp <= 0 && _settings.Scale > 0) return HookResult.Continue;
-
-        /*
-         * 【核心代数补偿公式】
-         * 引擎已经执行了: 实际血量 = 原始血量 - dmg
-         * 我们的目标是:   期望血量 = 原始血量 - (dmg * Scale)
-         * 那么我们需要给玩家补偿: 补偿量 = 期望血量 - 实际血量 = dmg * (1 - Scale)
-         * 最终赋值:       新血量 = 实际血量 + 补偿量
-         */
-        float adjustment = dmg * (1 - _settings.Scale);
-        int finalHp = currentHp + (int)Math.Round(adjustment);
-
-        // 极限致死与溢出处理。开启 /hpcap 后，回血/扣血边界完全交给全局 cap。
-        if (finalHp <= 0 && !CaorenCupUtils.IsHpCapEnabled(_plugin))
+        var personal = CaorenCup.Contracts.CaorenCupPlayerEffectsAccess.Get(victim);
+        if (personal is null && (!_settings.Enabled || !IsTarget(victim))) return HookResult.Continue;
+        var scale = personal?.FireScale ?? _settings.Scale;
+        if (scale < 0 && damage.Damage > 0)
         {
-            if (currentHp > 0) pawn.CommitSuicide(false, true); // 如果倍率过高(比如2x)导致该死了，强行处决
+            var healed = pawn.Health + (int)Math.Round(damage.Damage * -scale);
+            if (!CaorenCupUtils.IsHpCapEnabled(_plugin)) healed = Math.Min(healed, pawn.MaxHealth);
+            CaorenCupUtils.ApplyModuleHealth(_plugin, pawn, healed);
         }
-        else
-        {
-            if (!CaorenCupUtils.IsHpCapEnabled(_plugin))
-            {
-                int maxHp = pawn.MaxHealth > 0 ? pawn.MaxHealth : 100;
-                finalHp = Math.Min(finalHp, maxHp);
-            }
-
-            CaorenCupUtils.ApplyModuleHealth(_plugin, pawn, finalHp);
-        }
-
+        damage.Damage = Math.Max(0, damage.Damage * scale);
         return HookResult.Continue;
     }
 

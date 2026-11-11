@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Import-Module (Join-Path $PSScriptRoot 'CaorenRelease.psm1') -Force
@@ -24,7 +24,7 @@ function Put([string]$Relative, [string]$Text) {
 }
 
 $manifest = Read-ServerPackageManifest $repo
-Check (@($manifest.plugins).Count -eq 14) '14 existing buildable plugin projects and destinations'
+Check (@($manifest.plugins).Count -eq 15) '15 buildable plugin projects and destinations'
 Check (@($manifest.externalComponents.name) -contains 'CS2Snake') 'Snake is an explicit external component'
 $selected = @(Select-ReleaseModules $manifest @('CaorenDuel', 'CS2MiniGames'))
 Check ($selected.Count -eq 2 -and $selected[0].directory -eq 'CaorenCupGamemodes/CaorenCupSolos/CaorenDuel') 'partial selection preserves nested directories'
@@ -104,6 +104,22 @@ Check (Test-Path -LiteralPath (Join-Path $webStage 'weaponpaints-data/LICENSE'))
 
 $null = Put 'stage/安装说明.txt' 'Unicode ZIP paths preserved'
 $stage = Resolve-ReleasePath $fixture 'stage'
+$guideManifest = Get-Content -LiteralPath (Join-Path $repo 'scripts/deployment-guide-manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$validateStage = Join-Path $fixture 'validate-only-guide'
+Copy-DeploymentGuide -RepoRoot $repo -Stage $validateStage -Version 'v0.0.0' -ValidateOnly
+Check (-not (Test-Path -LiteralPath $validateStage)) 'guide validation creates no stage'
+Copy-DeploymentGuide -RepoRoot $repo -Stage $stage -Version 'v0.0.0'
+$guideHome = Join-Path $stage 'guide/docs/deployment/README.md'
+Check (Test-Path -LiteralPath $guideHome) 'full deployment guide collected'
+Check ((Get-Content -LiteralPath (Join-Path $stage 'INSTALL.md') -Raw -Encoding UTF8).Contains('(guide/docs/deployment/README.md)')) 'package INSTALL points to offline guide'
+$csGuide = Get-Content -LiteralPath (Join-Path $stage 'guide/docs/deployment/04-cs.md') -Raw -Encoding UTF8
+Check ($csGuide.Contains('/blob/v0.0.0/cs/game-plugin/Features/HeadSizeFeature.cs')) 'unbundled source points to the exact release tag'
+$guideFiles = @(Get-ChildItem -LiteralPath (Join-Path $stage 'guide') -File -Recurse)
+Check ($guideFiles.Count -eq @($guideManifest.files).Count) 'only explicit public documentation selected'
+Reject { Copy-DeploymentGuide -RepoRoot $repo -Stage $stage -Version 'v0.0.0' } 'guide collection refuses existing output'
+$invalidGuideManifest = '{"schemaVersion":1,"entryPoint":".env","files":[".env"],"installationSources":[".env"]}'
+$null = Put 'invalid-guide/scripts/deployment-guide-manifest.json' $invalidGuideManifest
+Reject { Copy-DeploymentGuide -RepoRoot (Join-Path $fixture 'invalid-guide') -Version 'v0.0.0' -InstallationSource '.env' -ValidateOnly } 'private guide manifest input rejected'
 Assert-ReleaseTree $stage @('addons/counterstrikesharp/plugins/CaorenCup/Demo/Demo.dll')
 Reject { Assert-ReleaseTree $stage @('missing.dll') } 'missing primary entry rejected'
 Write-ReleaseFileManifest $stage 'v0.0.0' @('Demo') @()
@@ -118,6 +134,11 @@ try {
     $reader = New-Object IO.StreamReader($entry.Open(), [Text.Encoding]::UTF8)
     try { $text = $reader.ReadToEnd() } finally { $reader.Dispose() }
     Check (-not $text.Contains($repo) -and -not $text.Contains($fixture)) 'file manifest contains no private absolute paths'
+    $packageManifest = $text | ConvertFrom-Json
+    $guideRow = @($packageManifest.files | Where-Object { $_.path -eq 'guide/docs/deployment/README.md' })
+    Check ($guideRow.Count -eq 1) 'guide included in package manifest'
+    Check ($guideRow[0].sha256 -eq (Get-FileHash -LiteralPath $guideHome -Algorithm SHA256).Hash.ToLowerInvariant()) 'guide SHA256 matches packaged content'
+    Check ($names -contains 'guide/docs/deployment/README.md') 'guide included in ZIP'
 } finally { $zip.Dispose() }
 Reject { New-PortableReleaseZip $repo $stage $zipRelative } 'existing ZIP cannot be overwritten'
 Check ($result.SHA256.Length -eq 64) 'ZIP SHA256 provided'

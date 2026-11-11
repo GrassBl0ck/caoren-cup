@@ -23,6 +23,7 @@ $projects = @(
     @{ Name = 'CaorenCupFunCommands'; Source = '.'; Subdir = 'CaorenCupFunCommands' },
     @{ Name = 'CaorenCupInGameMenu'; Source = 'PluginSplit\CaorenCupInGameMenu'; Subdir = 'CaorenCupInGameMenu' },
     @{ Name = 'CaorenCupGamemode_Competitive'; Source = 'PluginSplit\CaorenCupGamemode_Competitive'; Subdir = 'CaorenCupGamemodes\CaorenCupGamemode_Competitive' },
+    @{ Name = 'CaorenCupGamemode_Random'; Source = 'PluginSplit\CaorenCupGamemode_Random'; Subdir = 'CaorenCupGamemodes\CaorenCupGamemode_Random' },
     @{ Name = 'CaorenCupGamemode_RUSH'; Source = 'PluginSplit\CaorenCupGamemode_RUSH'; Subdir = 'CaorenCupGamemodes\CaorenCupGamemode_RUSH' },
     @{ Name = 'CaorenCupGamemode_Ability'; Source = 'PluginSplit\CaorenCupGamemode_Ability'; Subdir = 'CaorenCupGamemodes\CaorenCupGamemode_Ability' },
     @{ Name = 'CaorenCupQOL_Alias'; Source = 'PluginSplit\CaorenCupQOL_Alias'; Subdir = 'CaorenCupQOLs\CaorenCupQOL_Alias' },
@@ -62,6 +63,7 @@ New-Item -ItemType Directory -Path $globalGamedataDest | Out-Null
 Copy-Item -LiteralPath (Join-Path $weaponPaintsSource 'gamedata\weaponpaints.json') -Destination (Join-Path $globalGamedataDest 'weaponpaints.json')
 
 $contractSource = Join-Path $splitDir "CaorenCupContracts\bin\$Configuration\net10.0\CaorenCupContracts.dll"
+Copy-Item -LiteralPath (Join-Path $splitDir 'CaorenCupGamemode_Random\catalog-source.json') -Destination (Join-Path $group 'CaorenCupGamemodes\CaorenCupGamemode_Random\catalog-source.json')
 $contractDest = Join-Path $base 'shared\CaorenCupContracts'
 New-Item -ItemType Directory -Path $contractDest | Out-Null
 Copy-Item -LiteralPath $contractSource -Destination (Join-Path $contractDest 'CaorenCupContracts.dll')

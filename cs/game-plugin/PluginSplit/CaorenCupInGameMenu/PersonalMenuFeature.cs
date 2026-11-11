@@ -5,7 +5,7 @@ namespace CaorenCup.Features.InGameMenu;
 
 public sealed partial class CaorenCupInGameMenuPlugin
 {
-    private enum PersonalView { Commands, Detail, Stats, Settings, Guide }
+    private enum PersonalView { Commands, Detail, Stats, Settings, Guide, Random }
     private IMenuHudSurface _personalSurface = null!;
     private MenuPreferences _preferences = null!;
     private readonly Dictionary<(IMenuHudSurface Surface, string SteamId, string Panel), int> _menuSoundVolumes = new();
@@ -25,6 +25,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         Console.WriteLine("[草人杯] 玩家对局指令目录已加载：" + _playerCommands.Entries.Count + " 项（" + string.Join("、", _playerCommands.Entries.Select(entry => entry.Name)) + "）。");
         AddCommand("css_crcmenu", "打开普通玩家菜单", OnPersonalMenuCommand);
         AddCommand("css_cm", "打开普通玩家菜单", OnPersonalMenuCommand);
+        RegisterRandomMenu();
     }
     public override void OnAllPluginsLoaded(bool hotReload)
     {
@@ -59,13 +60,15 @@ public sealed partial class CaorenCupInGameMenuPlugin
         _personalSurface.SetClass(player, "player_back", "Hidden", view == PersonalView.Commands);
         foreach (var pair in new[] { (PersonalView.Commands, "player_commands"),
             (PersonalView.Detail, "player_detail"), (PersonalView.Stats, "player_stats"),
-            (PersonalView.Settings, "player_settings"), (PersonalView.Guide, "player_open_guide") })
+            (PersonalView.Settings, "player_settings"), (PersonalView.Guide, "player_open_guide"), (PersonalView.Random, "player_random") })
             _personalSurface.SetClass(player, pair.Item2, "Hidden", view != pair.Item1);
         _personalSurface.SetClass(player, "player_commands_open", "CaorenTabSelected", view is PersonalView.Commands or PersonalView.Detail);
         _personalSurface.SetClass(player, "player_stats_open", "CaorenTabSelected", view == PersonalView.Stats);
         _personalSurface.SetClass(player, "player_settings_open", "CaorenTabSelected", view == PersonalView.Settings);
         _personalSurface.SetClass(player, "player_guide_open", "CaorenTabSelected", view == PersonalView.Guide);
-        _personalSurface.SetVariable(player, "player_section", view switch { PersonalView.Commands => "玩家指令", PersonalView.Detail => "指令详情", PersonalView.Stats => "趣味数据", PersonalView.Settings => "个人设置", _ => "打开指引" });
+        _personalSurface.SetClass(player, "player_random_open", "CaorenTabSelected", view == PersonalView.Random);
+        _personalSurface.SetClass(player, "player_random_open", "Hidden", !RandomMenuAvailable);
+        _personalSurface.SetVariable(player, "player_section", view switch { PersonalView.Commands => "玩家指令", PersonalView.Detail => "指令详情", PersonalView.Stats => "趣味数据", PersonalView.Settings => "个人设置", PersonalView.Random => "随机乱斗", _ => "打开指引" });
         RenderPersonalView(player);
     }
     private void HandlePersonalClick(CCSPlayerController player, string id)
@@ -73,6 +76,8 @@ public sealed partial class CaorenCupInGameMenuPlugin
         var sid = player.SteamID.ToString(); if (!_personalViews.TryGetValue(sid, out var view)) return;
         if (id == "player_exit") { ExitOwnMenus(player); return; }
         if (id == "player_back") { HandlePersonalBack(player); return; }
+        if (id == "player_random_open") { OpenRandomMenu(player); return; }
+        if (view == PersonalView.Random && HandleRandomClick(player, id)) return;
         if (id == "player_commands_open") { _personalDetails.Remove(sid); SetPersonalView(player, PersonalView.Commands); return; }
         if (id == "player_stats_open") { SetPersonalView(player, PersonalView.Stats); return; }
         if (id == "player_settings_open") { SetPersonalView(player, PersonalView.Settings); return; }
@@ -109,6 +114,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
     private void RenderPersonalView(CCSPlayerController player)
     {
         var sid = player.SteamID.ToString(); var view = _personalViews.GetValueOrDefault(sid);
+        if (view == PersonalView.Random) { RenderRandomMenu(player); return; }
         if (view == PersonalView.Stats) { RenderPersonalStats(player); return; }
         if (view == PersonalView.Settings) { RenderPersonalSettings(player, _personalSurface); return; }
         if (view == PersonalView.Commands)
@@ -140,6 +146,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
     private bool HandlePersonalBack(CCSPlayerController player)
     {
         var sid = player.SteamID.ToString(); if (!_personalViews.TryGetValue(sid, out var view)) return false;
+        if (view == PersonalView.Random && HandleRandomBack(player)) return true;
         if (view == PersonalView.Commands) ClosePersonalMenu(player);
         else SetPersonalView(player, PersonalView.Commands);
         return true;
@@ -148,6 +155,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
     {
         var sid = player.SteamID.ToString();
         _personalViews.Remove(sid);
+        _randomMenus.Remove(sid);
         if (!preservePage) { _personalPages.Remove(sid); _personalDetails.Remove(sid); _personalStatsPages.Remove(sid); }
         if (_personalSurface == null) return;
         _personalSurface.SetClass(player, "dialog", "Hidden", true); _personalSurface.ReleaseInput(player);

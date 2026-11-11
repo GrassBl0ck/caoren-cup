@@ -11,7 +11,7 @@ namespace CaorenCup.QOL.PlaySound;
 public sealed partial class CaorenCupPlaySoundPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Play Sound";
-    public override string ModuleVersion => "1.10.0";
+    public override string ModuleVersion => "2.2.2";
     public override string ModuleAuthor => "Graslock + AI";
 
     private ICaorenCupCoreApi Core => CaorenCupCoreAccess.TryGet()

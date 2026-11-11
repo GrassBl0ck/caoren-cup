@@ -272,6 +272,7 @@ registerMatchOptionsRoutes(app, {
 registerGameModeRoutes(app, {
     adminPassword: ADMIN_PASSWORD,
     getPhase: () => getSession().phase,
+    getAvailableGameModes: () => getSession().availableGameModes,
     getPlayerById: (playerId: string) => findPlayerById(getSession(), playerId),
     ensureMatchOptions,
     applyMatchOptions,

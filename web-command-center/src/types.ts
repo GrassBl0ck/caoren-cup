@@ -18,7 +18,7 @@ export type Team = 'CT' | 'T' | 'Unassigned';
 export type RosterTeam = 'A' | 'B';
 export type MatchMode = 'competitive' | 'duel';
 export type MatchController = 'matchzy' | 'caoren';
-export type GameModeId = 'competitive' | 'rush' | 'duel' | 'ability' | 'undercover' | 'unbalanced';
+export type GameModeId = 'competitive' | 'rush' | 'duel' | 'ability' | 'undercover' | 'unbalanced' | 'random';
 export type GameModeLifecycle = 'Lobby' | 'Warmup' | 'Live' | 'Stopped' | 'Error';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
 export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
@@ -224,6 +224,7 @@ export interface LiveGameData {
     roundBaseOffset?: number;
     formalRoundStartRaw?: number;
     formalStatsStarted?: boolean;
+    statsUnavailableReason?: string;
     [key: string]: any;
 }
 export interface GameModeCvarOverride {
@@ -263,6 +264,7 @@ export interface GameSession {
     matchId: string;
     matchOptions: MatchOptions;
     gameModeRuntime?: GameModeRuntimeState;
+    availableGameModes?: GameModeId[];
     players: Record<string, Player>;
     playerOrder: string[];
     teams: {

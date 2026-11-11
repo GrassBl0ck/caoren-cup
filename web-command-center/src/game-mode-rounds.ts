@@ -1,5 +1,5 @@
 import { getDuelTotalRounds } from './duel-config';
-import type { GameModeId, MatchOptions } from './types';
+import type { GameModeId, MatchOptions, RosterTeam } from './types';
 import { GAME_MODE_MANIFESTS, normalizeGameModeId } from './game-mode';
 
 export interface GameModeRoundRules {
@@ -8,6 +8,7 @@ export interface GameModeRoundRules {
   winTarget: number;
   halftimeEnabled: boolean;
   halftimeRound: number;
+  playAllRounds?: boolean;
 }
 
 const readCvar = (
@@ -42,6 +43,10 @@ export const getGameModeRoundRules = (
     ? 'duel'
     : normalizeGameModeId(rawModeId, options);
 
+  if (modeId === 'random') {
+    return { isDuel: false, maxRounds: 24, winTarget: 0, halftimeEnabled: true, halftimeRound: 13, playAllRounds: true };
+  }
+
   if (modeId === 'duel') {
     const maxRounds = getDuelTotalRounds(options?.duelRounds);
     return {
@@ -62,4 +67,16 @@ export const getGameModeRoundRules = (
     halftimeEnabled,
     halftimeRound: halftimeEnabled ? Math.ceil(maxRounds / 2) + 1 : 0,
   };
+};
+
+export const getRoundOutcome = (rules: GameModeRoundRules, scoreA: number, scoreB: number, completedRound: number) => {
+  let winner: RosterTeam | null = null;
+  if (rules.playAllRounds || rules.isDuel) {
+    const finished = rules.isDuel ? scoreA + scoreB >= rules.maxRounds : completedRound >= rules.maxRounds;
+    if (finished && scoreA !== scoreB) winner = scoreA > scoreB ? 'A' : 'B';
+    return { finished, winner };
+  }
+  if (scoreA >= rules.winTarget && scoreA > scoreB) winner = 'A';
+  if (scoreB >= rules.winTarget && scoreB > scoreA) winner = 'B';
+  return { finished: winner !== null || completedRound >= rules.maxRounds, winner };
 };

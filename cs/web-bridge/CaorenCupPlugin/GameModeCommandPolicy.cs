@@ -7,6 +7,7 @@ public static class GameModeCommandPolicy
     private static readonly HashSet<string> AllowedModes = new(StringComparer.OrdinalIgnoreCase)
     {
         "competitive",
+        "random",
         "rush",
         "duel",
         "ability",

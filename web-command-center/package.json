@@ -1,6 +1,6 @@
 {
   "name": "caoren-cup-web",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "private": true,
   "type": "commonjs",
   "scripts": {
@@ -31,7 +31,7 @@
     "test:flow-undo": "tsx --test src/flow-undo-manager.test.ts src/session-persistence.test.ts src/flow-runtime.test.ts src/flow-undo-integration.test.ts src/flow-undo-visibility.test.ts",
     "test:phase-rollback": "npm run test:flow-undo && npm run test:flow-undo-ui",
     "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts",
-    "test:game-mode": "tsx --test src/game-mode.test.ts"
+    "test:game-mode": "tsx --test src/game-mode.test.ts src/random-mode-integration.test.ts"
   },
   "dependencies": {
     "express": "^4.18.3",

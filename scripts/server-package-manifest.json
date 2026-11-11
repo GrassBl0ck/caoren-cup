@@ -6,6 +6,7 @@
     { "name": "CaorenCupFunCommands", "project": "cs/game-plugin/CaorenCup.csproj", "directory": "CaorenCupFunCommands" },
     { "name": "CaorenCupInGameMenu", "project": "cs/game-plugin/PluginSplit/CaorenCupInGameMenu/CaorenCupInGameMenu.csproj", "directory": "CaorenCupInGameMenu" },
     { "name": "CaorenCupGamemode_Competitive", "project": "cs/game-plugin/PluginSplit/CaorenCupGamemode_Competitive/CaorenCupGamemode_Competitive.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_Competitive" },
+    { "name": "CaorenCupGamemode_Random", "project": "cs/game-plugin/PluginSplit/CaorenCupGamemode_Random/CaorenCupGamemode_Random.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_Random" },
     { "name": "CaorenCupGamemode_RUSH", "project": "cs/game-plugin/PluginSplit/CaorenCupGamemode_RUSH/CaorenCupGamemode_RUSH.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_RUSH" },
     { "name": "CaorenCupGamemode_Ability", "project": "cs/game-plugin/PluginSplit/CaorenCupGamemode_Ability/CaorenCupGamemode_Ability.csproj", "directory": "CaorenCupGamemodes/CaorenCupGamemode_Ability" },
     { "name": "CaorenDuel", "project": "cs/duel-plugin/CaorenDuel.csproj", "directory": "CaorenCupGamemodes/CaorenCupSolos/CaorenDuel" },

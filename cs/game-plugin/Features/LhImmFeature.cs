@@ -649,11 +649,9 @@ public class LhImmFeature : ICaorenFeature
     {
         if (pawn == null || !pawn.IsValid) return;
 
-        pawn.VelocityModifier = Math.Max(0.01f, speedMultiplier);
-
         try
         {
-            Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_flVelocityModifier");
+            CaorenCup.Contracts.CaorenCupPlayerMovement.SetMultiplier(pawn, speedMultiplier);
         }
         catch
         {

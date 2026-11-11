@@ -14,7 +14,7 @@ namespace CaorenCup.QOL.SimpleHP;
 public sealed class CaorenCupSimpleHpPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Simple HP";
-    public override string ModuleVersion => "1.10.0";
+    public override string ModuleVersion => "2.2.2";
     public override string ModuleAuthor => "Graslock + AI";
     private const string FeatureName = "Simple HP (伤害查询)";
 

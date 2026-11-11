@@ -25,6 +25,17 @@ const standardCvars = (overrides: Partial<Record<GameModeId, GameModeCvarDefinit
   overrides;
 
 export const GAME_MODE_MANIFESTS: Record<GameModeId, GameModeManifest> = {
+  random: {
+    id: 'random', displayName: '随机乱斗', pluginKey: 'CaorenCupGamemode_Random',
+    availability: 'available', defaultWarmupSeconds: 15,
+    cvars: [
+      { name: 'mp_maxrounds', type: 'integer', defaultValue: '24', min: 24, max: 24, webEditable: false },
+      { name: 'mp_halftime', type: 'boolean', defaultValue: '1', webEditable: false },
+      { name: 'mp_match_can_clinch', type: 'boolean', defaultValue: '0', webEditable: false },
+      { name: 'mp_overtime_enable', type: 'boolean', defaultValue: '0', webEditable: false },
+      { name: 'mp_startmoney', type: 'integer', defaultValue: '800', min: 800, max: 800, webEditable: false },
+    ],
+  },
   competitive: {
     id: 'competitive',
     displayName: 'Competitive',
@@ -113,6 +124,10 @@ export const GAME_MODE_STANDARD_CVARS = standardCvars();
 
 export const isAvailableGameMode = (modeId: GameModeId): boolean =>
   GAME_MODE_MANIFESTS[modeId].availability === 'available';
+
+// Random is only offered after the connected server confirms its provider is loaded.
+export const isLoadedGameMode = (modeId: GameModeId, loaded?: readonly GameModeId[]): boolean =>
+  isAvailableGameMode(modeId) && (modeId !== 'random' || loaded?.includes(modeId) === true);
 
 export const normalizeGameModeId = (raw: unknown, legacy?: Partial<MatchOptions>): GameModeId => {
   if (typeof raw === 'string' && raw in GAME_MODE_MANIFESTS) return raw as GameModeId;

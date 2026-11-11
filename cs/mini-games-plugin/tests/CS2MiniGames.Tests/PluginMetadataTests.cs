@@ -19,7 +19,7 @@ public sealed class PluginMetadataTests
             .GetValue(plugin);
 
         Assert.Equal("CS2 Mini Games", moduleName);
-        Assert.Equal("0.1.0", moduleVersion);
+        Assert.Equal("2.2.2", moduleVersion);
 
         var commandNames = pluginType
             .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)

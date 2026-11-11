@@ -359,7 +359,7 @@ public sealed partial class CaorenCupCorePlugin
 
         if (info.ArgCount < 2)
         {
-            Reply(player, "/gamemode (/gm) <competitive|comp|rush|duel|ability|undercover|under|unbalanced|unb|status|start|stop>");
+            Reply(player, "/gamemode (/gm) <competitive|comp|rush|duel|ability|random|undercover|under|unbalanced|unb|status|start|stop>");
             return;
         }
 

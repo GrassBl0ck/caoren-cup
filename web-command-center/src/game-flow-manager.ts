@@ -7,6 +7,7 @@ import {
     RosterTeam,
     Team,
     LiveGameData,
+    GameModeRuntimeState,
 } from './types';
 import { getSession } from './session-manager';
 import { canTransition } from './state-machine';
@@ -47,7 +48,7 @@ import {
 } from './duel-config';
 import { normalizeUnbalancedRosterOptions, validateUnbalancedRoster, validateUnbalancedRosterForTeamLock } from './unbalanced-roster';
 import { GAME_MODE_MANIFESTS, normalizeGameModeId, normalizeGameModeOverrides, modeUsesUndercoverFlow, modeUsesUnbalancedRoster } from './game-mode';
-import { getGameModeRoundRules } from './game-mode-rounds';
+import { getGameModeRoundRules, getRoundOutcome } from './game-mode-rounds';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import {
     clearFlowUndoHistory,
@@ -587,31 +588,24 @@ const updateMatchFinishState = () => {
     const scoreB = session.liveGameData.scoreB || 0;
     const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
     const winTarget = rules.winTarget;
-    const winner = getMatchWinner(scoreA, scoreB);
     syncCurrentRoundFromScores(session.liveGameData);
     const completedRound = nonNegativeInt(session.liveGameData.lastScoredRound);
+    const outcome = rules.playAllRounds && session.liveGameData.formalStatsStarted !== true
+        ? { finished: false, winner: null }
+        : getRoundOutcome(rules, scoreA, scoreB, completedRound);
     session.liveGameData.roundLimit = rules.maxRounds;
     session.liveGameData.halftimeEnabled = rules.halftimeEnabled;
     session.liveGameData.halftimeRound = rules.halftimeRound;
     session.liveGameData.winTarget = winTarget;
-    session.liveGameData.winnerTeam = winner;
-    session.liveGameData.matchFinished = rules.isDuel
-        ? (scoreA + scoreB) >= rules.maxRounds
-        : !!winner || completedRound >= rules.maxRounds;
+    session.liveGameData.winnerTeam = outcome.winner;
+    session.liveGameData.matchFinished = outcome.finished;
+    if (rules.playAllRounds) session.liveGameData.currentRound = Math.min(rules.maxRounds, session.liveGameData.currentRound);
 };
 
 const getMatchWinner = (scoreA: number, scoreB: number): RosterTeam | null => {
     const session = getSession();
     const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
-    if (rules.isDuel) {
-        if (scoreA + scoreB < rules.maxRounds) return null;
-        if (scoreA > scoreB) return 'A';
-        if (scoreB > scoreA) return 'B';
-        return null;
-    }
-    if (scoreA >= rules.winTarget && scoreA > scoreB) return 'A';
-    if (scoreB >= rules.winTarget && scoreB > scoreA) return 'B';
-    return null;
+    return getRoundOutcome(rules, scoreA, scoreB, session.liveGameData?.lastScoredRound || 0).winner;
 };
 
 const resolveRosterTeamByInitialSide = (side: Team, roundNumber?: number): RosterTeam | null => {
@@ -1014,9 +1008,38 @@ export const markGameModeLiveFromRuntime = (modeId: string): boolean => {
     session.phase = GamePhase.LiveGame;
     if (session.liveGameData) session.liveGameData.matchController = 'caoren';
     performPhaseTransition(GamePhase.LiveGame);
+    if (modeId === 'random' && session.liveGameData) {
+        // The Random provider starts its own first formal round; no web restart command is needed.
+        const players = getGamePlayers(session);
+        const ready = (session.selectedSide === 'CT' || session.selectedSide === 'T') &&
+            players.some(player => player.rosterTeam === 'A') && players.some(player => player.rosterTeam === 'B') &&
+            players.every(player => !!player.steamId && (player.rosterTeam === 'A' || player.rosterTeam === 'B'));
+        session.liveGameData.formalStatsStarted = ready;
+        if (!ready) session.liveGameData.statsUnavailableReason = '网页比分统计未就绪：请在开局前完成阵容、SteamID绑定与选边。游戏正常进行。';
+        session.liveGameData.formalRoundStartRaw = 1;
+        session.liveGameData.roundBaseOffset = 0;
+    }
     broadcast?.();
     notifyMessage?.(`Gamemode ${modeId} 已进入正式比赛阶段。`);
     return true;
+};
+
+export const synchronizeRandomModeRuntime = (runtime: GameModeRuntimeState) => {
+    const session = getSession();
+    const previous = session.gameModeRuntime;
+    const changed = !previous || previous.modeId !== runtime.modeId ||
+        previous.revision !== runtime.revision || previous.lifecycle !== runtime.lifecycle;
+    if (changed && (runtime.modeId === 'random' || previous?.modeId === 'random')) {
+        applyMatchOptions({ ...session.matchOptions, gameModeId: runtime.modeId, matchMode: runtime.modeId === 'duel' ? 'duel' : 'competitive' });
+        if (runtime.lifecycle === 'Lobby' || runtime.lifecycle === 'Warmup' || runtime.lifecycle === 'Stopped' || runtime.lifecycle === 'Live') {
+            clearAllFlowTimers();
+            session.timerEndAt = null;
+            session.timerPhase = null;
+            session.phase = runtime.lifecycle === 'Warmup' ? GamePhase.PreGameSetup : GamePhase.Lobby;
+        }
+    }
+    session.gameModeRuntime = runtime;
+    if (runtime.lifecycle === 'Live') markGameModeLiveFromRuntime(runtime.modeId);
 };
 
 const performPhaseTransition = (to: GamePhase) => {

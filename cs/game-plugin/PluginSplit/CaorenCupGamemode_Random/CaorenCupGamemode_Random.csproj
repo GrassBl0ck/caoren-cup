@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>CaorenCupGamemode_Random</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CounterStrikeSharp.API" Version="1.0.374" />
+    <ProjectReference Include="..\CaorenCupContracts\CaorenCupContracts.csproj" />
+    <Content Include="catalog-source.json" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="catalog.json" LogicalName="CaorenCup.Random.Catalog" />
+    <Content Include="..\..\Native\CaorenCupEngine\bin\linux-x64\libcaorencup_engine.so"
+             Link="native\libcaorencup_engine.so" CopyToOutputDirectory="PreserveNewest"
+             Condition="Exists('..\..\Native\CaorenCupEngine\bin\linux-x64\libcaorencup_engine.so')" />
+  </ItemGroup>
+  <Target Name="RequireNativeEngineForRelease" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release'">
+    <Error Condition="!Exists('..\..\Native\CaorenCupEngine\bin\linux-x64\libcaorencup_engine.so')"
+           Text="Build the Linux x64 native engine bridge before publishing Random. See Native/CaorenCupEngine/README.md." />
+  </Target>
+</Project>

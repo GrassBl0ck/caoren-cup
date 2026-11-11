@@ -4,6 +4,7 @@ using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using System;
+using CaorenCup.Contracts;
 
 namespace CaorenCup.Features;
 
@@ -28,6 +29,7 @@ public class WeaponSpeedFeature : ICaorenFeature
     private sealed class PlayerWeaponSpeedState
     {
         public string LastWeaponName { get; set; } = "";
+        public uint LastWeaponHandle { get; set; }
 
         // 记录上一次由本插件写入的攻击 Tick，避免每 Tick 反复压缩同一段冷却
         public int LastAppliedPrimaryTick { get; set; } = 0;
@@ -192,14 +194,12 @@ public class WeaponSpeedFeature : ICaorenFeature
 
     private void OnTickCore()
     {
-        if (!_settings.Enabled) return;
-
         foreach (var player in Utilities.GetPlayers())
         {
-            if (player == null || !player.IsValid || player.IsBot || !player.PawnIsAlive)
+            if (player == null || !player.IsValid || player.IsHLTV || !player.PawnIsAlive)
                 continue;
 
-            if (!IsTarget(player))
+            if (!TryGetSpeeds(player, out var switchSpeed, out var fireSpeed))
                 continue;
 
             if (player.Slot < 0 || player.Slot >= _states.Length)
@@ -219,8 +219,8 @@ public class WeaponSpeedFeature : ICaorenFeature
 
             var state = _states[player.Slot];
 
-            ProcessSwitchSpeed(player, weapon, weaponName, state);
-            ProcessFireSpeed(weapon, weaponName, state);
+            ProcessSwitchSpeed(player, weapon, weaponName, state, switchSpeed);
+            ProcessFireSpeed(weapon, weaponName, state, fireSpeed);
 
             // 记录这一帧的后坐力，给下一次 weapon_fire 当作“开火前基准”
             UpdateObservedRecoil(pawn, state);
@@ -229,18 +229,20 @@ public class WeaponSpeedFeature : ICaorenFeature
 
     private HookResult OnWeaponFire(EventWeaponFire @event, GameEventInfo info)
     {
-        if (!_settings.Enabled) return HookResult.Continue;
+        var actor = @event.Userid;
+        var personal = actor is { IsValid: true } ? CaorenCupPlayerEffectsAccess.Get(actor) : null;
+        if (personal is null && !_settings.Enabled) return HookResult.Continue;
 
         // 100% 或更低射速时，不做后坐力补偿。
         // 主要解决“射速加快后后坐力过大”的问题。
-        if (_settings.FireSpeedPercent <= 100.0f + 0.01f)
+        if (personal is null ? _settings.FireSpeedPercent <= 100.0f + 0.01f : personal.RecoilMultiplier >= 1)
             return HookResult.Continue;
 
         var player = @event.Userid;
-        if (player == null || !player.IsValid || player.IsBot || !player.PawnIsAlive)
+        if (player == null || !player.IsValid || personal is null && player.IsBot || !player.PawnIsAlive)
             return HookResult.Continue;
 
-        if (!IsTarget(player))
+        if (personal is null && !IsTarget(player))
             return HookResult.Continue;
 
         if (player.Slot < 0 || player.Slot >= _states.Length)
@@ -260,7 +262,8 @@ public class WeaponSpeedFeature : ICaorenFeature
 
         var state = _states[player.Slot];
 
-        float fireMultiplier = PercentToMultiplier(_settings.FireSpeedPercent);
+        // 复用原来的每发增量补偿。玩法只用稳枪手参数，射速不再附加后坐力缩放。
+        float fireMultiplier = personal is null ? PercentToMultiplier(_settings.FireSpeedPercent) : 1 / personal.RecoilMultiplier;
         if (fireMultiplier <= 1.0f + 0.01f)
             return HookResult.Continue;
 
@@ -276,6 +279,7 @@ public class WeaponSpeedFeature : ICaorenFeature
             ? state.LastViewPunchAngle
             : new QAngle(0, 0, 0);
 
+        var recoilPawnHandle = pawn.EntityHandle.Raw;
         state.RecoilShotToken++;
         int token = state.RecoilShotToken;
 
@@ -295,11 +299,14 @@ public class WeaponSpeedFeature : ICaorenFeature
         {
             _plugin.AddTimer(0.01f, () =>
             {
-                if (!_settings.Enabled) return;
                 if (!player.IsValid || !player.PawnIsAlive) return;
+                var current = CaorenCupPlayerEffectsAccess.Get(player);
+                if (personal is null ? !_settings.Enabled || current is not null :
+                    current is null || current.Identity != personal.Identity || current.Round != personal.Round ||
+                    current.RecoilMultiplier != personal.RecoilMultiplier) return;
 
                 var p = player.PlayerPawn.Value;
-                if (p == null || !p.IsValid) return;
+                if (p == null || !p.IsValid || p.EntityHandle.Raw != recoilPawnHandle) return;
 
                 TryApplyRecoilCompensation(
                     p,
@@ -320,39 +327,45 @@ public class WeaponSpeedFeature : ICaorenFeature
         CCSPlayerController player,
         CBasePlayerWeapon weapon,
         string weaponName,
-        PlayerWeaponSpeedState state)
+        PlayerWeaponSpeedState state,
+        float switchSpeed)
     {
         if (state.LastWeaponName == "")
         {
             state.LastWeaponName = weaponName;
+            state.LastWeaponHandle = weapon.EntityHandle.Raw;
             return;
         }
 
-        if (state.LastWeaponName == weaponName)
+        if (state.LastWeaponHandle == weapon.EntityHandle.Raw)
             return;
 
         state.LastWeaponName = weaponName;
+        state.LastWeaponHandle = weapon.EntityHandle.Raw;
         state.LastAppliedPrimaryTick = 0;
         state.LastAppliedSecondaryTick = 0;
 
         if (!IsGunWeapon(weaponName) && !IsKnifeWeapon(weaponName))
             return;
 
-        if (Math.Abs(_settings.SwitchSpeedPercent - 100.0f) < 0.01f)
+        if (Math.Abs(switchSpeed - 100.0f) < 0.01f)
             return;
 
-        float multiplier = PercentToMultiplier(_settings.SwitchSpeedPercent);
+        float multiplier = PercentToMultiplier(switchSpeed);
+        var weaponHandle = weapon.EntityHandle.Raw;
+        var controllerHandle = player.EntityHandle.Raw;
 
         _plugin.AddTimer(0.01f, () =>
         {
-            if (!_settings.Enabled) return;
             if (!player.IsValid || !player.PawnIsAlive) return;
+            if (player.EntityHandle.Raw != controllerHandle || !TryGetSpeeds(player, out var currentSpeed, out _) ||
+                Math.Abs(currentSpeed - switchSpeed) > 0.01f) return;
 
             var pawn = player.PlayerPawn.Value;
             if (pawn == null || !pawn.IsValid) return;
 
             var active = pawn.WeaponServices?.ActiveWeapon.Value;
-            if (active == null || !active.IsValid) return;
+            if (active == null || !active.IsValid || active.EntityHandle.Raw != weaponHandle) return;
 
             string activeWeaponName = NormalizeWeaponName(active.DesignerName);
             if (activeWeaponName != weaponName)
@@ -366,15 +379,16 @@ public class WeaponSpeedFeature : ICaorenFeature
     private void ProcessFireSpeed(
         CBasePlayerWeapon weapon,
         string weaponName,
-        PlayerWeaponSpeedState state)
+        PlayerWeaponSpeedState state,
+        float fireSpeed)
     {
         if (!IsGunWeapon(weaponName))
             return;
 
-        if (Math.Abs(_settings.FireSpeedPercent - 100.0f) < 0.01f)
+        if (Math.Abs(fireSpeed - 100.0f) < 0.01f)
             return;
 
-        float multiplier = PercentToMultiplier(_settings.FireSpeedPercent);
+        float multiplier = PercentToMultiplier(fireSpeed);
 
         /*
          * 不依赖 weapon_fire 修改射速。
@@ -382,6 +396,14 @@ public class WeaponSpeedFeature : ICaorenFeature
          * 只要发现游戏刚写入了一段新的开火冷却，就立刻按倍率缩放。
          */
         ApplyAttackDelayScaleOnce(weapon, multiplier, state, force: false, includeSecondary: false);
+    }
+
+    private bool TryGetSpeeds(CCSPlayerController player, out float switchSpeed, out float fireSpeed)
+    {
+        var personal = CaorenCupPlayerEffectsAccess.Get(player);
+        switchSpeed = personal?.SwitchSpeedPercent ?? _settings.SwitchSpeedPercent;
+        fireSpeed = personal?.FireSpeedPercent ?? _settings.FireSpeedPercent;
+        return personal is not null || _settings.Enabled && !player.IsBot && IsTarget(player);
     }
 
     private void ApplyAttackDelayScaleOnce(
@@ -497,7 +519,7 @@ public class WeaponSpeedFeature : ICaorenFeature
         if (pawn == null || !pawn.IsValid) return false;
 
         // 避免同一发子弹重复补偿。
-        if (state.LastCompensatedRecoilToken == token)
+        if (state.LastCompensatedRecoilToken == token || state.RecoilShotToken != token)
             return true;
 
         if (!TryGetAimPunchAngle(pawn, out var currentAimPunch))
@@ -724,123 +746,70 @@ public class WeaponSpeedFeature : ICaorenFeature
 
     private static bool TryGetAimPunchAngle(CCSPlayerPawn pawn, out QAngle angle)
     {
-        return TryGetPawnAngle(pawn, "AimPunchAngle", out angle);
+        return TryGetRecoilAngle(pawn, RecoilComponent.AimPunch, out angle);
     }
 
     private static bool TrySetAimPunchAngle(CCSPlayerPawn pawn, QAngle angle)
     {
-        return TrySetPawnAngle(pawn, "AimPunchAngle", angle);
+        return TrySetRecoilAngle(pawn, RecoilComponent.AimPunch, angle);
     }
 
     private static bool TryGetAimPunchVelocity(CCSPlayerPawn pawn, out QAngle angle)
     {
-        return TryGetPawnAngle(pawn, "AimPunchAngleVel", out angle) ||
-               TryGetPawnAngle(pawn, "AimPunchVelocity", out angle);
+        return TryGetRecoilAngle(pawn, RecoilComponent.Velocity, out angle);
     }
 
     private static bool TrySetAimPunchVelocity(CCSPlayerPawn pawn, QAngle angle)
     {
-        return TrySetPawnAngle(pawn, "AimPunchAngleVel", angle) ||
-               TrySetPawnAngle(pawn, "AimPunchVelocity", angle);
+        return TrySetRecoilAngle(pawn, RecoilComponent.Velocity, angle);
     }
 
     private static bool TryGetViewPunchAngle(CCSPlayerPawn pawn, out QAngle angle)
     {
-        return TryGetPawnAngle(pawn, "ViewPunchAngle", out angle);
+        return TryGetRecoilAngle(pawn, RecoilComponent.Unpredictable, out angle);
     }
 
     private static bool TrySetViewPunchAngle(CCSPlayerPawn pawn, QAngle angle)
     {
-        return TrySetPawnAngle(pawn, "ViewPunchAngle", angle);
+        return TrySetRecoilAngle(pawn, RecoilComponent.Unpredictable, angle);
     }
 
-    private static bool TryGetPawnAngle(CCSPlayerPawn pawn, string propertyName, out QAngle angle)
+    private enum RecoilComponent { AimPunch, Velocity, Unpredictable }
+
+    private static QAngle? RecoilAngle(CCSPlayerPawn pawn, RecoilComponent component)
     {
-        angle = new QAngle(0, 0, 0);
-
-        if (pawn == null || !pawn.IsValid)
-            return false;
-
-        try
+        if (!pawn.IsValid || pawn.AimPunchServices is not { } service || service.Handle == IntPtr.Zero) return null;
+        return component switch
         {
-            dynamic dynPawn = pawn;
-
-            object value = propertyName switch
-            {
-                "AimPunchAngle" => dynPawn.AimPunchAngle,
-                "AimPunchAngleVel" => dynPawn.AimPunchAngleVel,
-                "AimPunchVelocity" => dynPawn.AimPunchVelocity,
-                "ViewPunchAngle" => dynPawn.ViewPunchAngle,
-                _ => throw new InvalidOperationException()
-            };
-
-            if (value is QAngle q)
-            {
-                angle = q;
-                return true;
-            }
-        }
-        catch
-        {
-            // 当前 CounterStrikeSharp 版本没有这个属性时，直接忽略。
-        }
-
-        return false;
+            RecoilComponent.AimPunch => service.PredictableBaseAngle,
+            RecoilComponent.Velocity => service.PredictableBaseAngleVel,
+            _ => service.UnpredictableBaseAngle
+        };
     }
 
-    private static bool TrySetPawnAngle(CCSPlayerPawn pawn, string propertyName, QAngle angle)
+    private static bool TryGetRecoilAngle(CCSPlayerPawn pawn, RecoilComponent component, out QAngle angle)
     {
-        if (pawn == null || !pawn.IsValid)
-            return false;
+        var source = RecoilAngle(pawn, component);
+        // 保存数值副本，不能把指向实时字段的包装器当作上一帧快照。
+        angle = source is null ? new(0, 0, 0) : new(source.X, source.Y, source.Z);
+        return source is not null;
+    }
 
-        try
-        {
-            dynamic dynPawn = pawn;
-
-            switch (propertyName)
-            {
-                case "AimPunchAngle":
-                    dynPawn.AimPunchAngle = angle;
-                    return true;
-
-                case "AimPunchAngleVel":
-                    dynPawn.AimPunchAngleVel = angle;
-                    return true;
-
-                case "AimPunchVelocity":
-                    dynPawn.AimPunchVelocity = angle;
-                    return true;
-
-                case "ViewPunchAngle":
-                    dynPawn.ViewPunchAngle = angle;
-                    return true;
-
-                default:
-                    return false;
-            }
-        }
-        catch
-        {
-            return false;
-        }
+    private static bool TrySetRecoilAngle(CCSPlayerPawn pawn, RecoilComponent component, QAngle angle)
+    {
+        var target = RecoilAngle(pawn, component);
+        if (target is null) return false;
+        target.X = angle.X;
+        target.Y = angle.Y;
+        target.Z = angle.Z;
+        return true;
     }
 
     private static void NotifyRecoilChanged(CCSPlayerPawn pawn)
     {
         if (pawn == null || !pawn.IsValid) return;
 
-        // 不同 CSS 版本/Schema 名可能不完全一致，所以多试几个，不成功就忽略。
-        try { Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_aimPunchAngle"); } catch { }
-        try { Utilities.SetStateChanged(pawn, "C_CSPlayerPawn", "m_aimPunchAngle"); } catch { }
-        try { Utilities.SetStateChanged(pawn, "CBasePlayerPawn", "m_aimPunchAngle"); } catch { }
-
-        try { Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_aimPunchAngleVel"); } catch { }
-        try { Utilities.SetStateChanged(pawn, "C_CSPlayerPawn", "m_aimPunchAngleVel"); } catch { }
-        try { Utilities.SetStateChanged(pawn, "CBasePlayerPawn", "m_aimPunchAngleVel"); } catch { }
-
-        try { Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_viewPunchAngle"); } catch { }
-        try { Utilities.SetStateChanged(pawn, "C_CSPlayerPawn", "m_viewPunchAngle"); } catch { }
-        try { Utilities.SetStateChanged(pawn, "CBasePlayerPawn", "m_viewPunchAngle"); } catch { }
+        Utilities.SetStateChanged(pawn, "CCSPlayerPawn", "m_pAimPunchServices");
     }
 
     private string GetTargetDisplayName(string target)

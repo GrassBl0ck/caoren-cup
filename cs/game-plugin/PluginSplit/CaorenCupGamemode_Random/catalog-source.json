@@ -1,0 +1,393 @@
+{
+  "schema": 2,
+  "internalVersion": "2.2",
+  "releaseVersion": "2.2.2",
+  "masterVersion": "v010",
+  "masterSha256": "e6ebba40bb3ef692cbe4e6185d35378d50ba23210c4d40e04a43663983997637",
+  "enabled": [
+    {
+      "displayId": "D-1",
+      "key": "reload_aftercare",
+      "quality": "D",
+      "scope": "个人",
+      "maxLevel": 3,
+      "cost": 1
+    },
+    {
+      "displayId": "D-2",
+      "key": "pocket_medkit",
+      "quality": "D",
+      "scope": "个人",
+      "maxLevel": 3,
+      "cost": 2
+    },
+    {
+      "displayId": "D-3",
+      "key": "ghost_delivery",
+      "quality": "D",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 0
+    },
+    {
+      "displayId": "C-1",
+      "key": "grenade_refund",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 4
+    },
+    {
+      "displayId": "C-2",
+      "key": "knife_sprint",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 3
+    },
+    {
+      "displayId": "C-3",
+      "key": "armor_buddy",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 4
+    },
+    {
+      "displayId": "C-4",
+      "key": "flash_to_he",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 3
+    },
+    {
+      "displayId": "B-1",
+      "key": "smoke_supply",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 5
+    },
+    {
+      "displayId": "B-2",
+      "key": "legacy_double",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 5
+    },
+    {
+      "displayId": "B-3",
+      "key": "last_chance",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 7
+    },
+    {
+      "displayId": "B-4",
+      "key": "flash_retaliation",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 5
+    },
+    {
+      "displayId": "B-5",
+      "key": "smoke_haste",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 5
+    },
+    {
+      "displayId": "B-6",
+      "key": "magazine_repeat",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 7
+    },
+    {
+      "displayId": "B-7",
+      "key": "kill_he",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 6
+    },
+    {
+      "displayId": "B-8",
+      "key": "field_repair",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 7
+    },
+    {
+      "displayId": "B-9",
+      "key": "death_bombs",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 6
+    },
+    {
+      "displayId": "A-1",
+      "key": "kill_reload",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 8
+    },
+    {
+      "displayId": "A-2",
+      "key": "tank_engine",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 10
+    },
+    {
+      "displayId": "A-3",
+      "key": "light_engine",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 9
+    },
+    {
+      "displayId": "A-4",
+      "key": "arsenal",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 9
+    },
+    {
+      "displayId": "A-5",
+      "key": "bounce_missile",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 9
+    },
+    {
+      "displayId": "A-6",
+      "key": "battering_ram",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 8
+    },
+    {
+      "displayId": "A-7",
+      "key": "flash_partner",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 9
+    },
+    {
+      "displayId": "A-8",
+      "key": "team_rescue",
+      "quality": "A",
+      "scope": "团队",
+      "maxLevel": 2,
+      "cost": 10
+    },
+    {
+      "displayId": "A-9",
+      "key": "smoke_train",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 9
+    },
+    {
+      "displayId": "A-10",
+      "key": "repulsor",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 8
+    },
+    {
+      "displayId": "A-11",
+      "key": "attractor",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 8
+    },
+    {
+      "displayId": "S-1",
+      "key": "death_insurance",
+      "quality": "S",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 15
+    },
+    {
+      "displayId": "S-2",
+      "key": "cluster_he",
+      "quality": "S",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 12
+    },
+    {
+      "displayId": "S-3",
+      "key": "flash_chain",
+      "quality": "S",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 12
+    },
+    {
+      "displayId": "S-4",
+      "key": "lifesteal",
+      "quality": "S",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 15
+    },
+    {
+      "displayId": "S-5",
+      "key": "he_supply",
+      "quality": "S",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 11
+    },
+    {
+      "displayId": "S-6",
+      "key": "comeback",
+      "quality": "S",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 14
+    },
+    {
+      "displayId": "C-5",
+      "key": "diagonal_speed",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 4
+    },
+    {
+      "displayId": "B-10",
+      "key": "extra_jump",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 3,
+      "cost": 6
+    },
+    {
+      "displayId": "C-6",
+      "key": "ammo_coupon",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 3
+    },
+    {
+      "displayId": "C-7",
+      "key": "fast_switch",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 3
+    },
+    {
+      "displayId": "C-8",
+      "key": "anti_tag",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 3
+    },
+    {
+      "displayId": "C-9",
+      "key": "soft_landing",
+      "quality": "C",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 3
+    },
+    {
+      "displayId": "B-11",
+      "key": "fire_resist",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 6
+    },
+    {
+      "displayId": "B-12",
+      "key": "smoke_regen",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 6
+    },
+    {
+      "displayId": "B-13",
+      "key": "recoil_control",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 6
+    },
+    {
+      "displayId": "B-14",
+      "key": "mobile_accuracy",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 6
+    },
+    {
+      "displayId": "B-15",
+      "key": "fast_trigger",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 2,
+      "cost": 7
+    },
+    {
+      "displayId": "B-16",
+      "key": "time_resist",
+      "quality": "B",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 5
+    },
+    {
+      "displayId": "A-12",
+      "key": "kinetic_hit",
+      "quality": "A",
+      "scope": "个人",
+      "maxLevel": 1,
+      "cost": 8
+    }
+  ],
+  "economy": {
+    "roundCoupons": 4,
+    "performanceCap": 4,
+    "killCoupons": 2,
+    "otherPerformanceCoupons": 1,
+    "exchangeMoney": 1000,
+    "exchangeCapPerRound": 1,
+    "rerollCoupons": 1
+  },
+  "limits": {
+    "health": 200,
+    "speedPercent": 150,
+    "damageReductionPercent": 75,
+    "fireRatePercent": 125
+  },
+  "validationStatus": "in-progress"
+}

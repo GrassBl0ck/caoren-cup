@@ -15,6 +15,7 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
     private readonly Action<string> _executeServerCommand;
     private readonly Func<string?> _getCurrentMap;
     private readonly Action<string> _notify;
+    private readonly Action? _resetFeatures;
     private readonly Dictionary<string, string> _overrides = new(StringComparer.OrdinalIgnoreCase);
     private ActiveGameModeState _state = new(null, GameModeLifecycleState.Lobby, DefaultWarmupSeconds, 0);
     private ICaorenCupGameModeProvider? _activeProvider;
@@ -25,13 +26,15 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
         Action<float, Action> scheduleTimer,
         Action<string> executeServerCommand,
         Func<string?> getCurrentMap,
-        Action<string> notify)
+        Action<string> notify,
+        Action? resetFeatures = null)
     {
         _managedCvars = managedCvars;
         _scheduleTimer = scheduleTimer;
         _executeServerCommand = executeServerCommand;
         _getCurrentMap = getCurrentMap;
         _notify = notify;
+        _resetFeatures = resetFeatures;
     }
 
     public ActiveGameModeState State => _state;
@@ -164,7 +167,8 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
             Revision = _state.Revision + 1,
         };
         _notify($"已启动 {_activeProvider.Descriptor.DisplayName}，Warmup {seconds} 秒。");
-        _scheduleTimer(seconds, EnterLive);
+        var warmupRevision = _state.Revision;
+        _scheduleTimer(seconds, () => { if (_state.Revision == warmupRevision) EnterLive(); });
         return GameModeResult.Ok("模式已进入 Warmup。");
     }
 
@@ -198,6 +202,15 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
     private void EnterLive()
     {
         if (_state.Lifecycle != GameModeLifecycleState.Warmup || _activeProvider is null) return;
+        // exec 的配置可能晚于 Start 中的设值执行。正式开局前再次应用已校验参数，
+        // 不重建托管快照，停止时仍恢复启动前的值。
+        foreach (var definition in _activeProvider.Descriptor.Cvars)
+        {
+            var value = _overrides.TryGetValue(definition.Name, out var overrideValue)
+                ? overrideValue
+                : definition.DefaultValue;
+            _executeServerCommand($"{definition.Name} {value}");
+        }
         var result = _activeProvider.OnLiveStarted(CreateContext());
         if (!result.Success)
         {
@@ -229,7 +242,15 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
 
     private GameModeRuntimeContext CreateContext() => new()
     {
-        ExecuteServerCommand = _executeServerCommand,
+        ExecuteServerCommand = command =>
+        {
+            // 开赛重置必须先清理旧托管项，再建立本模式快照。
+            // 排入控制台队列会在 Set 之后 ResetAll，并把旧值追加到新值后面。
+            if (_resetFeatures is not null && command.Trim().Equals("css_reset_plu", StringComparison.OrdinalIgnoreCase))
+                _resetFeatures();
+            else
+                _executeServerCommand(command);
+        },
         GetCurrentMap = _getCurrentMap,
         Notify = _notify,
     };

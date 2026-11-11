@@ -1,6 +1,7 @@
 """Packaging behavior checks; fixtures stay in ignored release-build for review."""
 from pathlib import Path
 import importlib.util,json,tempfile,unittest,zipfile
+import hashlib
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('mc_package',ROOT/'scripts/package-caoren-mc.py')
@@ -67,5 +68,21 @@ class McPackageTests(unittest.TestCase):
         original=target.read_bytes()
         with self.assertRaises(FileExistsError): package.write_bundle(stage,target,'v2.0.0',{})
         self.assertEqual(target.read_bytes(),original)
+
+    def test_deployment_guide_and_offline_entry_are_in_mc_bundle_manifest(self):
+        stage = self.root / 'guide-stage'
+        package.copy_deployment_guide(ROOT, stage, 'v9.8.7', 'mc/INSTALL.md')
+        output = self.root / 'guide-bundle.zip'
+        package.write_bundle(stage, output, 'v9.8.7', {})
+        with zipfile.ZipFile(output) as archive:
+            install = archive.read('INSTALL.md').decode('utf-8')
+            self.assertIn('(guide/docs/deployment/README.md)', install)
+            manifest = json.loads(archive.read('package-manifest.json'))
+            rows = {row['path']: row for row in manifest['files']}
+            name = 'guide/docs/deployment/README.md'
+            self.assertEqual(rows[name]['sha256'], hashlib.sha256(archive.read(name)).hexdigest())
+            self.assertEqual(rows[name]['size'], len(archive.read(name)))
+            cs = archive.read('guide/docs/deployment/04-cs.md').decode('utf-8')
+            self.assertIn('/blob/v9.8.7/cs/game-plugin/Features/HeadSizeFeature.cs', cs)
 
 if __name__=='__main__': unittest.main()

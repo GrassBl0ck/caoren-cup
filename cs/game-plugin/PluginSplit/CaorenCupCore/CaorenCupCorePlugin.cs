@@ -10,7 +10,7 @@ namespace CaorenCup.Core;
 public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
 {
     public override string ModuleName => "CaorenCup Core";
-    public override string ModuleVersion => "1.10.0";
+    public override string ModuleVersion => "2.2.2";
     public override string ModuleAuthor => "Graslock + AI";
     public int ContractVersion => CaorenCupCoreAccess.CurrentContractVersion;
     private CaorenCupConfigStore _configStore = null!;
@@ -52,7 +52,8 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
             (seconds, callback) => AddTimer(seconds, callback),
             command => CounterStrikeSharp.API.Server.ExecuteCommand(command),
             () => CounterStrikeSharp.API.Server.MapName,
-            message => CaorenCupChat.PrintToChatAll(message));
+            message => CaorenCupChat.PrintToChatAll(message),
+            PerformReset);
         CaorenCupCoreAccess.Publish(this);
         _preferences = new PlayerPreferenceStore(Path.Combine(ModuleDirectory, "data", "player-preferences.json"));
         CaorenCupPreferencesAccess.Publish(_preferences);

@@ -744,6 +744,10 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 broadcastState();
             } else if (data.action === 'RESET_FORMAL_MATCH_COUNTERS') {
                 if (session.phase !== GamePhase.LiveGame) return;
+                if (session.matchOptions?.gameModeId === 'random') {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '[草人杯] 随机乱斗按游戏正式回合自动统计，不能把当前回合改为第1回合。' });
+                    return;
+                }
                 const rawPluginRound = resetFormalMatchCounters();
                 enqueuePluginCommand('RESET_LIVE_MATCH_STATS', { currentRound: rawPluginRound });
                 notifyMessage('管理员已将当前局重置为正式第 1 回合，并重置网页端与插件端战绩。');

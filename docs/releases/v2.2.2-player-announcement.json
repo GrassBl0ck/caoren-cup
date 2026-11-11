@@ -1,0 +1,9 @@
+{
+  "version": "v2.2.2",
+  "title": "随机乱斗强化与管理员测试更新",
+  "sections": {
+    "webHtml": "<p>随机乱斗支持模式选择、24回合统计和比分同步。</p>",
+    "gamePluginHtml": "<ul><li>加入46项强化，支持升级、团队效果与主动技能。</li><li>每回合获得4张强化券，可免费锁定一张候选，重抽消耗1券。</li><li>输入 /randombuffs 打开选牌，输入 /rbskill 加卡牌名称发动主动技能。</li><li>管理员可从 /ca 测试卡牌与等级，亦可使用 /rbdebug。</li></ul>",
+    "bridgePluginHtml": "<p>网页和游戏内的随机乱斗状态同步。</p>"
+  }
+}

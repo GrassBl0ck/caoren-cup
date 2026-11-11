@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][ValidatePattern('^v\d+\.\d+\.\d+$')][string]$Version,
     [string[]]$Modules = @(),
@@ -13,6 +13,7 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Import-Module (Join-Path $PSScriptRoot 'CaorenRelease.psm1') -Force
 $manifest = Read-ServerPackageManifest $repoRoot
 $plugins = @(Select-ReleaseModules $manifest $Modules)
+Copy-DeploymentGuide -RepoRoot $repoRoot -Version $Version -ValidateOnly
 $hasAudio = 'CaorenCupQOL_PlaySound' -in @($plugins.name)
 $hasFunCommands = 'CaorenCupFunCommands' -in @($plugins.name)
 $needsContracts = $false
@@ -62,6 +63,10 @@ foreach ($plugin in $plugins) {
     $destination = Resolve-ReleasePath $stage $relative
     Copy-ReleasePublishTree $publish $destination
     $required += "$relative/$($plugin.name).dll", "$relative/$($plugin.name).deps.json"
+    if ($plugin.name -eq 'CaorenCupGamemode_Random') {
+        Copy-Item -LiteralPath (Join-Path $publish 'catalog-source.json') -Destination (Join-Path $destination 'catalog-source.json')
+        $required += "$relative/native/libcaorencup_engine.so", "$relative/catalog-source.json"
+    }
     if ($plugin.name -eq 'CaorenWeaponPaints') {
         $required += "$relative/LICENSE", "$relative/UPSTREAM.md", "$relative/MySqlConnector.dll", "$relative/data/skin-rarities.json"
         $gamedata = Resolve-ReleasePath $stage 'addons/counterstrikesharp/gamedata/weaponpaints.json'
@@ -109,7 +114,7 @@ if ('CaorenCupGamemode_RUSH' -in @($plugins.name)) {
 $licenses = Resolve-ReleasePath $stage 'licenses'
 $null = New-Item -ItemType Directory -Path $licenses -Force
 Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'LICENSE') -Destination (Join-Path $licenses 'CaorenCup-MIT.txt')
-Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'docs/release-installation.md') -Destination (Join-Path $stage 'INSTALL.md')
+Copy-DeploymentGuide -RepoRoot $repoRoot -Stage $stage -Version $Version
 $sourceText = "Source repository: https://github.com/GrassBl0ck/caoren-cup" + [Environment]::NewLine +
     "Release tag: $Version (verify the published tag before distribution)." + [Environment]::NewLine +
     "GPL-3.0 components, when included: cs/mini-games-plugin/; cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/." + [Environment]::NewLine +

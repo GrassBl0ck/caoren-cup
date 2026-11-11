@@ -83,12 +83,64 @@ public sealed class GameModeAnnouncementTests
         finally { CaorenCupGameModeRegistry.Unregister(provider); }
     }
 
+    [Fact]
+    public void Old_warmup_timer_cannot_start_a_replacement_match_early()
+    {
+        CaorenCupPracticeState.EnterSleep();
+        var provider = new Provider("timer-generation");
+        CaorenCupGameModeRegistry.Register(provider);
+        var timers = new List<Action>();
+        var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timers.Add(callback), _ => { }, () => "de_ancient", _ => { });
+        try
+        {
+            runtime.SelectMode(provider.Descriptor.Id); runtime.Start(); runtime.Stop(); runtime.Start();
+            timers[0](); Assert.Equal(GameModeLifecycleState.Warmup, runtime.State.Lifecycle);
+            timers[1](); Assert.Equal(GameModeLifecycleState.Live, runtime.State.Lifecycle);
+        }
+        finally { CaorenCupGameModeRegistry.Unregister(provider); }
+    }
+
+    [Fact]
+    public void Warmup_feature_reset_finishes_before_mode_scope_is_created_and_never_runs_late_from_console_queue()
+    {
+        CaorenCupPracticeState.EnterSleep();
+        var provider = new Provider("reset-order") { ResetWarmup = true };
+        CaorenCupGameModeRegistry.Register(provider);
+        var queuedCommands = new List<string>();
+        var resetCalls = 0;
+        var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, _) => { }, queuedCommands.Add,
+            () => "de_ancient", _ => { }, () =>
+            {
+                resetCalls++;
+                queuedCommands.Add("restore_previous_feature_values");
+            });
+        try
+        {
+            Assert.True(runtime.SelectMode(provider.Descriptor.Id).Success);
+            Assert.True(runtime.Start().Success);
+            Assert.Equal(1, resetCalls); // 尚未执行任何排队的控制台命令。
+            Assert.DoesNotContain("css_reset_plu", queuedCommands);
+            Assert.True(queuedCommands.IndexOf("restore_previous_feature_values") < queuedCommands.IndexOf("mp_warmup_start"));
+            Assert.False(runtime.Start().Success);
+            Assert.Equal(1, resetCalls);
+            Assert.True(runtime.Stop().Success);
+            Assert.True(runtime.Start().Success);
+            Assert.Equal(2, resetCalls);
+        }
+        finally { CaorenCupGameModeRegistry.Unregister(provider); }
+    }
+
     private sealed class Provider(string id, IReadOnlyList<GameModeCvarDefinition>? cvars = null) : ICaorenCupGameModeProvider
     {
         public bool RejectWarmup { get; init; }
+        public bool ResetWarmup { get; init; }
         public GameModeDescriptor Descriptor { get; } = new(id, "测试模式", "Test", [], null, 15, cvars ?? []);
         public GameModeResult ValidateStart(GameModeStartRequest request, GameModeRuntimeContext context) => GameModeResult.Ok("ok");
-        public GameModeResult OnWarmupStarted(GameModeRuntimeContext context) => RejectWarmup ? GameModeResult.Fail("资源未就绪") : GameModeResult.Ok("ok");
+        public GameModeResult OnWarmupStarted(GameModeRuntimeContext context)
+        {
+            if (ResetWarmup) context.ExecuteServerCommand("css_reset_plu");
+            return RejectWarmup ? GameModeResult.Fail("资源未就绪") : GameModeResult.Ok("ok");
+        }
         public GameModeResult OnLiveStarted(GameModeRuntimeContext context) => GameModeResult.Ok("ok");
         public GameModeResult OnStopped(GameModeRuntimeContext context) => GameModeResult.Ok("ok");
     }

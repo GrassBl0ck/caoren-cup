@@ -1,8 +1,8 @@
 import type { Express } from 'express';
-import { GamePhase, MatchOptions, Player } from '../types';
+import { GamePhase, MatchOptions, Player, GameModeId } from '../types';
 import {
   GAME_MODE_MANIFESTS,
-  isAvailableGameMode,
+  isLoadedGameMode,
   normalizeGameModeId,
   normalizeGameModeOverrides,
 } from '../game-mode';
@@ -10,6 +10,7 @@ import {
 interface RegisterGameModeRoutesDeps {
   adminPassword?: string;
   getPhase: () => GamePhase;
+  getAvailableGameModes?: () => readonly GameModeId[] | undefined;
   getPlayerById?: (playerId: string) => Player | undefined;
   ensureMatchOptions: () => MatchOptions;
   applyMatchOptions: (rawOptions: unknown) => MatchOptions;
@@ -36,7 +37,7 @@ export function registerGameModeRoutes(app: Express, deps: RegisterGameModeRoute
       current: options.gameModeId,
       modes: Object.values(GAME_MODE_MANIFESTS).map(mode => ({
         ...mode,
-        available: isAvailableGameMode(mode.id),
+        available: isLoadedGameMode(mode.id, deps.getAvailableGameModes?.()),
       })),
     });
   });
@@ -53,7 +54,7 @@ export function registerGameModeRoutes(app: Express, deps: RegisterGameModeRoute
     const rawOptions = req.body?.matchOptions && typeof req.body.matchOptions === 'object' ? req.body.matchOptions : {};
     const raw = { ...rawOptions, ...(req.body?.gameMode || {}), ...req.body };
     const modeId = normalizeGameModeId(raw.gameModeId, rawOptions);
-    if (!isAvailableGameMode(modeId)) {
+    if (!isLoadedGameMode(modeId, deps.getAvailableGameModes?.())) {
       return res.status(400).json({ success: false, error: `模式尚未加载：${modeId}`, phase });
     }
 
@@ -84,7 +85,7 @@ export function registerGameModeRoutes(app: Express, deps: RegisterGameModeRoute
       return res.status(400).json({ success: false, error: '只能在大厅或赛前配置阶段开始模式', phase });
     }
     const matchOptions = deps.ensureMatchOptions();
-    if (!isAvailableGameMode(matchOptions.gameModeId)) {
+    if (!isLoadedGameMode(matchOptions.gameModeId!, deps.getAvailableGameModes?.())) {
       return res.status(400).json({ success: false, error: `模式尚未加载：${matchOptions.gameModeId}`, phase });
     }
     deps.enqueuePluginCommand('GAME_MODE_START', {

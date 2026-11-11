@@ -11,7 +11,7 @@ namespace CaorenCup.Features.InGameMenu;
 
 public sealed partial class CaorenCupInGameMenuPlugin
 {
-    private enum AdminVoteView { Home, Management, Preview, CancelConfirmation, HelpList, HelpDetail, Settings, Audio, Ability }
+    private enum AdminVoteView { Home, Management, Preview, CancelConfirmation, HelpList, HelpDetail, Settings, Audio, Ability, Random }
     private sealed record VotePageSession(Guid? VoteId, bool ResultOnly);
     private readonly VoteSystem _votes = new();
     private IMenuHudSurface _voteSurface = null!;
@@ -42,6 +42,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         RegisterListener<Listeners.OnTick>(VoteTick);
         RegisterListener<Listeners.OnTick>(RefreshAudioMenus);
         RegisterListener<Listeners.OnTick>(RefreshAbilityMenus);
+        RegisterListener<Listeners.OnTick>(RefreshAdminRandomMenus);
         RegisterListener<Listeners.OnMapEnd>(() => CloseAllMenus(VoteEndReason.MapChanged));
     }
 
@@ -141,6 +142,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         _surface.SetClass(player, "admin_settings", "Hidden", view != AdminVoteView.Settings);
         _surface.SetClass(player, "admin_audio", "Hidden", view != AdminVoteView.Audio);
         _surface.SetClass(player, "admin_ability", "Hidden", view != AdminVoteView.Ability);
+        _surface.SetClass(player, "admin_random", "Hidden", view != AdminVoteView.Random);
         _surface.SetVariable(player, "navsection", view is AdminVoteView.HelpList or AdminVoteView.HelpDetail ? "指令帮助" : view is AdminVoteView.Home or AdminVoteView.Ability ? "快捷指令" : view == AdminVoteView.Settings ? "个人设置" : "投票");
         _surface.SetVariable(player, "subsection", view switch { AdminVoteView.Home => "广播", AdminVoteView.Preview => "确认发起", AdminVoteView.CancelConfirmation => "确认取消", AdminVoteView.HelpList => "全部指令", AdminVoteView.HelpDetail => "指令详情", AdminVoteView.Settings => "外观与声音", AdminVoteView.Audio => "音乐与广播", AdminVoteView.Ability => "异能职业分配", _ => "管理" });
         _surface.SetClass(player, "admin_home_tab", "CaorenTabSelected", view is not (AdminVoteView.HelpList or AdminVoteView.HelpDetail or AdminVoteView.Settings));
@@ -152,6 +154,12 @@ public sealed partial class CaorenCupInGameMenuPlugin
         if (view == AdminVoteView.Settings) RenderPersonalSettings(player, _surface);
         if (view == AdminVoteView.Audio) RenderAudioMenu(player);
         if (view == AdminVoteView.Ability) RenderAbilityMenu(player);
+        if (view == AdminVoteView.Random)
+        {
+            _surface.SetVariable(player, "navsection", "快捷指令");
+            _surface.SetVariable(player, "subsection", "随机乱斗状态");
+            RenderAdminRandomMenu(player);
+        }
     }
 
     private void RenderAdminVoting(CCSPlayerController player)
@@ -494,6 +502,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
             case AdminVoteView.HelpList: SetAdminVoteView(player, AdminVoteView.Home); break;
             case AdminVoteView.Settings: SetAdminVoteView(player, AdminVoteView.Home); break;
             case AdminVoteView.Audio: SetAdminVoteView(player, AdminVoteView.Home); break;
+            case AdminVoteView.Random: BackAdminRandom(player); break;
             case AdminVoteView.Ability:
                 if (_abilityMenuStates.TryGetValue(sid, out var abilityState) && abilityState.Mode == AbilityMenuMode.Roles)
                 {
@@ -528,6 +537,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         _personalPages.Remove(steamId); _personalDetails.Remove(steamId); _voteFromPersonalMenu.Remove(steamId);
         _adminVoteViews.Remove(steamId); _cancelVoteIds.Remove(steamId); _noticeSignatures.Remove(steamId);
         _abilityMenuStates.Remove(steamId);
+        _randomAdminMenus.Remove(steamId);
     }
 
     private void ResetVoting(VoteEndReason reason)
@@ -539,6 +549,8 @@ public sealed partial class CaorenCupInGameMenuPlugin
         _voteDrafts.Clear(); _adminVoteViews.Clear(); _cancelVoteIds.Clear(); _noticeSignatures.Clear();
         _helpListPages.Clear(); _helpDetails.Clear();
         _personalViews.Clear(); _personalPages.Clear(); _personalDetails.Clear(); _voteFromPersonalMenu.Clear(); _personalSurface?.RemoveEntity();
+        _randomMenus.Clear();
+        _randomAdminMenus.Clear();
         _publishedVoteResult = null;
         if (result != null) RaiseVoteCompleted(result);
     }

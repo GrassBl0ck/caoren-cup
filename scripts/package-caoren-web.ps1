@@ -10,6 +10,7 @@ Import-Module (Join-Path $PSScriptRoot 'CaorenRelease.psm1') -Force
 
 # Fail before creating output; do not silently rewrite deferred authentication.
 Assert-WebReleaseBoundary $repoRoot $Version
+Copy-DeploymentGuide -RepoRoot $repoRoot -Version $Version -ValidateOnly
 $dataRoot = Resolve-ReleasePath $repoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
 if (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'skin-rarities.json'))) { throw 'Missing webpage item data' }
 $webEntries = @('src/server.ts', 'public/index.html', 'pages/cs.html', 'pages/mc.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', '.env.example', 'ACCOUNT-SETUP.md')
@@ -28,7 +29,7 @@ Copy-ReleaseWebTree $repoRoot $stage $Version
 $required = @('package.json', 'package-lock.json', 'tsconfig.json', 'pages/cs.html', 'pages/mc.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', 'src/server.ts', 'public/index.html', 'weaponpaints-data/skin-rarities.json')
 Assert-ReleaseTree $stage $required
 Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'LICENSE') -Destination (Join-Path $stage 'LICENSE')
-Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'docs/release-installation.md') -Destination (Join-Path $stage 'INSTALL.md')
+Copy-DeploymentGuide -RepoRoot $repoRoot -Stage $stage -Version $Version
 Write-ReleaseFileManifest $stage $Version @('CaorenCupWeb') @()
 $result = New-PortableReleaseZip $repoRoot $stage $zipRelative
 Write-Output "Created: $($result.Path)"

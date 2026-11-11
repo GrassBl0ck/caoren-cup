@@ -46,7 +46,8 @@ public sealed class ManagedCvarScope
         try
         {
             ConVar? cvar = ConVar.Find(name);
-            return cvar?.GetPrimitiveValue<string>();
+            // 数字/布尔 CVar 的泛型读取必须匹配原生类型；统一快照使用文本接口。
+            return cvar?.StringValue;
         }
         catch
         {

@@ -688,6 +688,12 @@ document.addEventListener('caoren:terminate-confirmed', () => {
 
             // 网页单挑已归档，仅保留游戏内 /duel；旧缓存状态也不得重新打开网页入口。
             if (gameModeInput) {
+                const randomOption = gameModeInput.querySelector('option[value="random"]');
+                if (randomOption) {
+                    const loaded = state?.availableGameModes?.includes('random') === true;
+                    randomOption.hidden = !loaded;
+                    randomOption.disabled = !loaded;
+                }
                 gameModeInput.value = gameModeId;
                 gameModeInput.disabled = !editable;
                 gameModeInput.onchange = () => {
@@ -2838,7 +2844,9 @@ if (window._caorenModifiersEnabled !== true) {
                 ? '等待开赛'
                 : (isDuel
                     ? '第 ' + (displayRound || 0) + ' / ' + roundLimit + ' 回合｜单挑强制打满'
-                    : '第 ' + (displayRound || 0) + ' / ' + roundLimit + ' 回合｜胜局目标 ' + (live.winTarget || Math.floor(roundLimit / 2) + 1) + ' 分');
+                    : state?.matchOptions?.gameModeId === 'random'
+                        ? '第 ' + (displayRound || 0) + ' / 24 回合｜随机乱斗打满24回合'
+                        : '第 ' + (displayRound || 0) + ' / ' + roundLimit + ' 回合｜胜局目标 ' + (live.winTarget || Math.floor(roundLimit / 2) + 1) + ' 分');
             let html = '<div class="live-header" style="background:#263238; color:#fff;">' +
                 '<span style="font-size:24px;">赛况：A队 <span style="color:#64b5f6;">' + scoreA + '</span> - <span style="color:#ffb74d;">' + scoreB + '</span> B队</span> ' +
                 (isDuel ? '<span style="font-size:16px; color:#b0bec5;">CT=A队，T=B队</span> ' : '<span style="font-size:16px; color:#b0bec5;">CT/T参考：' + (live.scoreCT || 0) + ':' + (live.scoreT || 0) + '</span> ') +
@@ -2846,6 +2854,9 @@ if (window._caorenModifiersEnabled !== true) {
                 '<button onclick="showRules()" style="background:#455a64; color:#fff; border:1px solid #78909c;">📖 温习规则指引</button></div>';
             if (live.duelWaitingForPlayers) {
                 html += '<div style="background:#eff6ff; border:1px solid #93c5fd; padding:12px; border-radius:6px; margin-bottom:12px; color:#1e3a8a;">单挑准备等待中：游戏内 warmup 倒计时就是等人/分队时间，玩家可以先进服务器，管理员可以继续把玩家分到 A/B 队并锁边。倒计时结束后，如果 A/B 双方都有玩家且没有未分队参赛玩家，服务器会重启并从手枪第 1 回合开始；否则自动回到大厅。</div>';
+            }
+            if (state?.matchOptions?.gameModeId === 'random' && live.statsUnavailableReason) {
+                html += '<div style="padding:12px;background:#263238;color:#eceff1;">网页比分统计未就绪：请在开局前完成阵容、SteamID绑定与选边。游戏正常进行。</div>';
             }
             if (live.matchFinished) {
                 const resolvedWinner = resolveLiveWinnerTeam(live, scoreA, scoreB);
@@ -2889,8 +2900,11 @@ if (window._caorenModifiersEnabled !== true) {
                 html += 'T参考：<input id="admin-scoreT" type="number" value="' + (live.scoreT || 0) + '" style="width:60px;"> &nbsp;&nbsp;';
                 html += '当前回合：<input id="admin-round" type="number" value="' + (displayRound || 0) + '" style="width:60px;"> &nbsp;';
                 html += '<button onclick="updateLiveData()" style="background:#607d8b; color:#fff;">覆盖赛局</button> ';
-                html += '<button onclick="resetFormalMatchCounters()" style="background:#d32f2f; color:#fff;">开启正式统计：现在是第一回合</button>';
-                html += '<p style="font-size:13px;color:#64748b;margin:8px 0 0;">点击前，练习模式的击杀/伤害/矩阵不会纳入正式战绩；正式开赛第一回合时点此按钮，网页端和插件端会清零并从当前回合开始统计。</p></div>';
+                if (state?.matchOptions?.gameModeId !== 'random') {
+                    html += '<button onclick="resetFormalMatchCounters()" style="background:#d32f2f; color:#fff;">开启正式统计：现在是第一回合</button>';
+                    html += '<p style="font-size:13px;color:#64748b;margin:8px 0 0;">点击前，练习模式的击杀/伤害/矩阵不会纳入正式战绩；正式开赛第一回合时点此按钮，网页端和插件端会清零并从当前回合开始统计。</p>';
+                }
+                html += '</div>';
 
                 if (undercoverEnabled) {
                     html += '<div style="margin-top:15px; padding:15px; background:#e8f5e9; border:1px solid #a5d6a5; border-radius:6px;">';

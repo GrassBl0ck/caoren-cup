@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "entryPoint": "docs/deployment/README.md",
+  "installationSources": ["docs/release-installation.md", "mc/INSTALL.md"],
+  "files": [
+    "docs/deployment/README.md",
+    "docs/deployment/01-before-you-start.md",
+    "docs/deployment/02-environment.md",
+    "docs/deployment/03-web.md",
+    "docs/deployment/04-cs.md",
+    "docs/deployment/05-mc.md",
+    "docs/deployment/06-integration.md",
+    "docs/deployment/07-networking.md",
+    "docs/deployment/08-maintenance.md",
+    "docs/deployment/09-source-build.md",
+    "docs/deployment/10-reference.md",
+    "web-command-center/ACCOUNT-SETUP.md",
+    "mc/INSTALL.md",
+    "mc/cushion-wars/cushion-wars-b/README.md",
+    "cs/game-plugin/PluginSplit/CaorenCupGamemode_RUSH/AssetTools/README.md",
+    "cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/README.md"
+  ]
+}

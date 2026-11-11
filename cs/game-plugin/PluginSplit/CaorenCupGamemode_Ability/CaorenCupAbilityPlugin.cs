@@ -23,7 +23,7 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
     public int ContractVersion => CaorenCupAbilityAccess.CurrentContractVersion;
 
     public override string ModuleName => "CaorenCup Ability";
-    public override string ModuleVersion => "1.12.0";
+    public override string ModuleVersion => "2.2.2";
     public override string ModuleAuthor => "Graslock + AI";
 
     public override void Load(bool hotReload)

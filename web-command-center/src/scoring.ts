@@ -1,7 +1,7 @@
 // scoring.ts
 import { GameSession, Player, MatchStats, RosterTeam } from './types';
 import { findPlayerById, getGamePlayers, toNumber, parseCsvLine, getTeamPlayers } from './player-utils';
-import { getGameModeRoundRules } from './game-mode-rounds';
+import { getGameModeRoundRules, getRoundOutcome } from './game-mode-rounds';
 
 // ========== CSV 类型和解析 ==========
 
@@ -236,6 +236,8 @@ export const calculateScores = (session: GameSession): void => {
 // 工具函数
 const getMatchWinner = (session: GameSession, scoreA: number, scoreB: number): RosterTeam | null => {
     const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
+    if (rules.playAllRounds) return session.liveGameData?.formalStatsStarted === true
+        ? getRoundOutcome(rules, scoreA, scoreB, session.liveGameData.lastScoredRound || 0).winner : null;
     if (rules.isDuel && scoreA + scoreB < rules.maxRounds) return null;
     if (scoreA >= rules.winTarget && scoreA > scoreB) return 'A';
     if (scoreB >= rules.winTarget && scoreB > scoreA) return 'B';

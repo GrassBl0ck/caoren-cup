@@ -2,6 +2,7 @@
 """Build one MC release bundle with separate game and experimental directories."""
 from pathlib import Path, PurePosixPath
 import argparse,hashlib,json,os,re,shutil,subprocess,sys,tempfile,uuid,zipfile
+from deployment_guide import copy_deployment_guide, documentation_outputs
 
 ROOT=Path(__file__).resolve().parents[1]
 MC=ROOT/'mc'
@@ -96,6 +97,7 @@ def main():
     parser.add_argument('--version',required=True)
     args=parser.parse_args()
     if not re.fullmatch(r'v\d+\.\d+\.\d+',args.version): raise ValueError('Use a concrete vX.Y.Z release version')
+    documentation_outputs(ROOT, args.version, 'mc/INSTALL.md')
     output=ROOT/'release-output'/('CaorenCupMC-服务器内容-'+args.version+'.zip')
     if output.exists(): raise FileExistsError(output.name)
     cushion=MC/'cushion-wars/cushion-wars-a/dist/CushionWarsProbe-0.1.0.jar'
@@ -111,7 +113,7 @@ def main():
     names={p.relative_to(MC).as_posix() for p in selected}
     if not imported_current_paths(imported,json.loads((MC/'source-layout.json').read_text(encoding='utf-8'))).issubset(names): raise ValueError('Source selection omitted an imported file')
     for file in selected: copy(file,stage/'source'/file.relative_to(MC))
-    copy(MC/'INSTALL.md',stage/'INSTALL.md')
+    copy_deployment_guide(ROOT, stage, args.version, 'mc/INSTALL.md')
     copy(cushion,stage/'cushion-wars/cushion-wars-a/plugins'/cushion.name)
     copy(realtime,stage/'cushion-wars/cushion-wars-b/plugins'/realtime.name)
     (stage/'cushion-wars/cushion-wars-b/README.md').write_text('坐垫战争即时制 B，本地自动验证通过，真实服务端与玩家验收待完成。需要 Java 25、Paper API 26.3，主命令 /cwb；仅在显式设置 -Dcw.map=cushion-wars-b 且配置有效时启用。不要同时启用 A 与 B。完整配置与安装条件见 ../../source/cushion-wars/cushion-wars-b/README.md。\n',encoding='utf-8')

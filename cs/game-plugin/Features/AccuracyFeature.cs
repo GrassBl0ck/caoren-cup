@@ -7,6 +7,8 @@ using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Memory;
+using CounterStrikeSharp.API.Modules.Memory.DynamicFunctions;
+using CaorenCup.Contracts;
 using CounterStrikeSharp.API.Modules.Utils;
 
 namespace CaorenCup.Features;
@@ -29,6 +31,7 @@ public class AccuracyFeature : ICaorenFeature
 
     private CaorenCupPlugin _plugin = null!;
     private bool _registered;
+    private MemoryFunctionWithReturn<CCSWeaponBase, nint, nint, float>? _inaccuracyHook;
 
     private const string WeaponSchemaClass = "CCSWeaponBase";
     private const float Epsilon = 0.0001f;
@@ -98,6 +101,8 @@ public class AccuracyFeature : ICaorenFeature
 
     public void OnUnload()
     {
+        _inaccuracyHook?.Unhook(OnNativeInaccuracy, HookMode.Post);
+        _inaccuracyHook = null;
         try
         {
             RestoreAllActiveWeapons();
@@ -276,6 +281,7 @@ public class AccuracyFeature : ICaorenFeature
 
     private void OnTickCore()
     {
+        EnsureNativeHook();
         if (!_settings.Enabled)
             return;
 
@@ -290,6 +296,32 @@ public class AccuracyFeature : ICaorenFeature
         {
             // 避免某个实体瞬间无效导致整 Tick 报错刷屏。
         }
+    }
+
+    private void EnsureNativeHook()
+    {
+        if (_inaccuracyHook is not null || !CaorenCupNativeEngine.Available) return;
+        _inaccuracyHook = new(CaorenCupNativeEngine.InaccuracySignature);
+        _inaccuracyHook.Hook(OnNativeInaccuracy, HookMode.Post);
+    }
+
+    private HookResult OnNativeInaccuracy(DynamicHook hook)
+    {
+        if (CaorenCupNativeEngine.InaccuracyQueryInProgress || !CaorenCupNativeEngine.OnOwnerThread) return HookResult.Continue;
+        var weapon = hook.GetParam<CCSWeaponBase>(0);
+        if (!weapon.IsValid || !CaorenCupDamageSources.IsGun(weapon.DesignerName) ||
+            weapon.OwnerEntity.Value is not { IsValid: true, DesignerName: "player" } owner) return HookResult.Continue;
+        var player = owner.As<CCSPlayerPawn>().Controller.Value?.As<CCSPlayerController>();
+        if (player is not { IsValid: true }) return HookResult.Continue;
+        var personal = CaorenCupPlayerEffectsAccess.Get(player);
+        if (personal is null || personal.MovePenaltyMultiplier >= 1) return HookResult.Continue;
+        var parts = CaorenCupNativeEngine.WeaponInaccuracy(weapon, personal.MovePenaltyMultiplier);
+        hook.SetReturn(parts.Total);
+        var movement = hook.GetParam<nint>(1);
+        var air = hook.GetParam<nint>(2);
+        if (movement != nint.Zero) Marshal.WriteInt32(movement, BitConverter.SingleToInt32Bits(parts.Movement));
+        if (air != nint.Zero) Marshal.WriteInt32(air, BitConverter.SingleToInt32Bits(parts.Air));
+        return HookResult.Handled;
     }
 
     private HookResult OnWeaponFire(EventWeaponFire @event, GameEventInfo info)
@@ -315,6 +347,7 @@ public class AccuracyFeature : ICaorenFeature
 
     private void ApplyToPlayer(CCSPlayerController player)
     {
+        if (CaorenCup.Contracts.CaorenCupPlayerEffectsAccess.Get(player) is not null) return;
         if (!_settings.Enabled)
             return;
 

@@ -176,7 +176,7 @@ assert.match(js, /weaponpaints-panel['"]\)\.hidden\s*=\s*true;[\s\S]{0,160}setPr
 assert.match(js, /const api = window\.WeaponPaintsEntry;[\s\S]{0,200}api\.create\(\{/, '换肤入口显隐必须使用独立的身份状态模块');
 assert.match(js, /entryApi\.PLAYER_CENTER_EVENT/, '换肤入口必须跟随玩家中心账号会话');
 assert.match(js, /entryApi\.ADMIN_EVENT/, '换肤入口必须跟随管理员会话');
-const identityLostMatch = js.match(/function handleIdentityLost\(\)[\s\S]*?\n    }\n/);
+const identityLostMatch = js.match(/function handleIdentityLost\(\)[\s\S]*?\r?\n    }\r?\n/);
 assert.ok(identityLostMatch, '缺少身份失效处理函数');
 assert.doesNotMatch(identityLostMatch[0], /guardUnsavedChange/, '身份失效时必须直接收起面板，不能被未保存更改确认拦截');
 assert.match(js, /function resetIdentityScopedState\(\)[\s\S]{0,1200}state\.loadout = null;/, '身份失效后必须清除上一身份的换肤配置');

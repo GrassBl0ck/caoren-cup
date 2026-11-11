@@ -1,10 +1,12 @@
-# 草人杯 v1.10 开发说明
+# 草人杯开发说明
 
 本文面向源码开发和本地排错。直接安装版本包请看[安装说明](release-installation.md)，生成版本包请看[打包说明](release-packaging.md)。
 
+首次开服和当前源码构建路线见[完整部署指南](deployment/README.md)。
+
 ## 环境与源码
 
-- 网页端：Node.js 20 或更新版本、npm。
+- 网页端使用仍受支持的 Node.js LTS 和 npm，新部署教程以 Node 22 为基准。
 - 插件构建：建议同时安装 .NET 10 和 .NET 8 SDK，与仓库 CI 保持一致。主体、拆分插件、桥接和单挑使用 net10.0；CS2MiniGames 与 CaorenWeaponPaints 使用 net8.0。
 - 游戏运行：CS2 Dedicated Server、MetaMod、CounterStrikeSharp；MatchZy 与 MultiAddonManager 等依赖见安装说明。
 
@@ -43,7 +45,7 @@ npm run check
 | 示例 | 用途 |
 | --- | --- |
 | [ecosystem.config.cjs.example](../web-command-center/ecosystem.config.cjs.example) | PM2 网页服务配置 |
-| [caoren_config.example.json](../web-command-center/CaorenCupPlugin/caoren_config.example.json) | 桥接插件配置 |
+| [caoren_config.example.json](../cs/web-bridge/CaorenCupPlugin/caoren_config.example.json) | 桥接插件配置 |
 
 使用 PM2 时，复制网页示例为 `ecosystem.config.cjs`，将 `cwd` 改为实际网页目录，并配置：
 
@@ -71,23 +73,23 @@ npm run check
 
 长期账号身份默认位于忽略的 `web-command-center/runtime/identity-store.json`，与单场比赛 Session 分离。账号密码使用 scrypt 和随机盐保存，设备令牌只存安全哈希；桌面端凭据保存及自动登录使用既有设备登录流程。更新前备份并保留身份与其他运行数据。
 
-当前玩家入口为账号密码登录；开户和恢复使用 `/cclogin` 取得的单次游戏码。登录玩家中心或管理员入口不会自动参加比赛，玩家需要明确加入当前场次。
+当前新账户通过邮箱验证码注册并设置账号密码；CS 身份使用 `/cclogin` 取得的单次游戏码绑定或恢复。登录玩家中心或管理员入口后，玩家需要明确加入当前场次。SMTP 配置见[账户说明](../web-command-center/ACCOUNT-SETUP.md)。
 
 ## 构建单个插件
 
 以下命令均从仓库根目录执行：
 
 ```bash
-dotnet restore game-plugin/CaorenCup.csproj
-dotnet build game-plugin/CaorenCup.csproj -c Release --no-restore
-dotnet publish game-plugin/CaorenCup.csproj -c Release --no-restore -o game-plugin/publish
+dotnet restore cs/game-plugin/CaorenCup.csproj
+dotnet build cs/game-plugin/CaorenCup.csproj -c Release --no-restore
+dotnet publish cs/game-plugin/CaorenCup.csproj -c Release --no-restore -o cs/game-plugin/publish
 
-dotnet restore web-command-center/CaorenCupPlugin/CaorenCupPlugin.csproj
-dotnet build web-command-center/CaorenCupPlugin/CaorenCupPlugin.csproj -c Release --no-restore
-dotnet publish web-command-center/CaorenCupPlugin/CaorenCupPlugin.csproj -c Release --no-restore -o web-command-center/CaorenCupPlugin/publish
+dotnet restore cs/web-bridge/CaorenCupPlugin/CaorenCupPlugin.csproj
+dotnet build cs/web-bridge/CaorenCupPlugin/CaorenCupPlugin.csproj -c Release --no-restore
+dotnet publish cs/web-bridge/CaorenCupPlugin/CaorenCupPlugin.csproj -c Release --no-restore -o cs/web-bridge/CaorenCupPlugin/publish
 ```
 
-`game-plugin/CaorenCup.csproj` 生成 **CaorenCupFunCommands**，不等于整个服务器插件合集。完整版本包按发布清单组装，见打包说明。
+`cs/game-plugin/CaorenCup.csproj` 生成 **CaorenCupFunCommands**。完整版本包按发布清单组装，见打包说明。
 
 GitHub Actions 的检查入口在 [ci.yml](../.github/workflows/ci.yml)，包括网页检查、插件构建和相关测试；基础检查通过不能替代 CS2 内实际加载与游玩验收。
 

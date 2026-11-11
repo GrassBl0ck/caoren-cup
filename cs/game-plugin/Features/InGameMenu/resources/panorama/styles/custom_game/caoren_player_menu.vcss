@@ -1,4 +1,70 @@
 .CaorenPlayerSection { horizontal-align: center; vertical-align: center; color: #82D8FF; font-size: 20px; }
+
+/* 随机乱斗整卡选择：底色跟品质，分类/归属用小剪影；不按强化等级染色。 */
+.CaorenRandomHeader { width: 100%; flow-children: right; margin-bottom: 8px; }
+.CaorenRandomHeader .SettingsSectionTitleLabel { width: 55%; }
+.CaorenRandomBalance { width: 45%; text-align: right; color: #dddddd; font-size: 20px; vertical-align: center; }
+.CaorenRandomStatus { width: 100%; height: 32px; color: #bbbbbb; font-size: 17px; white-space: normal; }
+.CaorenRandomCollectionNav { width: 100%; height: 46px; flow-children: right; margin-bottom: 6px; }
+.CaorenRandomDescriptionMode { width: 100%; height: 26px; color: #999999; font-size: 15px; }
+.CaorenRandomActionHost { width: 226px; height: 42px; margin: 0px 14px 0px 0px; horizontal-align: left; flow-children: none; }
+.CaorenRandomAction { width: 100%; height: 40px; margin: 0px; padding: 4px 8px; background-color: #ffffff0c; border: 1px solid #ffffff22; }
+.CaorenRandomAction Label { horizontal-align: center; vertical-align: center; font-size: 17px; }
+.CaorenRandomList { width: 100%; height: 520px; flow-children: right; }
+.CaorenRandomCardHost { width: 304px; height: 520px; margin: 0px 17px 0px 0px; horizontal-align: left; vertical-align: top; }
+#random_buy_2_host { margin-right: 0px; }
+.CaorenRandomCard { width: 100%; height: 100%; padding: 16px; flow-children: down; border: 1px solid #ffffff30; border-top: 2px solid #bfbfbf; }
+.CaorenRandomCard:hover { border-color: #ffffff80; }
+.CaorenRandomCard.RandomCardUnavailable { opacity: 0.65; }
+.CaorenRandomCardCorners { width: 100%; height: 64px; flow-children: right; z-index: 2; }
+.CaorenRandomIcons { width: fit-children; height: 64px; flow-children: right; }
+/* 提示完整放在64px容器内，避免CustomHud裁掉容器外文字；只有剪影接收命中。 */
+.CaorenRandomIconHost { width: 64px; height: 64px; margin-right: -32px; flow-children: down; }
+.CaorenRandomScopeHost { width: 64px; height: 64px; margin-right: 0px; }
+.CaorenRandomIconHost.Hidden { visibility: collapse; }
+.CaorenRandomIconHost:hover { z-index: 100; }
+.CaorenRandomIcon { width: 24px; height: 24px; vertical-align: top; margin-top: 1px; wash-color: #dddddd; }
+.CaorenRandomScopeIcon { width: 20px; height: 20px; margin-top: 3px; margin-bottom: 2px; }
+.CaorenRandomIconHint { opacity: 0; width: 64px; height: 32px; margin-top: 3px; padding: 6px 10px; background-color: #202020fa; border: 1px solid #ffffff33; }
+.CaorenRandomIconHost:hover .CaorenRandomIconHint { opacity: 1; }
+.CaorenRandomIconHint .CaorenRandomIconHintText { width: 42px; height: 20px; font-size: 16px; color: #dddddd; white-space: nowrap; text-align: center; horizontal-align: left; vertical-align: top; }
+.CaorenRandomCard .CaorenRandomCardName { width: 100%; height: 62px; color: #eeeeee; font-size: 24px; text-align: center; vertical-align: center; margin-top: -20px; white-space: normal; }
+.CaorenRandomCardDescriptionScroll { width: 100%; height: fill-parent-flow(1); overflow: squish scroll; margin-top: 12px; margin-bottom: 12px; }
+.CaorenRandomCard .CaorenRandomCardDescription { width: 100%; height: fit-children; font-size: 18px; line-height: 26px; color: #cccccc; text-align: left; white-space: normal; }
+.CaorenRandomCard .CaorenRandomCardActionHint { width: 100%; height: 36px; font-size: 17px; color: #dddddd; text-align: center; border-top: 1px solid #ffffff20; padding-top: 10px; }
+.CaorenRandomUnavailable { width: 100%; height: 42px; padding: 4px 8px; }
+.CaorenRandomUnavailable Label { vertical-align: center; horizontal-align: center; color: #777777; font-size: 17px; }
+.CaorenRandomOverview { width: 100%; min-height: 520px; flow-children: down; }
+.CaorenRandomOverviewColumns { width: 100%; flow-children: right; margin-top: 20px; }
+.CaorenRandomOverviewColumn { width: 48%; flow-children: down; margin-right: 2%; }
+.CaorenRandomName { font-size: 22px; color: #eeeeee; }
+.CaorenRandomMeta { width: 100%; font-size: 15px; color: #aaaaaa; margin-top: 5px; margin-bottom: 6px; }
+.CaorenRandomCountRow { width: 100%; height: 60px; flow-children: right; border-bottom: 1px solid #ffffff19; }
+.CaorenRandomCountName { width: 80%; color: #cccccc; font-size: 19px; vertical-align: center; }
+.CaorenRandomCountValue { width: 20%; color: #eeeeee; font-size: 22px; vertical-align: center; text-align: right; }
+.CaorenRandomCard.RandomQualityD { background-color: #ffffff0c; border-top-color: #bfbfbf; }
+.CaorenRandomCard.RandomQualityC { background-color: #80bc701c; border-top-color: #80bc70; }
+.CaorenRandomCard.RandomQualityB { background-color: #77aadd1c; border-top-color: #77aadd; }
+.CaorenRandomCard.RandomQualityA { background-color: #b18cdb1c; border-top-color: #b18cdb; }
+.CaorenRandomCard.RandomQualityS { background-color: #dac0781c; border-top-color: #dac078; }
+.RandomQualityC .CaorenRandomCountName { color: #80bc70; }
+.RandomQualityB .CaorenRandomCountName { color: #77aadd; }
+.RandomQualityA .CaorenRandomCountName { color: #b18cdb; }
+.RandomQualityS .CaorenRandomCountName { color: #dac078; }
+.CaorenRandomDetail { width: 100%; min-height: 520px; flow-children: down; padding: 24px; border: 1px solid #ffffff30; border-top: 2px solid #bfbfbf; }
+.CaorenRandomDetail.RandomQualityD { background-color: #ffffff0c; border-top-color: #bfbfbf; }
+.CaorenRandomDetail.RandomQualityC { background-color: #80bc701c; border-top-color: #80bc70; }
+.CaorenRandomDetail.RandomQualityB { background-color: #77aadd1c; border-top-color: #77aadd; }
+.CaorenRandomDetail.RandomQualityA { background-color: #b18cdb1c; border-top-color: #b18cdb; }
+.CaorenRandomDetail.RandomQualityS { background-color: #dac0781c; border-top-color: #dac078; }
+.CaorenRandomDetailIcons { width: 100%; height: 64px; flow-children: right; margin-top: 12px; z-index: 2; }
+.CaorenRandomDescription { width: 100%; height: 280px; font-size: 20px; line-height: 28px; color: #dddddd; white-space: normal; margin-top: -12px; }
+.CaorenRandomPagination { width: 100%; height: 44px; flow-children: right; margin-top: 8px; }
+.CaorenRandomPageLabel { width: fill-parent-flow(1); color: #aaaaaa; font-size: 16px; vertical-align: center; }
+.CaorenRandomFooter { width: 100%; height: 48px; flow-children: right; margin-top: 6px; }
+.CaorenRandomFooterGroup { width: 226px; height: 44px; margin-right: 14px; flow-children: none; }
+.CaorenRandomFooterLast { margin-right: 0px; }
+.CaorenRandomFooterGroup .CaorenRandomActionHost { width: 100%; margin: 0px; }
 #player_detail .SettingsSectionTitleLabel { margin-bottom: 24px; }
 
 /* 个人悬停声音分档，0% 保持无声；原生素材不写入资源包。 */

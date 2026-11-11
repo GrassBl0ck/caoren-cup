@@ -253,4 +253,101 @@ function New-PortableReleaseZip {
     return @{ Path = $zipPath; SHA256 = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash }
 }
 
-Export-ModuleMember -Function Resolve-ReleasePath, Read-ServerPackageManifest, Select-ReleaseModules, Test-ReleaseEntry, Read-ReleaseAudioCatalog, Assert-WebReleaseBoundary, Copy-ReleaseWebTree, Copy-ReleasePublishTree, Assert-ReleaseTree, Write-ReleaseFileManifest, New-PortableReleaseZip
+function Get-PublicGuidePath {
+    param([string]$RepoRoot, [string]$Relative)
+    $parts = $Relative.Split('/')
+    if ($Relative -notmatch '\.md$' -or $Relative.Contains('\') -or $Relative.Contains(':') -or
+        $parts -contains '..' -or $parts -contains 'runtime' -or $parts -contains 'archive' -or
+        $parts -contains 'AGENTS.md' -or @($parts | Where-Object { $_ -match '^(\.|backup)' }).Count -gt 0) {
+        throw "Not a public Markdown entry: $Relative"
+    }
+    $path = Resolve-ReleasePath $RepoRoot $Relative
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing documentation: $Relative" }
+    return $path
+}
+
+function Convert-GuideMarkdown {
+    param([string]$RepoRoot, [string]$Source, [string]$Destination, [string]$Version, $Selected)
+    $sourcePath = Get-PublicGuidePath $RepoRoot $Source
+    $text = [IO.File]::ReadAllText($sourcePath, [Text.UTF8Encoding]::new($false, $true)).Replace("`r`n", "`n")
+    $pattern = '(!?\[[^\]\n]*\]\()(<[^>\n]+>|[^\s)\n]+)((?:[ \t]+"[^"\n]*")?\))'
+    $replace = {
+        param($match)
+        $target = $match.Groups[2].Value.Trim('<', '>')
+        if ($target -match '^(https?://|mailto:|#)') { return $match.Value }
+        if ($target -match '^[A-Za-z][A-Za-z0-9+.-]*:|^//|\?') { throw "Unsupported local documentation link: $target" }
+        $fragmentIndex = $target.IndexOf('#')
+        $pathPart = if ($fragmentIndex -ge 0) { $target.Substring(0, $fragmentIndex) } else { $target }
+        $fragment = if ($fragmentIndex -ge 0) { $target.Substring($fragmentIndex) } else { '' }
+        $sourceDirectory = Split-Path -Parent $Source
+        $relativeInput = Join-Path $sourceDirectory ([Uri]::UnescapeDataString($pathPart))
+        $resolved = Resolve-ReleasePath $RepoRoot $relativeInput
+        if (-not (Test-Path -LiteralPath $resolved)) { throw "Missing documentation target: $Source -> $target" }
+        $relative = [IO.Path]::GetRelativePath($RepoRoot, $resolved).Replace('\', '/')
+        if ($Selected.Contains($relative)) {
+            $outputDirectory = [IO.Path]::GetDirectoryName((Join-Path $RepoRoot $Destination))
+            $outputTarget = Join-Path $RepoRoot ('guide/' + $relative)
+            $link = [IO.Path]::GetRelativePath($outputDirectory, $outputTarget).Replace('\', '/')
+            $link = (($link.Split('/') | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/')
+        } else {
+            $kind = if (Test-Path -LiteralPath $resolved -PathType Container) { 'tree' } else { 'blob' }
+            $encoded = (($relative.Split('/') | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/')
+            $link = "https://github.com/GrassBl0ck/caoren-cup/$kind/$Version/$encoded"
+        }
+        return $match.Groups[1].Value + $link + $fragment + $match.Groups[3].Value
+    }.GetNewClosure()
+    $output = [Text.StringBuilder]::new()
+    $fence = ''
+    foreach ($line in [regex]::Split($text, '(?<=\n)')) {
+        $marker = [regex]::Match($line, '^\s*(`{3,}|~{3,})')
+        if ($marker.Success) {
+            $value = $marker.Groups[1].Value
+            if (-not $fence) { $fence = $value }
+            elseif ($value[0] -eq $fence[0] -and $value.Length -ge $fence.Length) { $fence = '' }
+            $null = $output.Append($line)
+        } elseif ($fence) {
+            $null = $output.Append($line)
+        } else {
+            $null = $output.Append([regex]::Replace($line, $pattern, $replace))
+        }
+    }
+    if ($fence) { throw "Unclosed Markdown code fence: $Source" }
+    return $output.ToString()
+}
+
+function Copy-DeploymentGuide {
+    param([string]$RepoRoot, [string]$Stage, [string]$Version,
+        [string]$InstallationSource = 'docs/release-installation.md', [switch]$ValidateOnly)
+    if ($Version -notmatch '^v\d+\.\d+\.\d+$') { throw 'Use a concrete vX.Y.Z release version' }
+    $manifestPath = Resolve-ReleasePath $RepoRoot 'scripts/deployment-guide-manifest.json'
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($manifest.schemaVersion -ne 1 -or @($manifest.files).Count -eq 0 -or
+        @($manifest.installationSources).Count -eq 0 -or $InstallationSource -cnotin $manifest.installationSources) {
+        throw 'Invalid deployment documentation manifest or installation source'
+    }
+    $selected = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($source in $manifest.files) {
+        $null = Get-PublicGuidePath $RepoRoot $source
+        if (-not $selected.Add($source)) { throw "Duplicate documentation entry: $source" }
+    }
+    if (-not $selected.Contains($manifest.entryPoint)) { throw 'Documentation entry point is not selected' }
+    foreach ($source in $manifest.installationSources) { $null = Get-PublicGuidePath $RepoRoot $source }
+    $outputs = [ordered]@{}
+    foreach ($source in $manifest.files) {
+        $destination = 'guide/' + $source
+        $outputs[$destination] = Convert-GuideMarkdown $RepoRoot $source $destination $Version $selected
+    }
+    $outputs['INSTALL.md'] = Convert-GuideMarkdown $RepoRoot $InstallationSource 'INSTALL.md' $Version $selected
+    if ($ValidateOnly) { return }
+    foreach ($relative in $outputs.Keys) {
+        $destination = Resolve-ReleasePath $Stage $relative
+        if (Test-Path -LiteralPath $destination) { throw "Documentation output already exists: $relative" }
+    }
+    foreach ($relative in $outputs.Keys) {
+        $destination = Resolve-ReleasePath $Stage $relative
+        $null = New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force
+        [IO.File]::WriteAllText($destination, $outputs[$relative], [Text.UTF8Encoding]::new($false))
+    }
+}
+
+Export-ModuleMember -Function Resolve-ReleasePath, Read-ServerPackageManifest, Select-ReleaseModules, Test-ReleaseEntry, Read-ReleaseAudioCatalog, Assert-WebReleaseBoundary, Copy-ReleaseWebTree, Copy-ReleasePublishTree, Assert-ReleaseTree, Write-ReleaseFileManifest, New-PortableReleaseZip, Copy-DeploymentGuide

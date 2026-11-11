@@ -134,10 +134,29 @@ public class TaggingControlFeature : ICaorenFeature
 
     private HookResult OnPlayerHurt(EventPlayerHurt @event, GameEventInfo info)
     {
-        if (!_settings.Enabled) return HookResult.Continue;
-
         var hurtPlayer = @event.Userid;
         if (hurtPlayer == null || !hurtPlayer.IsValid || !hurtPlayer.PawnIsAlive) return HookResult.Continue;
+
+        var personal = CaorenCup.Contracts.CaorenCupPlayerEffectsAccess.Get(hurtPlayer);
+        if (personal is null && !_settings.Enabled) return HookResult.Continue;
+        if (personal is not null)
+        {
+            var attacker = @event.Attacker;
+            if (personal.TagReduction <= 0 || attacker is not { IsValid: true } ||
+                attacker.TeamNum == hurtPlayer.TeamNum || attacker.TeamNum is not (2 or 3) ||
+                !CaorenCup.Contracts.CaorenCupDamageSources.IsGun(@event.Weapon)) return HookResult.Continue;
+            var pawnHandle = hurtPlayer.PlayerPawn.Raw;
+            var round = personal.Round;
+            Server.NextFrame(() =>
+            {
+                if (!hurtPlayer.IsValid || !hurtPlayer.PawnIsAlive || hurtPlayer.PlayerPawn.Raw != pawnHandle) return;
+                var current = CaorenCup.Contracts.CaorenCupPlayerEffectsAccess.Get(hurtPlayer);
+                if (current is null || current.Identity != personal.Identity || current.Round != round) return;
+                CaorenCup.Contracts.CaorenCupPlayerEffectsAccess.TryGet()?.ApplyTagging(hurtPlayer,
+                    value => value + (1 - value) * current.TagReduction);
+            });
+            return HookResult.Continue;
+        }
 
         int team = hurtPlayer.TeamNum;
         bool useCustom = false;
@@ -169,6 +188,7 @@ public class TaggingControlFeature : ICaorenFeature
 
         return HookResult.Continue;
     }
+
 
     // --- 接口实现 ---
 
