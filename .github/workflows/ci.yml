@@ -37,6 +37,15 @@ jobs:
             8.0.x
             10.0.x
 
+      - name: Build and test native engine bridge
+        working-directory: cs/game-plugin/Native/CaorenCupEngine
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+          mkdir -p bin/linux-x64
+          cp build/libcaorencup_engine.so bin/linux-x64/libcaorencup_engine.so
+
       - name: Restore game plugin
         working-directory: cs/game-plugin
         run: dotnet restore
