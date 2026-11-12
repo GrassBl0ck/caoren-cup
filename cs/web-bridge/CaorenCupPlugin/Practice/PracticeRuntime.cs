@@ -4,7 +4,7 @@ using CounterStrikeSharp.API.Modules.Cvars;
 
 namespace CaorenCupPlugin.Practice;
 
-public enum PracticeStage { Inactive, Starting, Active, Stopping }
+public enum PracticeStage { Inactive, Starting, Active, Stopping, PendingCleanup }
 
 public enum PracticeSpawnSide { Terrorist, CounterTerrorist }
 
@@ -24,6 +24,10 @@ public sealed class PracticeRuntime
     public PracticeStage Stage { get; private set; }
 
     public string? MapName { get; private set; }
+
+    public bool PendingCleanup => !_cvars.IsReadyForNewMatch && Stage is PracticeStage.PendingCleanup or PracticeStage.Stopping;
+
+    public bool RequiresAuthority => Stage != PracticeStage.Inactive || !_cvars.IsReadyForNewMatch;
 
     public MatchCommandResult Start(string mapName, bool formalMatchActive)
     {
@@ -58,21 +62,21 @@ public sealed class PracticeRuntime
         }
         catch (Exception ex)
         {
-            _cvars.TryRestoreAll(maxAttempts: 1);
-            Stage = PracticeStage.Inactive;
-            MapName = null;
+            var restored = _cvars.TryRestoreAll(maxAttempts: 1);
+            Stage = restored ? PracticeStage.Inactive : PracticeStage.PendingCleanup;
+            MapName = restored ? null : mapName;
             return new(false, "START_FAILED", ex.Message);
         }
     }
 
     public MatchCommandResult Stop()
     {
-        if (Stage == PracticeStage.Inactive) return new(true, "ALREADY_INACTIVE");
+        if (!RequiresAuthority) return new(true, "ALREADY_INACTIVE");
         Stage = PracticeStage.Stopping;
         var restored = _cvars.TryRestoreAll(maxAttempts: 3);
         if (!restored)
         {
-            Stage = PracticeStage.Stopping;
+            Stage = PracticeStage.PendingCleanup;
             return new(false, "CVAR_RESTORE_PENDING", "练习 CVar 尚未恢复完整。");
         }
         Stage = PracticeStage.Inactive;

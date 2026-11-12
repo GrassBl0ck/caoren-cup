@@ -58,6 +58,10 @@ public sealed class MatchRuntimeBridgeAdapter
 
     public bool IsActive => Snapshot.Stage is not MatchStage.Disabled and not MatchStage.Completed and not MatchStage.Aborted;
 
+    public bool PendingCleanup => !IsActive && (_formalConfigApplied || _demoStarted);
+
+    public bool RequiresAuthority => IsActive || PendingCleanup;
+
     public MatchCommandResult ApplyWebCommand(JsonElement payload, bool featureEnabled, string? matchController)
     {
         if (!featureEnabled) return Failure("FEATURE_DISABLED", "草人杯正式比赛运行时尚未启用。");
@@ -66,6 +70,8 @@ public sealed class MatchRuntimeBridgeAdapter
         if (payload.ValueKind != JsonValueKind.Object)
             return Failure("INVALID_PAYLOAD", "比赛运行时命令必须是对象。");
         var action = ReadString(payload, "action").ToLowerInvariant();
+        if (PendingCleanup && action != "abort")
+            return Failure("CVAR_RESTORE_PENDING", "上次比赛仍有待恢复状态，请先重试中止清理。");
         if (action == "load") return Load(payload);
         var identity = ValidateIdentity(payload);
         if (!identity.Ok) return identity;
@@ -101,7 +107,7 @@ public sealed class MatchRuntimeBridgeAdapter
         MatchRuntimeSnapshot snapshot,
         IEnumerable<RoundRestorePoint>? restorePoints = null)
     {
-        if (IsActive) return Failure("RUNTIME_BUSY", "桥接运行时已经激活。");
+        if (RequiresAuthority) return Failure("RUNTIME_BUSY", "桥接运行时已经激活或仍待清理。");
         var loaded = Load(definitionPayload);
         if (!loaded.Ok) return loaded;
         var recovered = _runtime.RecoverFromWeb(snapshot);
@@ -111,8 +117,8 @@ public sealed class MatchRuntimeBridgeAdapter
         _roster?.SetTeamAEngineSide(snapshot.TeamAEngineSide);
         _pauses = new PauseCoordinator();
         _pauses.RequestTechnicalPause("bridge recovery", DateTimeOffset.UtcNow, atSafeBoundary: true);
-        _host.ApplyFormalMatchConfig();
         _formalConfigApplied = true;
+        _host.ApplyFormalMatchConfig();
         _host.PauseMatch();
         if (_definition is not null && snapshot.Stage is not MatchStage.Completed and not MatchStage.Aborted)
         {
@@ -162,8 +168,8 @@ public sealed class MatchRuntimeBridgeAdapter
 
     public MatchCommandResult Cleanup(string reason)
     {
-        var abort = Snapshot.Stage == MatchStage.Aborted
-            ? new MatchCommandResult(true, "ALREADY_ABORTED")
+        var abort = Snapshot.Stage is MatchStage.Disabled or MatchStage.Completed or MatchStage.Aborted
+            ? new MatchCommandResult(true, "ALREADY_INACTIVE")
             : _runtime.Abort(string.IsNullOrWhiteSpace(reason) ? "runtime cleanup" : reason);
         if (_demoStarted)
         {
@@ -201,8 +207,8 @@ public sealed class MatchRuntimeBridgeAdapter
     {
         if (Snapshot.Stage != MatchStage.Staging)
             return Failure("INVALID_STAGE", "只有 Staging 可以进入 Warmup。");
-        _host.ApplyFormalMatchConfig();
         _formalConfigApplied = true;
+        _host.ApplyFormalMatchConfig();
         return _runtime.BeginWarmup();
     }
 

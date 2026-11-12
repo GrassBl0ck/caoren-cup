@@ -2,6 +2,7 @@ using CaorenCup.Contracts;
 using CaorenCupPlugin.MatchRuntime;
 using Xunit;
 namespace CaorenCupPlugin.Tests;
+[Collection("Match authority")]
 public sealed class MatchRuntimeOwnershipTests
 {
     [Theory]

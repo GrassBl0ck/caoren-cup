@@ -42,6 +42,9 @@ public sealed partial class CaorenCupPlugin
     private string _runtimeModeId = "competitive";
     private bool RuntimeOwnsMatch => MatchRuntimeOwnership.IsRequested(_config.CaorenMatchRuntimeEnabled,_webMatchRuntimeEnabled,_runtimeModeId,_currentMatchController);
 
+    private void ReleaseAuthorityIfIdle() => MatchRuntimeOwnership.TryReleaseIfIdle(
+        _matchAuthorityOwner, _matchRuntimeBridge?.RequiresAuthority == true, _practiceRuntime?.RequiresAuthority == true);
+
     internal static JsonSerializerOptions CreatePluginJsonOptions()
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
@@ -86,7 +89,7 @@ public sealed partial class CaorenCupPlugin
         CommandInfo command,
         ParsedPracticeCommand parsed)
     {
-        if (!_config.CaorenMatchRuntimeEnabled || MatchRuntimeOwnership.IsMatchZyLoaded) { ReplyToPlayer(player,"[草人杯] 自有练习模式未启用，或 MatchZy 仍加载；请先在独立实例停用 MatchZy 并完整重启。");return; }
+        if (parsed.Kind != PracticeCommandKind.Stop && (!_config.CaorenMatchRuntimeEnabled || MatchRuntimeOwnership.IsMatchZyLoaded)) { ReplyToPlayer(player,"[草人杯] 自有练习模式未启用，或 MatchZy 仍加载；请先在独立实例停用 MatchZy 并完整重启。");return; }
         if (_practiceRuntime is null)
         {
             ReplyToPlayer(player, "[草人杯] 练习运行时尚未初始化。");
@@ -106,10 +109,7 @@ public sealed partial class CaorenCupPlugin
                     || CaorenCupPracticeState.IsPracticeActive || !CaorenCupMatchAuthority.TryAcquire(_matchAuthorityOwner)) { ReplyToPlayer(player,"[草人杯] 其他模式正在控制比赛，不能开启练习。"); return; }
                 result = _practiceRuntime.Start(
                     SafeMapName(),
-                    ShouldUseCaorenMatchRuntime(
-                        _config.CaorenMatchRuntimeEnabled,
-                        _currentMatchController,
-                        _matchRuntimeBridge?.Snapshot.Stage ?? MatchStage.Disabled));
+                    _matchRuntimeBridge?.RequiresAuthority == true);
                 break;
             case PracticeCommandKind.Stop:
                 if (!isAdmin) { ReplyToPlayer(player, "[草人杯] 只有管理员可以退出练习模式。"); return; }
@@ -159,7 +159,7 @@ public sealed partial class CaorenCupPlugin
                 result = new(false, "UNKNOWN_PRACTICE_COMMAND");
                 break;
         }
-        if (_practiceRuntime.Stage==PracticeStage.Inactive && _matchRuntimeBridge?.IsActive!=true) CaorenCupMatchAuthority.Release(_matchAuthorityOwner);
+        ReleaseAuthorityIfIdle();
         if (result.Ok && isAdmin && parsed.Kind is not (PracticeCommandKind.Last or PracticeCommandKind.SaveLineup or PracticeCommandKind.LoadLineup or PracticeCommandKind.DeleteLineup))
             PrintToAllPlayers($"[草人杯] 练习设置已生效：{parsed.Kind}（{result.Code}）。");
         else ReplyToPlayer(player, $"[草人杯] {result.Code}{(string.IsNullOrWhiteSpace(result.Message) ? string.Empty : "：" + result.Message)}");
@@ -281,7 +281,7 @@ public sealed partial class CaorenCupPlugin
                         ["force"] = false,
                         ["abilitySyncConfirmed"] = !_abilityModeRequired || _abilitySyncConfirmed,
                     });
-                    if (automatic.Ok) Server.PrintToChatAll($" {ChatColors.Green}[草人杯]{ChatColors.Default} 全员 Ready，正在正式开赛。");
+                    if (automatic.Ok) PrintToAllPlayers("[草人杯] 全员 Ready，正在正式开赛。");
                 }
                 break;
             case MatchCommandKind.Start:
@@ -368,7 +368,7 @@ public sealed partial class CaorenCupPlugin
         if (subcommand == "status")
         {
             var snapshot = _matchRuntimeBridge?.Snapshot ?? MatchRuntimeSnapshot.Empty;
-            ReplyToPlayer(player, $"[草人杯] {snapshot.Stage} A {snapshot.ScoreA}:{snapshot.ScoreB} B，epoch {snapshot.RuntimeEpoch}，暂停 {snapshot.PauseState}");
+            ReplyToPlayer(player, $"[草人杯] {snapshot.Stage} A {snapshot.ScoreA}:{snapshot.ScoreB} B，epoch {snapshot.RuntimeEpoch}，暂停 {snapshot.PauseState}，待清理 {_matchRuntimeBridge?.PendingCleanup == true}");
             return;
         }
         var action = subcommand switch
@@ -396,6 +396,13 @@ public sealed partial class CaorenCupPlugin
 
     private MatchCommandResult ApplyLocalRuntimeAction(string action, IReadOnlyDictionary<string, object?> values)
     {
+        if (action == "abort" && _matchRuntimeBridge?.PendingCleanup == true)
+        {
+            var cleanup = _matchRuntimeBridge.Cleanup("administrator cleanup retry");
+            ReleaseAuthorityIfIdle();
+            if (cleanup.Ok) PrintToAllPlayers("[草人杯] 比赛运行时待恢复状态已清理。");
+            return cleanup;
+        }
         if (!RuntimeOwnsMatch || _matchRuntimeBridge is null) return new(false, "FEATURE_DISABLED");
         if (action != "abort" && !MatchRuntimeOwnership.CanClaim(RuntimeOwnsMatch,
             CaorenCupCoreAccess.TryGet()?.GameModes.State.Lifecycle,CaorenCupPracticeState.IsPracticeActive,
@@ -420,6 +427,7 @@ public sealed partial class CaorenCupPlugin
             SyncRuntimeRosterAssignmentsFromAdapter();
             DispatchAbilitySubstitution(values);
         }
+        ReleaseAuthorityIfIdle();
         return result;
     }
 
@@ -687,7 +695,7 @@ public sealed partial class CaorenCupPlugin
         && stage is not MatchStage.Disabled and not MatchStage.Completed and not MatchStage.Aborted;
 
     internal static bool IsPracticeBlockingMatchAction(PracticeStage practiceStage, string? action) =>
-        practiceStage is PracticeStage.Starting or PracticeStage.Active
+        practiceStage is not PracticeStage.Inactive
         && action is "load" or "begin_warmup" or "begin_ready_check" or "begin_going_live";
 
     internal static string ResolveRuntimeAssignmentSide(string roster, string teamAInitialSide) =>
@@ -884,6 +892,16 @@ public sealed partial class CaorenCupPlugin
     }
     private void ApplyRuntimeWebCommand(PluginCommand command)
     {
+        if (_matchRuntimeBridge?.PendingCleanup == true && command.Payload.ValueKind == JsonValueKind.Object
+            && command.Payload.TryGetProperty("action", out var cleanupAction) && cleanupAction.GetString() == "abort")
+        {
+            // Cleanup stays reachable even if the web/local enable flag changed after settlement.
+            var cleanup = _matchRuntimeBridge.ApplyWebCommand(command.Payload, true, "caoren");
+            if (cleanup.Ok) PrintToAllPlayers("[草人杯] 比赛运行时待恢复状态已清理。");
+            else Logger.LogWarning("Runtime cleanup retry rejected: {Code}", cleanup.Code);
+            ReleaseAuthorityIfIdle();
+            return;
+        }
         if (!RuntimeOwnsMatch || _matchRuntimeBridge is null || command.Payload.ValueKind != JsonValueKind.Object) return;
         var matchZyAutoStart=ConVar.Find("matchzy_autostart_mode")?.StringValue;
         if (!MatchRuntimeOwnership.CanClaim(RuntimeOwnsMatch,CaorenCupCoreAccess.TryGet()?.GameModes.State.Lifecycle,CaorenCupPracticeState.IsPracticeActive,matchZyAutoStart,MatchRuntimeOwnership.IsMatchZyLoaded)) {
@@ -896,7 +914,7 @@ public sealed partial class CaorenCupPlugin
         if (IsPracticeBlockingMatchAction(_practiceRuntime?.Stage ?? PracticeStage.Inactive,action)) return;
         var result=_matchRuntimeBridge.ApplyWebCommand(command.Payload,true,_currentMatchController);
         if (!result.Ok) { Logger.LogWarning("Rejected match action: {Code}",result.Code);
-            if (!_matchRuntimeBridge.IsActive) CaorenCupMatchAuthority.Release(_matchAuthorityOwner); return; }
+            ReleaseAuthorityIfIdle(); return; }
         if (action is "load" or "begin_warmup" or "begin_ready_check" or "begin_going_live" or "force_pause" or "force_unpause" or "restore" or "abort" or "substitute") PrintToAllPlayers($"[草人杯] 比赛运行时操作已生效：{action}。");
         if (action=="load") { StopDemoRecording();_bridgeStatsCheckpoints.Clear();ApplyRuntimeRosterAssignments(command.Payload); }
         if (action=="confirm_side_swap" || action=="substitute") SyncRuntimeRosterAssignmentsFromAdapter();
@@ -905,19 +923,20 @@ public sealed partial class CaorenCupPlugin
             ["steamId"]=command.Payload.TryGetProperty("steamId",out var steam)?steam.GetString():null });
         if (action=="abort") { ClearTeamAssignments();DispatchCaorenAbilityStop("aborted"); }
         DispatchPendingAbilityRestore();
-        if (!_matchRuntimeBridge.IsActive) CaorenCupMatchAuthority.Release(_matchAuthorityOwner);
+        ReleaseAuthorityIfIdle();
     }
 
     private void CleanupAuthority(string reason)
     {
         var practiceCleanup=_practiceRuntime?.Stop();
         var cleanup=_matchRuntimeBridge?.Cleanup(reason);
-        if ((cleanup is null || cleanup.Ok) && (practiceCleanup is null || practiceCleanup.Ok)) CaorenCupMatchAuthority.Release(_matchAuthorityOwner);
+        if ((cleanup is null || cleanup.Ok) && (practiceCleanup is null || practiceCleanup.Ok)) ReleaseAuthorityIfIdle();
     }
 
     private bool ObserveAuthoritativeRoundStart()
     {
-        if (!RuntimeOwnsMatch || _matchRuntimeBridge?.IsActive != true) return false;
+        if (_matchRuntimeBridge?.RequiresAuthority != true) return false;
+        if (!RuntimeOwnsMatch || _matchRuntimeBridge.PendingCleanup) return true;
         if (MatchRuntimeOwnership.IsMatchZyLoaded) return true;
         var first=_matchRuntimeBridge.Snapshot.Stage==MatchStage.GoingLive;
         var result=_matchRuntimeBridge.OnNativeRoundStart(IsServerWarmup());
@@ -931,26 +950,27 @@ public sealed partial class CaorenCupPlugin
 
     private bool ObserveAuthoritativeRoundEnd(string? winner)
     {
-        if (!RuntimeOwnsMatch || _matchRuntimeBridge?.IsActive != true) return false;
+        if (_matchRuntimeBridge?.RequiresAuthority != true) return false;
+        if (!RuntimeOwnsMatch || _matchRuntimeBridge.PendingCleanup) return true;
         if (MatchRuntimeOwnership.IsMatchZyLoaded || winner is not ("CT" or "T")) return true;
         var result=_matchRuntimeBridge.OnNativeRoundEnd(winner=="CT"?EngineSide.CounterTerrorist:EngineSide.Terrorist);
         if (!result.Ok) return true;
         _scoreCt=_matchRuntimeBridge.Snapshot.TeamAEngineSide==EngineSide.CounterTerrorist?_matchRuntimeBridge.Snapshot.ScoreA:_matchRuntimeBridge.Snapshot.ScoreB;
         _scoreT=_matchRuntimeBridge.Snapshot.TeamAEngineSide==EngineSide.Terrorist?_matchRuntimeBridge.Snapshot.ScoreA:_matchRuntimeBridge.Snapshot.ScoreB;
         QueueSnapshot();
-        if (result.MatchFinished) { DispatchCaorenAbilityStop("completed");CaorenCupMatchAuthority.Release(_matchAuthorityOwner); }
+        if (result.MatchFinished) { DispatchCaorenAbilityStop("completed"); ReleaseAuthorityIfIdle(); }
         return true;
     }
     private void RecoverRuntime(PluginHeartbeatResponse? state)
     {
-        if (!RuntimeOwnsMatch || _matchRuntimeBridge is null || _matchRuntimeBridge.IsActive
+        if (!RuntimeOwnsMatch || _matchRuntimeBridge is null || _matchRuntimeBridge.RequiresAuthority
             || state?.MatchRuntime is not { Stage: not MatchStage.Disabled and not MatchStage.Completed and not MatchStage.Aborted } snapshot
             || state.MatchRuntimeDefinition.ValueKind != JsonValueKind.Object) return;
         if (!MatchRuntimeOwnership.CanClaim(RuntimeOwnsMatch,CaorenCupCoreAccess.TryGet()?.GameModes.State.Lifecycle,
             CaorenCupPracticeState.IsPracticeActive,ConVar.Find("matchzy_autostart_mode")?.StringValue,MatchRuntimeOwnership.IsMatchZyLoaded)) return;
         if (!CaorenCupMatchAuthority.TryAcquire(_matchAuthorityOwner)) return;
         var result=_matchRuntimeBridge.RecoverFromWeb(state.MatchRuntimeDefinition,snapshot,state.MatchRestorePoints);
-        if (!result.Ok) { if (!_matchRuntimeBridge.IsActive) CaorenCupMatchAuthority.Release(_matchAuthorityOwner); return; }
+        if (!result.Ok) { ReleaseAuthorityIfIdle(); return; }
         SyncRuntimeRosterAssignmentsFromAdapter();DispatchPendingAbilityRestore();
     }
 }

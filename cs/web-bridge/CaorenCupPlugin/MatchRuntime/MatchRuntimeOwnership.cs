@@ -2,6 +2,12 @@ using CaorenCup.Contracts;
 namespace CaorenCupPlugin.MatchRuntime;
 public static class MatchRuntimeOwnership
 {
+    public static bool TryReleaseIfIdle(object owner, bool matchRequiresAuthority, bool practiceRequiresAuthority)
+    {
+        if (matchRequiresAuthority || practiceRequiresAuthority) return false;
+        CaorenCupMatchAuthority.Release(owner);
+        return true;
+    }
     public static bool IsMatchZyLoaded => AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name is string name && (name.Equals("MatchZy",StringComparison.OrdinalIgnoreCase) || name.StartsWith("MatchZy.",StringComparison.OrdinalIgnoreCase)));
     public static bool IsRequested(bool localEnabled,bool webEnabled,string? mode,string? controller) =>
         localEnabled && webEnabled && mode is "competitive" or "ability"

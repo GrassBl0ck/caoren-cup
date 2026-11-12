@@ -18,5 +18,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CaorenCupPlugin\CaorenCupPlugin.csproj" />
+    <ProjectReference Include="..\..\game-plugin\PluginSplit\CaorenCupCore\CaorenCupCore.csproj" />
   </ItemGroup>
 </Project>

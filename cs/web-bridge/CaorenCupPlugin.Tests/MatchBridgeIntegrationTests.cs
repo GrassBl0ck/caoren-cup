@@ -348,6 +348,8 @@ public sealed class MatchBridgeIntegrationTests
     [Theory]
     [InlineData(PracticeStage.Active, "load", true)]
     [InlineData(PracticeStage.Starting, "begin_warmup", true)]
+    [InlineData(PracticeStage.PendingCleanup, "load", true)]
+    [InlineData(PracticeStage.Stopping, "begin_warmup", true)]
     [InlineData(PracticeStage.Inactive, "load", false)]
     [InlineData(PracticeStage.Stopping, "abort", false)]
     public void Practice_blocks_only_match_starting_actions(PracticeStage stage, string action, bool expected)
