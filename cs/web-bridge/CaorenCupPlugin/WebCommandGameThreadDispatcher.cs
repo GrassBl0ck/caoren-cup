@@ -57,6 +57,7 @@ internal static class WebCommandGameThreadDispatcher
         "APPLY_TEAM_ASSIGNMENTS",
         "CLEAR_TEAM_ASSIGNMENTS",
         // Retained as a blocked legacy command so stale web-duel requests cannot mutate the server.
+        "MATCH_RUNTIME_COMMAND",
         "CONFIGURE_DUEL_MODE"
     };
 
@@ -188,6 +189,19 @@ internal static class WebCommandGameThreadDispatcher
         bool hasPendingCvarRestore)
     {
         if (!hasPendingCvarRestore) return false;
+        return IsMatchControlPluginCommand(command);
+    }
+
+    public static bool IsBlockedByCaorenRuntime(PluginCommand command, bool runtimeActive)
+    {
+        if (!runtimeActive) return false;
+        if (string.Equals(
+                command.Type,
+                MatchRuntime.MatchRuntimeBridgeAdapter.WebCommandType,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
         return IsMatchControlPluginCommand(command);
     }
 

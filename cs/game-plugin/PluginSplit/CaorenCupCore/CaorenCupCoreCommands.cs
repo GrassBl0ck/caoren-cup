@@ -27,6 +27,7 @@ public sealed partial class CaorenCupCorePlugin
 
     private HookResult OnMatchZyPracticeStateCommand(CCSPlayerController? player, CommandInfo command)
     {
+        if (CaorenCupMatchAuthority.BridgeCompatibilityCommandsEnabled) return HookResult.Continue;
         var name = command.GetCommandString.TrimStart('!', '/').ToLowerInvariant();
         if (name.Contains("exitprac", StringComparison.Ordinal) ||
             name.Contains("noprac", StringComparison.Ordinal) ||

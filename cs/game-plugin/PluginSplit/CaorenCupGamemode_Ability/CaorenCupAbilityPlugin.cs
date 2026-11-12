@@ -10,7 +10,7 @@ using System.Text.Json;
 
 namespace CaorenCup.Gamemodes.Ability;
 
-public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
+public sealed partial class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -38,8 +38,14 @@ public sealed class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
             _roleSettings,
             Path.Combine(ModuleDirectory, "ability-runtime-state.json"));
         // 中途分配不下发即时生效，而是在下一个回合开始时按分配表重建席位。
-        _adapter.SeatConfigProvider = () => BuildConfig(keepMatchId: true);
+        _adapter.SeatConfigProvider = () => _activeConfig ?? BuildConfig(keepMatchId: true);
         _adapter.Register();
+        AddCommand("css_ability_sync_begin", "内部异能配置开始", OnAbilitySyncBeginCommand);
+        AddCommand("css_ability_sync_seat", "内部异能配置席位", OnAbilitySyncSeatCommand);
+        AddCommand("css_ability_sync_commit", "内部异能配置提交", OnAbilitySyncCommitCommand);
+        AddCommand("css_ability_sync_reset", "内部异能配置重置", OnAbilitySyncResetCommand);
+        AddCommand("css_ability_sync_clear", "内部异能配置清理", OnAbilitySyncClearCommand);
+        LoadAbilitySyncState();
         // 跨重启恢复的运行时可能与最新分配表不一致，标记一次，让下一个回合自动对齐席位。
         if (_adapter.IsRuntimeRunning) _adapter.MarkSeatsDirty();
 

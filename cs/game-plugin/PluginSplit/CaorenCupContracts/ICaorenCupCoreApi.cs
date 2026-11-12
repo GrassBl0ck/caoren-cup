@@ -26,7 +26,7 @@ public sealed record CaorenCupRuntimeState(
 /// </summary>
 public static class CaorenCupCoreAccess
 {
-    public const int CurrentContractVersion = 1;
+    public const int CurrentContractVersion = 2;
     private static readonly object Gate = new();
     private static readonly PluginCapability<ICaorenCupCoreApi?> Capability = new("caorencup:core:v1");
     private static ICaorenCupCoreApi? _current;

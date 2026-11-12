@@ -41,7 +41,7 @@ public interface ICaorenCupAbilityApi
 /// </summary>
 public static class CaorenCupAbilityAccess
 {
-    public const int CurrentContractVersion = 1;
+    public const int CurrentContractVersion = 2;
 
     private static readonly object Gate = new();
     private static readonly PluginCapability<ICaorenCupAbilityApi?> Capability = new("caorencup:ability:v1");

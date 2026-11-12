@@ -47,6 +47,7 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
 
     public GameModeResult SelectMode(string modeId)
     {
+        if (CaorenCupMatchAuthority.IsOwned) return GameModeResult.Fail("当前由草人杯比赛运行时控制，请先结束比赛。");
         var normalized = NormalizeModeId(modeId);
         if (string.IsNullOrWhiteSpace(normalized))
             return GameModeResult.Fail("模式 ID 不能为空。");
@@ -113,6 +114,7 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
 
     public GameModeResult Start(string? mapName = null, int? warmupSeconds = null)
     {
+        if (CaorenCupMatchAuthority.IsOwned) return GameModeResult.Fail("当前由草人杯比赛运行时控制，请先结束比赛。");
         if (_activeProvider is null)
             return GameModeResult.Fail("请先选择模式。");
         if (CaorenCupPracticeState.IsPracticeActive)
@@ -174,6 +176,7 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
 
     public GameModeResult Stop()
     {
+        if (CaorenCupMatchAuthority.IsOwned) return GameModeResult.Fail("当前由草人杯比赛运行时控制，请先结束比赛。");
         if (_activeProvider is null)
         {
             _state = _state with { Lifecycle = GameModeLifecycleState.Stopped, Revision = _state.Revision + 1 };

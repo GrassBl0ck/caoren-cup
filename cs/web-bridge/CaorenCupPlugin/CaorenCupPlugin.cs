@@ -1,3 +1,5 @@
+using CaorenCupPlugin.MatchRuntime;
+using CaorenCupPlugin.Practice;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -17,7 +19,7 @@ using Microsoft.Extensions.Logging;
 namespace CaorenCupPlugin;
 
 [MinimumApiVersion(367)]
-public sealed class CaorenCupPlugin : BasePlugin
+public sealed partial class CaorenCupPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Command Center Bridge";
     public override string ModuleVersion => "2.2.3";
@@ -33,7 +35,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     private readonly Dictionary<string, LocalPlayerStats> _stats = new();
     private readonly Dictionary<string, int> _roundHealthBySteamId = new(StringComparer.Ordinal);
     private readonly Dictionary<ulong, PlayerButtons> _previousButtonsBySteamId = new();
-    private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly JsonSerializerOptions _jsonOptions = CreatePluginJsonOptions();
     private readonly List<CounterStrikeSharp.API.Modules.Timers.Timer> _timers = new();
     private CounterStrikeSharp.API.Modules.Timers.Timer? _teamAssignmentsSafetyTimer;
     private readonly PluginTelemetryBatchBuffer _telemetryBatch = new(PluginTelemetryPolicy.MaxBufferedEvents);
@@ -135,6 +137,13 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         _isUnloading = false;
         LoadConfig();
+        _matchRuntimeBridge = new MatchRuntimeBridgeAdapter(new CounterStrikeMatchRuntimeHost());
+        _practiceRuntime = new PracticeRuntime();
+        _practiceLineups = new PracticeLineupStore(Path.Combine(ModuleDirectory, "practice-lineups"));
+        AddCommand(AbilitySyncProtocol.AckCommandName, "内部异能同步确认", OnAbilitySyncAckCommand);
+        AddCommand(AbilityRuntimeProtocol.ReadyCommandName, "内部异能运行时就绪", OnAbilityRuntimeReadyCommand);
+        CaorenCupMatchAuthority.BridgeCompatibilityCommandsEnabled = _config.CaorenMatchRuntimeEnabled && !MatchRuntimeOwnership.IsMatchZyLoaded;
+        if (_config.CaorenMatchRuntimeEnabled) RegisterMatchCompatibilityCommands();
         _http.BaseAddress = new Uri(_config.CommandCenterBaseUrl.TrimEnd('/') + "/");
         _http.DefaultRequestHeaders.Remove("x-caoren-plugin-token");
         _http.DefaultRequestHeaders.Add("x-caoren-plugin-token", _config.PluginToken);
@@ -181,12 +190,15 @@ public sealed class CaorenCupPlugin : BasePlugin
         }, TimerFlags.REPEAT));
 
         Logger.LogInformation("{Name} loaded. CommandCenter={BaseUrl}", ModuleName, _config.CommandCenterBaseUrl);
+        _timers.Add(AddTimer(1.0f, () => { if (!_isUnloading && RuntimeOwnsMatch) RefreshRuntimeRosterPlayers(); },TimerFlags.REPEAT));
         _ = SendHeartbeatAsync();
         _ = RefreshWebStateAsync();
     }
 
     public override void Unload(bool hotReload)
     {
+        CleanupAuthority("plugin unload");
+        CaorenCupMatchAuthority.BridgeCompatibilityCommandsEnabled = false;
         _isUnloading = true;
         StopTimers();
         RemoveCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
@@ -547,6 +559,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     [GameEventHandler]
     public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
     {
+        if (ObserveAuthoritativeRoundStart()) return HookResult.Continue;
         var mode = CaorenCupCoreAccess.TryGet()?.GameModes.State;
         if (mode is { ModeId: "random", Lifecycle: GameModeLifecycleState.Live } && mode.Revision != _randomLiveRevision)
         {
@@ -768,6 +781,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     public HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
     {
         var winner = TeamName(@event.Winner);
+        if (ObserveAuthoritativeRoundEnd(winner)) return HookResult.Continue;
         if (winner == "CT") _scoreCt++;
         else if (winner == "T") _scoreT++;
 
@@ -874,6 +888,14 @@ public sealed class CaorenCupPlugin : BasePlugin
                 heartbeatStartedAtTicks = _heartbeatStartedAtTicks,
                 heartbeatSequence = heartbeatRequest.Sequence,
                 mapName = SafeMapName(),
+                matchRuntimeProtocolVersion = 1,
+                abilitySyncProtocolVersion = CaorenCupAbilityAccess.TryGet() is null ? 0 : 1,
+                matchController = _currentMatchController,
+                matchRuntimeEnabled = RuntimeOwnsMatch,
+                matchRuntime = RuntimeOwnsMatch ? _matchRuntimeBridge?.Snapshot : null,
+                matchRuntimeEvents = RuntimeOwnsMatch ? _matchRuntimeBridge?.Events.ToArray() : null,
+                demoSegments = RuntimeOwnsMatch ? _matchRuntimeBridge?.DemoSegments.ToArray() : null,
+                matchRestorePoints = RuntimeOwnsMatch ? _matchRuntimeBridge?.RestorePoints.ToArray() : null,
                 gameMode = GameModeBridgePolicy.ToHeartbeatState(CaorenCupCoreAccess.TryGet()?.GameModes.State),
                 availableGameModes = CaorenCupCoreAccess.TryGet()?.GameModes.AvailableModes.Where(mode => mode.Available).Select(mode => mode.Id).ToArray(),
             }, _jsonOptions);
@@ -987,7 +1009,16 @@ public sealed class CaorenCupPlugin : BasePlugin
         PluginHeartbeatResponse? state,
         bool replaceIsolatedState)
     {
+        if (state?.MatchRuntimeEnabled != true && _matchRuntimeBridge?.IsActive == true) CleanupAuthority("web runtime disabled");
+        _webMatchRuntimeEnabled = state?.MatchRuntimeEnabled == true;
+        _runtimeModeId = state?.GameModeId ?? "competitive";
+        _currentMatchController = state?.MatchController ?? "matchzy";
+        _currentWebPhase = state?.Phase;
+        _abilityModeRequired = state?.AbilityModeEnabled == true;
+        _abilitySyncConfirmed = state?.AbilitySyncConfirmed == true;
+        RecoverRuntime(state);
         var heartbeatMatchId = string.IsNullOrWhiteSpace(state?.MatchId) ? null : state.MatchId.Trim();
+        if (_currentMatchId != heartbeatMatchId) { _pendingAbilitySyncDigests.Clear();_confirmedAbilityRuntimeIdentity=null;_lastAbilityRuntimeStartKey=null; }
         if (replaceIsolatedState)
         {
             _currentMatchId = heartbeatMatchId;
@@ -1000,7 +1031,7 @@ public sealed class CaorenCupPlugin : BasePlugin
         }
 
         if (state != null && CaorenCupCoreAccess.TryGet()?.GameModes.State.ModeId != "random" &&
-            ShouldApplyWebMatchCounters(_duelTelemetryIsolation.IsActive))
+            !RuntimeOwnsMatch && ShouldApplyWebMatchCounters(_duelTelemetryIsolation.IsActive))
         {
             _currentRound = Math.Max(0, state.CurrentRound);
             _scoreCt = Math.Max(0, state.ScoreCT);
@@ -1012,6 +1043,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void SyncDemoRecording(PluginHeartbeatResponse? state)
     {
+        if (_matchRuntimeBridge?.IsActive == true) return;
         var modeState = CaorenCupCoreAccess.TryGet()?.GameModes.State;
         var modeId = modeState?.ModeId?.Trim().ToLowerInvariant();
         var modeIsLive = modeState?.Lifecycle == GameModeLifecycleState.Live;
@@ -1198,6 +1230,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
     private void OnMapStart(string _mapName)
     {
+        CleanupAuthority("map changed");
         StopDemoRecordingIfNeeded();
         ClearLobbyReminderState();
         if (!_isUnloading)
@@ -1689,6 +1722,7 @@ public sealed class CaorenCupPlugin : BasePlugin
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return Task.FromResult(false);
         var command = heartbeatCommand.Command;
+        if (WebCommandGameThreadDispatcher.IsBlockedByCaorenRuntime(command,_matchRuntimeBridge?.IsActive == true)) return Task.FromResult(true);
         if (!IsHeartbeatCommandSourceCurrent(heartbeatCommand))
         {
             Logger.LogWarning(
@@ -1749,6 +1783,23 @@ public sealed class CaorenCupPlugin : BasePlugin
         else if (string.Equals(command.Type, "CLEAR_TEAM_ASSIGNMENTS", StringComparison.OrdinalIgnoreCase))
         {
             ClearTeamAssignments();
+        }
+        else if (string.Equals(command.Type, AbilitySyncProtocol.WebCommandType, StringComparison.OrdinalIgnoreCase))
+        {
+            return ApplyAbilitySyncCommandAsync(heartbeatCommand);
+        }
+        else if (string.Equals(command.Type, AbilityRuntimeProtocol.WebCommandType, StringComparison.OrdinalIgnoreCase))
+        {
+            var internalCommand = AbilityRuntimeProtocol.BuildInternalCommand(command);
+            Server.ExecuteCommand($"{internalCommand.Name} {internalCommand.Argument}");
+        }
+        else if (string.Equals(command.Type, "ABILITY_SYNC_CLEAR", StringComparison.OrdinalIgnoreCase))
+        {
+            ResetEntertainmentAbilitySyncState(null);
+        }
+        else if (string.Equals(command.Type, MatchRuntimeBridgeAdapter.WebCommandType, StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyRuntimeWebCommand(command);
         }
         else if (command.Type?.StartsWith("GAME_MODE_", StringComparison.OrdinalIgnoreCase) == true)
         {
@@ -2333,6 +2384,7 @@ public sealed class CaorenCupPlugin : BasePlugin
 
 public sealed class CaorenConfig
 {
+    public bool CaorenMatchRuntimeEnabled { get; set; } = false;
     public string CommandCenterBaseUrl { get; set; } = "http://127.0.0.1:3000";
     public string PluginToken { get; set; } = "CHANGE_ME_PLUGIN_TOKEN";
     public float HeartbeatSeconds { get; set; } = 3;
@@ -2482,6 +2534,14 @@ public sealed class PluginCommand
 
 public sealed class PluginHeartbeatResponse
 {
+    [JsonPropertyName("matchController")] public string? MatchController { get; set; }
+    [JsonPropertyName("matchRuntimeEnabled")] public bool MatchRuntimeEnabled { get; set; }
+    [JsonPropertyName("matchRuntime")] public MatchRuntimeSnapshot? MatchRuntime { get; set; }
+    [JsonPropertyName("matchRuntimeDefinition")] public JsonElement MatchRuntimeDefinition { get; set; }
+    [JsonPropertyName("matchRestorePoints")] public List<RoundRestorePoint> MatchRestorePoints { get; set; } = [];
+    [JsonPropertyName("abilityModeEnabled")] public bool AbilityModeEnabled { get; set; }
+    [JsonPropertyName("abilitySyncConfirmed")] public bool AbilitySyncConfirmed { get; set; }
+
     [JsonPropertyName("gameModeId")]
     public string? GameModeId { get; set; }
 
@@ -2537,3 +2597,52 @@ internal sealed class PluginAccountRegisterResponse
         public string? LoginName { get; set; }
         public string? Error { get; set; }
     }
+
+public sealed class AbilitySyncFinalAckEnvelope
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonPropertyName("syncId")]
+    public string SyncId { get; set; } = string.Empty;
+
+    [JsonPropertyName("matchId")]
+    public string MatchId { get; set; } = string.Empty;
+
+    [JsonPropertyName("revision")]
+    public int Revision { get; set; }
+
+    [JsonPropertyName("contentDigest")]
+    public string ContentDigest { get; set; } = string.Empty;
+
+    [JsonPropertyName("appliedSeatCount")]
+    public int AppliedSeatCount { get; set; }
+
+    [JsonPropertyName("errorCode")]
+    public string? ErrorCode { get; set; }
+
+    [JsonPropertyName("errorMessage")]
+    public string? ErrorMessage { get; set; }
+}
+
+
+public sealed class PluginHeartbeatRequest
+{
+    [JsonPropertyName("mapName")]
+    public string MapName { get; set; } = string.Empty;
+
+    [JsonPropertyName("matchController")]
+    public string MatchController { get; set; } = "matchzy";
+
+    [JsonPropertyName("matchRuntime")]
+    public MatchRuntimeSnapshot? MatchRuntime { get; set; }
+
+    [JsonPropertyName("matchRuntimeEvents")]
+    public IReadOnlyList<MatchEvent> MatchRuntimeEvents { get; set; } = [];
+
+    [JsonPropertyName("demoSegments")]
+    public IReadOnlyList<string> DemoSegments { get; set; } = [];
+
+    [JsonPropertyName("matchRestorePoints")]
+    public IReadOnlyList<RoundRestorePoint> MatchRestorePoints { get; set; } = [];
+}
