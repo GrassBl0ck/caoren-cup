@@ -1,3 +1,4 @@
+import { applyRuntimeRoundStatistics, restoreStatsCheckpoint } from './match-runtime-statistics';
 import { isBridgeMatchRuntimeEnabled } from './match-runtime-orchestrator';
 import type {
     MatchRuntimeEvent,
@@ -35,43 +36,16 @@ const validSnapshot = (snapshot: MatchRuntimeSnapshot): boolean =>
     && Number.isSafeInteger(snapshot.runtimeEpoch) && snapshot.runtimeEpoch > 0
     && Number.isSafeInteger(snapshot.lastEventSequence) && snapshot.lastEventSequence >= 0;
 
-const captureStatsCheckpoint = (session: GameSession, roundNumber: number): void => {
-    if (!Number.isSafeInteger(roundNumber) || roundNumber <= 0) return;
-    if (!session.matchRuntimeStatsCheckpoints) session.matchRuntimeStatsCheckpoints = {};
-    if (session.matchRuntimeStatsCheckpoints[roundNumber]) return;
-    const players: Record<string, { stats?: any; sideStats?: any }> = {};
-    for (const [playerId, player] of Object.entries(session.players || {})) {
-        players[playerId] = {
-            ...(player.stats !== undefined ? { stats: clone(player.stats) } : {}),
-            ...(player.sideStats !== undefined ? { sideStats: clone(player.sideStats) } : {}),
-        };
-    }
-    session.matchRuntimeStatsCheckpoints[roundNumber] = {
-        ...(session.liveGameData ? { liveGameData: clone(session.liveGameData) } : {}),
-        players,
-    };
-};
-
-const restoreStatsCheckpoint = (session: GameSession, roundNumber: number): boolean => {
-    const checkpoint = session.matchRuntimeStatsCheckpoints?.[roundNumber];
-    if (!checkpoint) return false;
-    session.liveGameData = checkpoint.liveGameData ? clone(checkpoint.liveGameData) : undefined;
-    for (const [playerId, player] of Object.entries(session.players || {})) {
-        const saved = checkpoint.players[playerId];
-        if (saved?.stats !== undefined) player.stats = clone(saved.stats);
-        else delete player.stats;
-        if (saved?.sideStats !== undefined) player.sideStats = clone(saved.sideStats);
-        else delete player.sideStats;
-    }
-    return true;
-};
-
 export const applyMatchRuntimeSnapshot = (
     session: GameSession,
     snapshot: MatchRuntimeSnapshot,
 ): MatchRuntimeProjectionResult => {
     if (!isBridgeMatchRuntimeEnabled(session)) return result(false, 'NOT_CAOREN_CONTROLLER');
     if (!validSnapshot(snapshot) || snapshot.matchId !== session.matchId) return result(false, 'IDENTITY_MISMATCH');
+    if (session.matchRuntime?.matchId !== snapshot.matchId) {
+        session.matchRuntimeStatsCheckpoints = undefined;
+        session.matchRuntimeStatsJournal = undefined;
+    }
     const currentEpoch = Number(session.matchRuntime?.runtimeEpoch || 0);
     if (snapshot.runtimeEpoch < currentEpoch) return result(false, 'STALE_EPOCH');
     if (currentEpoch > 0 && snapshot.runtimeEpoch > currentEpoch) {
@@ -133,9 +107,9 @@ export const applyMatchRuntimeEvent = (
     if (event.type === 'match_started') {
         if (session.phase === GamePhase.PreGameSetup) session.phase = GamePhase.LiveGame;
         live.formalStatsStarted = true;
-        live.formalRoundStartRaw = Math.max(1, live.currentRound || 1);
-    } else if (event.type === 'round_started') {
-        captureStatsCheckpoint(session, Math.max(1, Math.floor(runtime.completedRounds) + 1));
+        live.formalRoundStartRaw = 1;
+    } else if (event.type === 'round_started' || event.type === 'round_completed') {
+        if (live.formalStatsStarted === true) applyRuntimeRoundStatistics(session, event);
     } else if (event.type === 'match_completed') {
         live.matchFinished = true;
         live.statsLocked = true;

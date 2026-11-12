@@ -1,3 +1,4 @@
+import { isBridgeMatchRuntimeEnabled } from './match-runtime-orchestrator';
 // scoring.ts
 import { GameSession, Player, MatchStats, RosterTeam } from './types';
 import { findPlayerById, getGamePlayers, toNumber, parseCsvLine, getTeamPlayers } from './player-utils';
@@ -235,6 +236,7 @@ export const calculateScores = (session: GameSession): void => {
 
 // 工具函数
 const getMatchWinner = (session: GameSession, scoreA: number, scoreB: number): RosterTeam | null => {
+    if (isBridgeMatchRuntimeEnabled(session)) return session.matchRuntime?.stage === 'completed' ? session.liveGameData?.winnerTeam || null : null;
     const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
     if (rules.playAllRounds) return session.liveGameData?.formalStatsStarted === true
         ? getRoundOutcome(rules, scoreA, scoreB, session.liveGameData.lastScoredRound || 0).winner : null;

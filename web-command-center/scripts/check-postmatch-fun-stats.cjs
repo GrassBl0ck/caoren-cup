@@ -4,7 +4,8 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const lobbyApp = fs.readFileSync(path.join(root, 'public/js/lobby-app.js'), 'utf8');
 const appCss = fs.readFileSync(path.join(root, 'public/css/app.css'), 'utf8');
-const pluginApi = fs.readFileSync(path.join(root, 'src/plugin-api.ts'), 'utf8');
+const pluginApi = fs.readFileSync(path.join(root, 'src/plugin-api.ts'), 'utf8')
+  + fs.readFileSync(path.join(root, 'src/plugin-round-statistics.ts'), 'utf8');
 const bridgePlugin = fs.readFileSync(path.join(root, '..', 'cs/web-bridge/CaorenCupPlugin/CaorenCupPlugin.cs'), 'utf8');
 
 const requiredHeaders = [

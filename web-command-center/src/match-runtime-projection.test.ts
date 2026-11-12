@@ -179,7 +179,8 @@ test('new epoch snapshot restores the full web stats checkpoint for its target r
         sideStats: { CT: { kills: 3 }, T: { kills: 0 } },
     } as any;
     applyMatchRuntimeSnapshot(current, snapshot({ completedRounds: 5, currentRoundKey: 'match-projection:4:round-6' }));
-    applyMatchRuntimeEvent(current, event(9, 'round_started'));
+    applyMatchRuntimeEvent(current, event(1, 'match_started'));
+    applyMatchRuntimeEvent(current, { ...event(9, 'round_started'), roundKey: 'match-projection:4:round-6' });
     current.players.a1.stats.kills = 9;
     current.players.a1.stats.damage = 999;
     current.players.a1.sideStats.CT.kills = 9;

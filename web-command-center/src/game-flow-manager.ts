@@ -1,3 +1,4 @@
+import { isBridgeMatchRuntimeEnabled } from './match-runtime-orchestrator';
 // game-flow-manager.ts
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -848,7 +849,7 @@ const syncCurrentRoundFromScores = (live: LiveGameData | null | undefined): numb
 
 const updateMatchFinishState = () => {
     const session = getSession();
-    if (!session.liveGameData) return;
+    if (!session.liveGameData || isBridgeMatchRuntimeEnabled(session)) return;
     const scoreA = session.liveGameData.scoreA || 0;
     const scoreB = session.liveGameData.scoreB || 0;
     const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
@@ -869,6 +870,7 @@ const updateMatchFinishState = () => {
 
 const getMatchWinner = (scoreA: number, scoreB: number): RosterTeam | null => {
     const session = getSession();
+    if (isBridgeMatchRuntimeEnabled(session)) return session.matchRuntime?.stage === 'completed' ? session.liveGameData?.winnerTeam || null : null;
     const rules = getGameModeRoundRules(session.matchOptions?.gameModeId, session.matchOptions);
     return getRoundOutcome(rules, scoreA, scoreB, session.liveGameData?.lastScoredRound || 0).winner;
 };

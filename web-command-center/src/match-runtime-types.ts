@@ -44,9 +44,21 @@ export interface MatchRuntimeEvent {
     revision: number;
     runtimeEpoch: number;
     roundKey?: string | null;
+    roundNumber?: number;
+    occurredAtUnixMs?: number;
+    teamAEngineSide?: 'terrorist' | 'counterTerrorist';
+    winningEngineSide?: 'terrorist' | 'counterTerrorist';
+    players?: Array<{ steamId: string; team: string; isAlive?: boolean; health?: number; maxHealth?: number }>;
 }
 
 export interface MatchRuntimeProjectionResult {
     applied: boolean;
     code: string;
+}
+
+export interface MatchRuntimeRoundStatisticsJournal {
+    roundKey: string;
+    started?: MatchRuntimeEvent;
+    completed?: MatchRuntimeEvent;
+    combat: Array<{ type: string; payload: any }>;
 }

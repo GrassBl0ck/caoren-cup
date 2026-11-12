@@ -1,4 +1,4 @@
-import type { MatchRuntimeSnapshot } from './match-runtime-types';
+import type { MatchRuntimeSnapshot, MatchRuntimeRoundStatisticsJournal } from './match-runtime-types';
 
 export enum GamePhase {
     Lobby = 'Lobby',
@@ -408,6 +408,7 @@ export interface GameSession {
     matchRuntimeRevision?: number;
     matchRuntimeEventEpoch?: number;
     matchRuntimeLastEventSequence?: number;
+    matchRuntimeStatsJournal?: Record<number, MatchRuntimeRoundStatisticsJournal>;
     matchRuntimeStatsCheckpoints?: Record<number, {
         liveGameData?: LiveGameData;
         players: Record<string, { stats?: any; sideStats?: any }>;

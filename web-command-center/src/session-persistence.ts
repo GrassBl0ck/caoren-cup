@@ -77,6 +77,7 @@ export const buildSessionSnapshotPayload = (
         matchRuntimeEventEpoch: session.matchRuntimeEventEpoch,
         matchRuntimeLastEventSequence: session.matchRuntimeLastEventSequence,
         matchRuntimeStatsCheckpoints: session.matchRuntimeStatsCheckpoints,
+        matchRuntimeStatsJournal: session.matchRuntimeStatsJournal,
         matchRestorePoints: session.matchRestorePoints,
         accusations: session.accusations,
         taskTemplate: session.taskTemplate,
@@ -141,6 +142,7 @@ const normalizeRestoredSession = (raw: any, version: 1 | 2 | 3): GameSession => 
         restored.matchRuntimeEventEpoch = undefined;
         restored.matchRuntimeLastEventSequence = undefined;
         restored.matchRuntimeStatsCheckpoints = undefined;
+        restored.matchRuntimeStatsJournal = undefined;
         restored.matchRestorePoints = undefined;
     }
     restored.matchRuntimeRevision = Number.isSafeInteger(restored.matchRuntimeRevision)
