@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace CaorenCupPlugin.MatchRuntime;
 
 public sealed class CompetitiveMatchRuntime
@@ -83,7 +85,7 @@ public sealed class CompetitiveMatchRuntime
         return Success();
     }
 
-    public MatchRoundOpenResult OpenRound()
+    public MatchRoundOpenResult OpenRound(JsonElement? players = null)
     {
         if (_definition is null || _rounds is null)
             return new(false, "NO_MATCH", "没有已加载的正式比赛。");
@@ -95,11 +97,11 @@ public sealed class CompetitiveMatchRuntime
             return new(false, "ROUND_ALREADY_OPEN", "当前已有进行中的正式回合。", _rounds.CurrentRoundKey);
 
         var roundKey = _rounds.OpenRound(_definition.MatchId, _runtimeEpoch);
-        Publish("round_started", roundKey);
+        Publish("round_started", roundKey, _rounds.CompletedRounds + 1, players: players);
         return new(true, "OK", RoundKey: roundKey);
     }
 
-    public MatchRoundResult CompleteRound(string roundKey, RosterSide winner)
+    public MatchRoundResult CompleteRound(string roundKey, RosterSide winner, JsonElement? players = null)
     {
         if (_rounds is null) return new(false, "NO_MATCH", "没有已加载的正式比赛。");
         if (string.IsNullOrWhiteSpace(roundKey)) return new(false, "INVALID_ROUND_KEY", "回合标识不能为空。");
@@ -107,7 +109,9 @@ public sealed class CompetitiveMatchRuntime
         var settlement = _rounds.CompleteRound(roundKey, winner);
         if (!settlement.Ok) return new(false, settlement.Code, settlement.Message);
 
-        Publish("round_completed", roundKey);
+        var winningEngineSide = winner == RosterSide.A ? _teamAEngineSide
+            : _teamAEngineSide == EngineSide.CounterTerrorist ? EngineSide.Terrorist : EngineSide.CounterTerrorist;
+        Publish("round_completed", roundKey, _rounds.CompletedRounds, winningEngineSide, players);
         var sideSwapRequired = false;
         var matchFinished = false;
         switch (settlement.Transition)
@@ -217,7 +221,8 @@ public sealed class CompetitiveMatchRuntime
         return Success("RECOVERED");
     }
 
-    private void Publish(string type, string? roundKey = null)
+    private void Publish(string type, string? roundKey = null, int? roundNumber = null,
+        EngineSide? winningEngineSide = null, JsonElement? players = null)
     {
         if (_definition is null) return;
         _eventSequence++;
@@ -227,7 +232,12 @@ public sealed class CompetitiveMatchRuntime
             _definition.MatchId,
             _definition.Revision,
             _runtimeEpoch,
-            roundKey));
+            roundKey,
+            roundNumber,
+            roundNumber is null ? null : _teamAEngineSide,
+            winningEngineSide,
+            players?.Clone(),
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
     }
 
     private static MatchCommandResult ValidateDefinition(MatchDefinition definition)

@@ -18,4 +18,6 @@ Core 继续管理普通模式与 Random 生命周期。Bridge 接管前要求 Co
 
 比赛已结算不代表服务器状态已恢复。CVar 恢复失败时保留控制权并阻止 Core 接管或开始下一局；管理员使用 `css_ccmatch abort` 重试比赛清理，使用 `css_exitprac` 重试练习清理。开关关闭后清理入口仍可使用，只有全部恢复成功才释放控制权。
 
+权威 `round_started` / `round_completed` 事件在游戏线程捕获 `roundNumber`、`teamAEngineSide`、`players` 和 `occurredAtUnixMs`，完成事件另含 `winningEngineSide`。玩家快照在事件产生时复制，后续心跳只发送该历史快照。战斗遥测同样在产生时附 `matchId/revision/runtimeEpoch/roundKey/roundNumber`，没有进行中的正式回合时 `roundKey=null`。网页需按身份与事件时间归属统计，不能假设独立心跳和遥测 HTTP 必然按回合顺序到达。
+
 源码回归覆盖默认关闭、旧心跳缺字段、非标准模式拒绝、Core 活动拒绝、MatchZy 手动比赛保守拒绝、互斥租约、MR12/MR3、恢复与重复事件。真实服务器的完整比赛、Practice、带玩家恢复、画面与操控仍待隔离验收；本次不部署服务器。

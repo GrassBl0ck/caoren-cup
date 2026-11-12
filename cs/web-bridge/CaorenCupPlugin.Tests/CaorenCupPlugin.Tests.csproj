@@ -20,4 +20,7 @@
     <ProjectReference Include="..\CaorenCupPlugin\CaorenCupPlugin.csproj" />
     <ProjectReference Include="..\..\game-plugin\PluginSplit\CaorenCupCore\CaorenCupCore.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="Fixtures\authoritative-round-telemetry.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

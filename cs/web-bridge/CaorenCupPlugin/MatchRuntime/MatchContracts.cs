@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace CaorenCupPlugin.MatchRuntime;
 
 public enum MatchStage
@@ -63,7 +65,12 @@ public sealed record MatchEvent(
     string MatchId,
     int Revision,
     long RuntimeEpoch,
-    string? RoundKey = null);
+    string? RoundKey = null,
+    int? RoundNumber = null,
+    EngineSide? TeamAEngineSide = null,
+    EngineSide? WinningEngineSide = null,
+    JsonElement? Players = null,
+    long? OccurredAtUnixMs = null);
 
 public sealed record MatchRuntimeSnapshot(
     string? MatchId,

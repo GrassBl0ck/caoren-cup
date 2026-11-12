@@ -939,7 +939,9 @@ public sealed partial class CaorenCupPlugin
         if (!RuntimeOwnsMatch || _matchRuntimeBridge.PendingCleanup) return true;
         if (MatchRuntimeOwnership.IsMatchZyLoaded) return true;
         var first=_matchRuntimeBridge.Snapshot.Stage==MatchStage.GoingLive;
-        var result=_matchRuntimeBridge.OnNativeRoundStart(IsServerWarmup());
+        var warmup = IsServerWarmup();
+        if (first && !warmup) ResetLiveMatchStats(0);
+        var result=_matchRuntimeBridge.OnNativeRoundStart(warmup, JsonSerializer.SerializeToElement(BuildLivePlayers(), _jsonOptions));
         if (result.Ok) {
             _currentRound=_matchRuntimeBridge.Snapshot.CompletedRounds+1;
             CaptureBridgeStatsCheckpoint(); DispatchCaorenAbilityRoundStart(first);
@@ -953,7 +955,8 @@ public sealed partial class CaorenCupPlugin
         if (_matchRuntimeBridge?.RequiresAuthority != true) return false;
         if (!RuntimeOwnsMatch || _matchRuntimeBridge.PendingCleanup) return true;
         if (MatchRuntimeOwnership.IsMatchZyLoaded || winner is not ("CT" or "T")) return true;
-        var result=_matchRuntimeBridge.OnNativeRoundEnd(winner=="CT"?EngineSide.CounterTerrorist:EngineSide.Terrorist);
+        var result=_matchRuntimeBridge.OnNativeRoundEnd(winner=="CT"?EngineSide.CounterTerrorist:EngineSide.Terrorist,
+            JsonSerializer.SerializeToElement(BuildLivePlayers(), _jsonOptions));
         if (!result.Ok) return true;
         _scoreCt=_matchRuntimeBridge.Snapshot.TeamAEngineSide==EngineSide.CounterTerrorist?_matchRuntimeBridge.Snapshot.ScoreA:_matchRuntimeBridge.Snapshot.ScoreB;
         _scoreT=_matchRuntimeBridge.Snapshot.TeamAEngineSide==EngineSide.Terrorist?_matchRuntimeBridge.Snapshot.ScoreA:_matchRuntimeBridge.Snapshot.ScoreB;

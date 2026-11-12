@@ -128,7 +128,7 @@ public sealed class MatchRuntimeBridgeAdapter
         return recovered;
     }
 
-    public MatchCommandResult OnNativeRoundStart(bool isWarmup)
+    public MatchCommandResult OnNativeRoundStart(bool isWarmup, JsonElement? players = null)
     {
         if (!IsActive) return Failure("RUNTIME_INACTIVE", "草人杯正式比赛运行时未激活。");
         if (isWarmup) return Failure("WARMUP_IGNORED", "暖身回合不属于正式比赛。");
@@ -143,19 +143,19 @@ public sealed class MatchRuntimeBridgeAdapter
             }
         }
 
-        var opened = _runtime.OpenRound();
+        var opened = _runtime.OpenRound(players);
         if (opened.Ok) CreateRoundRestorePoint();
         return opened.Ok
             ? new(true, "ROUND_OPENED", opened.RoundKey ?? string.Empty)
             : new(false, opened.Code, opened.Message);
     }
 
-    public MatchRoundResult OnNativeRoundEnd(EngineSide winner)
+    public MatchRoundResult OnNativeRoundEnd(EngineSide winner, JsonElement? players = null)
     {
         var roundKey = Snapshot.CurrentRoundKey;
         if (roundKey is null) return new(false, "NO_OPEN_ROUND", "当前没有可结算的正式回合。");
         var rosterWinner = winner == Snapshot.TeamAEngineSide ? RosterSide.A : RosterSide.B;
-        var result = _runtime.CompleteRound(roundKey, rosterWinner);
+        var result = _runtime.CompleteRound(roundKey, rosterWinner, players);
         if (result.MatchFinished && _demoStarted)
         {
             _host.StopDemo();

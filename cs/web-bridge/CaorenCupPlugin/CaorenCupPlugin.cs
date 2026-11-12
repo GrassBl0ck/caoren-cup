@@ -1417,6 +1417,8 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     private void QueueEvent(string type, object payload)
     {
         if (!ShouldPublishMatchTelemetry()) return;
+        if (_matchRuntimeBridge?.RequiresAuthority == true)
+            payload = MatchRuntimeTelemetry.AttachRoundIdentity(payload, _matchRuntimeBridge.Snapshot, _jsonOptions);
 
         if (PluginTelemetryPolicy.IsBatchable(type))
         {
@@ -1722,7 +1724,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return Task.FromResult(false);
         var command = heartbeatCommand.Command;
-        if (WebCommandGameThreadDispatcher.IsBlockedByCaorenRuntime(command,_matchRuntimeBridge?.IsActive == true)) return Task.FromResult(true);
+        if (WebCommandGameThreadDispatcher.IsBlockedByCaorenRuntime(command,_matchRuntimeBridge?.RequiresAuthority == true)) return Task.FromResult(true);
         if (!IsHeartbeatCommandSourceCurrent(heartbeatCommand))
         {
             Logger.LogWarning(
