@@ -11,12 +11,14 @@
   },
   "damage": {
     "eventId": "11111111111111111111111111111111",
+    "eventSequence": 1,
     "matchId": "telemetry", "revision": 1, "runtimeEpoch": 1, "roundKey": "telemetry:1:round-1", "roundNumber": 1, "round": 1,
     "attackerSteamId": "76561198000000001", "attackerTeam": "CT", "victimSteamId": "76561198000000002", "victimTeam": "T",
     "damage": 100, "occurredAtUnixMs": 1500
   },
   "death": {
     "eventId": "22222222222222222222222222222222",
+    "eventSequence": 2,
     "matchId": "telemetry", "revision": 1, "runtimeEpoch": 1, "roundKey": "telemetry:1:round-1", "roundNumber": 1, "round": 1,
     "attackerSteamId": "76561198000000001", "attackerTeam": "CT", "victimSteamId": "76561198000000002", "victimTeam": "T",
     "assisterSteamId": null, "headshot": true, "weapon": "ak47", "occurredAtUnixMs": 1501
@@ -43,6 +45,7 @@
   },
   "closedRoundDamage": {
     "eventId": "33333333333333333333333333333333",
+    "eventSequence": 3,
     "matchId": "telemetry", "revision": 1, "runtimeEpoch": 1, "roundKey": null, "roundNumber": 2, "round": 2,
     "attackerSteamId": "76561198000000001", "victimSteamId": "76561198000000002", "damage": 50, "occurredAtUnixMs": 2500
   }

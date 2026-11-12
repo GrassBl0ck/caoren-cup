@@ -21,11 +21,14 @@ public sealed class AuthoritativeRoundTelemetryTests
         var damage = MatchRuntimeTelemetry.AttachRoundIdentity(root.GetProperty("damage"), runtime.Snapshot, Options);
         var death = MatchRuntimeTelemetry.AttachRoundIdentity(root.GetProperty("death"), runtime.Snapshot, Options);
         Assert.NotEqual(damage.GetProperty("eventId").GetString(), death.GetProperty("eventId").GetString());
+        Assert.True(death.GetProperty("eventSequence").GetInt64() > damage.GetProperty("eventSequence").GetInt64());
         foreach (var raw in new[] { damage, death })
         {
             Assert.True(Guid.TryParseExact(raw.GetProperty("eventId").GetString(), "N", out _));
             var wireCopy = JsonSerializer.SerializeToElement(raw, Options);
             Assert.Equal(raw.GetProperty("eventId").GetString(), wireCopy.GetProperty("eventId").GetString());
+            Assert.Equal(raw.GetProperty("eventSequence").GetInt64(), wireCopy.GetProperty("eventSequence").GetInt64());
+            Assert.True(raw.GetProperty("eventSequence").GetInt64() > 0);
             Assert.Equal(key, raw.GetProperty("roundKey").GetString());
             Assert.Equal(1, raw.GetProperty("roundNumber").GetInt32());
             Assert.Equal(1, raw.GetProperty("runtimeEpoch").GetInt64());
@@ -37,6 +40,7 @@ public sealed class AuthoritativeRoundTelemetryTests
         Assert.True(JsonElement.DeepEquals(completedFixture, JsonSerializer.SerializeToElement(completed, Options)));
         Assert.False(runtime.CompleteRound(key, RosterSide.A).Ok);
         var closed = MatchRuntimeTelemetry.AttachRoundIdentity(root.GetProperty("closedRoundDamage"), runtime.Snapshot, Options);
+        Assert.True(closed.GetProperty("eventSequence").GetInt64() > death.GetProperty("eventSequence").GetInt64());
         Assert.Equal(JsonValueKind.Null, closed.GetProperty("roundKey").ValueKind);
         Assert.True(runtime.Restore(target with { RuntimeEpoch = 2 }).Ok);
         runtime.OpenRound(root.GetProperty("restoredStarted").GetProperty("players"));

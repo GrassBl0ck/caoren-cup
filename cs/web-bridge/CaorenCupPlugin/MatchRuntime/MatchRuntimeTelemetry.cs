@@ -4,11 +4,14 @@ namespace CaorenCupPlugin.MatchRuntime;
 
 public static class MatchRuntimeTelemetry
 {
+    private static long _eventSequence;
+
     public static JsonElement AttachRoundIdentity(object payload, MatchRuntimeSnapshot snapshot, JsonSerializerOptions options)
     {
         var fields = JsonSerializer.SerializeToElement(payload, options).EnumerateObject()
             .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
         fields["eventId"] = JsonSerializer.SerializeToElement(Guid.NewGuid().ToString("N"));
+        fields["eventSequence"] = JsonSerializer.SerializeToElement(Interlocked.Increment(ref _eventSequence));
         fields["matchId"] = JsonSerializer.SerializeToElement(snapshot.MatchId);
         fields["revision"] = JsonSerializer.SerializeToElement(snapshot.Revision);
         fields["runtimeEpoch"] = JsonSerializer.SerializeToElement(snapshot.RuntimeEpoch);
