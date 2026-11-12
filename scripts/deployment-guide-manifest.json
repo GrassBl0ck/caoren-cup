@@ -18,6 +18,8 @@
     "mc/INSTALL.md",
     "mc/cushion-wars/cushion-wars-b/README.md",
     "cs/game-plugin/PluginSplit/CaorenCupGamemode_RUSH/AssetTools/README.md",
-    "cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/README.md"
+    "cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/README.md",
+    "cs/web-bridge/CaorenCupPlugin/MATCH-RUNTIME.md",
+    "web-command-center/docs/ability-v223-integration.md"
   ]
 }
