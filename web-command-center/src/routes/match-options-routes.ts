@@ -57,7 +57,7 @@ export function registerMatchOptionsRoutes(app: Express, deps: RegisterMatchOpti
     deps.notify(
       matchOptions.matchMode === 'duel'
         ? `本局模式已更新：单挑模式，地图 ${matchOptions.duelMap}`
-        : `本局模式已更新：竞技模式，卧底模式${matchOptions.undercoverModeEnabled ? '开启' : '关闭'}，CaorenCup 修改${matchOptions.caorenModifiersEnabled ? '开启' : '关闭'}`
+        : `本局模式已更新：竞技模式，控制器 ${matchOptions.matchController === 'caoren' ? '草人杯' : 'MatchZy'}，卧底模式${matchOptions.undercoverModeEnabled ? '开启' : '关闭'}，CaorenCup 修改${matchOptions.caorenModifiersEnabled ? '开启' : '关闭'}`
     );
 
     deps.broadcastState();

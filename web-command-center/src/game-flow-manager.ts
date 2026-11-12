@@ -22,9 +22,13 @@ import { getDefaultTaskTemplate, assignTaskGridToPlayer } from './task-system';
 import {
     clearDraftPickTimer,
     clearAllFlowTimers,
+    clearAbilityBanTimer,
+    clearAbilityDraftTimer,
     clearMapVoteTimer,
     clearSideVoteTimer,
     setDraftPickTimer,
+    setAbilityBanTimer,
+    setAbilityDraftTimer,
     setMapVoteTimer,
     setSideVoteTimer,
 } from './game-timers';
@@ -35,6 +39,8 @@ import {
     MAP_BAN_LATER_SECONDS,
     SIDE_PICK_VOTE_SECONDS,
     MAP_BAN_COUNT_PER_TURN,
+    ABILITY_BAN_DEFAULT_SECONDS,
+    ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
 } from './game-constants';
 import {
     DUEL_DEFAULT_MAP,
@@ -50,11 +56,25 @@ import { normalizeUnbalancedRosterOptions, validateUnbalancedRoster, validateUnb
 import { GAME_MODE_MANIFESTS, normalizeGameModeId, normalizeGameModeOverrides, modeUsesUndercoverFlow, modeUsesUnbalancedRoster } from './game-mode';
 import { getGameModeRoundRules, getRoundOutcome } from './game-mode-rounds';
 import { enqueuePluginCommand } from './plugin-command-queue';
+import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
+import { enqueueAbilityRuntimeStart, enqueueAbilityRuntimeStop } from './ability-runtime-orchestrator';
+import { scheduleSessionSnapshotSave } from './session-persistence';
 import {
     clearFlowUndoHistory,
     commitFlowUndoCheckpoint,
     prepareFlowUndoCheckpoint,
 } from './flow-undo-manager';
+import {
+    calculateSafeBanLimit,
+    createAbilityBanState,
+    createAbilityDraftState,
+    finishCurrentAbilityBatch,
+    resolveAbilityBans,
+} from './ability-draft-service';
+import {
+    ABILITY_PHASE_ONE_START_BLOCK_MESSAGE,
+    isAbilityPhaseOneFormalStartBlocked,
+} from './ability-phase-one-policy';
 
 // ========== Broadcast and notification hooks ==========
 let broadcast: (() => void) | null = null;
@@ -371,6 +391,7 @@ const startSideVoteFunc = (team: RosterTeam = getSession().sidePickTeam || 'A') 
 const finishSideVote = (reason: 'timeout' | 'admin' | 'manual' = 'timeout') => {
     const session = getSession();
     if (session.phase !== GamePhase.SidePick || !session.sideVote) return;
+    if (!allowAbilityBanConfigGate(validateAbilityBanConfigForSidePickStart())) return;
     clearSideVoteTimer();
 
     const votes = session.sideVote.votes || {};
@@ -400,6 +421,24 @@ const resumeRestoredPregameFlow = () => {
     session.rollTimeout = undefined;
     session.timerEndAt = null;
     session.timerPhase = null;
+
+    if (session.phase === GamePhase.AbilityBan) {
+        const timeoutAt = session.abilityBanState?.timeoutAt;
+        if (typeof timeoutAt === 'number' && Number.isFinite(timeoutAt)) {
+            session.timerEndAt = timeoutAt;
+            session.timerPhase = GamePhase.AbilityBan;
+        }
+        return;
+    }
+
+    if (session.phase === GamePhase.AbilityDraft) {
+        const timeoutAt = session.abilityDraftState?.timeoutAt;
+        if (!session.abilityDraftState?.failure && typeof timeoutAt === 'number' && Number.isFinite(timeoutAt)) {
+            session.timerEndAt = timeoutAt;
+            session.timerPhase = GamePhase.AbilityDraft;
+        }
+        return;
+    }
 
     if (session.phase === GamePhase.PlayerDraft && session.draftCaptainsActive && !isDraftComplete()) {
         startDraftPickTimerFunc(false);
@@ -434,6 +473,232 @@ const setRosterLiveSides = (teamASide: Team) => {
     const teamBSide = oppositeSide(teamASide);
     for (const p of getTeamPlayers(session, 'A')) p.team = teamASide;
     for (const p of getTeamPlayers(session, 'B')) p.team = teamBSide;
+};
+
+// ========== Ability BP flow ==========
+const positiveInteger = (value: unknown, fallback: number): number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : fallback;
+};
+
+const getOrderedAbilityPlayers = (team: RosterTeam): string[] => {
+    const session = getSession();
+    const eligibleIds = new Set(getGamePlayers(session).map((player) => player.playerId));
+    const ordered: string[] = [];
+    const addOnce = (playerId: string | null | undefined) => {
+        if (playerId && eligibleIds.has(playerId) && !ordered.includes(playerId)) ordered.push(playerId);
+    };
+    addOnce(session.captains[team]);
+    session.teams[team].players.forEach(addOnce);
+    return ordered;
+};
+
+const getLobbyAbilityBanSafeLimit = (): number => {
+    const totalPlayers = getGamePlayers(getSession()).length;
+    return calculateSafeBanLimit({
+        teamSizeA: Math.ceil(totalPlayers / 2),
+        teamSizeB: Math.floor(totalPlayers / 2),
+    });
+};
+
+const getActualAbilityBanSafeLimit = (): number => calculateSafeBanLimit({
+    teamSizeA: getOrderedAbilityPlayers('A').length,
+    teamSizeB: getOrderedAbilityPlayers('B').length,
+});
+
+interface AbilityBanConfigValidation {
+    allowed: boolean;
+    safeLimit: number;
+}
+
+const validateAbilityBanConfigForSafeLimit = (safeLimit: number): AbilityBanConfigValidation => {
+    const session = getSession();
+    if (session.matchOptions?.matchMode === 'duel' || session.matchOptions?.abilityModeEnabled !== true) {
+        return { allowed: true, safeLimit };
+    }
+    const banCount = session.matchOptions.abilityBanCountPerTeam;
+    return {
+        allowed: Number.isSafeInteger(banCount) && Number(banCount) >= 0 && Number(banCount) <= safeLimit,
+        safeLimit,
+    };
+};
+
+const validateAbilityBanConfigForLobbyStart = (): AbilityBanConfigValidation => (
+    validateAbilityBanConfigForSafeLimit(getLobbyAbilityBanSafeLimit())
+);
+
+const validateAbilityBanConfigForSidePickStart = (): AbilityBanConfigValidation => (
+    validateAbilityBanConfigForSafeLimit(getActualAbilityBanSafeLimit())
+);
+
+const allowAbilityBanConfigGate = (validation: AbilityBanConfigValidation): boolean => {
+    if (validation.allowed) return true;
+    notifyMessage?.(`异能 BP 无法开始：当前最多可 Ban ${validation.safeLimit} 个。请管理员返回大厅修改异能设置。`);
+    broadcast?.();
+    return false;
+};
+
+const clearAbilityFlowState = () => {
+    const session = getSession();
+    clearAbilityBanTimer();
+    clearAbilityDraftTimer();
+    session.abilityBanState = undefined;
+    session.abilityDraftState = undefined;
+    session.abilityAssignments = undefined;
+    session.abilitySyncState = undefined;
+};
+
+const scheduleAbilityBanTimer = () => {
+    clearAbilityBanTimer();
+    const session = getSession();
+    const timeoutAt = session.abilityBanState?.timeoutAt;
+    if (!timeoutAt) return;
+    const timer = setTimeout(() => {
+        setAbilityBanTimer(null);
+        pollAbilityFlowTimeouts(Date.now());
+    }, Math.max(0, timeoutAt - Date.now()));
+    setAbilityBanTimer(timer);
+};
+
+const scheduleAbilityDraftTimer = () => {
+    clearAbilityDraftTimer();
+    const session = getSession();
+    const timeoutAt = session.abilityDraftState?.timeoutAt;
+    if (!timeoutAt) return;
+    const timer = setTimeout(() => {
+        setAbilityDraftTimer(null);
+        pollAbilityFlowTimeouts(Date.now());
+    }, Math.max(0, timeoutAt - Date.now()));
+    setAbilityDraftTimer(timer);
+};
+
+const startAbilityBan = () => {
+    const session = getSession();
+    clearAbilityBanTimer();
+    clearAbilityDraftTimer();
+    const durationSeconds = positiveInteger(
+        session.matchOptions?.abilityBanSeconds,
+        ABILITY_BAN_DEFAULT_SECONDS,
+    );
+    session.abilityBanState = createAbilityBanState({
+        orderedA: getOrderedAbilityPlayers('A'),
+        orderedB: getOrderedAbilityPlayers('B'),
+        banCountPerTeam: Math.max(0, Math.floor(Number(session.matchOptions?.abilityBanCountPerTeam) || 0)),
+        timeoutAt: Date.now() + durationSeconds * 1000,
+    });
+    session.abilityDraftState = undefined;
+    session.abilityAssignments = [];
+    session.timerEndAt = session.abilityBanState.timeoutAt;
+    session.timerPhase = GamePhase.AbilityBan;
+    scheduleAbilityBanTimer();
+};
+
+const startAbilityDraft = () => {
+    const session = getSession();
+    clearAbilityBanTimer();
+    clearAbilityDraftTimer();
+    const durationSeconds = positiveInteger(
+        session.matchOptions?.abilityDraftBatchSeconds,
+        ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
+    );
+    const bannedAbilityIds = session.abilityBanState
+        ? resolveAbilityBans(session.abilityBanState, Math.random).bannedAbilityIds
+        : [];
+    const firstTeam: RosterTeam = session.sidePickTeam === 'A' ? 'B' : 'A';
+    session.abilityDraftState = createAbilityDraftState({
+        firstTeam,
+        orderedA: getOrderedAbilityPlayers('A'),
+        orderedB: getOrderedAbilityPlayers('B'),
+        bannedAbilityIds,
+        timeoutAt: Date.now() + durationSeconds * 1000,
+    });
+    session.abilityAssignments = [];
+    session.timerEndAt = session.abilityDraftState.timeoutAt;
+    session.timerPhase = GamePhase.AbilityDraft;
+    scheduleAbilityDraftTimer();
+};
+
+const finishAbilityBan = (_reason: 'timeout' | 'confirmed' | 'admin' = 'timeout'): boolean => {
+    const session = getSession();
+    if (session.phase !== GamePhase.AbilityBan || !session.abilityBanState) return false;
+    clearAbilityBanTimer();
+    session.timerEndAt = null;
+    session.timerPhase = null;
+    advancePhase(GamePhase.AbilityBan, GamePhase.AbilityDraft);
+    return getSession().phase === GamePhase.AbilityDraft;
+};
+
+const finishAbilityBanIfReady = (): boolean => {
+    const session = getSession();
+    const state = session.abilityBanState;
+    if (session.phase !== GamePhase.AbilityBan || !state) return false;
+    const onlinePlayerIds = [...state.orderedPlayers.A, ...state.orderedPlayers.B]
+        .filter((playerId) => session.players[playerId]?.isOnline !== false);
+    if (!onlinePlayerIds.every((playerId) => state.confirmedPlayerIds.includes(playerId))) return false;
+    return finishAbilityBan('confirmed');
+};
+
+const finishAbilityDraftBatch = (_reason: 'timeout' | 'manual' | 'admin' = 'timeout'): boolean => {
+    const session = getSession();
+    const state = session.abilityDraftState;
+    if (session.phase !== GamePhase.AbilityDraft || !state) return false;
+    clearAbilityDraftTimer();
+    const result = finishCurrentAbilityBatch(state, Math.random);
+    if (!result.ok) {
+        const code = result.code || 'ABILITY_DRAFT_FAILED';
+        const message = result.message || '职业自动分配失败。';
+        state.failure = { code, message, failedAt: Date.now() };
+        session.timerEndAt = null;
+        session.timerPhase = null;
+        notifyMessage?.(`职业自动分配失败：${message}（${code}）。已停止自动重试，请管理员处理。`);
+        broadcast?.();
+        return false;
+    }
+    state.failure = undefined;
+
+    if (state.currentBatchIndex >= state.batches.length) {
+        session.abilityAssignments = [...state.assignments];
+        session.timerEndAt = null;
+        session.timerPhase = null;
+        advancePhase(GamePhase.AbilityDraft, GamePhase.PreGameSetup);
+        if (getSession().phase === GamePhase.PreGameSetup && session.matchOptions.abilityModeEnabled === true) {
+            try {
+                enqueueCurrentAbilitySync(session);
+                scheduleSessionSnapshotSave();
+                notifyMessage?.('异能职业配置已加入可靠同步队列，等待桥接和娱乐插件最终确认。');
+            } catch (err) {
+                notifyMessage?.(err instanceof Error ? err.message : '异能职业配置同步准备失败。');
+            }
+        }
+        return getSession().phase === GamePhase.PreGameSetup;
+    }
+
+    const durationSeconds = positiveInteger(
+        session.matchOptions?.abilityDraftBatchSeconds,
+        ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
+    );
+    state.timeoutAt = Date.now() + durationSeconds * 1000;
+    session.timerEndAt = state.timeoutAt;
+    session.timerPhase = GamePhase.AbilityDraft;
+    scheduleAbilityDraftTimer();
+    broadcast?.();
+    return true;
+};
+
+const pollAbilityFlowTimeouts = (now = Date.now()): boolean => {
+    const session = getSession();
+    if (session.phase === GamePhase.AbilityBan
+        && session.abilityBanState
+        && now >= session.abilityBanState.timeoutAt) {
+        return finishAbilityBan('timeout');
+    }
+    if (session.phase === GamePhase.AbilityDraft
+        && session.abilityDraftState
+        && !session.abilityDraftState.failure
+        && now >= session.abilityDraftState.timeoutAt) {
+        return finishAbilityDraftBatch('timeout');
+    }
+    return false;
 };
 
 // ========== Live game data updates ==========
@@ -718,6 +983,7 @@ const queueDuelMapOnlySetup = () => {
 const rollbackDuelToLobby = (reason = '单挑等待结束后参赛玩家不足，已回到大厅。') => {
     const session = getSession();
     clearFlowUndoHistory();
+    clearAbilityFlowState();
     session.phase = GamePhase.Lobby;
     session.matchId = uuidv4();
     session.liveGameData = undefined;
@@ -871,6 +1137,13 @@ const randomRemainingRoles = (onlyTeam?: RosterTeam) => {
 // ========== Phase progression ==========
 const resolveNextPhaseByMatchOptions = (from: GamePhase, requestedTo: GamePhase): GamePhase => {
     const session = getSession();
+    if (from === GamePhase.SidePick) {
+        if (session.matchOptions?.matchMode === 'duel' || session.matchOptions?.abilityModeEnabled !== true) {
+            return GamePhase.PreGameSetup;
+        }
+        const banCount = Math.max(0, Math.floor(Number(session.matchOptions?.abilityBanCountPerTeam) || 0));
+        return banCount > 0 ? GamePhase.AbilityBan : GamePhase.AbilityDraft;
+    }
     const undercoverEnabled = session.matchOptions?.undercoverModeEnabled !== false;
     if (undercoverEnabled) return requestedTo;
     if (requestedTo === GamePhase.MidGameQA || requestedTo === GamePhase.PostGameAccusation) return GamePhase.Scoreboard;
@@ -885,6 +1158,8 @@ const REVERSIBLE_PREGAME_PHASES = [
     GamePhase.PlayerDraft,
     GamePhase.MapBan,
     GamePhase.SidePick,
+    GamePhase.AbilityBan,
+    GamePhase.AbilityDraft,
     GamePhase.PreGameSetup,
 ];
 
@@ -918,6 +1193,25 @@ const advancePhase = (
             notifyMessage?.(`不能推进阶段：${rosterCheck.blockers.join(' ')}`);
             return false;
         }
+    }
+    if (from === GamePhase.Lobby
+        && nextTo === GamePhase.CaptainSelection
+        && !allowAbilityBanConfigGate(validateAbilityBanConfigForLobbyStart())) return false;
+    if (from === GamePhase.SidePick
+        && session.matchOptions?.matchMode !== 'duel'
+        && session.matchOptions?.abilityModeEnabled === true) {
+        if (!allowAbilityBanConfigGate(validateAbilityBanConfigForSidePickStart())) return false;
+    }
+    if (from === GamePhase.AbilityDraft && nextTo === GamePhase.PreGameSetup) {
+        const draft = session.abilityDraftState;
+        if (!draft || draft.currentBatchIndex < draft.batches.length) return false;
+    }
+    if (from === GamePhase.PreGameSetup
+        && nextTo === GamePhase.LiveGame
+        && isAbilityPhaseOneFormalStartBlocked(session)) {
+        notifyMessage?.(ABILITY_PHASE_ONE_START_BLOCK_MESSAGE);
+        broadcast?.();
+        return false;
     }
     if (!canTransition(from, nextTo)) return false;
 
@@ -978,6 +1272,15 @@ const advancePhase = (
     if (from === GamePhase.SidePick) {
         clearSideVoteTimer();
         session.sideVote = undefined;
+        if (nextTo === GamePhase.PreGameSetup) clearAbilityFlowState();
+    }
+
+    if (from === GamePhase.AbilityBan) {
+        clearAbilityBanTimer();
+    }
+
+    if (from === GamePhase.AbilityDraft) {
+        clearAbilityDraftTimer();
     }
 
     if (from === GamePhase.MidGameQA) {
@@ -987,13 +1290,17 @@ const advancePhase = (
         broadcast?.();
     }
 
+    if (from === GamePhase.LiveGame
+        && (nextTo === GamePhase.Scoreboard || nextTo === GamePhase.PostGameAccusation)) {
+        enqueueAbilityRuntimeStop(session, 'phase_exit');
+    }
     session.phase = nextTo;
     performPhaseTransition(nextTo);
     if (checkpoint) commitFlowUndoCheckpoint(checkpoint);
     return true;
 };
 
-export const markGameModeLiveFromRuntime = (modeId: string): boolean => {
+export const markGameModeLiveFromRuntime = (modeId: string, roundKey = 'round-1'): boolean => {
     const session = getSession();
     if (![GamePhase.Lobby, GamePhase.PreGameSetup].includes(session.phase)) return false;
     const expectedModeId = normalizeGameModeId(session.matchOptions?.gameModeId, session.matchOptions);
@@ -1002,6 +1309,11 @@ export const markGameModeLiveFromRuntime = (modeId: string): boolean => {
     const rosterCheck = validateUnbalancedRosterForTeamLock(session);
     if (!rosterCheck.valid) {
         notifyMessage?.(`Gamemode 开局被阻止：${rosterCheck.blockers.join(' ')}`);
+        return false;
+    }
+    if (isAbilityPhaseOneFormalStartBlocked(session)) {
+        notifyMessage?.(ABILITY_PHASE_ONE_START_BLOCK_MESSAGE);
+        broadcast?.();
         return false;
     }
 
@@ -1019,6 +1331,7 @@ export const markGameModeLiveFromRuntime = (modeId: string): boolean => {
         session.liveGameData.formalRoundStartRaw = 1;
         session.liveGameData.roundBaseOffset = 0;
     }
+    enqueueAbilityRuntimeStart(session, roundKey);
     broadcast?.();
     notifyMessage?.(`Gamemode ${modeId} 已进入正式比赛阶段。`);
     return true;
@@ -1026,6 +1339,7 @@ export const markGameModeLiveFromRuntime = (modeId: string): boolean => {
 
 export const synchronizeRandomModeRuntime = (runtime: GameModeRuntimeState) => {
     const session = getSession();
+    if (session.matchOptions.matchRuntimeEnabled === true) return;
     const previous = session.gameModeRuntime;
     const changed = !previous || previous.modeId !== runtime.modeId ||
         previous.revision !== runtime.revision || previous.lifecycle !== runtime.lifecycle;
@@ -1046,6 +1360,7 @@ const performPhaseTransition = (to: GamePhase) => {
     const session = getSession();
     switch (to) {
         case GamePhase.CaptainSelection:
+            clearAbilityFlowState();
             const gamePlayers = getGamePlayers(session);
             if (gamePlayers.length >= 2) { randomizeCaptainForTeam('A'); randomizeCaptainForTeam('B'); }
             else if (gamePlayers.length === 1) { session.captains.A = gamePlayers[0].playerId; session.captains.B = null; }
@@ -1088,6 +1403,12 @@ const performPhaseTransition = (to: GamePhase) => {
             break;
         case GamePhase.SidePick:
             startSideVoteFunc(session.sidePickTeam || 'A');
+            break;
+        case GamePhase.AbilityBan:
+            startAbilityBan();
+            break;
+        case GamePhase.AbilityDraft:
+            startAbilityDraft();
             break;
         case GamePhase.PreGameSetup:
             if (session.selectedSide) setRosterLiveSides(session.selectedSide);
@@ -1206,6 +1527,8 @@ const performPhaseTransition = (to: GamePhase) => {
     if (to === GamePhase.PlayerDraft && session.draftPickTimeoutAt) { timerEnd = session.draftPickTimeoutAt; timerPhase = GamePhase.PlayerDraft; }
     else if (to === GamePhase.MapBan && session.mapVote?.timeoutAt) { timerEnd = session.mapVote.timeoutAt; timerPhase = GamePhase.MapBan; }
     else if (to === GamePhase.SidePick && session.sideVote?.timeoutAt) { timerEnd = session.sideVote.timeoutAt; timerPhase = GamePhase.SidePick; }
+    else if (to === GamePhase.AbilityBan && session.abilityBanState?.timeoutAt) { timerEnd = session.abilityBanState.timeoutAt; timerPhase = GamePhase.AbilityBan; }
+    else if (to === GamePhase.AbilityDraft && session.abilityDraftState?.timeoutAt) { timerEnd = session.abilityDraftState.timeoutAt; timerPhase = GamePhase.AbilityDraft; }
     session.timerEndAt = timerEnd;
     session.timerPhase = timerPhase;
 
@@ -1251,12 +1574,27 @@ const applyMatchOptions = (rawOptions: unknown) => {
     const manifest = GAME_MODE_MANIFESTS[gameModeId];
     const undercoverEnabled = modeUsesUndercoverFlow(gameModeId);
     const unbalancedEnabled = modeUsesUnbalancedRoster(gameModeId);
+    const previousMatchController = session.matchOptions?.matchController;
+    const previousMatchRuntimeEnabled = session.matchOptions?.matchRuntimeEnabled === true;
+    const requestedMatchMode = (rawOptions as any)?.matchMode === 'duel' ? 'duel' : 'competitive';
+    const requestedMatchController = raw.matchController === 'matchzy' ? 'matchzy' : raw.matchController === 'caoren' ? 'caoren' : session.matchOptions.matchController || 'caoren';
+    const normalizeTeamName = (value: unknown, fallback: string): string => {
+        const normalized = String(value || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 32);
+        return normalized || fallback;
+    };
+    const currentAbilityOptions = {
+        abilityModeEnabled: session.matchOptions.abilityModeEnabled === true,
+        abilityBanCountPerTeam: session.matchOptions.abilityBanCountPerTeam ?? 1,
+        abilityBanSeconds: session.matchOptions.abilityBanSeconds ?? ABILITY_BAN_DEFAULT_SECONDS,
+        abilityDraftBatchSeconds: session.matchOptions.abilityDraftBatchSeconds ?? ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
+    };
     session.matchOptions = {
         gameModeId,
         gameModeWarmupSeconds: Math.max(1, Math.min(300, Math.floor(Number(raw.gameModeWarmupSeconds || manifest.defaultWarmupSeconds)))),
         gameModeCvarOverrides: normalizeGameModeOverrides(gameModeId, raw.gameModeCvarOverrides),
         matchMode: raw.matchMode === 'duel' ? 'duel' : 'competitive',
-        matchController: 'caoren',
+        matchController: requestedMatchMode === 'duel' ? 'caoren' : requestedMatchController,
+        matchRuntimeEnabled: raw.matchRuntimeEnabled === true && requestedMatchController === 'caoren' && ['competitive','ability'].includes(gameModeId) && requestedMatchMode !== 'duel',
         undercoverModeEnabled: undercoverEnabled,
         caorenModifiersEnabled: raw.caorenModifiersEnabled === true,
         duelMap: resolveDuelMapConfig(String(raw.duelMap || DUEL_DEFAULT_MAP), raw.duelMapWorkshopId).name,
@@ -1268,12 +1606,28 @@ const applyMatchOptions = (rawOptions: unknown) => {
             ...raw,
             unbalancedModeEnabled: unbalancedEnabled,
         } as any),
+
+        teamAName: normalizeTeamName((rawOptions as any)?.teamAName, 'A队'),
+        teamBName: normalizeTeamName((rawOptions as any)?.teamBName, 'B队'),
+        abilityModeEnabled: requestedMatchMode !== 'duel' && currentAbilityOptions.abilityModeEnabled,
+        abilityBanCountPerTeam: currentAbilityOptions.abilityBanCountPerTeam,
+        abilityBanSeconds: currentAbilityOptions.abilityBanSeconds,
+        abilityDraftBatchSeconds: currentAbilityOptions.abilityDraftBatchSeconds,
     };
+    if (session.matchOptions.matchController !== previousMatchController || (session.matchOptions.matchRuntimeEnabled === true) !== previousMatchRuntimeEnabled) {
+        session.matchRuntime = undefined;
+        session.matchRuntimeEventEpoch = undefined;
+        session.matchRuntimeLastEventSequence = undefined;
+        session.matchRuntimeRevision = Math.max(1, Number(session.matchRuntimeRevision || 1)) + 1;
+    }
     if (session.matchOptions.matchMode === 'duel') {
         session.matchOptions.undercoverModeEnabled = false;
+        session.matchOptions.abilityModeEnabled = false;
+        clearAbilityFlowState();
         clearUndercoverModeState();
         return session.matchOptions;
     }
+    if (!session.matchOptions.abilityModeEnabled) clearAbilityFlowState();
     if (!session.matchOptions.undercoverModeEnabled) {
         clearUndercoverModeState();
         forceSkipUndercoverOnlyPhaseIfNeeded();
@@ -1299,6 +1653,12 @@ export {
     resumeRestoredPregameFlow,
     startSideVoteFunc as startSideVote,
     setRosterLiveSides,
+    // Ability BP
+    getLobbyAbilityBanSafeLimit,
+    finishAbilityBan,
+    finishAbilityBanIfReady,
+    finishAbilityDraftBatch,
+    pollAbilityFlowTimeouts,
     // Roles
     randomRemainingRoles,
     // LiveGame
@@ -1321,4 +1681,11 @@ export {
     isDraftComplete,
     syncPendingDraftOrderWithRoster,
     startCaptainDraftFunc as startCaptainDraft,
+};
+
+export const markStandardMatchLiveFromMatchZy = (roundKey = 'round-1'): boolean => {
+    const session = getSession();
+    if (session.phase !== GamePhase.PreGameSetup || session.matchOptions.matchMode === 'duel') return false;
+    if (isAbilityPhaseOneFormalStartBlocked(session)) { notifyMessage?.(ABILITY_PHASE_ONE_START_BLOCK_MESSAGE); return false; }
+    return markGameModeLiveFromRuntime(normalizeGameModeId(session.matchOptions.gameModeId, session.matchOptions), roundKey);
 };

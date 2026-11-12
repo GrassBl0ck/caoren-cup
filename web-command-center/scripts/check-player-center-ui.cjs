@@ -13,7 +13,7 @@ const css = fs.readFileSync(path.join(root, 'public', 'css', 'app.css'), 'utf8')
 if (!html.includes('/js/player-center.js?v=2.0.0-account-settings1')) {
   throw new Error('player-center cache version must match the account session notification update');
 }
-if (!html.includes('/js/lobby-app.js?v=1.11.1-pcskin1')) {
+if (!html.includes('/js/lobby-app.js?v=2.2.3-ability1')) {
   throw new Error('lobby script cache version must match the admin session notification update');
 }
 if (!html.includes('/js/access-admin.js?v=1.9.2-modern-dialog8')) {

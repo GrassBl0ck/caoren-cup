@@ -9,6 +9,7 @@ import {
 
 interface RegisterGameModeRoutesDeps {
   adminPassword?: string;
+  isAbilitySyncConfirmed?: () => boolean;
   getPhase: () => GamePhase;
   getAvailableGameModes?: () => readonly GameModeId[] | undefined;
   getPlayerById?: (playerId: string) => Player | undefined;
@@ -85,6 +86,8 @@ export function registerGameModeRoutes(app: Express, deps: RegisterGameModeRoute
       return res.status(400).json({ success: false, error: '只能在大厅或赛前配置阶段开始模式', phase });
     }
     const matchOptions = deps.ensureMatchOptions();
+    if (matchOptions.abilityModeEnabled === true && deps.isAbilitySyncConfirmed?.() !== true) return res.status(409).json({ success: false, error: '异能职业配置尚未确认，不能开始正式模式。' });
+    if (matchOptions.matchRuntimeEnabled === true) return res.status(409).json({ success: false, error: '测试比赛运行时已选中，请使用其准备与开赛入口，不能同时启动 Core 模式。' });
     if (!isLoadedGameMode(matchOptions.gameModeId!, deps.getAvailableGameModes?.())) {
       return res.status(400).json({ success: false, error: `模式尚未加载：${matchOptions.gameModeId}`, phase });
     }

@@ -118,7 +118,7 @@ test('actual lobby menu hides unloaded Random and enables it after server confir
   const select = { value: '', disabled: false, querySelector: () => option };
   const context = vm.createContext({
     document: { getElementById: (id: string) => id === 'match-options-panel' ? panel : id === 'game-mode-id' ? select : null, querySelector: () => null },
-    getPendingMatchOptions: () => null, DUEL_DEFAULT_MAP: 'duel_01', syncCaorenModPanel() {},
+    getPendingMatchOptions: () => null, DUEL_DEFAULT_MAP: 'duel_01', syncCaorenModPanel() {}, syncAbilityModeConfigPanel() {},
   });
   vm.runInContext(source.slice(start, end), context);
   context.syncMatchOptionsPanel({ phase: 'Lobby', matchOptions: {} }, true);

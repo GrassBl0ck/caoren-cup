@@ -318,6 +318,35 @@ html:not(.cc-reduce-motion) .cc-sidepick-hero-enter {
     }
 }
 
+/* Ability BP only uses strong motion for batch and lock state changes. */
+html:not(.cc-reduce-motion) .ability-bp-card,
+html:not(.cc-reduce-motion) .ability-bp-actions,
+html:not(.cc-reduce-motion) .ability-bp-batch {
+    transition:
+        border-color var(--cc-motion-normal) var(--cc-motion-ease),
+        box-shadow var(--cc-motion-normal) var(--cc-motion-ease),
+        opacity var(--cc-motion-normal) var(--cc-motion-ease),
+        transform var(--cc-motion-normal) var(--cc-motion-ease);
+}
+
+html:not(.cc-reduce-motion) .ability-bp-batch.is-current {
+    animation: cc-ability-batch-in 360ms var(--cc-motion-ease) both;
+}
+
+html:not(.cc-reduce-motion) .ability-bp-actions button:disabled {
+    animation: cc-ability-lock-in 260ms var(--cc-motion-ease) both;
+}
+
+@keyframes cc-ability-batch-in {
+    from { opacity: 0.72; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cc-ability-lock-in {
+    0% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

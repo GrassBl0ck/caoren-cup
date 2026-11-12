@@ -456,6 +456,18 @@
                     <div class="match-options-desc" style="margin-top:6px;">网页完成阵容和模式设置后，由管理员开始；Warmup 结束后由 Gamemode 自动开始正式比赛。</div>
                 </div>
 
+                <label class="match-options-row">
+                    <div style="width:100%;">
+                        <div class="match-options-title">测试比赛控制器</div>
+                        <label><input type="checkbox" id="match-option-runtime-enabled">启用测试比赛运行时（仅竞技/异能；默认关闭，需先验证与 MatchZy 互斥）</label>
+                        <select id="match-runtime-controller" style="width:100%;margin-top:6px;">
+                            <option value="matchzy">MatchZy（现有回滚路径）</option>
+                            <option value="caoren">草人杯比赛运行时</option>
+                        </select>
+                        <div class="match-options-desc">测试阶段默认保留 MatchZy。选择草人杯后，正式比赛、Ready、暂停、换边和恢复由草人杯桥接插件管理。</div>
+                    </div>
+                </label>
+
                 <label class="match-options-row" style="display:none;" aria-hidden="true">
                     <input type="checkbox" id="match-option-duel">
                     <div>
@@ -463,6 +475,11 @@
                         <div class="match-options-desc">&#24320;&#21551;&#21518;&#65292;&#26412;&#23616;&#21482;&#21462;&#21069;&#20004;&#21517;&#29609;&#23478;&#36827;&#34892; 1v1&#65292;&#36339;&#36807;&#38431;&#38271;&#36873;&#20154;&#12289;&#22320;&#22270; BP&#12289;&#36873;&#36793;&#21644;&#21351;&#24213;&#27969;&#31243;&#12290;&#27491;&#24335;&#24320;&#22987;&#26102;&#20250;&#19979;&#21457;&#30701;&#22238;&#21512;&#21333;&#25361;&#35268;&#21017;&#12290;</div>
                     </div>
                 </label>
+
+                <div class="match-options-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <label><span class="match-options-title">A 队名称</span><input id="match-option-team-a-name" type="text" maxlength="32" value="A队"></label>
+                    <label><span class="match-options-title">B 队名称</span><input id="match-option-team-b-name" type="text" maxlength="32" value="B队"></label>
+                </div>
 
                 <div class="match-options-row" id="duel-options-row">
                     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;width:100%;">
@@ -931,7 +948,8 @@
     <script src="/js/update-announcement-read-state.js"></script>
     <script src="/js/caoren-dialog.js?v=1.9.2-modern-dialog11"></script>
     <script src="/js/task-template-history.js?v=undercover-ui1"></script>
-    <script src="/js/lobby-app.js?v=1.11.1-pcskin1"></script>
+    <script src="/js/ability-bp-ui.js?v=ability-bp-task7-20260720"></script>
+    <script src="/js/lobby-app.js?v=2.2.3-ability1"></script>
     <script src="/js/update-announcement-public.js"></script>
     <script src="/js/update-announcement-admin-mutation-state.js"></script>
     <script src="/js/update-announcement-admin.js?v=1.9.2-modern-dialog8"></script>

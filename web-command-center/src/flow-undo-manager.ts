@@ -31,6 +31,11 @@ const SESSION_FLOW_KEYS = [
     'sidePickTeam',
     'sideVote',
     'selectedSide',
+    'abilityBanState',
+    'abilityDraftState',
+    'abilityAssignments',
+    'abilitySyncRevision',
+    'abilitySyncState',
     'undercoverCount',
     'detectiveCount',
     'rolesReleased',
@@ -195,6 +200,8 @@ const isPregamePhase = (phase: GamePhase) => [
     GamePhase.PlayerDraft,
     GamePhase.MapBan,
     GamePhase.SidePick,
+    GamePhase.AbilityBan,
+    GamePhase.AbilityDraft,
     GamePhase.PreGameSetup,
 ].includes(phase);
 

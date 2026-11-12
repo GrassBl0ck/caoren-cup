@@ -1,9 +1,9 @@
+import { isCurrentAbilitySyncConfirmed } from './ability-phase-one-policy';
 // server.ts
 import { createServer } from 'http';
 import path from 'node:path';
 import express from 'express';
 import { Server as SocketIOServer } from 'socket.io';
-import multer from 'multer';
 import {
     GamePhase,
     WsEvents,
@@ -33,12 +33,18 @@ import {
     finishMapVote,
     finishSideVote,
     resumeRestoredPregameFlow,
+    pollAbilityFlowTimeouts,
 } from './game-flow-manager';
 import {
     enqueuePluginCommand,
     getPluginCommandQueueSummary,
 } from './plugin-command-queue';
-import { ADMIN_PASSWORD } from './game-constants';
+import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
+import {
+    ABILITY_BAN_DEFAULT_SECONDS,
+    ABILITY_DRAFT_BATCH_DEFAULT_SECONDS,
+    ADMIN_PASSWORD,
+} from './game-constants';
 import { DUEL_DEFAULT_MAP, DUEL_DEFAULT_ROUND_TIME_MINUTES, DUEL_DEFAULT_UTILITY_MODE, DUEL_DEFAULT_WORKSHOP_ID, getDefaultDuelRounds, normalizeDuelMap, normalizeDuelRoundTimeMinutes, normalizeDuelRounds, normalizeDuelUtilityMode, normalizeDuelWorkshopId } from './duel-config';
 import { registerIdentityAuthRoutes } from './identity/auth-routes';
 import { registerBoardPages } from './portal-routes';
@@ -89,7 +95,6 @@ app.use(express.static('public', {
         }
     }
 }));
-const upload = multer({ storage: multer.memoryStorage() });
 const restoredSessionSnapshot = restoreSessionSnapshot();
 loadTaskPresets();
 
@@ -217,7 +222,20 @@ const broadcastAnnouncement = (announcement: LobbyAnnouncement) => {
 
 injectFlowBroadcast(broadcastState);
 injectNotify(notifyMessage);
-if (restoredSessionSnapshot) resumeRestoredPregameFlow();
+if (restoredSessionSnapshot) {
+    resumeRestoredPregameFlow();
+    const restoredSession = getSession();
+    if (restoredSession.phase === GamePhase.PreGameSetup
+        && restoredSession.matchOptions.matchMode !== 'duel'
+        && restoredSession.matchOptions.abilityModeEnabled === true
+        && restoredSession.abilitySyncState?.status !== 'disabled') {
+        try {
+            enqueueCurrentAbilitySync(restoredSession);
+        } catch (error) {
+            console.error('[AbilitySync] 恢复同步队列失败：', error);
+        }
+    }
+}
 
 const ensureMatchOptions = () => {
     const session = getSession();
@@ -246,7 +264,27 @@ const ensureMatchOptions = () => {
     session.matchOptions.gameModeWarmupSeconds = Math.max(1, Math.min(300, Math.floor(Number(session.matchOptions.gameModeWarmupSeconds || gameModeManifest.defaultWarmupSeconds))));
     session.matchOptions.gameModeCvarOverrides = normalizeGameModeOverrides(gameModeId, session.matchOptions.gameModeCvarOverrides);
     session.matchOptions.matchMode = session.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
-    session.matchOptions.matchController = 'caoren';
+    const restoredCaorenRuntime = session.matchOptions.matchRuntimeEnabled === true
+        && ['competitive','ability'].includes(gameModeId)
+        && session.matchOptions.matchMode !== 'duel'
+        && session.matchOptions.matchController === 'caoren';
+    session.matchOptions.matchController = session.matchOptions.matchMode === 'duel' ? 'caoren' : session.matchOptions.matchController === 'matchzy' ? 'matchzy' : 'caoren';
+    session.matchOptions.matchRuntimeEnabled = restoredCaorenRuntime;
+    session.matchOptions.abilityModeEnabled = session.matchOptions.matchMode === 'duel'
+        ? false
+        : session.matchOptions.abilityModeEnabled === true;
+    const abilityBanCount = Number(session.matchOptions.abilityBanCountPerTeam);
+    session.matchOptions.abilityBanCountPerTeam = Number.isFinite(abilityBanCount)
+        ? Math.max(0, Math.floor(abilityBanCount))
+        : 1;
+    const abilityBanSeconds = Number(session.matchOptions.abilityBanSeconds);
+    session.matchOptions.abilityBanSeconds = Number.isFinite(abilityBanSeconds)
+        ? Math.max(1, Math.floor(abilityBanSeconds))
+        : ABILITY_BAN_DEFAULT_SECONDS;
+    const abilityDraftBatchSeconds = Number(session.matchOptions.abilityDraftBatchSeconds);
+    session.matchOptions.abilityDraftBatchSeconds = Number.isFinite(abilityDraftBatchSeconds)
+        ? Math.max(1, Math.floor(abilityDraftBatchSeconds))
+        : ABILITY_DRAFT_BATCH_DEFAULT_SECONDS;
     session.matchOptions.undercoverModeEnabled = session.matchOptions.matchMode === 'duel' ? false : modeUsesUndercoverFlow(gameModeId);
     session.matchOptions.caorenModifiersEnabled = session.matchOptions.caorenModifiersEnabled === true;
     session.matchOptions.unbalancedModeEnabled = modeUsesUnbalancedRoster(gameModeId);
@@ -270,6 +308,7 @@ registerMatchOptionsRoutes(app, {
 });
 
 registerGameModeRoutes(app, {
+    isAbilitySyncConfirmed: () => isCurrentAbilitySyncConfirmed(getSession()),
     adminPassword: ADMIN_PASSWORD,
     getPhase: () => getSession().phase,
     getAvailableGameModes: () => getSession().availableGameModes,
@@ -353,14 +392,6 @@ registerGameCodeLogin(app, io, {
     identityService: lobbyIdentityService,
 });
 
-// MatchZy CSV import is intentionally disabled. Official stats now come from the bridge plugin.
-app.post('/api/upload-csv', upload.single('csvfile'), (_req, res) => {
-    res.status(410).json({
-        success: false,
-        error: 'MatchZy CSV ' + '\u5df2\u505c\u7528\uff0c\u5f53\u524d\u7248\u672c\u4f7f\u7528\u63d2\u4ef6\u5b9e\u65f6\u6570\u636e\u7edf\u8ba1\u3002',
-    });
-});
-
 // 定时器轮询
 setInterval(() => {
     const session = getSession();
@@ -374,6 +405,7 @@ setInterval(() => {
     if (session.phase === GamePhase.SidePick && session.sideVote && now > session.sideVote.timeoutAt) {
         finishSideVote('timeout');
     }
+    pollAbilityFlowTimeouts(now);
 }, 1000);
 
 const PORT = process.env.PORT || 3000;

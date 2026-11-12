@@ -1,3 +1,5 @@
+import type { MatchRuntimeSnapshot } from './match-runtime-types';
+
 export enum GamePhase {
     Lobby = 'Lobby',
     CaptainSelection = 'CaptainSelection',
@@ -5,6 +7,8 @@ export enum GamePhase {
     PlayerDraft = 'PlayerDraft',
     MapBan = 'MapBan',
     SidePick = 'SidePick',
+    AbilityBan = 'AbilityBan',
+    AbilityDraft = 'AbilityDraft',
     PreGameSetup = 'PreGameSetup',
     LiveGame = 'LiveGame',
     MidGameQA = 'MidGameQA',
@@ -20,6 +24,89 @@ export type MatchMode = 'competitive' | 'duel';
 export type MatchController = 'matchzy' | 'caoren';
 export type GameModeId = 'competitive' | 'rush' | 'duel' | 'ability' | 'undercover' | 'unbalanced' | 'random';
 export type GameModeLifecycle = 'Lobby' | 'Warmup' | 'Live' | 'Stopped' | 'Error';
+export type AbilityId =
+    | 'medic'
+    | 'berserker'
+    | 'assassin'
+    | 'tank'
+    | 'istaru'
+    | 'capitalist'
+    | 'balance'
+    | 'glass_cannon'
+    | 'utility_specialist'
+    | 'commander'
+    | 'sky_courier'
+    | 'snow_golem'
+    | 'witch';
+export interface AbilityBanState {
+    orderedPlayers: Record<RosterTeam, string[]>;
+    banCountPerTeam: number;
+    selections: Record<string, AbilityId[]>;
+    confirmedPlayerIds: string[];
+    timeoutAt: number;
+}
+export interface AbilityDraftBatch {
+    team: RosterTeam;
+    playerIds: string[];
+}
+export interface AbilityAssignment {
+    playerId: string;
+    team: RosterTeam;
+    abilityId: AbilityId;
+}
+export interface AbilityDraftState {
+    batches: AbilityDraftBatch[];
+    currentBatchIndex: number;
+    bannedAbilityIds: AbilityId[];
+    choices: Record<string, AbilityId>;
+    confirmedPlayerIds: string[];
+    assignments: AbilityAssignment[];
+    timeoutAt: number;
+    failure?: {
+        code: string;
+        message: string;
+        failedAt: number;
+    };
+}
+export interface AbilityBanResolution {
+    teamBans: Record<RosterTeam, AbilityId[]>;
+    bannedAbilityIds: AbilityId[];
+    votes: Record<RosterTeam, Partial<Record<AbilityId, number>>>;
+}
+export interface AbilityPhaseOnePublicPolicy {
+    formalMatchStartBlocked: boolean;
+    rosterMutationBlocked: boolean;
+    formalMatchStartMessage: string;
+    rosterMutationMessage: string;
+}
+export type AbilitySyncStatus =
+    | 'not_started'
+    | 'waiting_bridge'
+    | 'bridge_received'
+    | 'plugin_validating'
+    | 'confirmed'
+    | 'failed'
+    | 'disabled';
+export interface AbilitySyncState {
+    status: AbilitySyncStatus;
+    syncId: string;
+    matchId: string;
+    revision: number;
+    catalogVersion: string;
+    contentDigest: string;
+    seatCount: number;
+    commandId?: string;
+    appliedSeatCount?: number;
+    errorCode?: string;
+    errorMessage?: string;
+    updatedAt?: number;
+}
+export interface RuleResult {
+    ok: boolean;
+    code?: string;
+    message?: string;
+}
+export type ChargeModel = 'A' | 'B' | 'C';
 export type CellStatus = 'Incomplete' | 'Partial' | 'Complete' | 'Abandoned';
 export type UndercoverTaskAckStage = 'none' | 'received' | 'read';
 export type IdentityLevel = 'temporary' | 'longTerm';
@@ -246,6 +333,13 @@ export interface MatchOptions {
     gameModeCvarOverrides?: Record<string, string>;
     matchMode?: MatchMode;
     matchController?: MatchController;
+    matchRuntimeEnabled?: boolean;
+    teamAName?: string;
+    teamBName?: string;
+    abilityModeEnabled?: boolean;
+    abilityBanCountPerTeam?: number;
+    abilityBanSeconds?: number;
+    abilityDraftBatchSeconds?: number;
     undercoverModeEnabled: boolean;
     caorenModifiersEnabled: boolean;
     duelMap?: string;
@@ -290,6 +384,13 @@ export interface GameSession {
     sidePickTeam: RosterTeam | null;
     sideVote?: SideVoteState;
     selectedSide: 'CT' | 'T' | null;
+    abilityBanState?: AbilityBanState;
+    abilityDraftState?: AbilityDraftState;
+    abilityAssignments?: AbilityAssignment[];
+    abilitySyncRevision?: number;
+    abilitySyncState?: AbilitySyncState;
+    abilityPhaseOnePolicy?: AbilityPhaseOnePublicPolicy;
+    bridgeProtocolCapabilities?: { matchRuntime: number; abilitySync: number };
     undercoverCount: number;
     detectiveCount: number;
     rolesReleased?: boolean;
@@ -303,6 +404,15 @@ export interface GameSession {
     timerPhase: GamePhase | null;
     adminLock: AdminLock;
     liveGameData?: LiveGameData;
+    matchRuntime?: MatchRuntimeSnapshot;
+    matchRuntimeRevision?: number;
+    matchRuntimeEventEpoch?: number;
+    matchRuntimeLastEventSequence?: number;
+    matchRuntimeStatsCheckpoints?: Record<number, {
+        liveGameData?: LiveGameData;
+        players: Record<string, { stats?: any; sideStats?: any }>;
+    }>;
+    matchRestorePoints?: any[];
     rollTimeout?: any;
     createdAt: number;
     autoClearMinutes: number;
@@ -317,6 +427,10 @@ export enum WsEvents {
     VOTE = 'VOTE',
     DRAFT_PICK = 'DRAFT_PICK',
     SIDE_PICK = 'SIDE_PICK',
+    ABILITY_BAN_UPDATE = 'ABILITY_BAN_UPDATE',
+    ABILITY_BAN_CONFIRM = 'ABILITY_BAN_CONFIRM',
+    ABILITY_PICK_UPDATE = 'ABILITY_PICK_UPDATE',
+    ABILITY_PICK_CONFIRM = 'ABILITY_PICK_CONFIRM',
     TASK_ACTION = 'TASK_ACTION',
     SUBMIT_QUESTION = 'SUBMIT_QUESTION',
     UNDERCOVER_TASK_ACK = 'UNDERCOVER_TASK_ACK',

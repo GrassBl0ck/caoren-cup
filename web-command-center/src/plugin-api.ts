@@ -1,3 +1,7 @@
+import { cancelPluginCommands } from './plugin-command-queue';
+import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
+import { isBridgeMatchRuntimeEnabled } from './match-runtime-orchestrator';
+import { markStandardMatchLiveFromMatchZy } from './game-flow-manager';
 // plugin-api.ts
 import express from 'express';
 import { GamePhase, WsEvents, LiveGameData } from './types';
@@ -13,7 +17,13 @@ import {
     enqueuePluginCommand,
     takeQueuedPluginCommands,
     ackPluginCommand,
+    getPluginCommand,
 } from './plugin-command-queue';
+import {
+    applyAbilitySyncFinalAck,
+    markAbilitySyncBridgeReceived,
+    markAbilitySyncPluginValidating,
+} from './ability-sync-service';
 import {
     normalizePluginRound,
     updateMatchFinishState,
@@ -28,6 +38,15 @@ import { validateUnbalancedRosterForTeamLock } from './unbalanced-roster';
 import { getGameModeRoundRules } from './game-mode-rounds';
 import { GAME_MODE_MANIFESTS } from './game-mode';
 import { PluginHeartbeatOrder } from './plugin-heartbeat-order';
+import { scheduleSessionSnapshotSave } from './session-persistence';
+import { enqueueAbilityRuntimeStop } from './ability-runtime-orchestrator';
+import {
+    applyMatchRuntimeHeartbeat,
+    shouldTreatRoundStartAsLegacyMatchzy,
+} from './match-runtime-projection';
+import type { MatchRuntimeEvent, MatchRuntimeSnapshot } from './match-runtime-types';
+import { isCurrentAbilitySyncConfirmed } from './ability-phase-one-policy';
+import { buildMatchRuntimeDefinition } from './match-runtime-orchestrator';
 
 type TeamAssignmentSide = 'CT' | 'T';
 
@@ -311,6 +330,23 @@ export function registerPluginRoutes(app: express.Express, deps: {
             return res.status(409).json({ success: false, ignored: true, error: '过期或无效的插件心跳' });
         }
         const session = getSession();
+        session.bridgeProtocolCapabilities = {
+            matchRuntime: req.body?.matchRuntimeProtocolVersion === 1 ? 1 : 0,
+            abilitySync: req.body?.abilitySyncProtocolVersion === 1 ? 1 : 0,
+        };
+        if (session.bridgeProtocolCapabilities.matchRuntime !== 1) cancelPluginCommands(command => command.type === 'MATCH_RUNTIME_COMMAND');
+        if (session.bridgeProtocolCapabilities.abilitySync !== 1) {
+            cancelPluginCommands(command => command.type === 'ABILITY_SYNC' || command.type === 'ABILITY_RUNTIME');
+            if (session.matchOptions.abilityModeEnabled === true && session.abilitySyncState) {
+                session.abilitySyncState.status = 'waiting_bridge';
+                session.abilitySyncState.commandId = '';
+                session.abilitySyncState.errorMessage = '等待支持异能同步协议的桥接与异能插件。';
+            }
+        }
+        if (session.bridgeProtocolCapabilities.abilitySync === 1 && session.abilitySyncState?.status === 'waiting_bridge' && !session.abilitySyncState.commandId) {
+            try { enqueueCurrentAbilitySync(session); } catch { /* keep the explicit waiting state until roster is valid */ }
+        }
+
         if (!session.liveGameData) session.liveGameData = createEmptyLiveGameData();
         if (Array.isArray(req.body?.availableGameModes)) {
             session.availableGameModes = req.body.availableGameModes.filter((id: unknown): id is GameModeId =>
@@ -338,6 +374,14 @@ export function registerPluginRoutes(app: express.Express, deps: {
         session.liveGameData.pluginConnected = true;
         session.liveGameData.lastPluginHeartbeatAt = Date.now();
         if (req.body?.mapName) session.liveGameData.mapName = String(req.body.mapName);
+        const projection = applyMatchRuntimeHeartbeat(session, {
+            matchRuntimeEnabled: req.body?.matchRuntimeEnabled === true && req.body?.matchRuntimeProtocolVersion === 1,
+            matchRuntime: req.body?.matchRuntime as MatchRuntimeSnapshot | undefined,
+            matchRuntimeEvents: req.body?.matchRuntimeEvents as MatchRuntimeEvent[] | undefined,
+            demoSegments: req.body?.demoSegments,
+            restorePoints: req.body?.matchRestorePoints,
+        });
+        if (projection.snapshotApplied || projection.eventsApplied > 0) scheduleSessionSnapshotSave();
         broadcastState();
         res.json({
             success: true,
@@ -349,14 +393,90 @@ export function registerPluginRoutes(app: express.Express, deps: {
             scoreT: session.liveGameData.scoreT || 0,
             currentRound: session.liveGameData.currentRound || 0,
             matchFinished: session.liveGameData.matchFinished === true,
+            matchController: session.matchOptions.matchController || 'caoren',
+            matchRuntimeEnabled: session.matchOptions.matchRuntimeEnabled === true,
+            matchRuntime: session.matchRuntime,
+            matchRuntimeDefinition: session.matchRuntime ? buildMatchRuntimeDefinition(session) : undefined,
+            matchRestorePoints: session.matchRestorePoints || [],
+            abilityModeEnabled: session.matchOptions.abilityModeEnabled === true,
+            abilitySyncConfirmed: isCurrentAbilitySyncConfirmed(session),
             commands: takeQueuedPluginCommands(),
         });
     });
 
     app.post('/api/plugin/command-ack', requirePluginAuth, (req, res) => {
-        const ok = ackPluginCommand(req.body?.commandId);
+        const commandId = req.body?.commandId;
+        const command = getPluginCommand(commandId);
+        const ok = ackPluginCommand(commandId);
         if (!ok) return res.status(404).json({ success: false, error: '未找到要确认的插件命令' });
+        const session = getSession();
+        if (command?.type === 'ABILITY_SYNC') {
+            const nextState = markAbilitySyncBridgeReceived(session.abilitySyncState, String(commandId || '').trim());
+            if (nextState !== session.abilitySyncState) {
+                session.abilitySyncState = nextState;
+                scheduleSessionSnapshotSave();
+                broadcastState();
+            }
+        }
         res.json({ success: true });
+    });
+
+    app.post('/api/plugin/ability-sync-ack', requirePluginAuth, (req, res) => {
+        const body = req.body || {};
+        const status = body.status === 'success' || body.status === 'failed' ? body.status : null;
+        const ack = {
+            status,
+            syncId: String(body.syncId || '').trim(),
+            matchId: String(body.matchId || '').trim(),
+            revision: Number(body.revision),
+            contentDigest: String(body.contentDigest || '').trim(),
+            appliedSeatCount: Number(body.appliedSeatCount),
+            ...(typeof body.errorCode === 'string' ? { errorCode: body.errorCode.slice(0, 80) } : {}),
+            ...(typeof body.errorMessage === 'string' ? { errorMessage: body.errorMessage.slice(0, 240) } : {}),
+        } as const;
+        if (!ack.status || !ack.syncId || !ack.matchId || !Number.isSafeInteger(ack.revision)
+            || !/^([a-f0-9]{64})$/.test(ack.contentDigest)
+            || !Number.isSafeInteger(ack.appliedSeatCount) || ack.appliedSeatCount < 0) {
+            return res.status(400).json({ success: false, error: '异能同步最终 ACK 格式无效' });
+        }
+        const session = getSession();
+        if (session.phase !== GamePhase.PreGameSetup || session.matchOptions.abilityModeEnabled !== true) {
+            return res.status(409).json({ success: false, error: '当前比赛已不再接收异能同步最终 ACK' });
+        }
+        const result = applyAbilitySyncFinalAck(session.abilitySyncState, ack);
+        if (!result.accepted || !result.state) {
+            return res.status(409).json({ success: false, error: '异能同步最终 ACK 已过期或不属于当前比赛' });
+        }
+        session.abilitySyncState = result.state;
+        scheduleSessionSnapshotSave();
+        broadcastState();
+        res.json({ success: true, status: result.state.status });
+    });
+
+    app.post('/api/plugin/ability-sync-progress', requirePluginAuth, (req, res) => {
+        const body = req.body || {};
+        const input = {
+            syncId: String(body.syncId || '').trim(),
+            matchId: String(body.matchId || '').trim(),
+            revision: Number(body.revision),
+            contentDigest: String(body.contentDigest || '').trim(),
+        };
+        if (!input.syncId || !input.matchId || !Number.isSafeInteger(input.revision)
+            || !/^([a-f0-9]{64})$/.test(input.contentDigest)) {
+            return res.status(400).json({ success: false, error: '异能同步进度格式无效' });
+        }
+        const session = getSession();
+        if (session.phase !== GamePhase.PreGameSetup || session.matchOptions.abilityModeEnabled !== true) {
+            return res.status(409).json({ success: false, error: '当前比赛已不再接收异能同步进度' });
+        }
+        const nextState = markAbilitySyncPluginValidating(session.abilitySyncState, input);
+        if (nextState === session.abilitySyncState) {
+            return res.status(409).json({ success: false, error: '异能同步进度已过期或不属于当前比赛' });
+        }
+        session.abilitySyncState = nextState;
+        scheduleSessionSnapshotSave();
+        broadcastState();
+        res.json({ success: true, status: nextState?.status });
     });
 
     app.post('/api/plugin/duel-map', requirePluginAuth, (req, res) => {
@@ -413,6 +533,14 @@ export function registerPluginRoutes(app: express.Express, deps: {
 
     app.post('/api/plugin/snapshot', requirePluginAuth, async (req, res) => {
         const session = getSession();
+        const runtimeProjection = applyMatchRuntimeHeartbeat(session, {
+            matchRuntimeEnabled: req.body?.matchRuntimeEnabled === true && req.body?.matchRuntimeProtocolVersion === 1,
+            matchRuntime: req.body?.matchRuntime as MatchRuntimeSnapshot | undefined,
+            matchRuntimeEvents: req.body?.matchRuntimeEvents as MatchRuntimeEvent[] | undefined,
+            demoSegments: req.body?.demoSegments,
+            restorePoints: req.body?.matchRestorePoints,
+        });
+        if (runtimeProjection.snapshotApplied || runtimeProjection.eventsApplied > 0) scheduleSessionSnapshotSave();
         const players = Array.isArray(req.body?.players) ? req.body.players : [];
         const confirmedMemberships = await lobbyIdentityService.confirmLongTermPresence(
             session.sessionId,
@@ -454,6 +582,19 @@ export function registerPluginRoutes(app: express.Express, deps: {
         const session = getSession();
         const type = String(req.body?.type || '');
         const payload = req.body?.payload || {};
+
+        const projection = applyMatchRuntimeHeartbeat(session, {
+            matchRuntimeEnabled: req.body?.matchRuntimeEnabled === true && req.body?.matchRuntimeProtocolVersion === 1,
+            matchRuntime: req.body?.matchRuntime as MatchRuntimeSnapshot | undefined,
+            matchRuntimeEvents: req.body?.matchRuntimeEvents as MatchRuntimeEvent[] | undefined,
+            demoSegments: req.body?.demoSegments,
+            restorePoints: req.body?.matchRestorePoints,
+        });
+        if (projection.snapshotApplied || projection.eventsApplied > 0) scheduleSessionSnapshotSave();
+
+        const promotedFromPreGame = session.phase === GamePhase.PreGameSetup &&
+            shouldTreatRoundStartAsLegacyMatchzy(session, type) &&
+            markStandardMatchLiveFromMatchZy(`round-${Math.max(1, Math.floor(Number(payload.round || 1)))}`);
 
         if (!isPluginLivePhase(session.phase)) return res.json({ success: true, ignored: true, reason: `当前阶段 ${session.phase} 不接收实时事件` });
         if (req.body?.matchId && req.body.matchId !== session.matchId) return res.status(409).json({ success: false, error: 'matchId 不匹配' });
@@ -511,6 +652,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
 }
 
 function applyPluginEvent(session: any, type: string, payload: any, notifyMessage: (msg: string) => void): boolean {
+    if (isBridgeMatchRuntimeEnabled(session) && (type === 'round_start' || type === 'round_end')) return false;
     switch (type) {
         case 'round_start': applyRoundStartEvent(session, payload); return true;
         case 'player_death': applyKillEvent(session, payload); return true;
@@ -1322,8 +1464,10 @@ function applyRoundEndEvent(session: any, payload: any, notify: (msg: string) =>
         }
         if (formalRound) markScoredRound(live, rawKey, formalRound);
     }
+    const wasFinished = live.matchFinished === true;
     updateMatchFinishState();
     if (live.matchFinished) live.statsLocked = true;
+    if (!wasFinished && live.matchFinished) enqueueAbilityRuntimeStop(session, 'match_finished');
     if (live.matchFinished && session.phase === GamePhase.LiveGame) {
         const result = live.winnerTeam ? `${live.winnerTeam}队获胜` : '双方平局';
         notify(`比赛结束：${result}，比分 ${live.scoreA}:${live.scoreB}`);
