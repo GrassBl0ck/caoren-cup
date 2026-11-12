@@ -19,7 +19,7 @@ MC 层保留共用规范、工具和资料，单玩法专属文件归对应玩�
 
 | 内容 | 路径 | 当前边界 |
 |---|---|---|
-| 坐垫战争 A | [cushion-wars-a](cushion-wars/cushion-wars-a/) | Paper 插件、地图数据包、生成与校验工具；按 2026-10-31 源码快照导入，真人试玩验收仍待完成 |
+| 坐垫战争 A | [cushion-wars-a](cushion-wars/cushion-wars-a/) | Paper 插件负责玩法和地图；数据包仅保留世界规则、地图菜单与独立探针，旧地图层已归档；真人试玩验收仍待完成 |
 | 坐垫战争共用资料 | [shared](cushion-wars/shared/) | A/B 共用设计参考；专属设计位于各自 references 目录 |
 | 坐垫战争 B | [即时制 B](cushion-wars/cushion-wars-b/) | 本地候验实现，待真人验收 |
 | 跨时代 PvP | [cross-era-pvp](cross-era-pvp/) | 阶段 02 测试数据包与阶段 03 观察探针；不表示旧版战斗已还原 |
@@ -46,7 +46,6 @@ MC 独立发行包为 `CaorenCupMC-服务器内容-vX.Y.Z.zip`，内部分坐垫
 
 ```powershell
 python mc/verify_sources.py
-python mc/cushion-wars/cushion-wars-a/tools/verify_map.py
 python mc/cushion-wars/cushion-wars-a/tools/verify_pack.py
 python mc/cushion-wars/cushion-wars-a/tools/test_match_rules.py
 ```

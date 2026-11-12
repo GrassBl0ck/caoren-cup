@@ -74,6 +74,28 @@ class McPackageTests(unittest.TestCase):
         with self.assertRaises(FileExistsError): package.write_bundle(stage,target,'v2.0.0',{})
         self.assertEqual(target.read_bytes(),original)
 
+    def test_retired_board_pack_is_excluded_but_rule_and_menu_packs_remain_installable(self):
+        stage=self.root/'retained-stage'
+        package.stage_cushion_datapacks(ROOT/'mc',stage)
+        prefix='cushion-wars/cushion-wars-a'
+        expected={prefix+'/datapacks/cw-entry.zip',prefix+'/datapacks/cw-maps-menu.zip',
+                  prefix+'/diagnostics/datapacks/cw-p0-probes.zip','shared/datapacks/cw-maps-menu.zip'}
+        self.assertEqual({f.relative_to(stage).as_posix() for f in stage.rglob('*.zip')},expected)
+        for file in stage.rglob('*.zip'):
+            with zipfile.ZipFile(file) as z:
+                self.assertIn('pack.mcmeta',z.namelist())
+                self.assertFalse(any('cushionwars_a/' in n for n in z.namelist()))
+                self.assertFalse(any(b'cushionwars_a:' in z.read(n) for n in z.namelist()))
+        with zipfile.ZipFile(stage/prefix/'datapacks/cw-maps-menu.zip') as z:
+            tag=json.loads(z.read('data/minecraft/tags/dialog/pause_screen_additions.json'))
+            self.assertIn('cw_menu:menu',tag['values'])
+            self.assertIn('data/cw_menu/dialog/menu.json',z.namelist())
+        for name in ('src/round-a/data/cushionwars_a/function/arena/build.mcfunction',
+                     'deploy/server/cw-maptest/data/cw_maptest/function/run.mcfunction',
+                     'deploy/server/cw-autoverify/data/cw_autoverify/function/boot.mcfunction',
+                     'maps/sizes/MAP-n4.json','tools/gen_map.py','tools/layout.py','tools/verify_map.py','tools/build_pack.py'):
+            self.assertFalse(package.is_source_file(Path(prefix)/name),name)
+
     def test_deployment_guide_and_offline_entry_are_in_mc_bundle_manifest(self):
         stage = self.root / 'guide-stage'
         package.copy_deployment_guide(ROOT, stage, 'v9.8.7', 'mc/INSTALL.md')

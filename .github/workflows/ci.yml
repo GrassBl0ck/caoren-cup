@@ -108,10 +108,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Check Cushion Wars map geometry and data-pack boundaries
+      - name: Check retained Cushion Wars packs and source provenance
         run: |
-          python mc/cushion-wars/cushion-wars-a/tools/verify_map.py
-          python mc/cushion-wars/cushion-wars-a/tools/verify_pack.py
+          python -B mc/verify_sources.py
+          python -B mc/cushion-wars/cushion-wars-a/tools/verify_pack.py
       - name: Test MC package content and output safety
         run: python -B scripts/test_package_caoren_mc.py
 

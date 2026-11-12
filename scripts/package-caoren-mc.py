@@ -15,6 +15,12 @@ def digest(raw): return hashlib.sha256(raw).hexdigest()
 def is_source_file(relative):
     relative=Path(relative);parts=relative.parts
     if parts and parts[0] == 'minigames': return False
+    retired = ('cushion-wars/cushion-wars-a/src/round-a/', 'cushion-wars/cushion-wars-a/maps/',
+               'cushion-wars/cushion-wars-a/deploy/server/cw-autoverify/',
+               'cushion-wars/cushion-wars-a/deploy/server/cw-maptest/')
+    if relative.as_posix().startswith(retired): return False
+    if (len(parts) == 4 and parts[:3] == ('cushion-wars','cushion-wars-a','tools')
+            and parts[3] in {'gen_map.py','layout.py','verify_map.py','build_pack.py'}): return False
     if any(p in EXCLUDED or p.startswith('backup_') or p.startswith('backup-') for p in parts) or relative.name in FORBIDDEN: return False
     if relative.suffix.lower()=='.jar': return tuple(parts[-3:])==('gradle','wrapper','gradle-wrapper.jar')
     return relative.suffix.lower() in TEXT|{'.png','.svg'} or relative.name in {'LICENSE','LICENCE','LISENCE','NOTICE','gradlew','mapctl','mcctl','.gitignore','.gitattributes','.editorconfig'}
@@ -95,6 +101,14 @@ def compile_probe(work):
     validate_plugin(output,'CrossEraProbe','0.0.1-stage03')
     return output
 
+def stage_cushion_datapacks(mc,stage):
+    base=mc/'cushion-wars/cushion-wars-a'
+    # The plugin owns board geometry. Keep rules and the Esc menu installed together.
+    for name in ('cw-entry','cw-maps-menu'):
+        pack_datapack(base/'deploy/server'/name,stage/'cushion-wars/cushion-wars-a/datapacks'/(name+'.zip'))
+    pack_datapack(base/'prototypes/round-a-p0',stage/'cushion-wars/cushion-wars-a/diagnostics/datapacks/cw-p0-probes.zip')
+    pack_datapack(base/'deploy/server/cw-maps-menu',stage/'shared/datapacks/cw-maps-menu.zip')
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--version',required=True)
@@ -120,12 +134,7 @@ def main():
     copy(cushion,stage/'cushion-wars/cushion-wars-a/plugins'/cushion.name)
     copy(realtime,stage/'cushion-wars/cushion-wars-b/plugins'/realtime.name)
     (stage/'cushion-wars/cushion-wars-b/README.md').write_text('坐垫战争即时制 B，本地自动验证通过，真实服务端与玩家验收待完成。需要 Java 25、Paper API 26.3，主命令 /cwb；仅在显式设置 -Dcw.map=cushion-wars-b 且配置有效时启用。不要同时启用 A 与 B。完整配置与安装条件见 ../../source/cushion-wars/cushion-wars-b/README.md。\n',encoding='utf-8')
-    pack_datapack(MC/'cushion-wars/cushion-wars-a/src/round-a',stage/'cushion-wars/cushion-wars-a/datapacks/cushionwars-a.zip')
-    pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server/cw-entry',stage/'cushion-wars/cushion-wars-a/datapacks/cw-entry.zip')
-    for name in ['cw-autoverify','cw-maptest']:
-        pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'cushion-wars/cushion-wars-a/diagnostics/datapacks'/(name+'.zip'))
-    pack_datapack(MC/'cushion-wars/cushion-wars-a/prototypes/round-a-p0',stage/'cushion-wars/cushion-wars-a/diagnostics/datapacks/cw-p0-probes.zip')
-    pack_datapack(MC/'cushion-wars/cushion-wars-a/deploy/server/cw-maps-menu',stage/'shared/datapacks/cw-maps-menu.zip')
+    stage_cushion_datapacks(MC,stage)
     for name in ['mapctl','mcctl']: copy(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'shared/tools'/name,lf=True)
     probe=compile_probe(work);copy(probe,stage/'experiments/cross-era/plugins'/probe.name)
     copy(combat,stage/'experiments/cross-era/plugins'/combat.name)

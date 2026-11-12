@@ -96,8 +96,6 @@ public final class ProbeCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(ProbeText.prefix(value + "v" + value + "：棋盘 "
                 + BoardLayout.size(value) + "x" + BoardLayout.size(value)
                 + "，掩体 " + BoardLayout.coverCells(value) + " 格，共享 AP = " + value + "。"));
-        sender.sendMessage(ProbeText.warn("记得同时执行 /function cushionwars_a:arena/prepare {team:"
-                + value + "} 把棋盘改成该尺寸。"));
     }
 
     private void status(CommandSender sender) {

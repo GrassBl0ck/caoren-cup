@@ -11,9 +11,10 @@ def main():
     entries={}
     def add(source,target):entries[target]=(ROOT/source).read_bytes()
     add("dist/CushionWarsProbe-0.1.0.jar","plugins/CushionWarsProbe-0.1.0.jar")
-    add("dist/cushionwars-a-datapack-0.1.0-static.zip","maps/cushion-wars/world/datapacks/cushionwars-a-datapack-0.1.0-static.zip")
     for p in (ROOT/"deploy/server/cw-entry").rglob("*"):
         if p.is_file():entries["maps/cushion-wars/world/datapacks/cw-entry/"+p.relative_to(ROOT/"deploy/server/cw-entry").as_posix()]=p.read_bytes()
+    for p in (ROOT/"deploy/server/cw-maps-menu").rglob("*"):
+        if p.is_file():entries["maps/cushion-wars/world/datapacks/cw-maps-menu/"+p.relative_to(ROOT/"deploy/server/cw-maps-menu").as_posix()]=p.read_bytes()
     for source,target in [
         ("handoffs/TASK-CW-A-002-report.md","docs/implementation-report.md"),
         ("docs/13-试玩修复与本地验收.md","docs/local-validation.md"),

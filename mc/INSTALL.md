@@ -9,8 +9,8 @@
 | 目录 | 内容与状态 |
 |---|---|
 | `cushion-wars/cushion-wars-a/plugins/` | 自研 CushionWarsProbe 插件，内含坐垫战争 A；Java 25、Paper API 26.3，试玩待真人验收 |
-| `cushion-wars/cushion-wars-a/datapacks/` | 坐垫战争地图层与地图自举数据包 |
-| `cushion-wars/cushion-wars-a/diagnostics/` | 隔离验证用数据包；不作为普通玩法安装步骤 |
+| `cushion-wars/cushion-wars-a/datapacks/` | 世界规则 cw-entry 与 Esc 地图菜单 cw-maps-menu；棋盘由插件管理 |
+| `cushion-wars/cushion-wars-a/diagnostics/` | 仅保留独立 P0 能力探针；不作为普通玩法安装步骤 |
 | `cushion-wars/cushion-wars-b/plugins/` | 自研 CushionWarsRealtime 即时制 B；本地自动验证通过，真实服务端及玩家验收待完成 |
 | `shared/` | 地图菜单数据包及 Linux 地图管理参考工具 |
 | `experiments/cross-era/` | CrossEraCombat 管理插件、伤害观察探针、阶段02实验数据包与配置示例，默认不启用 |
@@ -22,11 +22,13 @@
 ## 坐垫战争 A
 
 1. 准备 Java 25 与兼容 Paper API 26.3 的独立测试实例，先验证服务端本体能够正常启动。
-2. 将 `cushion-wars/cushion-wars-a/plugins/CushionWarsProbe-0.1.0.jar` 放到该实例的 `plugins/`；将 `cushion-wars/cushion-wars-a/datapacks/` 下两个 ZIP 放到对应独立世界的 `datapacks/`。
+2. 将 `cushion-wars/cushion-wars-a/plugins/CushionWarsProbe-0.1.0.jar` 放到该实例的 `plugins/`；将 `cushion-wars/cushion-wars-a/datapacks/` 下的 `cw-entry.zip` 和 `cw-maps-menu.zip` 放到对应独立世界的 `datapacks/`。
 3. 由管理员启动或重启该测试实例，检查插件加载及 `/cw help`、`/cw status`。原版 Java 客户端即可参加，不要求客户端 Mod。
 4. 管理员设置每队人数 `/cw size N`（1—8）；按游戏提示入队和开局。完整规则及当前试玩边界见 `source/cushion-wars/cushion-wars-a/`。
 
-建图命令会在棋盘范围内清理并重建方块，因此应使用专门的世界；在已有世界试用前先做好备份。诊断数据包只在隔离验证时按需装入，避免自动测试干扰真实对局。
+旧 `cushionwars-a.zip` 地图层已退役，新安装不要添加；已有实例升级前备份世界，停服后仅移出旧地图数据包及 cw-autoverify/cw-maptest，保留世界存档和插件模板。菜单包只需安装一份（shared/ 中的是同一份）。本次源码归档没有更新任何服务器。
+
+插件建图命令会在棋盘范围内清理并重建方块，因此应使用专门的世界；在已有世界试用前先做好备份。诊断数据包只在隔离验证时按需装入，避免自动测试干扰真实对局。
 
 ## 坐垫战争 B
 

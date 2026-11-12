@@ -29,12 +29,40 @@
     "cushion-wars-a/deploy/server/maps/cushion-wars/map.conf": {
       "sha256": "a1fb3589f9751277668b98ab0b855ec864bf155602858fabefc80fda995678ba",
       "reason": "2026-11-12 owner requested generic map switching examples, no bundled third-party play map."
+    },
+    "cushion-wars-a/plugin/src/main/java/com/caoren/cushionwars/probe/ProbeCommand.java": {
+      "sha256": "38fa0dc7cf7d58af68be47231392a2cbc313ab41db844f832b468a637a805725",
+      "reason": "2026-11-12: Retire plugin-replaced datapack and update active build/documentation references."
+    },
+    "cushion-wars-a/README.md": {
+      "sha256": "319610d6c66200326a8a0a15ebcf2be53c32b74e4ab6c0afe2d107c3cb57ccac",
+      "reason": "2026-11-12: Retire plugin-replaced datapack and update active build/documentation references."
+    },
+    "cushion-wars-a/tools/build_review_bundle.py": {
+      "sha256": "aabfb3f3071582a7fe576c455f9439597ca6b9dbe4445ee214432ca8bb1d545a",
+      "reason": "2026-11-12: Retire plugin-replaced datapack and update active build/documentation references."
+    },
+    "cushion-wars-a/tools/verify_pack.py": {
+      "sha256": "e98cfafe7e7a28be920e45011c3702f171793c458a51d59fa742275da683b500",
+      "reason": "2026-11-12: Replace retired board-pack checks with retained rules/menu/P0 structure and reference validation."
+    },
+    "cushion-wars-a/plugin/README.md": {
+      "sha256": "76c898a62df91eeef4b52ff9f75ce2cce1f33ce9cbdd95f276c63b374753c5dc",
+      "reason": "2026-11-12: Correct obsolete probe-only/data-pack-map documentation after owner-approved archival."
     }
   },
   "excludedPrefixes": {
-    "minigames/": "2026-11-12: Owner confirmed this third-party map is for local play only; moved to ignored mc/.local-maps/minigames, not distributed."
+    "minigames/": "2026-11-12: Owner confirmed this third-party map is for local play only; moved to ignored mc/.local-maps/minigames, not distributed.",
+    "cushion-wars-a/src/round-a/": "2026-11-12: Owner approved retiring the map datapack replaced by plugin ArenaManager; preserved in local complete archive; excluded from active source and distribution.",
+    "cushion-wars-a/maps/": "2026-11-12: Owner approved retiring the map datapack replaced by plugin ArenaManager; preserved in local complete archive; excluded from active source and distribution.",
+    "cushion-wars-a/deploy/server/cw-autoverify/": "2026-11-12: Owner approved retiring the map datapack replaced by plugin ArenaManager; preserved in local complete archive; excluded from active source and distribution.",
+    "cushion-wars-a/deploy/server/cw-maptest/": "2026-11-12: Owner approved retiring the map datapack replaced by plugin ArenaManager; preserved in local complete archive; excluded from active source and distribution."
   },
   "excludedPaths": {
-    "cushion-wars-a/deploy/server/maps/minigames/map.conf": "2026-11-12: Local map registration retained locally; public examples use example-map."
+    "cushion-wars-a/deploy/server/maps/minigames/map.conf": "2026-11-12: Local map registration retained locally; public examples use example-map.",
+    "cushion-wars-a/tools/gen_map.py": "2026-11-12: Owner approved retiring the map datapack replaced by plugin ArenaManager; preserved in local complete archive; excluded from active source and distribution.",
+    "cushion-wars-a/tools/layout.py": "2026-11-12: Owner approved retiring the map datapack replaced by plugin ArenaManager; preserved in local complete archive; excluded from active source and distribution.",
+    "cushion-wars-a/tools/verify_map.py": "2026-11-12: Owner approved retiring the map datapack replaced by plugin ArenaManager; preserved in local complete archive; excluded from active source and distribution.",
+    "cushion-wars-a/tools/build_pack.py": "2026-11-12: Owner approved retiring the map datapack replaced by plugin ArenaManager; preserved in local complete archive; excluded from active source and distribution."
   }
 }
