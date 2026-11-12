@@ -8,6 +8,7 @@ public static class MatchRuntimeTelemetry
     {
         var fields = JsonSerializer.SerializeToElement(payload, options).EnumerateObject()
             .ToDictionary(property => property.Name, property => property.Value.Clone(), StringComparer.Ordinal);
+        fields["eventId"] = JsonSerializer.SerializeToElement(Guid.NewGuid().ToString("N"));
         fields["matchId"] = JsonSerializer.SerializeToElement(snapshot.MatchId);
         fields["revision"] = JsonSerializer.SerializeToElement(snapshot.Revision);
         fields["runtimeEpoch"] = JsonSerializer.SerializeToElement(snapshot.RuntimeEpoch);

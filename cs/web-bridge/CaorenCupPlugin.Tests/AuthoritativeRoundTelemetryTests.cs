@@ -20,8 +20,12 @@ public sealed class AuthoritativeRoundTelemetryTests
         var key = runtime.OpenRound(startedFixture.GetProperty("players")).RoundKey!;
         var damage = MatchRuntimeTelemetry.AttachRoundIdentity(root.GetProperty("damage"), runtime.Snapshot, Options);
         var death = MatchRuntimeTelemetry.AttachRoundIdentity(root.GetProperty("death"), runtime.Snapshot, Options);
+        Assert.NotEqual(damage.GetProperty("eventId").GetString(), death.GetProperty("eventId").GetString());
         foreach (var raw in new[] { damage, death })
         {
+            Assert.True(Guid.TryParseExact(raw.GetProperty("eventId").GetString(), "N", out _));
+            var wireCopy = JsonSerializer.SerializeToElement(raw, Options);
+            Assert.Equal(raw.GetProperty("eventId").GetString(), wireCopy.GetProperty("eventId").GetString());
             Assert.Equal(key, raw.GetProperty("roundKey").GetString());
             Assert.Equal(1, raw.GetProperty("roundNumber").GetInt32());
             Assert.Equal(1, raw.GetProperty("runtimeEpoch").GetInt64());
