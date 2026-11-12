@@ -10,7 +10,7 @@ namespace CaorenCup.Gamemodes.Random;
 public sealed partial class CaorenCupRandomPlugin : BasePlugin, ICaorenCupRandomApi, ICaorenCupPlayerEffectsSource
 {
     public override string ModuleName => "CaorenCup Random";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "Graslock + AI";
     private readonly RandomMatch _match = new();
     private RandomGameModeProvider _provider = null!;

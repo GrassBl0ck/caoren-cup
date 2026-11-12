@@ -51,16 +51,17 @@ public final class CombatService {
         });
     }
     public ProfileState select(PlayerRef player, CombatProfile profile) {
+        String requestedMode = settings.modeset(profile);
         boundary(player);
         return call(() -> {
             allowed(player.world());
             if (backend.hasOverrides(player)) throw new CombatFailure(CombatFailure.Code.OVERRIDE_CONFLICT,
                     "玩家存在共享模块 overrides，无法保证规则；请先由其所属插件处理。");
-            backend.selectModeset(player, settings.modeset(profile));
+            backend.selectModeset(player, requestedMode);
             // Read back the authority. No local cache or speculative success after an API failure.
             ProfileState result = profile(player);
-            if (result.profile() != profile) throw new CombatFailure(CombatFailure.Code.BACKEND_UNAVAILABLE,
-                    "OCM 返回的实际选择与请求不同；请使用 status 核对，勿假定已切换。");
+            if (result.profile() != profile || !result.stored()) throw new CombatFailure(CombatFailure.Code.BACKEND_UNAVAILABLE,
+                    "OCM 未确认保存所请求的选择；请使用 status 核对，勿假定已切换或已写入磁盘。");
             return result;
         });
     }
@@ -70,6 +71,7 @@ public final class CombatService {
     }
     private void boundary(PlayerRef player) {
         active();
+        if (player == null) throw new CombatFailure(CombatFailure.Code.PLAYER_UNAVAILABLE, "缺少玩家身份，请重新获取在线玩家后操作。");
         if (!settings.worlds().contains(player.world())) throw new CombatFailure(CombatFailure.Code.OUTSIDE_WORLD,
                 "该世界不在允许的实验范围内。");
     }
@@ -89,6 +91,8 @@ public final class CombatService {
         }
     }
     public Routing routing(PlayerRef attacker, PlayerRef victim) { return new Routing(profile(attacker), profile(victim)); }
-    public String summary() { return "实验开关=" + settings.enabled() + "；后端=" + (backend == null ? "不可用" : backend.description()); }
+    public String summary() {
+        return call(() -> "实验开关=" + settings.enabled() + "；后端=" + (backend == null ? "不可用" : backend.description()));
+    }
     public CombatSettings settings() { return settings; }
 }

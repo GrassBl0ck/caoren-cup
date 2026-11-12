@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "runId": "待填写",
+  "purpose": "REAL_CAPTURE",
+  "environment": {
+    "serverVersion": null,
+    "clientVersion": null,
+    "javaVersion": null,
+    "candidateCommit": null,
+    "serverJarSha256": null,
+    "combatJarSha256": null,
+    "ocmJarSha256": null,
+    "configSha256": null
+  },
+  "files": [],
+  "sessions": [],
+  "cases": [
+    {
+      "caseId": "C04-OO-N-S01",
+      "execution": "NOT_RUN",
+      "inputSource": "REAL_PLAYER",
+      "observedVerdict": "PENDING",
+      "inputRefs": [],
+      "contextRefs": [],
+      "observationRefs": [],
+      "baselineRefs": [],
+      "criteriaRefs": [],
+      "criteriaConfirmed": false,
+      "samples": []
+    }
+  ]
+}

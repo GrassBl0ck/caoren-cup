@@ -9,30 +9,55 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.plugin.RegisteredServiceProvider;
 
 /** The only backend class linked to OCM. No OCM internals or damage mutations. */
 public final class OcmBackend implements CombatBackend {
+    interface RuntimeAccess {
+        Plugin dependency();
+        RegisteredServiceProvider<OldCombatMechanicsAPI> registration();
+        boolean isPrimaryThread();
+        Player findPlayer(UUID id);
+        World findWorld(String name);
+    }
+    private static final RuntimeAccess BUKKIT = new RuntimeAccess() {
+        public Plugin dependency() { return Bukkit.getPluginManager().getPlugin("OldCombatMechanics"); }
+        public RegisteredServiceProvider<OldCombatMechanicsAPI> registration() {
+            return Bukkit.getServicesManager().getRegistration(OldCombatMechanicsAPI.class);
+        }
+        public boolean isPrimaryThread() { return Bukkit.isPrimaryThread(); }
+        public Player findPlayer(UUID id) { return Bukkit.getPlayer(id); }
+        public World findWorld(String name) { return Bukkit.getWorld(name); }
+    };
+    private final RuntimeAccess runtime;
     private final Plugin dependency;
     private final OldCombatMechanicsAPI api;
 
     public static OcmBackend connect() {
-        Plugin plugin = Bukkit.getPluginManager().getPlugin("OldCombatMechanics");
+        return connect(BUKKIT);
+    }
+    static OcmBackend connect(RuntimeAccess runtime) {
+        Plugin plugin = runtime.dependency();
         if (plugin == null || !plugin.isEnabled() || !plugin.getDescription().getVersion().equals("2.8.0"))
             throw new IllegalStateException("需要已启用的官方 OCM v2.8.0。");
-        var registration = Bukkit.getServicesManager().getRegistration(OldCombatMechanicsAPI.class);
-        if (registration == null) throw new IllegalStateException("OCM 未注册公开 API 服务。");
-        return new OcmBackend(plugin, registration.getProvider());
+        var registration = runtime.registration();
+        if (registration == null || registration.getPlugin() != plugin)
+            throw new IllegalStateException("官方 OCM 未以自身插件身份注册公开 API 服务。");
+        return new OcmBackend(runtime, plugin, registration.getProvider());
     }
-    private OcmBackend(Plugin dependency, OldCombatMechanicsAPI api) { this.dependency = dependency; this.api = api; }
+    private OcmBackend(RuntimeAccess runtime, Plugin dependency, OldCombatMechanicsAPI api) {
+        this.runtime = runtime; this.dependency = dependency; this.api = api;
+    }
     private void ready() {
-        if (!Bukkit.isPrimaryThread()) throw new IllegalStateException("战斗接口必须在服务端主线程调用。");
-        var registration = Bukkit.getServicesManager().getRegistration(OldCombatMechanicsAPI.class);
-        if (!dependency.isEnabled() || registration == null || registration.getProvider() != api)
+        if (!runtime.isPrimaryThread()) throw new IllegalStateException("战斗接口必须在服务端主线程调用。");
+        var registration = runtime.registration();
+        if (runtime.dependency() != dependency || !dependency.isEnabled() || registration == null
+                || registration.getPlugin() != dependency || registration.getProvider() != api)
             throw new CombatFailure(CombatFailure.Code.BACKEND_UNAVAILABLE, "OCM 服务已停止或替换，请重启实验环境后核对。");
     }
     private Player player(PlayerRef ref) {
         ready();
-        Player player = Bukkit.getPlayer(ref.id());
+        Player player = runtime.findPlayer(ref.id());
         if (player == null || !player.isOnline() || !player.getWorld().getUID().equals(ref.worldId())
                 || !player.getWorld().getName().equals(ref.world()))
             throw new CombatFailure(CombatFailure.Code.PLAYER_UNAVAILABLE, "玩家已离线或更换世界，请重新操作。");
@@ -43,7 +68,7 @@ public final class OcmBackend implements CombatBackend {
     @Override public Set<String> moduleNames() { ready(); return Set.copyOf(api.getModuleNames()); }
     @Override public List<String> allowedModesets(String worldName) {
         ready();
-        World world = Bukkit.getWorld(worldName);
+        World world = runtime.findWorld(worldName);
         if (world == null) throw new CombatFailure(CombatFailure.Code.INVALID_SETUP, "允许列表包含未加载的世界：" + worldName);
         return List.copyOf(api.getAllowedModesets(world));
     }

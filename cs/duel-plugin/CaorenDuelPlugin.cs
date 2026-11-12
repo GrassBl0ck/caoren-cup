@@ -16,7 +16,7 @@ namespace CaorenDuel;
 public sealed class CaorenDuelPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenDuel";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "CaorenCup";
     public override string ModuleDescription => "Standalone game-managed duel mode for the CaorenCup community servers.";
 

@@ -65,7 +65,7 @@ def write_bundle(stage,output,version,provenance):
         rows.append({'path':name,'size':len(raw),'sha256':digest(raw)})
         executable=name.endswith('.sh') or path.name in {'mapctl','mcctl','gradlew'}
         files.append((name,raw,executable))
-    manifest={'version':version,'modules':['CushionWarsA','CushionWarsRealtime','CrossEraExperiments','CrossEraCombat'],'provenance':provenance,'files':rows}
+    manifest={'version':version,'modules':['CushionWarsA','CushionWarsRealtime','CrossEraExperiments','CrossEraCombat','SpiritSky'],'provenance':provenance,'files':rows}
     raw=(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n').encode('utf-8')
     (stage/'package-manifest.json').write_bytes(raw);files.append(('package-manifest.json',raw,False))
     write_zip(files,output)
@@ -123,6 +123,12 @@ def main():
     combat=MC/'cross-era-pvp/combat/build/libs/CrossEraCombat-0.1.0-dev.jar'
     validate_plugin(realtime,'CushionWarsRealtime','0.1.0')
     validate_plugin(combat,'CrossEraCombat','0.1.0-dev')
+    spirit_root=MC/'spirit-sky/plugin'
+    spirit=Path((spirit_root/'build/latest.txt').read_text(encoding='utf-8').strip())/'CaorenSpiritSky.jar'
+    if not spirit.resolve().is_relative_to((spirit_root/'build').resolve()): raise ValueError('Spirit Sky artifact escapes build root')
+    validate_plugin(spirit,'CaorenSpiritSky','0.1.0')
+    with zipfile.ZipFile(spirit) as z:
+        if any('RuntimeBoot' in name for name in z.namelist()): raise ValueError('Do not distribute Spirit Sky runtime test plugin')
     work=ROOT/'release-build'/('mc-package-'+uuid.uuid4().hex);work.mkdir(parents=True)
     stage=work/'stage';stage.mkdir()
     imported=json.loads((MC/'source-manifest.json').read_text(encoding='utf-8-sig'))
@@ -135,6 +141,9 @@ def main():
     copy(realtime,stage/'cushion-wars/cushion-wars-b/plugins'/realtime.name)
     (stage/'cushion-wars/cushion-wars-b/README.md').write_text('坐垫战争即时制 B，本地自动验证通过，真实服务端与玩家验收待完成。需要 Java 25、Paper API 26.3，主命令 /cwb；仅在显式设置 -Dcw.map=cushion-wars-b 且配置有效时启用。不要同时启用 A 与 B。完整配置与安装条件见 ../../source/cushion-wars/cushion-wars-b/README.md。\n',encoding='utf-8')
     stage_cushion_datapacks(MC,stage)
+    copy(spirit,stage/'spirit-sky/plugins/CaorenSpiritSky.jar')
+    copy(MC/'spirit-sky/map-template.json',stage/'spirit-sky/map-template.json')
+    (stage/'spirit-sky/README.md').write_text('灵空战锋 v0.1：Paper 26.3 / Java 25，正式4v4，支持管理员少人数测试。默认世界未配置，不自动开局。原创地图模板从同版本 Release 附件单独下载，并按 map-template.json 核对 SHA-256；不覆盖已有玩家世界。完整安装、规则和验证边界见 ../source/spirit-sky/README.md。八人真实客户端、长期性能和平衡仍待验收。\n',encoding='utf-8')
     for name in ['mapctl','mcctl']: copy(MC/'cushion-wars/cushion-wars-a/deploy/server'/name,stage/'shared/tools'/name,lf=True)
     probe=compile_probe(work);copy(probe,stage/'experiments/cross-era/plugins'/probe.name)
     copy(combat,stage/'experiments/cross-era/plugins'/combat.name)
@@ -146,7 +155,7 @@ def main():
     (stage/'experiments/cross-era/README.md').write_text('研究与观察原型，默认不启用。新增阶段04 CrossEraCombat 管理插件，需要单独准备 OCM v2.8.0；配置示例仅供手动核对，不自动覆盖现有配置。阶段03探针和阶段02数据包继续保留。当前未完成真实战斗与原版对照，不代表已还原旧版战斗。按单实例、只启用当前地图插件的边界选择安装，详见 ../../source/cross-era-pvp/combat/README.md。OCM 完整参考源码、原许可及构建入口位于 ../../source/third-party/old-combat-mechanics/；本包不提供 OCM 组合 JAR。\n',encoding='utf-8')
     for source,name in [(ROOT/'LICENSE','CaorenCup-MIT.txt'),(MC/'third-party/old-combat-mechanics/LICENCE','OldCombatMechanics-MPL-2.0.txt'),(MC/'third-party/gradle-wrapper-LICENSE.txt','Gradle-Wrapper-LICENSE.txt')]: copy(source,stage/'licenses'/name)
     (stage/'SOURCE.md').write_text('对应源码：https://github.com/GrassBl0ck/caoren-cup/tree/'+args.version+'/mc\n本包 source/ 同时保留全部收录源码及第三方原许可。自研 MIT 不覆盖第三方组件。\n',encoding='utf-8')
-    provenance={'java':25,'paperApi':'26.3','experimentalDefaultEnabled':False,'sourceFiles':len(selected),'cushionJarSha256':digest(cushion.read_bytes()),'realtimeJarSha256':digest(realtime.read_bytes()),'combatJarSha256':digest(combat.read_bytes()),'probeJarSha256':digest(probe.read_bytes()),'ocmBuild':'Complete reference source and Gradle build entry; no bundled shaded OCM binary'}
+    provenance={'java':25,'paperApi':'26.3','experimentalDefaultEnabled':False,'sourceFiles':len(selected),'cushionJarSha256':digest(cushion.read_bytes()),'realtimeJarSha256':digest(realtime.read_bytes()),'combatJarSha256':digest(combat.read_bytes()),'probeJarSha256':digest(probe.read_bytes()),'spiritSkyJarSha256':digest(spirit.read_bytes()),'spiritSkyMapTemplate':json.loads((MC/'spirit-sky/map-template.json').read_text(encoding='utf-8')),'crossEraArtifact':'Source-identical verified candidate; 24 build inputs checked; fresh Gradle run blocked by release environment','ocmBuild':'Complete reference source and Gradle build entry; no bundled shaded OCM binary'}
     write_bundle(stage,output,args.version,provenance)
     print(json.dumps({'path':str(output),'sha256':digest(output.read_bytes()),'sourceFiles':len(selected),'experimentalDefaultEnabled':False},ensure_ascii=False))
 

@@ -12,7 +12,7 @@ public sealed class CaorenCupCompetitivePlugin : BasePlugin
     private readonly CompetitiveGameModeProvider _provider = new();
 
     public override string ModuleName => "CaorenCup Competitive";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "Graslock + AI";
 
     public override void Load(bool hotReload)

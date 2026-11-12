@@ -19,7 +19,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
     private const float ChatRelayTimeoutSeconds = 60f;
 
     public override string ModuleName => "CaorenCup In Game Menu";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "Graslock + AI";
 
     private IMenuHudSurface _surface = null!;

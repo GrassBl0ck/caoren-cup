@@ -6,6 +6,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -23,17 +24,23 @@ public final class JsonJournal implements AutoCloseable {
     private volatile IOException failure;
 
     public static JsonJournal open(Path file, int capacity, Consumer<String> warning) throws IOException {
+        validate(capacity, warning);
         Files.createDirectories(file.toAbsolutePath().getParent());
         return new JsonJournal(Files.newBufferedWriter(file, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND), capacity, warning);
     }
     JsonJournal(Writer output, int capacity, Consumer<String> warning) {
-        if (capacity < 1) throw new IllegalArgumentException("capacity must be positive");
+        validate(capacity, warning);
+        Objects.requireNonNull(output, "output");
         this.queue = new ArrayBlockingQueue<>(capacity);
         this.warning = warning;
         worker = new Thread(() -> write(output), "CrossEraCombat-journal");
         worker.setDaemon(true);
         worker.start();
+    }
+    private static void validate(int capacity, Consumer<String> warning) {
+        if (capacity < 1) throw new IllegalArgumentException("capacity must be positive");
+        Objects.requireNonNull(warning, "warning");
     }
     public boolean record(Map<String, ?> event) {
         final String line;
@@ -51,7 +58,11 @@ public final class JsonJournal implements AutoCloseable {
     }
     private void reject(String message) {
         long count = rejected.incrementAndGet();
-        if (count == 1 || count % 1024 == 0) warning.accept(message + " 累计拒绝=" + count);
+        if (count == 1 || count % 1024 == 0) warn(message + " 累计拒绝=" + count);
+    }
+    private void warn(String message) {
+        try { warning.accept(message); }
+        catch (RuntimeException callbackFailure) { errors.incrementAndGet(); }
     }
     private void write(Writer output) {
         try (output) {
@@ -67,15 +78,15 @@ public final class JsonJournal implements AutoCloseable {
                 }
             }
             output.flush();
-        } catch (IOException error) {
+        } catch (IOException | RuntimeException error) {
             synchronized (gate) {
-                failure = error;
+                failure = error instanceof IOException io ? io : new IOException("Journal writer failed", error);
                 accepting = false;
                 errors.incrementAndGet();
                 rejected.addAndGet(queue.size());
                 queue.clear();
             }
-            warning.accept("日志写入失败，后续记录将拒绝；请检查数据目录。错误=" + error.getClass().getSimpleName());
+            warn("日志写入失败，后续记录将拒绝；请检查数据目录。错误=" + error.getClass().getSimpleName());
         }
     }
     public Map<String, Object> stats() {

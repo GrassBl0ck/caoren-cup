@@ -114,9 +114,9 @@ class CombatServiceTest {
         final Map<PlayerRef, String> stored = new HashMap<>();
         List<String> allowed = List.of("ce-modern", "ce-old");
         Set<String> names = new HashSet<>(CombatService.OLD_MODULES);
-        boolean overrides, unexpected, failWrite, failAfterWrite;
+        boolean overrides, unexpected, failWrite, failAfterWrite, skipWrite, badDescription;
         int calls, writes;
-        public String description() { return "fake"; }
+        public String description() { if (badDescription) throw new IllegalStateException("description unavailable"); return "fake"; }
         public Set<String> modesets() { calls++; return Set.of("ce-old", "ce-modern"); }
         public Set<String> moduleNames() { calls++; return names; }
         public List<String> allowedModesets(String world) { calls++; return allowed; }
@@ -132,6 +132,7 @@ class CombatServiceTest {
         public void selectModeset(PlayerRef player, String mode) {
             calls++;
             if (failWrite) throw new IllegalStateException("simulated unavailable backend");
+            if (skipWrite) return;
             writes++; stored.put(player, mode);
             if (failAfterWrite) throw new IllegalStateException("simulated failure after persisted write");
         }

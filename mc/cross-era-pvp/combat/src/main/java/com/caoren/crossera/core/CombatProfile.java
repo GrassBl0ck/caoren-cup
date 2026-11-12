@@ -12,6 +12,7 @@ public enum CombatProfile {
     public String key() { return key; }
     public String version() { return version; }
     public static CombatProfile parse(String value) {
+        if (value == null) throw new CombatFailure(CombatFailure.Code.INVALID_PROFILE, "规则只能是 old 或 modern。");
         return switch (value.toLowerCase(Locale.ROOT)) {
             case "old" -> OLD;
             case "modern" -> MODERN;

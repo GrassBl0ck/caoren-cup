@@ -1,4 +1,4 @@
-# 草人杯 MC 服务器内容包 2.2.0
+# 草人杯 MC 服务器内容包 2.2.3
 
 从空机器开服请先阅读[完整部署指南](../docs/deployment/README.md)，再按本文件选择玩法。发行包中也附有完整指南，Windows 服务端路线未验证。
 
@@ -12,6 +12,7 @@
 | `cushion-wars/cushion-wars-a/datapacks/` | 世界规则 cw-entry 与 Esc 地图菜单 cw-maps-menu；棋盘由插件管理 |
 | `cushion-wars/cushion-wars-a/diagnostics/` | 仅保留独立 P0 能力探针；不作为普通玩法安装步骤 |
 | `cushion-wars/cushion-wars-b/plugins/` | 自研 CushionWarsRealtime 即时制 B；本地自动验证通过，真实服务端及玩家验收待完成 |
+| `spirit-sky/` | 灵空战锋独立插件和原创地图模板下载信息；完整八人试玩待验收 |
 | `shared/` | 地图菜单数据包及 Linux 地图管理参考工具 |
 | `experiments/cross-era/` | CrossEraCombat 管理插件、伤害观察探针、阶段02实验数据包与配置示例，默认不启用 |
 | `source/` | 全部收录源码、设计参考、OCM 工程及各自许可；用于复现和研究 |
@@ -38,6 +39,12 @@
 
 2.2 起包内 A/B 分目录；升级时按各自路径选择组件，不把新增目录整层覆盖到旧安装目录。
 
+## 灵空战锋
+
+将 `spirit-sky/plugins/CaorenSpiritSky.jar` 安装到所选 Paper 26.3 测试实例。按 `spirit-sky/map-template.json` 从同版本 Release 下载原创地图模板并校验 SHA-256，解压到新世界目录；配置插件世界名后执行 `/sss admin validate`。默认世界为空，对局不会自动开始。完整规则、安装和少人数测试说明见 `source/spirit-sky/README.md`。
+
+当前地图为粗模；八人客户端、载具操控、长期兵线性能、平衡和连续两局仍待用户验收。不要在未备份的现有世界上覆盖安装。
+
 ## 本地游玩地图
 
 第三方小游戏合集及其数据包源码、下载工具不随本包分发。管理员自行准备合法取得的地图。通用地图管理工具不绑定任何第三方地图，使用前按自己的地图 ID 配置菜单和元数据。
@@ -56,7 +63,7 @@ OldCombatMechanics 的完整参考源码、原 MPL-2.0 许可和 Gradle Wrapper 
 
 ## 复现、许可与版本
 
-`package-manifest.json` 记录本包相对路径、大小、SHA-256、来源与组件状态。坐垫战争内部插件版本仍为 0.1.0，观察探针仍为 stage03；2.2.0 是草人杯整体发行版本。
+`package-manifest.json` 记录本包相对路径、大小、SHA-256、来源与组件状态。坐垫战争内部插件版本仍为 0.1.0，观察探针仍为 stage03；2.2.3 是草人杯整体发行版本。
 
 自研代码采用 MIT。OCM 源码保留 MPL-2.0；Gradle Wrapper 保留原许可。根 MIT 不覆盖这些第三方内容。
 

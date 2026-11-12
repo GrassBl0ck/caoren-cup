@@ -15,7 +15,7 @@ public sealed class CaorenCupRushPlugin : BasePlugin
     private bool _loaded;
 
     public override string ModuleName => "CaorenCup RUSH";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "Graslock + AI";
 
     public override void Load(bool hotReload)

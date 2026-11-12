@@ -8,7 +8,7 @@ namespace CaorenCup;
 public sealed class CaorenCupPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Fun Commands";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "Graslock + AI";
 
     private ICaorenCupCoreApi Core => CaorenCupCoreAccess.TryGet()

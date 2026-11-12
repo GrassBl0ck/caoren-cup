@@ -1,0 +1,689 @@
+{
+  "schema_version": 1,
+  "name": "[草人杯] 灵空战锋",
+  "stage": "map-graybox-v0.1",
+  "target_game": "Java 26.3",
+  "storage_data_version": 5023,
+  "ground_y": 63,
+  "standing_y": 64,
+  "battle_bounds": {
+    "min": [
+      -80,
+      64,
+      -50
+    ],
+    "max_exclusive": [
+      80,
+      94,
+      50
+    ]
+  },
+  "support": {
+    "radius_horizontal": 12,
+    "requires_alive_friendly_minion": true,
+    "implemented": false
+  },
+  "lobby_spawn": [
+    0.5,
+    64,
+    -66.5
+  ],
+  "bases": [
+    {
+      "team": "red",
+      "center": [
+        -59.5,
+        64,
+        0.5
+      ],
+      "footprint": [
+        13,
+        13
+      ],
+      "core_markers": [
+        [
+          -61.5,
+          64,
+          0.5
+        ],
+        [
+          -57.5,
+          64,
+          0.5
+        ],
+        [
+          -59.5,
+          64,
+          -1.5
+        ],
+        [
+          -59.5,
+          64,
+          2.5
+        ]
+      ],
+      "projectile_origin": [
+        -59.5,
+        67,
+        0.5
+      ],
+      "supply": {
+        "center": [
+          -72.5,
+          64,
+          0.5
+        ],
+        "radius": 6
+      },
+      "player_spawns": [
+        [
+          -74.5,
+          64,
+          -1.5
+        ],
+        [
+          -70.5,
+          64,
+          -1.5
+        ],
+        [
+          -74.5,
+          64,
+          2.5
+        ],
+        [
+          -70.5,
+          64,
+          2.5
+        ]
+      ],
+      "takeoff_main": [
+        -71.5,
+        64,
+        -19.5
+      ],
+      "takeoff_backup": [
+        -71.5,
+        64,
+        20.5
+      ],
+      "minion_spawn": [
+        -49.5,
+        64,
+        0.5
+      ]
+    },
+    {
+      "team": "blue",
+      "center": [
+        59.5,
+        64,
+        -0.5
+      ],
+      "footprint": [
+        13,
+        13
+      ],
+      "core_markers": [
+        [
+          61.5,
+          64,
+          -0.5
+        ],
+        [
+          57.5,
+          64,
+          -0.5
+        ],
+        [
+          59.5,
+          64,
+          1.5
+        ],
+        [
+          59.5,
+          64,
+          -2.5
+        ]
+      ],
+      "projectile_origin": [
+        59.5,
+        67,
+        -0.5
+      ],
+      "supply": {
+        "center": [
+          72.5,
+          64,
+          -0.5
+        ],
+        "radius": 6
+      },
+      "player_spawns": [
+        [
+          74.5,
+          64,
+          1.5
+        ],
+        [
+          70.5,
+          64,
+          1.5
+        ],
+        [
+          74.5,
+          64,
+          -2.5
+        ],
+        [
+          70.5,
+          64,
+          -2.5
+        ]
+      ],
+      "takeoff_main": [
+        71.5,
+        64,
+        19.5
+      ],
+      "takeoff_backup": [
+        71.5,
+        64,
+        -20.5
+      ],
+      "minion_spawn": [
+        49.5,
+        64,
+        -0.5
+      ]
+    }
+  ],
+  "stations": [
+    {
+      "id": "S01",
+      "center": [
+        -45.5,
+        64,
+        -11.5
+      ],
+      "footprint": [
+        5,
+        5
+      ],
+      "owner": "shared"
+    },
+    {
+      "id": "S02",
+      "center": [
+        -45.5,
+        64,
+        11.5
+      ],
+      "footprint": [
+        5,
+        5
+      ],
+      "owner": "shared"
+    },
+    {
+      "id": "S03",
+      "center": [
+        -25.5,
+        64,
+        10.5
+      ],
+      "footprint": [
+        5,
+        5
+      ],
+      "owner": "shared"
+    },
+    {
+      "id": "S04",
+      "center": [
+        -7.5,
+        64,
+        10.5
+      ],
+      "footprint": [
+        5,
+        5
+      ],
+      "owner": "shared"
+    },
+    {
+      "id": "S05",
+      "center": [
+        7.5,
+        64,
+        -10.5
+      ],
+      "footprint": [
+        5,
+        5
+      ],
+      "owner": "shared"
+    },
+    {
+      "id": "S06",
+      "center": [
+        25.5,
+        64,
+        -10.5
+      ],
+      "footprint": [
+        5,
+        5
+      ],
+      "owner": "shared"
+    },
+    {
+      "id": "S07",
+      "center": [
+        45.5,
+        64,
+        -11.5
+      ],
+      "footprint": [
+        5,
+        5
+      ],
+      "owner": "shared"
+    },
+    {
+      "id": "S08",
+      "center": [
+        45.5,
+        64,
+        11.5
+      ],
+      "footprint": [
+        5,
+        5
+      ],
+      "owner": "shared"
+    }
+  ],
+  "minion_lane": [
+    [
+      -49.5,
+      64,
+      0.5
+    ],
+    [
+      -35.5,
+      64,
+      0.5
+    ],
+    [
+      -0.5,
+      64,
+      0.5
+    ],
+    [
+      0.5,
+      64,
+      -0.5
+    ],
+    [
+      35.5,
+      64,
+      -0.5
+    ],
+    [
+      49.5,
+      64,
+      -0.5
+    ]
+  ],
+  "air_network": {
+    "nodes": {
+      "A00": {
+        "position": [
+          -71.5,
+          76,
+          -29.5
+        ],
+        "neighbors": [
+          "A10",
+          "A01",
+          "RED-MAIN"
+        ]
+      },
+      "A01": {
+        "position": [
+          -71.5,
+          76,
+          -0.5
+        ],
+        "neighbors": [
+          "A11",
+          "A00",
+          "A02"
+        ]
+      },
+      "A02": {
+        "position": [
+          -71.5,
+          76,
+          0.5
+        ],
+        "neighbors": [
+          "A12",
+          "A01",
+          "A03"
+        ]
+      },
+      "A03": {
+        "position": [
+          -71.5,
+          76,
+          29.5
+        ],
+        "neighbors": [
+          "A13",
+          "A02",
+          "RED-BACKUP"
+        ]
+      },
+      "A10": {
+        "position": [
+          -35.5,
+          76,
+          -29.5
+        ],
+        "neighbors": [
+          "A00",
+          "A20",
+          "A11"
+        ]
+      },
+      "A11": {
+        "position": [
+          -35.5,
+          76,
+          -0.5
+        ],
+        "neighbors": [
+          "A01",
+          "A21",
+          "A10",
+          "A12"
+        ]
+      },
+      "A12": {
+        "position": [
+          -35.5,
+          76,
+          0.5
+        ],
+        "neighbors": [
+          "A02",
+          "A22",
+          "A11",
+          "A13"
+        ]
+      },
+      "A13": {
+        "position": [
+          -35.5,
+          76,
+          29.5
+        ],
+        "neighbors": [
+          "A03",
+          "A23",
+          "A12"
+        ]
+      },
+      "A20": {
+        "position": [
+          -0.5,
+          76,
+          -29.5
+        ],
+        "neighbors": [
+          "A10",
+          "A30",
+          "A21"
+        ]
+      },
+      "A21": {
+        "position": [
+          -0.5,
+          76,
+          -0.5
+        ],
+        "neighbors": [
+          "A11",
+          "A31",
+          "A20",
+          "A22"
+        ]
+      },
+      "A22": {
+        "position": [
+          -0.5,
+          76,
+          0.5
+        ],
+        "neighbors": [
+          "A12",
+          "A32",
+          "A21",
+          "A23"
+        ]
+      },
+      "A23": {
+        "position": [
+          -0.5,
+          76,
+          29.5
+        ],
+        "neighbors": [
+          "A13",
+          "A33",
+          "A22"
+        ]
+      },
+      "A30": {
+        "position": [
+          0.5,
+          76,
+          -29.5
+        ],
+        "neighbors": [
+          "A20",
+          "A40",
+          "A31"
+        ]
+      },
+      "A31": {
+        "position": [
+          0.5,
+          76,
+          -0.5
+        ],
+        "neighbors": [
+          "A21",
+          "A41",
+          "A30",
+          "A32"
+        ]
+      },
+      "A32": {
+        "position": [
+          0.5,
+          76,
+          0.5
+        ],
+        "neighbors": [
+          "A22",
+          "A42",
+          "A31",
+          "A33"
+        ]
+      },
+      "A33": {
+        "position": [
+          0.5,
+          76,
+          29.5
+        ],
+        "neighbors": [
+          "A23",
+          "A43",
+          "A32"
+        ]
+      },
+      "A40": {
+        "position": [
+          35.5,
+          76,
+          -29.5
+        ],
+        "neighbors": [
+          "A30",
+          "A50",
+          "A41"
+        ]
+      },
+      "A41": {
+        "position": [
+          35.5,
+          76,
+          -0.5
+        ],
+        "neighbors": [
+          "A31",
+          "A51",
+          "A40",
+          "A42"
+        ]
+      },
+      "A42": {
+        "position": [
+          35.5,
+          76,
+          0.5
+        ],
+        "neighbors": [
+          "A32",
+          "A52",
+          "A41",
+          "A43"
+        ]
+      },
+      "A43": {
+        "position": [
+          35.5,
+          76,
+          29.5
+        ],
+        "neighbors": [
+          "A33",
+          "A53",
+          "A42"
+        ]
+      },
+      "A50": {
+        "position": [
+          71.5,
+          76,
+          -29.5
+        ],
+        "neighbors": [
+          "A40",
+          "A51",
+          "BLUE-BACKUP"
+        ]
+      },
+      "A51": {
+        "position": [
+          71.5,
+          76,
+          -0.5
+        ],
+        "neighbors": [
+          "A41",
+          "A50",
+          "A52"
+        ]
+      },
+      "A52": {
+        "position": [
+          71.5,
+          76,
+          0.5
+        ],
+        "neighbors": [
+          "A42",
+          "A51",
+          "A53"
+        ]
+      },
+      "A53": {
+        "position": [
+          71.5,
+          76,
+          29.5
+        ],
+        "neighbors": [
+          "A43",
+          "A52",
+          "BLUE-MAIN"
+        ]
+      },
+      "RED-MAIN": {
+        "position": [
+          -71.5,
+          76,
+          -19.5
+        ],
+        "neighbors": [
+          "A00"
+        ]
+      },
+      "BLUE-MAIN": {
+        "position": [
+          71.5,
+          76,
+          19.5
+        ],
+        "neighbors": [
+          "A53"
+        ]
+      },
+      "RED-BACKUP": {
+        "position": [
+          -71.5,
+          76,
+          20.5
+        ],
+        "neighbors": [
+          "A03"
+        ]
+      },
+      "BLUE-BACKUP": {
+        "position": [
+          71.5,
+          76,
+          -20.5
+        ],
+        "neighbors": [
+          "A50"
+        ]
+      }
+    },
+    "clearance_width": 9,
+    "clearance_height": 9,
+    "runtime_navigation": false
+  },
+  "pending_game_checks": [
+    "world-load-upgrade",
+    "happy-ghast-ridden-clearance",
+    "minion-navigation",
+    "match-balance"
+  ],
+  "source_storage_data_version": 4325
+}

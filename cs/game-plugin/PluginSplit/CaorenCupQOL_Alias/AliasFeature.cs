@@ -12,7 +12,7 @@ namespace CaorenCup.QOL.Alias;
 public sealed class CaorenCupAliasPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Command Alias";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "Graslock + AI";
 
     private const string ArgsPlaceholder = "{args}";

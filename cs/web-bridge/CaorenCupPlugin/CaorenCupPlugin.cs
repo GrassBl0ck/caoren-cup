@@ -20,7 +20,7 @@ namespace CaorenCupPlugin;
 public sealed class CaorenCupPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Command Center Bridge";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "CaorenCup";
     public override string ModuleDescription => "Bridge trusted CS2 identity, score and match stats to the CaorenCup web command center.";
 

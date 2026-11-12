@@ -42,5 +42,8 @@ public record CombatSettings(boolean enabled, Set<String> worlds, String oldMode
         if (!(value instanceof String string) || string.isBlank()) throw new IllegalArgumentException(key + " 必须是非空文本。");
         return string;
     }
-    public String modeset(CombatProfile profile) { return profile == CombatProfile.OLD ? oldModeset : modernModeset; }
+    public String modeset(CombatProfile profile) {
+        if (profile == null) throw new CombatFailure(CombatFailure.Code.INVALID_PROFILE, "规则只能是 old 或 modern。");
+        return profile == CombatProfile.OLD ? oldModeset : modernModeset;
+    }
 }

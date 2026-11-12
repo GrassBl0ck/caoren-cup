@@ -12,7 +12,7 @@ namespace CaorenCup.QOL.RadarColor;
 public sealed class CaorenCupRadarColorPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Radar Color";
-    public override string ModuleVersion => "2.2.2";
+    public override string ModuleVersion => "2.2.3";
     public override string ModuleAuthor => "Graslock + AI";
 
     private const string FeatureName = "Radar Color Fix (小地图颜色修复)";

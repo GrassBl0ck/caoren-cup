@@ -1,0 +1,15 @@
+name: CaorenSpiritSky
+version: 0.1.0
+main: cn.caoren.spiritsky.SpiritSkyPlugin
+api-version: '26.3'
+description: '[草人杯] 灵空战锋完整首版（试玩待验收）'
+author: Caoren Cup
+commands:
+  sss:
+    description: '[草人杯] 灵空战锋'
+    permission: caoren.spiritsky.play
+permissions:
+  caoren.spiritsky.play:
+    default: true
+  caoren.spiritsky.admin:
+    default: op

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "purpose": "REAL_COPY",
+  "source": {
+    "path": "players.bson",
+    "sha256": null,
+    "ocmVersion": "2.8.0",
+    "ocmJarSha256": null,
+    "configSha256": null,
+    "snapshotState": "UNKNOWN",
+    "capturedAt": null
+  },
+  "profiles": {"old": "cross-era-old", "modern": "cross-era-modern"},
+  "worlds": []
+}

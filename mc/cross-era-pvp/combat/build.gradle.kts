@@ -20,6 +20,8 @@ dependencies {
     compileOnly(files(ocmJar))
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testImplementation(paperApi)
+    // API boundary tests use the pinned local OCM types; this is not a packaged dependency.
+    testImplementation(files(ocmJar))
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

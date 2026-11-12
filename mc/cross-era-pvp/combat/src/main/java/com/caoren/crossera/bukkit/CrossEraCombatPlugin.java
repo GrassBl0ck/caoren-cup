@@ -31,6 +31,7 @@ public final class CrossEraCombatPlugin extends JavaPlugin implements Listener {
                 var record = BukkitSnapshots.event("startup", Bukkit.getCurrentTick());
                 record.put("pluginVersion", getPluginMeta().getVersion()); record.put("serverVersion", Bukkit.getVersion());
                 record.put("javaVersion", System.getProperty("java.version")); record.put("backend", backend.description());
+                record.put("followupPolicy", ObservationEpochs.POLICY);
                 record.put("fidelityAccepted", false); journal.record(record);
                 Bukkit.getServicesManager().register(CombatService.class, service, this, ServicePriority.Normal);
                 Bukkit.getPluginManager().registerEvents(new CombatObserver(this, service, journal), this);

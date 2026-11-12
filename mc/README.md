@@ -22,6 +22,7 @@ MC 层保留共用规范、工具和资料，单玩法专属文件归对应玩�
 | 坐垫战争 A | [cushion-wars-a](cushion-wars/cushion-wars-a/) | Paper 插件负责玩法和地图；数据包仅保留世界规则、地图菜单与独立探针，旧地图层已归档；真人试玩验收仍待完成 |
 | 坐垫战争共用资料 | [shared](cushion-wars/shared/) | A/B 共用设计参考；专属设计位于各自 references 目录 |
 | 坐垫战争 B | [即时制 B](cushion-wars/cushion-wars-b/) | 本地候验实现，待真人验收 |
+| 灵空战锋 | [spirit-sky](spirit-sky/README.md) | 独立4v4插件、五职业、兵线与载具；普通构建与规则回归通过，真实玩家体验待验收；原创地图模板独立下载 |
 | 跨时代 PvP | [cross-era-pvp](cross-era-pvp/) | 阶段 02 测试数据包与阶段 03 观察探针；不表示旧版战斗已还原 |
 | OldCombatMechanics | [third-party/old-combat-mechanics](third-party/old-combat-mechanics/) | 既有 2.8.0 参考源码快照，原许可保留；不表示所有模块已满足跨时代玩法验收 |
 
