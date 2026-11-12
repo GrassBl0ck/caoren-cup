@@ -24,15 +24,17 @@ export const captureStatsCheckpoint = (session: GameSession, roundNumber: number
 
 export const restoreStatsCheckpoint = (session: GameSession, roundNumber: number): boolean => {
     const checkpoint = session.matchRuntimeStatsCheckpoints?.[roundNumber];
-    if (!checkpoint) return false;
-    session.liveGameData = checkpoint.liveGameData ? clone(checkpoint.liveGameData) : undefined;
-    for (const [playerId, player] of Object.entries(session.players || {})) {
-        const saved = checkpoint.players[playerId];
-        if (saved?.stats !== undefined) player.stats = clone(saved.stats);
-        else delete player.stats;
-        if (saved?.sideStats !== undefined) player.sideStats = clone(saved.sideStats);
-        else delete player.sideStats;
+    if (checkpoint) {
+        session.liveGameData = checkpoint.liveGameData ? clone(checkpoint.liveGameData) : undefined;
+        for (const [playerId, player] of Object.entries(session.players || {})) {
+            const saved = checkpoint.players[playerId];
+            if (saved?.stats !== undefined) player.stats = clone(saved.stats);
+            else delete player.stats;
+            if (saved?.sideStats !== undefined) player.sideStats = clone(saved.sideStats);
+            else delete player.sideStats;
+        }
     }
+    // 即使开始事件尚未到达、还没有检查点，也要丢弃旧 epoch 的待处理遥测。
     // 目标回合及之后的检查点来自已撤销的时间线，重打时必须重新捕获。
     for (const key of Object.keys(session.matchRuntimeStatsCheckpoints || {})) {
         if (Number(key) >= roundNumber) delete session.matchRuntimeStatsCheckpoints![Number(key)];
@@ -40,7 +42,7 @@ export const restoreStatsCheckpoint = (session: GameSession, roundNumber: number
     for (const key of Object.keys(session.matchRuntimeStatsJournal || {})) {
         if (Number(key) >= roundNumber) delete session.matchRuntimeStatsJournal[Number(key)];
     }
-    return true;
+    return !!checkpoint;
 };
 
 // roundKey 属于事件自身，不能用一批心跳的最新 snapshot 推算历史回合。
@@ -133,9 +135,12 @@ export const applyRuntimeCombatStatistics = (session: GameSession, type: string,
         || typeof payload.eventId !== 'string' || !/^[a-f0-9]{32}$/.test(payload.eventId)
         || !Number.isFinite(payload.occurredAtUnixMs) || payload.occurredAtUnixMs <= 0) return false;
     const round = eventRoundNumber(payload);
-    if (!round || round > runtime.completedRounds + 1) return false;
+    if (!round) return false;
     const entries = journal(session);
+    // raw 队列可领先周期快照跨越回合；只限制尚无权威开始的缓存量，不限制 OT 回合号。
+    if (!entries[round] && Object.values(entries).filter(item => !item.started).length >= 16) return false;
     const entry: RoundJournal = entries[round] ||= { roundKey: payload.roundKey, combat: [] };
+    if (!entry.started && entry.combat.length >= 4096) return false;
     if (entry.roundKey !== payload.roundKey || entry.combat.some(item => item.payload.eventId === payload.eventId)) return false;
     if (entry.completed && payload.occurredAtUnixMs > Number(entry.completed.occurredAtUnixMs)) return false;
     entry.combat.push({ type, payload: clone(payload) });

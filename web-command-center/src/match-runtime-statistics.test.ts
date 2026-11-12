@@ -267,3 +267,32 @@ test('formal combat arriving before start heartbeat is buffered without advancin
     assert.equal(restored.players.a.stats.roundsPlayed, 1);
     assert.equal(restored.players.a.stats.kastRounds, 1);
 });
+
+test('restore discards pending old epoch combat even when its start checkpoint never arrived', () => {
+    const session = setup();
+    send(session, [event(1, 'match_started')]);
+    applyPluginTelemetryBatch(session, [{ type: 'weapon_fire', payload: { matchId: session.matchId,
+        revision: 1, runtimeEpoch: 1, roundNumber: 1, roundKey: 'runtime-stats:1:round-1', occurredAtUnixMs: 105000,
+        eventId: '11111111111111111111111111111111', steamId: players[0].steamId, team: 'CT', weapon: 'ak47' } }]);
+    assert.equal(session.matchRuntimeStatsCheckpoints, undefined);
+    send(session, [event(1, 'round_started', 1, 2)], snapshot({ runtimeEpoch: 2, currentRoundKey: 'runtime-stats:2:round-1' }));
+    assert.equal(session.players.a.stats.roundsPlayed, 1);
+    assert.equal(session.players.a.stats.shotsFired, 0);
+});
+
+test('next-round combat leading the periodic old snapshot waits for its own authoritative start', () => {
+    const session = setup();
+    send(session, [event(1, 'match_started'), event(2, 'round_started')]);
+    applyPluginTelemetryBatch(session, [{ type: 'player_hurt', payload: { matchId: session.matchId,
+        revision: 1, runtimeEpoch: 1, roundNumber: 2, roundKey: 'runtime-stats:1:round-2', occurredAtUnixMs: 125000,
+        eventId: '22222222222222222222222222222222', attackerSteamId: players[0].steamId,
+        victimSteamId: players[1].steamId, attackerTeam: 'CT', victimTeam: 'T',
+        damage: 30, rawDamage: 30, health: 70, weapon: 'ak47' } }]);
+    assert.equal(session.matchRuntime!.completedRounds, 0);
+    assert.equal(session.players.a.stats.damage, 0);
+    send(session, [event(3, 'round_completed'), event(4, 'round_started', 2)],
+        snapshot({ completedRounds: 1, scoreA: 1, currentRoundKey: 'runtime-stats:1:round-2' }));
+    assert.equal(session.players.a.stats.damage, 30);
+    assert.equal(session.players.a.stats.roundsPlayed, 2);
+    assert.equal(session.players.a.stats.kastRounds, 1);
+});
