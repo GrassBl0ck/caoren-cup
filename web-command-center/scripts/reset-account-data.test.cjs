@@ -1,10 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { planReset, applyReset } = require('./reset-account-data.cjs');
-function fixture() {
-  const root = fs.mkdtempSync(path.resolve(__dirname, '../runtime/reset-test-'));
+function fixture(t) {
+  const tempDir = fs.realpathSync(os.tmpdir());
+  const root = fs.mkdtempSync(path.join(tempDir, 'caorencup-reset-test-'));
+  t.after(() => {
+    assert.equal(fs.realpathSync(root), root);
+    assert.equal(path.dirname(root), tempDir);
+    fs.rmSync(root, { recursive: true });
+  });
   const identity = path.join(root, 'identity-store.json'), sessions = path.join(root, 'player-center-sessions.json');
   const account = { schemaVersion: 4, identities: { one: { identityId: 'one' } }, accounts: { one: {} }, memberships: {}, deviceTokens: {} };
   fs.writeFileSync(identity, JSON.stringify(account));
@@ -13,8 +20,8 @@ function fixture() {
   fs.writeFileSync(path.join(root, '.env'), 'DO_NOT_TOUCH');
   return { root, identity, sessions, backupDir: path.join(root, 'backup'), serviceStopped: true };
 }
-test('dry-run does not mutate; apply backs up exact primaries and fallback then clears only account stores', () => {
-  const f = fixture(); const original = fs.readFileSync(f.identity);
+test('dry-run does not mutate; apply backs up exact primaries and fallback then clears only account stores', (t) => {
+  const f = fixture(t); const original = fs.readFileSync(f.identity);
   assert.equal(planReset(f).length, 3);
   assert.deepEqual(fs.readFileSync(f.identity), original);
   const result = applyReset(f);
@@ -24,13 +31,13 @@ test('dry-run does not mutate; apply backs up exact primaries and fallback then 
   assert.equal(fs.readFileSync(path.join(f.root, '.env'), 'utf8'), 'DO_NOT_TOUCH');
   assert.throws(() => applyReset(f), /EEXIST/);
 });
-test('refuses unknown schema or same targets before writing', () => {
-  const f = fixture(); assert.throws(() => planReset({identity:f.identity,sessions:f.identity}));
+test('refuses unknown schema or same targets before writing', (t) => {
+  const f = fixture(t); assert.throws(() => planReset({identity:f.identity,sessions:f.identity}));
   fs.writeFileSync(f.sessions, JSON.stringify({schemaVersion:2,sessions:{}}));
   assert.throws(() => applyReset(f), /Unexpected schema/);
   assert.equal(fs.existsSync(f.backupDir), false);
 });
-test('requires explicit service stop acknowledgement', () => {
-  const f = fixture(); assert.throws(() => applyReset({...f,serviceStopped:false}), /Stop the web service/);
+test('requires explicit service stop acknowledgement', (t) => {
+  const f = fixture(t); assert.throws(() => applyReset({...f,serviceStopped:false}), /Stop the web service/);
   assert.equal(fs.existsSync(f.backupDir), false);
 });
