@@ -275,25 +275,25 @@ test('changing the password invalidates the old password and returns the same pr
     assert.equal((await service.authenticatePlayerCenterDeviceToken(otherDevice.rawToken)).reason, 'revoked');
 });
 
-test('account HTTP login uses loginName and unifies credential errors', async (t) => {
+test('account HTTP login uses verified email and unifies credential errors', async (t) => {
     const runtime = await startAuthServer('http-login');
     t.after(runtime.close);
     const provisioned = await createTestLoginAccount(runtime.service, {
         steamId: '76561198000000106', nickname: 'HTTP Account', password: 'correct-pass',
     });
-    const account = runtime.service.getLoginAccount(provisioned.identity.identityId)!;
+    const account = await runtime.service.bindVerifiedEmail({identityId: provisioned.identity.identityId, email:'http@example.com', currentPassword:'correct-pass'});
 
     const missing = await postJson(`${runtime.baseUrl}/api/account-auth/login`, {
-        loginName: 'Missing_Account', password: 'correct-pass',
+        email: 'missing@example.com', password: 'correct-pass',
     });
     const wrong = await postJson(`${runtime.baseUrl}/api/account-auth/login`, {
-        loginName: account.loginName, password: 'wrong-pass',
+        email: account.email, password: 'wrong-pass',
     });
     assert.deepEqual({ status: missing.status, error: missing.body.error }, { status: 401, error: 'invalid_credentials' });
     assert.deepEqual({ status: wrong.status, error: wrong.body.error }, { status: 401, error: 'invalid_credentials' });
 
     const success = await postJson(`${runtime.baseUrl}/api/account-auth/login`, {
-        loginName: account.loginName, password: 'correct-pass',
+        email: account.email, password: 'correct-pass',
     });
     assert.equal(success.status, 200);
     assert.deepEqual(Object.keys(success.body).sort(), [
@@ -308,7 +308,7 @@ test('account HTTP login uses loginName and unifies credential errors', async (t
 
 });
 
-test('account HTTP failures are limited by IP and the exact case-sensitive login name', async (t) => {
+test('account HTTP failures are limited by IP and normalized email', async (t) => {
     class RecordingGuard extends AccountLoginGuard {
         readonly recordedKeys: string[][] = [];
 
@@ -324,142 +324,26 @@ test('account HTTP failures are limited by IP and the exact case-sensitive login
     let latest: Awaited<ReturnType<typeof postJson>> | undefined;
     for (let attempt = 1; attempt <= 10; attempt += 1) {
         latest = await postJson(`${runtime.baseUrl}/api/account-auth/login`, {
-            loginName: 'CaseSensitive_1', password: 'wrong-pass',
+            email: 'CaseSensitive@example.com', password: 'wrong-pass',
         });
     }
     assert.equal(latest?.status, 429);
     assert.equal(latest?.body.error, 'rate_limited');
     assert.equal(typeof latest?.body.retryAt, 'number');
     assert.equal(guard.recordedKeys[0].some((key) => key.startsWith('ip:')), true);
-    assert.equal(guard.recordedKeys[0].includes('account:CaseSensitive_1'), true);
-    assert.equal(guard.recordedKeys[0].includes('account:casesensitive_1'), false);
+    assert.equal(guard.recordedKeys[0].includes('account:casesensitive@example.com'), true);
+    assert.equal(guard.recordedKeys[0].includes('account:CaseSensitive@example.com'), false);
 });
 
-test('game-code HTTP flow refuses new registrations and recovers existing unbound-email accounts with a one-time ticket', async (t) => {
-    const gameCodes = new Map<string, { steamId: string; name: string }>([
-        ['FIRST1', { steamId: '76561198000000107', name: 'First Steam Name' }],
-    ]);
-    const runtime = await startAuthServer('http-recovery', (rawCode) => {
-        const code = String(rawCode || '').trim().toUpperCase();
-        const proof = gameCodes.get(code);
-        if (proof) gameCodes.delete(code);
-        return proof;
-    });
+test('retired game-code recovery endpoints cannot consume proof or create an account', async (t) => {
+    let consumed = false;
+    const runtime = await startAuthServer('retired-recovery', () => { consumed = true; return {steamId:'76561198000000107',name:'Player'}; });
     t.after(runtime.close);
-
-    const first = await postJson(`${runtime.baseUrl}/api/account-recovery/game-code`, { gameCode: 'first1' });
-    assert.equal(first.status, 400);
-    assert.equal(first.body.error, 'account_registration_on_web');
+    for (const endpoint of ['game-code', 'complete']) {
+        const result = await postJson(`${runtime.baseUrl}/api/account-recovery/${endpoint}`, {gameCode:'CODE',newPassword:'replacement-pass',confirmPassword:'replacement-pass'});
+        assert.equal(result.status, 410);
+        assert.equal(result.body.error, 'endpoint_retired');
+    }
+    assert.equal(consumed, false);
     assert.equal(runtime.service.findIdentityBySteamId('76561198000000107'), undefined);
-    const legacy = await createTestLoginAccount(runtime.service, {
-        steamId: '76561198000000107', nickname: 'Legacy Player', password: 'legacy-password',
-    });
-
-    const replay = await postJson(`${runtime.baseUrl}/api/account-recovery/game-code`, { gameCode: 'FIRST1' });
-    assert.deepEqual({ status: replay.status, error: replay.body.error }, {
-        status: 401, error: 'game_code_invalid_or_expired',
-    });
-
-    gameCodes.set('RECOVER1', { steamId: '76561198000000107', name: 'Latest Steam Name' });
-    const recovery = await postJson(`${runtime.baseUrl}/api/account-recovery/game-code`, { gameCode: 'RECOVER1' });
-    assert.equal(recovery.status, 200);
-    assert.deepEqual(Object.keys(recovery.body).sort(), [
-        'flow', 'loginName', 'recoveryTicket', 'recoveryTicketExpiresAt', 'success',
-    ]);
-    assert.equal(recovery.body.flow, 'recovery_required');
-    assert.equal(recovery.body.loginName, legacy.account.loginName);
-    assert.equal(JSON.stringify(recovery.body).match(/initialPassword|oldPassword|hash|salt/i), null);
-
-    const mismatch = await postJson(`${runtime.baseUrl}/api/account-recovery/complete`, {
-        recoveryTicket: recovery.body.recoveryTicket,
-        newPassword: 'replacement-pass',
-        confirmPassword: 'different-pass',
-    });
-    assert.deepEqual({ status: mismatch.status, error: mismatch.body.error }, {
-        status: 400, error: 'password_confirmation_mismatch',
-    });
-
-    const completed = await postJson(`${runtime.baseUrl}/api/account-recovery/complete`, {
-        recoveryTicket: recovery.body.recoveryTicket,
-        newPassword: 'replacement-pass',
-        confirmPassword: 'replacement-pass',
-    });
-    assert.equal(completed.status, 200);
-    assert.equal(completed.body.account.loginName, legacy.account.loginName);
-    assert.equal(completed.body.revocation.revokeOtherPlayerCenterSessions, true);
-    assert.equal(typeof completed.body.sessionBootstrapTicket, 'string');
-    assert.equal(JSON.stringify(completed.body).match(/replacement-pass|hash|salt/i), null);
-    assert.equal((await runtime.service.authenticateLoginAccount({
-        loginName: legacy.account.loginName,
-        password: legacy.password,
-    })).ok, false);
-    assert.equal((await runtime.service.authenticateLoginAccount({
-        loginName: legacy.account.loginName,
-        password: 'replacement-pass',
-    })).ok, true);
-
-    const recoveryReplay = await postJson(`${runtime.baseUrl}/api/account-recovery/complete`, {
-        recoveryTicket: recovery.body.recoveryTicket,
-        newPassword: 'another-pass',
-        confirmPassword: 'another-pass',
-    });
-    assert.deepEqual({ status: recoveryReplay.status, error: recoveryReplay.body.error }, {
-        status: 401, error: 'recovery_ticket_invalid_or_expired',
-    });
-});
-
-test('game-code recovery cannot bypass an administrator-disabled account', async (t) => {
-    const gameCodes = new Map<string, { steamId: string; name: string }>([
-        ['DISABLED1', { steamId: '76561198000000108', name: 'Disabled Steam Name' }],
-    ]);
-    const runtime = await startAuthServer('disabled-recovery', (rawCode) => {
-        const code = String(rawCode || '').trim().toUpperCase();
-        const proof = gameCodes.get(code);
-        if (proof) gameCodes.delete(code);
-        return proof;
-    });
-    t.after(runtime.close);
-    const provisioned = await createTestLoginAccount(runtime.service, {
-        steamId: '76561198000000108', nickname: 'Disabled Player', password: 'current-pass',
-    });
-    await runtime.service.setLoginAccountEnabled(provisioned.identity.identityId, false);
-    const passwordBefore = runtime.service.getLoginAccount(provisioned.identity.identityId)?.password;
-
-    const result = await postJson(`${runtime.baseUrl}/api/account-recovery/game-code`, { gameCode: 'DISABLED1' });
-    assert.deepEqual({ status: result.status, error: result.body.error }, {
-        status: 403, error: 'account_disabled',
-    });
-    assert.equal(JSON.stringify(result.body).match(/ticket|password|loginName/i), null);
-    assert.deepEqual(runtime.service.getLoginAccount(provisioned.identity.identityId)?.password, passwordBefore);
-});
-
-test('a recovery ticket cannot complete after the account is disabled', async (t) => {
-    const gameCodes = new Map<string, { steamId: string; name: string }>([
-        ['BEFOREOFF', { steamId: '76561198000000109', name: 'Disable Race' }],
-    ]);
-    const runtime = await startAuthServer('disabled-after-ticket', (rawCode) => {
-        const code = String(rawCode || '').trim().toUpperCase();
-        const proof = gameCodes.get(code);
-        if (proof) gameCodes.delete(code);
-        return proof;
-    });
-    t.after(runtime.close);
-    const provisioned = await createTestLoginAccount(runtime.service, {
-        steamId: '76561198000000109', nickname: 'Disable Race', password: 'current-pass',
-    });
-    const identityId = provisioned.identity.identityId;
-    const passwordBefore = runtime.service.getLoginAccount(identityId)?.password;
-    const recovery = await postJson(`${runtime.baseUrl}/api/account-recovery/game-code`, { gameCode: 'BEFOREOFF' });
-    assert.equal(recovery.status, 200);
-    await runtime.service.setLoginAccountEnabled(identityId, false);
-
-    const completed = await postJson(`${runtime.baseUrl}/api/account-recovery/complete`, {
-        recoveryTicket: recovery.body.recoveryTicket,
-        newPassword: 'replacement-pass',
-        confirmPassword: 'replacement-pass',
-    });
-    assert.deepEqual({ status: completed.status, error: completed.body.error }, {
-        status: 403, error: 'account_disabled',
-    });
-    assert.deepEqual(runtime.service.getLoginAccount(identityId)?.password, passwordBefore);
 });

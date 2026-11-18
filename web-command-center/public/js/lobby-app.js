@@ -35,7 +35,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
         window._postmatchMatrixMode = 'all';
         window._lobbyAnnouncement = null;
         const ADMIN_VIEWS = ['overview', 'access', 'setup', 'announcement', 'tasks', 'mods'];
-        const savedAdminView = localStorage.getItem('caoren-active-admin-tab');
+        let savedAdminView; try { savedAdminView = localStorage.getItem('caoren-active-admin-tab'); } catch (_) {}
         window._activeAdminView = ADMIN_VIEWS.includes(savedAdminView) ? savedAdminView : 'overview';
         const DUEL_DEFAULT_MAP = '5e_akm4_aim_duel';
 
@@ -106,7 +106,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             const previousView = window._activeAdminView;
             const activeView = ADMIN_VIEWS.includes(view) ? view : 'overview';
             window._activeAdminView = activeView;
-            localStorage.setItem('caoren-active-admin-tab', activeView);
+            try { localStorage.setItem('caoren-active-admin-tab', activeView); } catch (_) {}
 
             document.querySelectorAll('[data-admin-view]').forEach(btn => {
                 const active = btn.getAttribute('data-admin-view') === activeView;
@@ -141,7 +141,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
         function applyTheme(theme, persist = true) {
             const value = theme === 'dark' ? 'dark' : 'light';
             document.body.dataset.theme = value;
-            if (persist) localStorage.setItem('caoren-theme', value);
+            if (persist) { try { localStorage.setItem('caoren-theme', value); } catch (_) {} }
             const btn = document.getElementById('theme-toggle');
             if (btn) {
                 btn.textContent = value === 'dark' ? '浅色模式' : '深色模式';
@@ -153,7 +153,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
         }
 
-        const savedTheme = localStorage.getItem('caoren-theme');
+        let savedTheme; try { savedTheme = localStorage.getItem('caoren-theme'); } catch (_) {}
         const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         applyTheme(savedTheme || systemTheme, false);
 
@@ -1095,8 +1095,6 @@ document.addEventListener('caoren:terminate-confirmed', () => {
                 teamBName: String(document.getElementById('match-option-team-b-name')?.value || 'B队').trim().slice(0, 32),
                 caorenModifiersEnabled: !!document.getElementById('match-option-caoren')?.checked,
                 unbalancedModeEnabled: selectedGameMode === 'unbalanced',
-                unbalancedTeamASize: Math.max(1, Math.floor(Number(document.getElementById('match-option-team-a-size')?.value || 3))),
-                unbalancedTeamBSize: Math.max(1, Math.floor(Number(document.getElementById('match-option-team-b-size')?.value || 5))),
                 duelMap: document.getElementById('match-option-duel-map')?.value || DUEL_DEFAULT_MAP,
                 duelMapWorkshopId: duelWorkshopIdForSelect(document.getElementById('match-option-duel-map')),
                 duelRoundTimeMinutes: Number(document.getElementById('match-option-duel-round-time')?.value || 1),
@@ -1448,6 +1446,7 @@ if (window._caorenModifiersEnabled !== true) {
         refreshLobbyAnnouncement();
 
         ws.on('GAME_STATE', (state) => {
+            if (!state || !state.players) return;
             window._flowUndoRequestPending = false;
             window._currentGameState = state;
             if (typeof state.serverNow === 'number') serverClockOffset = state.serverNow - Date.now();
@@ -1492,7 +1491,7 @@ if (window._caorenModifiersEnabled !== true) {
             if (phaseSummary) phaseSummary.textContent = '当前阶段 · ' + state.phase;
 
             if (currentPlayer) {
-                let identityHtml = '你是：<b>' + currentPlayer.name + '</b>';
+                let identityHtml = '你是：<b>' + htmlEscape(currentPlayer.name) + '</b>';
                 if (isAdmin) identityHtml += ' <span style="color:#d32f2f;">(管理员)</span>';
                 else {
                     if (currentPlayer.rosterTeam) identityHtml += ' | <span style="font-weight:bold;">比赛队伍：' + currentPlayer.rosterTeam + '队</span>';
@@ -1516,7 +1515,7 @@ if (window._caorenModifiersEnabled !== true) {
             const listDiv = document.getElementById('player-list');
             const teamSortWeight = (p) => p.rosterTeam === 'A' ? 0 : (p.rosterTeam === 'B' ? 1 : (p.role === 'Spectator' ? 3 : (p.role === 'Admin' ? 4 : 2)));
             const visiblePlayers = Object.values(state.players)
-                .filter(p => isAdmin || p.role !== 'Admin')
+                .filter(p => p.role !== 'Admin')
                 .sort((a, b) => (teamSortWeight(a) - teamSortWeight(b)) || String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
             let playerTable = renderPublicDuelWorkshopNotice(state, currentPlayer);
             playerTable += '<h3 style="margin-top:0;">当前房间玩家</h3>';
@@ -1541,7 +1540,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const kickOp = isAdmin && p.role !== 'Admin' && !(state?.abilityPhaseOnePolicy?.rosterMutationBlocked === true && isProtectedAbilityRosterPlayer) ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
                 const adminOps = (isAdmin || duelAssignOps) ? `<td>${duelAssignOps}${kickOp || '-'}</td>` : '';
                 const sideCells = isDuel ? '' : `<td>${side}</td><td>${expectedSide}</td>`;
-                playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${p.name}</b></td><td>${roster}</td>${sideCells}<td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
+                playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${htmlEscape(p.name)}</b></td><td>${roster}</td>${sideCells}<td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
             });
             playerTable += '</tbody></table></div>';
             listDiv.innerHTML = playerTable;
@@ -1699,16 +1698,6 @@ if (window._caorenModifiersEnabled !== true) {
                 html += `<div class="map-bp-summary-card"><span>\u4f60\u7684\u72b6\u6001</span><strong>${!draftActive ? '\u7b49\u5f85\u7ba1\u7406\u5458\u5f00\u59cb' : (isMyTurn ? '\u8f6e\u5230\u4f60\u9009\u4eba' : (currentTeam ? '\u7b49\u5f85\u961f\u957f\u9009\u62e9' : '\u9009\u4eba\u5b8c\u6210'))}</strong></div>`;
                 html += '</div>';
 
-                const unbalancedOptions = state.matchOptions || {};
-                if (unbalancedOptions.unbalancedModeEnabled === true) {
-                    const rosterPlayers = Object.values(state.players || {}).filter(p => p.role !== 'Admin' && p.role !== 'Spectator');
-                    const aCount = rosterPlayers.filter(p => p.rosterTeam === 'A').length;
-                    const bCount = rosterPlayers.filter(p => p.rosterTeam === 'B').length;
-                    const unassignedCount = rosterPlayers.filter(p => p.rosterTeam !== 'A' && p.rosterTeam !== 'B').length;
-                    const missingBindCount = rosterPlayers.filter(p => !p.steamIdBound).length;
-                    html += `<div class="soft-block" style="margin-top:14px;">不平衡竞技目标：A 队 ${Number(unbalancedOptions.unbalancedTeamASize || 3)} 人，B 队 ${Number(unbalancedOptions.unbalancedTeamBSize || 5)} 人；当前 A ${aCount} 人、B ${bCount} 人${unassignedCount ? `，未分队 ${unassignedCount} 人` : ''}${missingBindCount ? `，未绑定 SteamID ${missingBindCount} 人` : ''}。</div>`;
-                }
-
                 if (available.length > 0) {
                     html += '<h3 style="margin-top:18px;">可选玩家</h3>';
                     html += '<div class="draft-pick-grid">';
@@ -1721,7 +1710,8 @@ if (window._caorenModifiersEnabled !== true) {
                     });
                     html += '</div>';
                 } else {
-                    html += '<div class="soft-block" style="margin-top:14px;">人员分配完毕，即将进入地图 BP。</div>';
+                    html += '<div class="soft-block" style="margin-top:14px;">人员分配完毕，等待管理员确认分队。</div>';
+                    if (isAdmin) html += '<button class="primary-btn" onclick="advancePhase()">确认分队并进入地图 BP</button>';
                 }
 
                 html += '<div class="draft-team-panels">';
@@ -1921,7 +1911,7 @@ if (window._caorenModifiersEnabled !== true) {
                             const liveSide = getLiveSide(p) || '未进队';
                             const expected = getExpectedSide(p, state).label;
                             const mismatchStyle = isSideMismatch(p, state) ? ' style="background:#fff7ed;"' : '';
-                            html += `<tr${mismatchStyle}><td><b>${p.name}</b></td><td>${p.rosterTeam ? p.rosterTeam + '队' : '未分队'}</td><td>${liveSide}</td><td>${expected}</td><td>${p.steamIdBound ? '已绑定' : '未绑定'}</td><td>${curRole}</td>`;
+                            html += `<tr${mismatchStyle}><td><b>${htmlEscape(p.name)}</b></td><td>${p.rosterTeam ? p.rosterTeam + '队' : '未分队'}</td><td>${liveSide}</td><td>${expected}</td><td>${p.steamIdBound ? '已绑定' : '未绑定'}</td><td>${curRole}</td>`;
                             html += `<td><select id="role-select-${p.playerId}">
                                     <option value="Undercover" ${p.gameRole === 'Undercover' ? 'selected' : ''}>卧底</option>
                                     <option value="Detective" ${p.gameRole === 'Detective' ? 'selected' : ''}>侦探</option>
@@ -3215,7 +3205,7 @@ if (window._caorenModifiersEnabled !== true) {
                     detectives.forEach(p => {
                         const count = Math.max(0, Math.min(2, Number(p.detectiveQuestionCount || 0)));
                         html += `<tr>
-                            <td><b>${p.name}</b></td>
+                            <td><b>${htmlEscape(p.name)}</b></td>
                             <td>${p.rosterTeam || '-'}</td>
                             <td><input id="dq-${p.playerId}" type="number" min="0" max="2" value="${count}" style="width:70px;"></td>
                             <td>${count >= 2 ? '<span style="color:#d32f2f;font-weight:bold;">-12</span>' : '<span style="color:#2e7d32;">0</span>'}</td>
@@ -3282,6 +3272,7 @@ if (window._caorenModifiersEnabled !== true) {
 
         // ===== 全局交互函数 =====
         async function advancePhase() {
+            if (window._currentGamePhase === 'PlayerDraft' && !await caorenConfirm('请核对下方 A/B 阵容。确认后进入地图 BP。', { title: '确认分队', confirmText: '确认分队' })) return;
             if (window._currentGamePhase === 'PreGameSetup') {
                 return showLobbyNotice('正式比赛由 Gamemode 启动，请使用网页“开始 Warmup”或游戏内 /gamemode start。', 'error');
             }

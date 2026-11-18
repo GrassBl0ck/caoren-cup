@@ -17,7 +17,7 @@ public sealed partial class CaorenCupPlugin
     internal static IReadOnlyList<string> MatchCompatibilityCommandNames { get; } =
     [
         "css_ready", "css_r", "css_unready", "css_ur", "css_notready", "css_start",
-        "css_pause", "css_tech", "css_tac", "css_unpause", "css_forcepause", "css_fp",
+        "css_pause", "css_p", "css_tech", "css_tac", "css_unpause", "css_up", "css_forcepause", "css_fp",
         "css_forceunpause", "css_fup", "css_stop", "css_restore", "css_ccmatch",
         "css_prac", "css_exitprac", "css_rethrow", "css_last", "css_clear", "css_bot",
         "css_cbot", "css_nobots", "css_savenade", "css_loadnade", "css_deletenade",
@@ -251,6 +251,12 @@ public sealed partial class CaorenCupPlugin
 
     private void HandleMatchCommand(CCSPlayerController? player, ParsedMatchCommand parsed)
     {
+        // Core intercepts its own live matches before this callback. Leave MatchZy's pause commands
+        // to MatchZy even if the local bridge compatibility switch was enabled.
+        if (parsed.Kind is MatchCommandKind.Pause or MatchCommandKind.TechnicalPause or MatchCommandKind.TacticalPause
+                or MatchCommandKind.Unpause or MatchCommandKind.ForcePause or MatchCommandKind.ForceUnpause
+            && MatchRuntimeOwnership.IsMatchZyLoaded)
+            return;
         if (_matchRuntimeBridge is null)
         {
             ReplyToPlayer(player, "[草人杯] 比赛运行时尚未初始化。");
@@ -293,7 +299,15 @@ public sealed partial class CaorenCupPlugin
                 });
                 break;
             case MatchCommandKind.Pause:
+                if (!isAdmin) { ReplyToPlayer(player, "[草人杯] /pause (/p) 仅管理员可用；玩家请使用 /tac 或 /tech。"); return; }
+                result = ApplyLocalRuntimeAction("force_pause", new Dictionary<string, object?>
+                {
+                    ["reason"] = "administrator",
+                    ["requestedAt"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                });
+                break;
             case MatchCommandKind.TechnicalPause:
+                if (roster is null) { ReplyToPlayer(player, "[草人杯] 无法识别你所属的 A/B 队。"); return; }
                 result = ApplyLocalRuntimeAction("technical_pause", new Dictionary<string, object?>
                 {
                     ["reason"] = "player technical pause",
@@ -309,8 +323,8 @@ public sealed partial class CaorenCupPlugin
                 });
                 break;
             case MatchCommandKind.Unpause:
-                if (roster is null) { ReplyToPlayer(player, "[草人杯] 无法识别你所属的 A/B 队。"); return; }
-                result = ApplyLocalRuntimeAction("confirm_unpause", new Dictionary<string, object?> { ["roster"] = roster.Value.ToString() });
+                if (!isAdmin) { ReplyToPlayer(player, "[草人杯] /unpause (/up) 仅管理员可用，请联系管理员恢复比赛。"); return; }
+                result = ApplyLocalRuntimeAction("force_unpause", new Dictionary<string, object?>());
                 break;
             case MatchCommandKind.ForcePause:
                 if (!isAdmin) { ReplyToPlayer(player, "[草人杯] 只有管理员可以强制暂停。"); return; }
@@ -403,7 +417,7 @@ public sealed partial class CaorenCupPlugin
             if (cleanup.Ok) PrintToAllPlayers("[草人杯] 比赛运行时待恢复状态已清理。");
             return cleanup;
         }
-        if (!RuntimeOwnsMatch || _matchRuntimeBridge is null) return new(false, "FEATURE_DISABLED");
+        if (!RuntimeOwnsMatch || _matchRuntimeBridge is null) return new(false, "FEATURE_DISABLED", "当前未启用草人杯自有比赛运行时，该命令不能控制当前比赛。");
         if (action != "abort" && !MatchRuntimeOwnership.CanClaim(RuntimeOwnsMatch,
             CaorenCupCoreAccess.TryGet()?.GameModes.State.Lifecycle,CaorenCupPracticeState.IsPracticeActive,
             ConVar.Find("matchzy_autostart_mode")?.StringValue,MatchRuntimeOwnership.IsMatchZyLoaded))

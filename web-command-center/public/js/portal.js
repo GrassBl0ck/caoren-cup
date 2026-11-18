@@ -1,18 +1,15 @@
 (function () {
   'use strict';
   var challenges = Object.create(null);
-  var recoveryTicket = '';
   var mailAvailable = false;
   var busy = new WeakSet();
   var lastSessionFailureStatus;
   var byId = function (id) { return document.getElementById(id); };
   var messages = {
-    invalid_credentials: '账号或密码不正确，请检查大小写。', account_disabled: '该账号当前不可用。',
+    invalid_credentials: '邮箱或密码不正确，请检查后重试。', account_disabled: '该账号当前不可用。',
     email_invalid: '请填写有效的邮箱地址。', email_code_invalid: '验证码不正确或已失效，请重新获取。',
     email_rate_limited: '发送或验证过于频繁，请稍后重试。', email_service_unavailable: '邮箱服务暂未启用，请联系管理员。',
     email_service_busy: '邮箱服务繁忙，请稍后重试。', email_delivery_failed: '邮件发送失败，请稍后重新获取。',
-    login_name_invalid: '账号需要 6–20 位字母、数字或下划线。', login_name_taken: '这个账号名已被使用，请换一个。',
-    login_name_in_use: '这个账号名已被使用，请换一个。',
     registration_unavailable: '无法使用这些信息注册。如果已有账号，请登录或找回密码。',
     password_invalid: '密码需要 8–128 位。', password_confirmation_mismatch: '两次输入的密码不一致。',
     current_password_incorrect: '当前账号密码不正确。', email_already_bound: '该账号已经绑定邮箱。', email_unavailable: '无法绑定这个邮箱。',
@@ -52,21 +49,19 @@
   }
   function setSignedIn(data) {
     document.body.classList.add('signed-in');
-    byId('account-auth').hidden = true;
-    byId('board-picker').hidden = false;
-    byId('logout').hidden = false;
-    byId('account-name').textContent = data.profile.displayName || data.profile.loginName;
-    byId('login-name-status').textContent = '当前登录账号：' + data.profile.loginName;
-    byId('email-status').textContent = data.profile.emailVerified ? '已验证：' + data.profile.email : '还没有绑定邮箱。建议补绑，以便找回密码。';
-    byId('bind-email-form').hidden = !!data.profile.emailVerified;
-    byId('steam-status').textContent = data.profile.hasSteamBinding ? '已绑定：' + data.profile.steamNickname : '尚未绑定，不影响浏览两个板块。';
-    byId('bind-steam-form').hidden = !!data.profile.hasSteamBinding;
+    if (byId('account-auth')) byId('account-auth').hidden = true;
+    if (byId('board-picker')) byId('board-picker').hidden = false;
+    if (byId('logout')) byId('logout').hidden = false;
+    if (byId('profile-link')) byId('profile-link').hidden = false;
+    var profile = data.profile || {};
+    if (byId('account-name')) byId('account-name').textContent = profile.steamNickname || profile.email || '玩家';
+    if (byId('login-name-status')) byId('login-name-status').textContent = profile.email || '';
+    if (byId('email-status')) byId('email-status').textContent = profile.emailVerified ? '已验证：' + profile.email : '尚未绑定邮箱。';
+    if (byId('bind-email-form')) byId('bind-email-form').hidden = !!profile.emailVerified;
+    if (byId('steam-status')) byId('steam-status').textContent = profile.hasSteamBinding ? '已绑定：' + (profile.steamNickname || 'CS 游戏身份') : '尚未绑定。参加 CS 比赛前请绑定游戏身份。';
+    if (byId('bind-steam-form')) byId('bind-steam-form').hidden = !!profile.hasSteamBinding;
     var next = new URLSearchParams(window.location.search).get('next');
-    if (next === 'cs' || next === 'mc') window.location.replace('/' + next);
-    else if (window.location.hash === '#account-settings') {
-      byId('account-settings').open = true;
-      byId('account-settings').scrollIntoView({ block: 'start' });
-    }
+    if (next === 'cs' || next === 'mc' || next === 'profile') window.location.replace('/' + next);
   }
   async function refresh() {
     try { setSignedIn(await request('/api/player-center/me')); lastSessionFailureStatus = undefined; return true; }
@@ -74,7 +69,9 @@
       lastSessionFailureStatus = error.status;
       if (error.status !== 401) message('auth-message', error.message, true);
       document.body.classList.remove('signed-in');
-      byId('account-auth').hidden = false;
+      if (byId('account-auth')) byId('account-auth').hidden = false;
+      if (byId('profile-link')) byId('profile-link').hidden = true;
+      if (document.body.dataset.page === 'profile' && error.status === 401) window.location.replace('/?next=profile');
       byId('board-picker').hidden = true;
       byId('logout').hidden = true;
       return false;
@@ -102,7 +99,7 @@
     var bridge = window.caorenDesktop;
     var result;
     if (input.rememberDevice === 'on' && bridge && typeof bridge.loginPlayerCenter === 'function') {
-      result = await bridge.loginPlayerCenter(input.loginName, input.password, true);
+      result = await bridge.loginPlayerCenter(input.email, input.password, true);
       if (!result || !result.ok) throw new Error(messages[result && (result.reason || result.error)] || '登录失败，请重试。');
     } else result = await request('/api/account-auth/login', input);
     await acceptBootstrap(result, input.rememberDevice === 'on');
@@ -124,7 +121,7 @@
           if (!await refresh() && lastSessionFailureStatus === 401) message('auth-message', messages.player_center_session_invalid, true);
         }
       } finally {
-        form.querySelectorAll('input[type=password]').forEach(function (input) { input.value = ''; });
+        if (document.body.classList.contains('signed-in')) form.querySelectorAll('input[type=password]').forEach(function (input) { input.value = ''; });
         if (button) button.disabled = false;
         busy.delete(form);
       }
@@ -168,14 +165,9 @@
   handleForm('reset-form', async function (input, form) {
     var result = await request('/api/account-recovery/email', emailProof('reset-password', input));
     delete challenges['reset-password']; form.reset(); switchTab('login');
-    byId('login-form').elements.namedItem('loginName').value = result.loginName || '';
-    message('auth-message', '密码已重设，请使用账号和新密码登录。');
+    byId('login-form').elements.namedItem('email').value = input.email || '';
+    message('auth-message', '密码已重设，请使用邮箱和新密码登录。');
   }, 'auth-message');
-  handleForm('change-login-name-form', async function (input, form) {
-    var result = await request('/api/player-center/account/login-name', input, 'PATCH');
-    form.reset(); setSignedIn(result);
-    message('account-message', '登录账号已修改，其他网页会话和其他设备已撤销。');
-  }, 'account-message');
   handleForm('change-password-form', async function (input, form) {
     if (input.newPassword !== input.confirmPassword) throw new Error(messages.password_confirmation_mismatch);
     var result = await request('/api/player-center/account/password', input);
@@ -191,18 +183,6 @@
     await request('/api/player-center/account/steam', input); form.reset(); await refresh();
     message('account-message', 'CS 游戏身份已绑定，可以进入 CS 大厅参加比赛。');
   }, 'account-message');
-  handleForm('legacy-code-form', async function (input) {
-    var result = await request('/api/account-recovery/game-code', { gameCode: input.code });
-    if (result.flow !== 'recovery_required' || !result.recoveryTicket) throw new Error('请返回首页使用邮箱注册。');
-    recoveryTicket = result.recoveryTicket;
-    byId('legacy-account-name').textContent = '恢复账号：' + result.loginName;
-    byId('legacy-code-form').hidden = true;
-    byId('legacy-reset-form').hidden = false;
-  }, 'auth-message');
-  handleForm('legacy-reset-form', async function (input) {
-    await acceptBootstrap(await request('/api/account-recovery/complete', Object.assign({}, input, { recoveryTicket: recoveryTicket })));
-    recoveryTicket = '';
-  }, 'auth-message');
   byId('logout').addEventListener('click', async function () {
     try {
       await request('/api/player-center/logout', {});
@@ -211,12 +191,13 @@
         if (!result || !result.ok) throw new Error('本机设备登录尚未清除，请重试退出。');
       }
       window.location.replace('/');
-    } catch (error) { message('account-message', error.message, true); }
+    } catch (error) { message(byId('portal-message') ? 'portal-message' : 'account-message', error.message, true); }
   });
-  if (window.caorenDesktop && typeof window.caorenDesktop.loginPlayerCenter === 'function') byId('remember-device-label').hidden = false;
+  if (window.caorenDesktop && typeof window.caorenDesktop.loginPlayerCenter === 'function' && byId('remember-device-label')) byId('remember-device-label').hidden = false;
   request('/api/public/account-capabilities').then(function (data) {
     mailAvailable = data.emailRegistrationAvailable === true;
     if (!mailAvailable) {
+      if (!byId('mail-availability')) return;
       byId('mail-availability').hidden = false;
       byId('mail-availability').textContent = '[草人杯]邮箱服务暂未启用。已有账号仍可登录，新用户请稍后注册。';
     }

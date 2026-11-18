@@ -40,13 +40,12 @@ export const validateUnbalancedRoster = (session: GameSession): UnbalancedRoster
     const missingSteamIds = players.filter(p => !p.steamId).map(p => p.name);
     const blockers: string[] = [];
     if (!options.unbalancedModeEnabled || session.matchOptions.matchMode === 'duel') {
-        return { valid: true, blockers, targetA: options.unbalancedTeamASize, targetB: options.unbalancedTeamBSize, actualA, actualB, unassigned, missingSteamIds };
+        return { valid: true, blockers, targetA: actualA, targetB: actualB, actualA, actualB, unassigned, missingSteamIds };
     }
-    if (players.length !== options.unbalancedTeamASize + options.unbalancedTeamBSize) blockers.push(`目标总人数为 ${options.unbalancedTeamASize + options.unbalancedTeamBSize} 人，当前参赛 ${players.length} 人。`);
-    if (actualA !== options.unbalancedTeamASize) blockers.push(`A 队需要 ${options.unbalancedTeamASize} 人，当前 ${actualA} 人。`);
-    if (actualB !== options.unbalancedTeamBSize) blockers.push(`B 队需要 ${options.unbalancedTeamBSize} 人，当前 ${actualB} 人。`);
+    // The administrator confirms the actual rosters; retired target-size controls must not gate entry.
+    if (actualA === 0 || actualB === 0) blockers.push('请由管理员确认 A/B 两队均已分配玩家。');
     if (unassigned > 0) blockers.push(`还有 ${unassigned} 名玩家未分入 A/B 队。`);
-    return { valid: blockers.length === 0, blockers, targetA: options.unbalancedTeamASize, targetB: options.unbalancedTeamBSize, actualA, actualB, unassigned, missingSteamIds };
+    return { valid: blockers.length === 0, blockers, targetA: actualA, targetB: actualB, actualA, actualB, unassigned, missingSteamIds };
 };
 
 export const validateUnbalancedRosterForTeamLock = (session: GameSession): UnbalancedRosterValidation => {

@@ -1,389 +1,127 @@
 (function () {
   'use strict';
-
+  if (document.body.dataset.page === 'admin') return;
   function byId(id) { return document.getElementById(id); }
-  var pendingBootstrapTicket = '';
-  var pendingRecoveryTicket = '';
-  var pendingMatchSocketTicket = '';
-  var matchSocketTicketRequestInFlight = false;
-  var desktopAutoLoginAttempted = false;
-  var desktopAutoLoginInFlight = false;
-  var currentProfile = {};
-  var currentMatchState = { matchStatus: 'waiting', joined: false, joinAvailable: false, leaveAvailable: false };
-  var matchStatusLabels = { waiting: '等待中', started: '已开始', ended: '已结束' };
-  var savedLoginNameKey = 'caoren_saved_login_name';
-  var playerCenterSessionActive = false;
-
-  async function requestJson(url, options) {
+  function socket() { return window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket; }
+  var current = {}, profile = {}, refreshing = false, ticketInFlight = false, operationInFlight = false;
+  var previousPublicStatus, resumeRequested = false, logoutInFlight = false, refreshPending = false;
+  var reasons = {
+    game_binding_required: '参加比赛前，请在个人资料中绑定 CS 游戏身份。',
+    match_started: '比赛已经开始，等待下一场比赛开放加入。',
+    match_ended: '本场比赛已结束，等待管理员开放下一场。',
+    blocked_for_session: '你已被移出本场比赛，请联系管理员。',
+    nickname_in_use: '当前已有相同昵称的参赛玩家，请联系管理员处理重复昵称。',
+    match_not_waiting: '当前比赛不在等待阶段，暂时不能更改参赛名单。'
+  };
+  async function request(url, body) {
     try {
-      var response = await fetch(url, Object.assign({ cache: 'no-store' }, options || {}));
-      var data = await response.json().catch(function () { return {}; });
+      var response = await fetch(url, { method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', headers: body === undefined ? {} : { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+      var data = await response.json();
       return { ok: response.ok && data.success === true, status: response.status, data: data };
-    } catch (_error) {
-      return { ok: false, status: 0, data: { error: 'network_error' } };
-    }
+    } catch (_) { return { ok: false, status: 0, data: { error: 'network_error' } }; }
   }
-
-  function delay(milliseconds) { return new Promise(function (resolve) { setTimeout(resolve, milliseconds); }); }
-
-  function jsonOptions(method, body) {
-    return {
-      method: method,
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body || {})
-    };
+  function message(text) { if (byId('player-center-home-message')) byId('player-center-home-message').textContent = text || ''; }
+  function sessionActive(active) {
+    window.__caorenPlayerCenterSessionActive = active;
+    window.dispatchEvent(new CustomEvent('caoren:player-center-session', { detail: { active: active } }));
   }
-
-  function loadSavedLoginName() {
-    try {
-      // Remove only the two legacy keys; never read or reuse a saved password.
-      localStorage.removeItem('caoren_saved_login_password');
-      localStorage.removeItem('caoren_saved_login_decided');
-      var savedName = localStorage.getItem(savedLoginNameKey) || '';
-      if (byId('player-center-login-name') && savedName) {
-        byId('player-center-login-name').value = savedName;
-        byId('player-center-save-login-name').checked = true;
-      }
-    } catch (_error) {
-      // 浏览器禁用本地存储时仍允许正常登录。
-    }
-  }
-
-  function saveLoginName(loginName) {
-    try {
-      if (byId('player-center-save-login-name')?.checked === true) localStorage.setItem(savedLoginNameKey, loginName);
-      else localStorage.removeItem(savedLoginNameKey);
-    } catch (_error) {
-      // 不影响登录结果。
-    }
-  }
-
-  function setEntryError(message, success) {
-    var target = byId('player-center-entry-error');
-    if (!target) return;
-    target.textContent = message || '';
-    target.classList.toggle('is-success', success === true);
-  }
-
-  function setHomeMessage(message, success) {
-    var target = byId('player-center-home-message');
-    if (!target) return;
-    target.textContent = message || '';
-    target.classList.toggle('is-success', success === true);
-  }
-
-  // 只广播“账号会话是否有效”，不暴露任何会话凭据；其他页面模块据此控制本人入口显隐。
-  function notifyPlayerCenterSession(active, reason) {
-    var next = active === true;
-    try { window.__caorenPlayerCenterSessionActive = next; } catch (_error) { /* 测试沙箱或旧环境缺少 window */ }
-    if (next === playerCenterSessionActive) return;
-    playerCenterSessionActive = next;
-    try {
-      window.dispatchEvent(new CustomEvent('caoren:player-center-session', {
-        detail: { active: next, reason: reason || '' }
-      }));
-    } catch (_error) {
-      // 不支持 CustomEvent 时，其他模块仍可通过 window.__caorenPlayerCenterSessionActive 读取状态。
-    }
-  }
-
-  function hideAuthPanels() {
-    ['player-center-login', 'player-center-game-code-panel', 'player-center-created', 'player-center-recovery'].forEach(function (id) {
-      if (byId(id)) byId(id).hidden = true;
-    });
-  }
-
-  function showEntry(message) {
-    pendingBootstrapTicket = '';
-    pendingRecoveryTicket = '';
-    if (byId('player-center-entry')) byId('player-center-entry').hidden = false;
-    if (byId('player-center-home')) byId('player-center-home').hidden = true;
-    hideAuthPanels();
-    if (byId('player-center-login')) byId('player-center-login').hidden = false;
-    setEntryError(message || '');
-    notifyPlayerCenterSession(false, 'entry');
-  }
-
-  function renderHome(data) {
-    var profile = data.profile || currentProfile || {};
-    currentProfile = profile;
-    currentMatchState = {
-      matchStatus: data.matchStatus || currentMatchState.matchStatus || 'waiting',
-      joined: data.joined === true,
-      joinAvailable: data.joinAvailable === true,
-      leaveAvailable: data.leaveAvailable === true
-    };
-    if (byId('player-center-steam-nickname')) byId('player-center-steam-nickname').textContent = profile.steamNickname || '未获取';
-    if (byId('player-center-account-name')) byId('player-center-account-name').textContent = profile.loginName || '未获取';
-    if (byId('player-center-match-status')) {
-      byId('player-center-match-status').textContent = matchStatusLabels[currentMatchState.matchStatus] || matchStatusLabels.waiting;
-    }
-    var matchButton = byId('player-center-join-btn');
-    if (matchButton) {
-      matchButton.textContent = currentMatchState.joined ? '取消本场参赛' : '加入本场比赛';
-      matchButton.disabled = currentMatchState.joined ? !currentMatchState.leaveAvailable : !currentMatchState.joinAvailable;
-      matchButton.classList.toggle('joined', currentMatchState.joined);
-    }
-    if (byId('player-center-entry')) byId('player-center-entry').hidden = true;
+  function render(data) {
+    current = data; profile = data.profile || profile;
     if (byId('player-center-home')) byId('player-center-home').hidden = false;
-    setHomeMessage('');
-    if (profile.hasSteamBinding === false) setHomeMessage('参加 CS 比赛前，请返回板块选择，在“账户与游戏身份”中绑定 CS 游戏身份。');
-    notifyPlayerCenterSession(true, 'home');
-  }
-
-  function consumeMatchSocketTicket(ticket) {
-    var loginSocket = window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket;
-    if (!ticket || !loginSocket || typeof loginSocket.emit !== 'function') return false;
-    if (loginSocket.connected === false) {
-      pendingMatchSocketTicket = ticket;
-      if (typeof loginSocket.connect === 'function') loginSocket.connect();
-      return false;
-    }
-    pendingMatchSocketTicket = '';
-    loginSocket.emit('PLAYER_CENTER_MATCH_LOGIN', { ticket: ticket });
-    return true;
-  }
-
-  async function requestMatchSocketTicket() {
-    if (!currentMatchState.joined || matchSocketTicketRequestInFlight) return;
-    matchSocketTicketRequestInFlight = true;
-    try {
-      var result = await requestJson('/api/player-center/match/socket-ticket', jsonOptions('POST', {}));
-      if (result.status === 401) return showEntry('会话已失效，请重新登录。');
-      if (!result.ok) return;
-      consumeMatchSocketTicket(result.data.socketTicket);
-    } finally {
-      matchSocketTicketRequestInFlight = false;
-    }
-  }
-
-  async function joinOrLeaveMatch() {
+    if (byId('player-center-steam-nickname')) byId('player-center-steam-nickname').textContent = profile.steamNickname || '未绑定';
+    if (byId('player-center-account-name')) byId('player-center-account-name').textContent = profile.email || '';
+    if (byId('player-center-match-status')) byId('player-center-match-status').textContent = ({ waiting: '等待中', started: '已开始', ended: '已结束' })[data.matchStatus] || '状态待刷新';
     var button = byId('player-center-join-btn');
-    if (button) button.disabled = true;
-    setHomeMessage(currentMatchState.joined ? '正在取消本场参赛...' : '正在加入本场比赛...');
-    var endpoint = currentMatchState.joined ? '/api/player-center/match/leave' : '/api/player-center/match/join';
-    var result = await requestJson(endpoint, jsonOptions('POST', {}));
-    if (result.status === 401) return showEntry('会话已失效，请重新登录。');
-    if (!result.ok) {
-      renderHome(Object.assign({ profile: currentProfile }, currentMatchState));
-      return setHomeMessage(result.data.error === 'match_not_waiting' ? '比赛已开始或已结束，当前不能更改参赛名单。' : '操作失败，请稍后重试。');
+    if (button) {
+      button.textContent = data.joined ? '取消本场参赛' : '加入本场比赛';
+      button.disabled = operationInFlight || (data.joined ? !data.leaveAvailable : !data.joinAvailable);
+      button.classList.toggle('joined', data.joined === true);
     }
-    renderHome(Object.assign({ profile: currentProfile }, result.data));
-    if (result.data.socketTicket) {
-      consumeMatchSocketTicket(result.data.socketTicket);
-      setHomeMessage('已加入本场比赛，正在进入比赛大厅。', true);
-    } else {
-      setHomeMessage('已取消本场参赛，玩家中心账号仍保持登录。', true);
-    }
+    message(data.joined ? (data.leaveAvailable ? '已加入本场比赛。' : '已参赛，比赛开始后暂不能退出名单。') : (reasons[data.joinUnavailableReason] || (data.joinAvailable ? '可以加入本场比赛。' : '正在等待参赛状态同步。')));
+    if (byId('player-center-resume-btn')) byId('player-center-resume-btn').hidden = !data.joined;
+    sessionActive(true);
   }
-
-  async function establishSession(ticket, source) {
-    var result = await requestJson('/api/player-center/session', jsonOptions('POST', {
-      sessionBootstrapTicket: ticket
-    }));
-    pendingBootstrapTicket = '';
-    if (!result.ok) {
-      if (result.status === 0) {
-        showEntry('网络暂时不可用，设备凭据已保留，可稍后重试。');
-        return false;
-      }
-      if (source === 'desktop-device' && result.status === 401) {
-        // 多窗口可能同时拿到同一张单次票据；先等待另一个窗口建立共享 Cookie，再判定票据失效。
-        for (var attempt = 0; attempt < 3; attempt += 1) {
-          if (attempt > 0) await delay(100);
-          var current = await requestJson('/api/player-center/me');
-          if (current.ok) {
-            renderHome(current.data);
-            return true;
-          }
-          if (current.status === 0) {
-            showEntry('网络暂时不可用，设备凭据已保留，可稍后重试。');
-            return false;
-          }
-        }
-        await window.caorenDesktop?.clearRejectedDeviceCredential?.();
-      }
-      showEntry(result.status === 401 ? '登录引导已失效，请重新登录。' : '玩家中心会话暂时无法建立，请稍后重试。');
-      return false;
-    }
-    renderHome(result.data);
-    var loginSocket = window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket;
-    if (loginSocket && typeof loginSocket.disconnect === 'function' && typeof loginSocket.connect === 'function') {
-      loginSocket.disconnect().connect();
-    }
-    return true;
-  }
-
-  async function login() {
-    var loginName = String(byId('player-center-login-name')?.value || '').trim();
-    var passwordInput = byId('player-center-login-password');
-    var password = String(passwordInput?.value || '');
-    if (!loginName || !password) return setEntryError('请输入登录账号和密码。');
-    setEntryError('正在验证账号...');
-    var rememberDevice = byId('player-center-remember-device')?.checked === true && !!window.caorenDesktop?.loginPlayerCenter;
-    var result = rememberDevice
-      ? await window.caorenDesktop.loginPlayerCenter(loginName, password, true)
-      : await requestJson('/api/account-auth/login', jsonOptions('POST', { loginName: loginName, password: password }));
-    if (!result.ok) {
-      if (passwordInput) passwordInput.value = '';
-      var reason = result.reason || result.data?.error;
-      var message = reason === 'account_disabled' ? '账号已禁用，请联系管理员。' :
-        reason === 'game_entry_required' ? '请返回首页用邮箱注册；老账号可以使用 /cclogin 恢复后补绑邮箱。' :
-        reason === 'rate_limited' ? '失败次数过多，请稍后再试。' :
-          reason === 'safe_storage_unavailable' ? 'Windows 安全凭据存储不可用，请取消“记住此设备”后登录。' : '账号或密码错误。';
-      return setEntryError(message);
-    }
-    saveLoginName(loginName);
-    if (passwordInput) passwordInput.value = '';
-    await establishSession(
-      rememberDevice ? result.sessionBootstrapTicket : result.data.sessionBootstrapTicket,
-      rememberDevice ? 'desktop-device' : 'web',
-    );
-  }
-
-  async function attemptDesktopAutoLogin() {
-    if (desktopAutoLoginAttempted || desktopAutoLoginInFlight || !window.caorenDesktop?.authenticatePlayerCenter) return false;
-    desktopAutoLoginAttempted = true;
-    desktopAutoLoginInFlight = true;
-    setEntryError('正在恢复此设备的玩家中心登录...');
+  async function refreshSession(resume) {
+    if (logoutInFlight) return;
+    resumeRequested = resumeRequested || resume === true;
+    if (refreshing) { refreshPending = true; return; }
+    refreshing = true;
     try {
-      var result = await window.caorenDesktop.authenticatePlayerCenter();
-      if (result.ok) return establishSession(result.sessionBootstrapTicket, 'desktop-device');
-      var messages = {
-        not_found: '',
-        revoked: '此设备的登录已撤销，请使用账号密码或 /cclogin 登录。',
-        expired: '此设备登录已过期，请使用账号密码或 /cclogin 登录。',
-        account_disabled: '账号已禁用，请联系管理员。',
-        password_state_invalid: '账号密码状态异常，请使用 /cclogin 恢复。',
-        account_unavailable: '账号尚未建立，请使用 /cclogin 创建账号。',
-        network_error: '网络暂时不可用，设备凭据已保留，可稍后重试。',
-        credential_corrupt: '本机设备凭据无法解密，已回到账号登录。',
-        safe_storage_unavailable: 'Windows 安全凭据存储不可用，请使用账号密码登录。',
-        rate_limited: '自动登录尝试过多，请稍后重试。'
-      };
-      showEntry(messages[result.reason] || '设备自动登录失败，请使用账号密码或 /cclogin 登录。');
-      return false;
+      var result = await request('/api/player-center/me');
+      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); return; }
+      if (!result.ok) { message('参赛状态读取失败，请检查网络后重试。'); return; }
+      render(result.data);
+      if (resumeRequested && result.data.joined) await requestTicket();
+      resumeRequested = false;
     } finally {
-      desktopAutoLoginInFlight = false;
+      refreshing = false;
+      if (refreshPending && !logoutInFlight) { refreshPending = false; void refreshSession(false); }
     }
   }
-
-  async function submitGameCode() {
-    var gameCode = String(byId('player-center-game-code')?.value || '').trim();
-    if (!gameCode) return setEntryError('请输入 /cclogin 返回的一次性游戏码。');
-    setEntryError('正在验证游戏码...');
-    var result = await requestJson('/api/account-recovery/game-code', jsonOptions('POST', { gameCode: gameCode }));
-    if (!result.ok) return setEntryError(result.data.error === 'account_disabled' ? '账号已禁用，请联系管理员。' : '游戏码无效或已过期。');
-    hideAuthPanels();
-    setEntryError('');
-    if (result.data.flow === 'created') {
-      pendingBootstrapTicket = result.data.sessionBootstrapTicket;
-      byId('player-center-created-login-name').textContent = result.data.credentials.loginName;
-      byId('player-center-created-password').textContent = result.data.credentials.initialPassword;
-      byId('player-center-created').hidden = false;
-      return;
-    }
-    pendingRecoveryTicket = result.data.recoveryTicket;
-    byId('player-center-recovery-login-name').textContent = result.data.loginName;
-    byId('player-center-recovery').hidden = false;
-  }
-
-  async function completeRecovery() {
-    var password = String(byId('player-center-recovery-password')?.value || '');
-    var confirmation = String(byId('player-center-recovery-confirm-password')?.value || '');
-    if (password !== confirmation) return setEntryError('两次输入的新密码不一致。');
-    var result = await requestJson('/api/account-recovery/complete', jsonOptions('POST', {
-      recoveryTicket: pendingRecoveryTicket,
-      newPassword: password,
-      confirmPassword: confirmation
-    }));
-    byId('player-center-recovery-password').value = '';
-    byId('player-center-recovery-confirm-password').value = '';
-    pendingRecoveryTicket = '';
-    if (!result.ok) return showEntry('恢复失败或恢复凭据已过期，请重新获取游戏码。');
-    await establishSession(result.data.sessionBootstrapTicket);
-  }
-
-  async function copyText(elementId) {
-    var value = String(byId(elementId)?.textContent || '');
-    if (!value) return;
+  async function requestTicket() {
+    var ws = socket();
+    if (!current.joined || ticketInFlight || !ws || !ws.connected) return;
+    ticketInFlight = true;
     try {
-      await navigator.clipboard.writeText(value);
-      setEntryError('已复制。', true);
-    } catch (_error) {
-      setEntryError('浏览器未允许自动复制，请手动选择复制。');
-    }
+      var result = await request('/api/player-center/match/socket-ticket', {});
+      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); return; }
+      if (!result.ok) { message('比赛连接恢复失败，请点击“重新进入比赛”重试。'); return; }
+      // Tickets are single-use and short-lived. Never queue them across a disconnect.
+      if (ws.connected) ws.emit('PLAYER_CENTER_MATCH_LOGIN', { ticket: result.data.socketTicket });
+    } finally { ticketInFlight = false; }
   }
-
-  async function confirmCredentialsSaved() {
-    var ticket = pendingBootstrapTicket;
-    byId('player-center-created-login-name').textContent = '';
-    byId('player-center-created-password').textContent = '';
-    if (!ticket) return showEntry('登录引导已失效，请重新获取游戏码。');
-    await establishSession(ticket);
+  async function joinOrLeave() {
+    if (operationInFlight) return;
+    operationInFlight = true; render(current);
+    var leaving = current.joined === true;
+    try {
+      var result = await request('/api/player-center/match/' + (leaving ? 'leave' : 'join'), {});
+      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); return; }
+      if (!result.ok) { await refreshSession(false); message(reasons[result.data.error] || '操作未完成，请稍后重试。'); return; }
+      render(Object.assign({ profile: profile }, result.data));
+      if (!leaving) {
+        var ws = socket();
+        if (ws && ws.connected && result.data.socketTicket) ws.emit('PLAYER_CENTER_MATCH_LOGIN', { ticket: result.data.socketTicket });
+        else if (ws) ws.connect();
+        message('已参赛，正在连接比赛大厅。');
+      }
+    } finally { operationInFlight = false; if (byId('player-center-join-btn')) byId('player-center-join-btn').disabled = current.joined ? !current.leaveAvailable : !current.joinAvailable; }
   }
-
-  async function logout() {
-    var result = await requestJson('/api/player-center/logout', jsonOptions('POST', {}));
-    if (!result.ok) return setHomeMessage('退出失败，尚未确认服务端已退出，请检查网络后重试。');
-    showEntry('已退出玩家中心。');
-  }
-
-  async function forgetDesktopDevice() {
-    var result = await window.caorenDesktop?.logoutDevice?.();
-    if (!result?.ok) return setHomeMessage('忘记此设备失败，请稍后重试。');
-    await requestJson('/api/player-center/logout', jsonOptions('POST', {}));
-    showEntry(result.remoteRevocationPending ?
-      '本机设备凭据已清除，但服务端撤销尚未确认。' : '已退出账号并忘记此设备。');
-  }
-
-  async function refreshSession() {
-    var result = await requestJson('/api/player-center/me');
-    if (result.ok) {
-      renderHome(result.data);
-      if (result.data.joined) requestMatchSocketTicket();
-    }
-    else {
-      showEntry('');
-      await attemptDesktopAutoLogin();
-    }
-  }
-
-  function bindSocketInvalidation() {
-    var socket = window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket;
-    if (!socket || typeof socket.on !== 'function') return;
-    socket.on('PLAYER_CENTER_SESSION_INVALID', function () {
-      showEntry('账号状态或会话已失效，请重新登录。');
-    });
-    socket.on('PLAYER_CENTER_MATCH_ENDED', function () {
-      refreshSession();
-    });
-    socket.on('connect', function () {
-      if (pendingMatchSocketTicket) consumeMatchSocketTicket(pendingMatchSocketTicket);
-      else if (currentMatchState.joined) requestMatchSocketTicket();
-    });
-  }
-
   function boot() {
-    byId('player-center-login-btn')?.addEventListener('click', login);
-    byId('player-center-login-password')?.addEventListener('keydown', function (event) { if (event.key === 'Enter') login(); });
-    byId('player-center-game-code-toggle')?.addEventListener('click', function () { hideAuthPanels(); byId('player-center-game-code-panel').hidden = false; setEntryError(''); });
-    byId('player-center-game-code-btn')?.addEventListener('click', submitGameCode);
-    byId('player-center-copy-login-name')?.addEventListener('click', function () { copyText('player-center-created-login-name'); });
-    byId('player-center-copy-password')?.addEventListener('click', function () { copyText('player-center-created-password'); });
-    byId('player-center-credentials-saved')?.addEventListener('click', confirmCredentialsSaved);
-    byId('player-center-recovery-btn')?.addEventListener('click', completeRecovery);
-    byId('player-center-logout-btn')?.addEventListener('click', logout);
-    byId('player-center-forget-device-btn')?.addEventListener('click', forgetDesktopDevice);
-    byId('player-center-join-btn')?.addEventListener('click', joinOrLeaveMatch);
-    bindSocketInvalidation();
-    loadSavedLoginName();
-    var desktopAvailable = !!window.caorenDesktop?.loginPlayerCenter;
-    if (byId('player-center-remember-device-row')) byId('player-center-remember-device-row').hidden = !desktopAvailable;
-    if (byId('player-center-forget-device-btn')) byId('player-center-forget-device-btn').hidden = !desktopAvailable;
-    refreshSession();
+    var home = byId('player-center-home');
+    if (!home) return;
+    var retry = document.createElement('button'); retry.type = 'button'; retry.id = 'player-center-resume-btn'; retry.textContent = '重新进入比赛';
+    retry.addEventListener('click', function () { refreshSession(true); }); home.appendChild(retry);
+    byId('player-center-join-btn')?.addEventListener('click', joinOrLeave);
+    byId('player-center-logout-btn')?.addEventListener('click', async function () {
+      if (logoutInFlight) return;
+      logoutInFlight = true;
+      try {
+      var result = await request('/api/player-center/logout', {});
+      if (!result.ok) return message('退出失败，请检查网络后重试。');
+      if (window.caorenDesktop?.logoutDevice) {
+        var deviceResult = await window.caorenDesktop.logoutDevice();
+        if (!deviceResult?.ok) return message('网页已退出，但本机设备登录尚未清除，请再次退出或在首页处理。');
+      }
+      sessionActive(false); window.location.replace('/');
+      } finally { logoutInFlight = false; }
+    });
+    var ws = socket();
+    if (ws?.on) {
+      ws.on('PLAYER_CENTER_SESSION_INVALID', function () { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); });
+      ws.on('PLAYER_CENTER_MATCH_ENDED', function () { refreshSession(false); });
+      ws.on('LOGIN_RESPONSE', function (data) {
+        if (!data.success && current.joined && !data.resetClient) message('比赛连接失败：' + (data.message || '票据已过期') + '。请点击“重新进入比赛”重试。');
+        if (!data.success && (data.resetClient || data.message === '你已退出游戏')) refreshSession(false);
+      });
+      ws.on('GAME_STATE', function (state) {
+        var status = state.matchStatus || (state.phase === 'Lobby' ? 'waiting' : state.phase === 'Scoreboard' ? 'ended' : state.phase ? 'started' : undefined);
+        if (status && status !== previousPublicStatus) { previousPublicStatus = status; refreshSession(false); }
+      });
+      ws.on('connect', function () { refreshSession(true); });
+    }
+    window.addEventListener('focus', function () { refreshSession(false); });
+    refreshSession(true);
   }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

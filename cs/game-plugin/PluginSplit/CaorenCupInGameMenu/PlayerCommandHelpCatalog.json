@@ -112,7 +112,7 @@
     "Permission": "普通参赛玩家；由 MatchZy 检查当前比赛阶段与条件",
     "Usage": [
       ".tech",
-      ".pause"
+      "/tech"
     ],
     "Parameters": [
       "无参数。"
@@ -124,9 +124,8 @@
       "需要本局已进入正式比赛，且自己属于 T 或 CT。",
       "已经暂停、半场、赛后或战术暂停期间不能再申请。",
       "服务器可关闭技术暂停或设置额外权限；当前检查时技术暂停开启、权限标记为空。",
-      "当前配置下 .pause 与 .tech 同效果；若管理员将 pause 改为战术暂停，使用 .tech 仍表示技术暂停。",
       "0.8.15 当前入口没有使用独立技术暂停计时实现，本帮助不承诺自动 5 分钟或每队 2 次。",
-      "控制台：css_tech；.pause 对应 css_pause。"
+      "草人杯正式比赛中，/pause (/p) 是管理员暂停；玩家在回合冻结时间使用 /tech。"
     ],
     "Sources": [
       "https://github.com/shobhit-pathak/MatchZy/blob/0.8.15/ConsoleCommands.cs",
@@ -142,7 +141,7 @@
       ],
       [
         {
-          "Text": ".pause"
+          "Text": "/tech"
         }
       ]
     ],
@@ -184,7 +183,7 @@
       ".unpause"
     ],
     "Notes": [
-      "通常需要双方队伍各有人输入 .unpause；自己输入一次不等于立刻恢复。",
+      "MatchZy 模式通常需要双方队伍各有人输入 .unpause；草人杯正式比赛中 /unpause (/up) 仅管理员可用。",
       "管理员强制暂停不能由玩家解除。",
       ".unpause 不代替战术暂停的计时规则。",
       "控制台：css_unpause。"

@@ -50,7 +50,7 @@ public sealed partial class CaorenCupCorePlugin
         AddCommand("css_hpcap", "设置模块血量全局上下限", OnCommandHpCap);
         AddCommand("info", "查看模块玩法说明", OnCommandInfo);
         AddCommand("info_cast", "向全服广播玩法说明", OnCommandInfoCast);
-        AddCommand("sv_noclip", "控制玩家 noclip", OnCommandSvNoclip);
+        AddCommand("css_noclip", "控制玩家 noclip", OnCommandNoclip);
         AddCommand("gamemode", "统一切换和控制游戏模式", OnGameModeCommand);
         AddCommand("gm", "统一切换和控制游戏模式（简写）", OnGameModeCommand);
         AddCommand("gamemode_cvar", "设置当前游戏模式 CVar", OnGameModeCvarCommand);
@@ -83,6 +83,7 @@ public sealed partial class CaorenCupCorePlugin
         Reply(player, "=== Gamemode 模式 ===");
         Reply(player, "/gamemode (/gm) : 管理游戏模式（管理员）");
         Reply(player, "/ccrestore <回合数> : 恢复当前模式指定回合的自动备份（管理员）");
+        Reply(player, "/pause (/p)、/unpause (/up) : 管理员暂停/恢复；/tac、/tech : 玩家战术/技术暂停（草人杯正式比赛）");
         Reply(player, "=== 杂项 ===");
         Reply(player, "/cclogin : 获取草人杯网页登录码");
         Reply(player, "/ccstate : 查看网页指挥台连接状态");
@@ -265,12 +266,16 @@ public sealed partial class CaorenCupCorePlugin
     private HookResult OnNoclipCommand(CCSPlayerController? player, CommandInfo info)
     {
         if (player is null || _allowPlayerNoclip) return HookResult.Continue;
+        // Closing the entry must never prevent a player who is already flying from exiting.
+        var pawn = player.PlayerPawn.Value;
+        if (pawn is { IsValid: true } && (pawn.MoveType == MoveType_t.MOVETYPE_NOCLIP || pawn.ActualMoveType == MoveType_t.MOVETYPE_NOCLIP))
+            return HookResult.Continue;
         Reply(player, "服务器已禁用 noclip，避免误触飞行。");
         Console.WriteLine($"[草人杯] Blocked noclip from player {player.PlayerName} (slot {player.Slot}).");
         return HookResult.Handled;
     }
 
-    private void OnCommandSvNoclip(CCSPlayerController? player, CommandInfo info)
+    private void OnCommandNoclip(CCSPlayerController? player, CommandInfo info)
     {
         if (!HasRoot(player)) { Reply(player, "你没有权限修改 noclip 开关。"); return; }
         if (info.ArgCount < 2) { ReplyNoclipStatus(player); return; }
@@ -282,11 +287,39 @@ public sealed partial class CaorenCupCorePlugin
                 break;
             case "0": case "off": case "false": case "disable":
                 _allowPlayerNoclip = false;
-                ReplyNoclipChanged(player);
+                var (restored, failed) = RestoreNoclipPlayers();
+                CaorenCupChat.PrintToChatAll(failed == 0
+                    ? $"玩家 noclip 已禁止，已将 {restored} 名飞行中的玩家恢复正常移动。"
+                    : $"玩家 noclip 已禁止，已恢复 {restored} 名玩家；另有 {failed} 名玩家恢复失败，请管理员检查日志。");
                 break;
             case "status": ReplyNoclipStatus(player); break;
-            default: Reply(player, "[草人杯] 用法：/sv_noclip <1允许/0禁止/status>"); break;
+            default: Reply(player, "[草人杯] 用法：/noclip <1允许/0禁止/status>"); break;
         }
+    }
+
+    private static (int Restored, int Failed) RestoreNoclipPlayers()
+    {
+        int restored = 0, failed = 0;
+        foreach (var controller in Utilities.GetPlayers())
+        {
+            if (controller is null || !controller.IsValid || !controller.PawnIsAlive) continue;
+            var pawn = controller.PlayerPawn.Value;
+            if (pawn is not { IsValid: true } || (pawn.MoveType != MoveType_t.MOVETYPE_NOCLIP && pawn.ActualMoveType != MoveType_t.MOVETYPE_NOCLIP)) continue;
+            try
+            {
+                // Both movement fields must agree, otherwise the engine may leave the pawn flying.
+                pawn.MoveType = MoveType_t.MOVETYPE_WALK;
+                pawn.ActualMoveType = MoveType_t.MOVETYPE_WALK;
+                Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+                restored++;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                CaorenCupChat.PrintToConsole($"恢复玩家 noclip 失败（slot {controller.Slot}）：{ex.Message}");
+            }
+        }
+        return (restored, failed);
     }
 
     private void ReplyNoclipChanged(CCSPlayerController? player)
@@ -296,7 +329,7 @@ public sealed partial class CaorenCupCorePlugin
     }
 
     private void ReplyNoclipStatus(CCSPlayerController? player) =>
-        Reply(player, $"[草人杯] 当前玩家 noclip：{(_allowPlayerNoclip ? "允许" : "禁止")}。用法：/sv_noclip <1允许/0禁止/status>");
+        Reply(player, $"[草人杯] 当前玩家 noclip：{(_allowPlayerNoclip ? "允许" : "禁止")}。用法：/noclip <1允许/0禁止/status>");
 
     private HookResult OnTeamChatForSpectators(EventPlayerChat @event, GameEventInfo info)
     {
@@ -361,6 +394,7 @@ public sealed partial class CaorenCupCorePlugin
         if (info.ArgCount < 2)
         {
             Reply(player, "/gamemode (/gm) <competitive|comp|rush|duel|ability|random|undercover|under|unbalanced|unb|status|start|stop>");
+            Reply(player, "正式比赛暂停：管理员 /pause (/p)、/unpause (/up)；玩家在回合冻结时间使用 /tac（战术）、/tech（技术）。");
             return;
         }
 

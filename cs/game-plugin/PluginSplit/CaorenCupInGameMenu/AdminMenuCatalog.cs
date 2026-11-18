@@ -108,8 +108,8 @@ public sealed class AdminMenuCatalog
                     OnClick = (sid, _) => { _host.ExecAsPlayer(sid, "css_reset_plu"); return true; },
                 },
                 PlayerCmdItem("查看服务器规则", "css_rules"),
-                PlayerCmdItem("noclip 开启", "css_sv_noclip 1"),
-                PlayerCmdItem("noclip 关闭", "css_sv_noclip 0"),
+                PlayerCmdItem("noclip 开启", "css_noclip 1"),
+                PlayerCmdItem("noclip 关闭", "css_noclip 0"),
                 PlayerCmdItem("指挥台连接状态", "css_ccstate"),
                 PlayerCmdItem("推送网页比赛快照", "css_ccsnapshot"),
                 new InGameMenuItem
@@ -228,6 +228,8 @@ public sealed class AdminMenuCatalog
                 },
                 NavItem("异能职业分配", "ability"),
                 PlayerCmdItem("开始当前模式 Warmup", "gamemode start"),
+                PlayerCmdItem("管理员暂停 /pause (/p) · 自有比赛运行时", "css_pause"),
+                PlayerCmdItem("管理员恢复 /unpause (/up) · 自有比赛运行时", "css_unpause"),
                 new InGameMenuItem
                 {
                     Title = "停止当前模式",

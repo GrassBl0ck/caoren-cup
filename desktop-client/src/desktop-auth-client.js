@@ -94,10 +94,10 @@ class DesktopAuthClient {
     };
   }
 
-  async loginAccount(loginName, password, rememberDevice) {
+  async loginAccount(email, password, rememberDevice) {
     if (!isDesktopAuthUrlAllowed(this.baseUrl)) return { ok: false, reason: 'unsupported_url' };
     if (!rememberDevice) {
-      const response = await this.request('/api/account-auth/login', { body: { loginName, password } });
+      const response = await this.request('/api/account-auth/login', { body: { email, password } });
       if (!response.ok) return { ok: false, reason: response.reason };
       return {
         ok: true,
@@ -109,7 +109,7 @@ class DesktopAuthClient {
     const existing = this.credentialStore.load();
     const deviceId = existing.ok ? existing.credential.deviceId : this.randomUUID();
     const response = await this.request('/api/desktop-auth/account-login', {
-      body: { loginName, password, deviceId },
+      body: { email, password, deviceId },
     });
     if (!response.ok) return { ok: false, reason: response.reason };
     if (!response.data.deviceToken || !response.data.sessionBootstrapTicket) {

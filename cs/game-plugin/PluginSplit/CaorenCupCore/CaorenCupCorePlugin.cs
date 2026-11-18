@@ -10,7 +10,7 @@ namespace CaorenCup.Core;
 public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
 {
     public override string ModuleName => "CaorenCup Core";
-    public override string ModuleVersion => "2.2.3";
+    public override string ModuleVersion => "2.2.4";
     public override string ModuleAuthor => "Graslock + AI";
     public int ContractVersion => CaorenCupCoreAccess.CurrentContractVersion;
     private CaorenCupConfigStore _configStore = null!;
@@ -61,6 +61,7 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
         RegisterMatchZyPracticeStateListeners();
         ScheduleMatchZyPracticeOnlyGuard();
         RegisterCoreCommands();
+        RegisterGameModePauseCommands();
     }
 
 
@@ -76,6 +77,7 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
 
     public override void Unload(bool hotReload)
     {
+        ClearCorePause(resumeMatch: OwnsPauseCommands);
         UnregisterMatchZyPracticeStateListeners();
         CaorenCupPreferencesAccess.Withdraw(_preferences);
         CaorenCupCoreAccess.Withdraw(this);

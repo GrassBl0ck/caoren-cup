@@ -6,16 +6,17 @@
   <meta name="description" content="草人杯，一起玩点不一样的。一个草人杯账户，进入 CS 和 Minecraft 板块。">
   <title>[草人杯] 2.0 · 一起玩点不一样的</title>
   <link rel="stylesheet" href="/css/portal.css">
-  <script defer src="/js/portal.js?v=2.0.0-account-settings1"></script>
+  <script defer src="/js/portal.js?v=2.2.4-email1"></script>
 </head>
 <body data-page="portal">
   <div class="portal-shell">
     <header class="portal-header">
       <a class="portal-brand" href="/" aria-label="草人杯首页"><span class="brand-symbol">草</span><span>草人杯<small>CAOREN CUP</small></span></a>
       <span class="header-caption">一起玩点不一样的</span>
-      <button id="logout" class="quiet-button" type="button" hidden>退出登录</button>
+      <nav class="board-navigation"><a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v2.2.4.zip" download>客户端下载</a><a id="profile-link" href="/profile" hidden>个人资料</a><a href="/admin">管理员</a></nav><button id="logout" class="quiet-button" type="button" hidden>退出登录</button>
     </header>
-    <main>
+    <p id="portal-message" class="form-message" role="status" aria-live="polite"></p>
+<main>
       <section class="portal-intro">
         <span class="eyebrow">玩家的聚会，从这里开始</span>
         <h1>一群朋友，<br>两种<span>快乐。</span></h1>
@@ -25,23 +26,21 @@
       <section id="account-auth" class="account-card" aria-labelledby="auth-title">
         <div class="card-topline"><span class="eyebrow">草人杯账户</span><span class="tiny-status">CS · MC 通用</span></div>
         <h2 id="auth-title">先登录，再出发</h2>
-        <p class="muted">老账号继续使用。新朋友可以直接在网页注册。</p>
+        <p class="muted">使用邮箱注册并登录，CS 与 MC 共用。</p>
         <div class="auth-tabs" aria-label="账户操作">
           <button type="button" data-auth-tab="login" aria-pressed="true">登录</button>
           <button type="button" data-auth-tab="register" aria-pressed="false">注册</button>
           <button type="button" data-auth-tab="reset-password" aria-pressed="false">找回密码</button>
         </div>
         <form id="login-form" data-auth-panel="login">
-          <label>账号<input name="loginName" autocomplete="username" maxlength="20" required placeholder="你的草人杯账号"></label>
+          <label>邮箱<input name="email" type="email" autocomplete="username" maxlength="254" required placeholder="注册时验证的邮箱"></label>
           <label>密码<input name="password" type="password" autocomplete="current-password" maxlength="128" required placeholder="输入密码"></label>
           <label id="remember-device-label" class="checkbox-label" hidden><input name="rememberDevice" type="checkbox">记住此设备（仅桌面客户端）</label>
           <button class="primary-button wide" type="submit">登录草人杯 <span aria-hidden="true">↗</span></button>
-          <button class="inline-link" data-auth-tab="legacy" type="button">未绑邮箱的老账号无法登录？使用游戏码恢复</button>
         </form>
         <form id="register-form" data-auth-panel="register" hidden>
           <label>邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="用于验证和找回密码"></label>
           <div class="code-row"><label>邮箱验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required placeholder="6 位验证码"></label><button type="button" data-send-code="register">发送验证码</button></div>
-          <label>自设账号<input name="loginName" autocomplete="username" minlength="6" maxlength="20" pattern="[A-Za-z0-9_]{6,20}" required placeholder="6–20 位字母、数字或下划线"></label>
           <label>自设密码<input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required placeholder="8–128 位，使用草人杯独立密码"></label>
           <label>确认密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
           <button class="primary-button wide" type="submit">注册并进入 <span aria-hidden="true">↗</span></button>
@@ -53,11 +52,6 @@
           <label>确认新密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
           <button class="primary-button wide" type="submit">重设密码</button>
         </form>
-        <div data-auth-panel="legacy" hidden>
-          <p class="muted">仅用于未绑邮箱的老账号。进入草人杯 CS2 服务器，输入 <code>/cclogin</code> 后填写一次性游戏码。</p>
-          <form id="legacy-code-form"><label>一次性游戏码<input name="code" autocomplete="one-time-code" maxlength="16" required></label><button class="secondary-button" type="submit">验证游戏码</button></form>
-          <form id="legacy-reset-form" hidden><p id="legacy-account-name" class="muted"></p><label>新密码<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><label>确认密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label><button class="primary-button" type="submit">恢复账号并登录</button></form>
-        </div>
         <p id="mail-availability" class="service-note" hidden></p>
         <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
       </section>
@@ -67,40 +61,7 @@
           <a class="board-card board-cs" href="/cs"><div class="board-art cs-art" aria-hidden="true"><span>CS</span><i></i></div><div class="board-content"><span class="eyebrow">COUNTER-STRIKE 2</span><h3>CS 板块 <span aria-hidden="true">↗</span></h3><p>组队、选图，开一场属于我们的比赛。<br>竞技、RUSH、单挑和更多娱乐玩法。</p><span class="card-link">进入现有草人杯大厅</span></div></a>
           <a class="board-card board-mc" href="/mc"><div class="board-art mc-art" aria-hidden="true"><span>MC</span><i></i><b></b></div><div class="board-content"><span class="eyebrow">MINECRAFT</span><h3>MC 板块 <span aria-hidden="true">↗</span></h3><p>坐垫上的对决，方块里的新玩法。<br>了解游戏规则，和朋友一起加入服务器。</p><span class="card-link">探索玩法与入服指引</span></div></a>
         </div>
-        <details class="account-settings" id="account-settings"><summary>账户设置与游戏身份 <span aria-hidden="true">＋</span></summary>
-          <div class="settings-grid">
-            <section><h3>登录账号</h3><p id="login-name-status" class="muted"></p>
-              <form id="change-login-name-form">
-                <label>当前密码<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
-                <label>新登录账号<input name="newLoginName" autocomplete="username" minlength="6" maxlength="20" pattern="[A-Za-z0-9_]{6,20}" required placeholder="6–20 位字母、数字或下划线"></label>
-                <button class="secondary-button" type="submit">保存新账号</button>
-              </form>
-              <p class="small-note">CS 与 MC 共用此账号。修改后，其他网页会话和其他设备会退出登录。</p>
-            </section>
-            <section><h3>修改密码</h3>
-              <form id="change-password-form">
-                <label>当前密码<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
-                <label>新密码<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required placeholder="8–128 位，使用草人杯独立密码"></label>
-                <label>再次输入新密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
-                <button class="secondary-button" type="submit">保存新密码</button>
-              </form>
-              <p class="small-note">修改的是草人杯账户密码。其他网页会话和其他设备会退出登录。</p>
-            </section>
-            <section><h3>邮箱</h3><p id="email-status" class="muted"></p>
-              <form id="bind-email-form" hidden>
-                <label>绑定邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
-                <div class="code-row"><label>验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label><button type="button" data-send-code="bind-email">发送验证码</button></div>
-                <label>当前账号密码<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
-                <button class="secondary-button" type="submit">验证并绑定邮箱</button>
-              </form>
-            </section>
-            <section><h3>CS 游戏身份</h3><p id="steam-status" class="muted"></p>
-              <form id="bind-steam-form" hidden><p class="muted">进入草人杯 CS2 服务器，输入 <code>/cclogin</code>，将游戏中的一次性码填在这里。</p><label>一次性游戏码<input name="code" autocomplete="one-time-code" maxlength="16" required></label><button class="secondary-button" type="submit">绑定 CS 游戏身份</button></form>
-              <p class="small-note">只有参加 CS 比赛时才需要绑定，进入 MC 板块不需要。</p>
-            </section>
-          </div>
-          <p id="account-message" class="form-message" role="status" aria-live="polite"></p>
-        </details>
+
       </section>
     </main>
     <footer class="portal-footer"><span>草人杯 2.0 · 朋友的下一场游戏</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">冀ICP备2026043660号-1</a><a href="https://beian.mps.gov.cn/#/query/webSearch?code=13102402000558" target="_blank" rel="noreferrer">冀公网安备13102402000558号</a></div></footer>

@@ -1327,6 +1327,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             socket.data.playerId = null;
             broadcastState();
             socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '你已退出游戏' });
+            socket.emit('PLAYER_CENTER_MATCH_ENDED', { message: '你已退出本场比赛。' });
         });
 
         socket.on('disconnect', () => {

@@ -29,7 +29,7 @@ async function websiteAccount() {
 test('a verified website account can log in without entering either game and survives reload', async () => {
     const runtime = await websiteAccount();
     const result = await runtime.service.authenticateLoginAccount({
-        loginName: runtime.account.loginName, password: runtime.password,
+        email: 'player@example.com', password: runtime.password,
     });
     assert.equal(result.ok, true);
     const reloaded = new IdentityStore(runtime.store.filePath);
@@ -42,6 +42,6 @@ test('a website account without a trusted Steam binding cannot join the CS match
     const runtime = await websiteAccount();
     const result = await runtime.service.joinPlayerCenterMatch(runtime.identity.identityId, 'test-cs-match');
     assert.equal(result.ok, false);
-    assert.equal(result.reason, 'steam_binding_required');
+    assert.equal(result.reason, 'game_binding_required');
     assert.equal(runtime.service.listMemberships('test-cs-match').length, 0);
 });

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
     advancePhase,
+    applyDraftPick,
     finishDraftPick,
     finishMapVote,
     finishSideVote,
@@ -20,6 +21,34 @@ import { GamePhase } from './types';
 test.afterEach(() => {
     clearAllFlowTimers();
     clearFlowUndoHistory();
+});
+
+test('finishing a manual draft batch preserves the next captain choices', () => {
+    const session = createInitialSession();
+    session.phase = GamePhase.PlayerDraft;
+    session.draftOrder = ['A', 'B', 'B', 'A', 'A', 'B', 'B', 'A'];
+    session.draftOriginalOrder = [...session.draftOrder];
+    session.draftIndex = 0;
+    session.draftCaptainsActive = true;
+    session.captains = { A: 'capA', B: 'capB' };
+    for (const id of ['capA', 'capB', ...Array.from({ length: 8 }, (_, i) => `p${i}`)]) {
+        session.players[id] = { playerId: id, name: id, role: 'Player', isReady: false };
+    }
+    session.players.capA.rosterTeam = 'A';
+    session.players.capB.rosterTeam = 'B';
+    session.teams.A.players = ['capA'];
+    session.teams.B.players = ['capB'];
+    session.playerOrder = Object.keys(session.players);
+    setSession(session);
+    assert.equal(applyDraftPick('p0', 'manual')?.playerId, 'p0');
+    finishDraftPick('manual');
+    assert.equal(session.draftIndex, 1);
+    assert.deepEqual(session.teams.B.players, ['capB']);
+    assert.equal(session.draftOrder[session.draftIndex], 'B');
+    assert.ok(getDraftPickTimer());
+    finishDraftPick('timeout');
+    assert.equal(session.draftIndex, 3);
+    assert.equal(session.teams.B.players.length, 3);
 });
 
 test('manual phase advance records one unified checkpoint with its actor', () => {
@@ -109,7 +138,7 @@ test('map and side vote completion record system phase checkpoints', () => {
     assert.equal(exportFlowUndoState().entries[0].restorePhase, GamePhase.SidePick);
 });
 
-test('completed draft automatically advances and records one system checkpoint', async () => {
+test('completed draft waits for administrator roster confirmation and records its actor', async () => {
     const session = createInitialSession();
     session.phase = GamePhase.PlayerDraft;
     session.draftOrder = [];
@@ -117,6 +146,10 @@ test('completed draft automatically advances and records one system checkpoint',
     session.draftIndex = 0;
     session.draftCaptainsActive = true;
     session.banSequence = ['A'];
+    session.players.a = {playerId:'a',name:'A',role:'Player',rosterTeam:'A',isReady:false};
+    session.players.b = {playerId:'b',name:'B',role:'Player',rosterTeam:'B',isReady:false};
+    session.playerOrder = ['a','b'];
+    session.teams.A.players = ['a'];session.teams.B.players = ['b'];
     setSession(session);
 
     finishDraftPick('manual');
@@ -124,9 +157,11 @@ test('completed draft automatically advances and records one system checkpoint',
 
     await new Promise(resolve => setTimeout(resolve, 1_600));
 
+    assert.equal(session.phase, GamePhase.PlayerDraft);
+    assert.equal(advancePhase(GamePhase.PlayerDraft, GamePhase.MapBan, 'Admin', 'admin'), true);
     assert.equal(session.phase, GamePhase.MapBan);
     assert.equal(exportFlowUndoState().entries.length, 1);
-    assert.equal(exportFlowUndoState().entries[0].actorId, 'SYSTEM');
+    assert.equal(exportFlowUndoState().entries[0].actorId, 'admin');
     assert.equal(exportFlowUndoState().entries[0].restorePhase, GamePhase.PlayerDraft);
 });
 
@@ -280,4 +315,12 @@ test('异能 Ban 推进到选角会记录可撤销的完整 BP 快照', () => {
         timeoutAt: session.abilityBanState?.timeoutAt,
     });
     assert.equal(getFlowUndoStatus(session, admin).canUndo, true);
+});
+
+test('administrator cannot confirm incomplete teams even when legacy unbalanced targets are disabled', () => {
+ const session=createInitialSession();session.phase=GamePhase.PlayerDraft;
+ session.players.a={playerId:'a',name:'A',role:'Player',rosterTeam:'A',isReady:false};
+ session.players.b={playerId:'b',name:'B',role:'Player',isReady:false};
+ setSession(session);assert.equal(advancePhase(GamePhase.PlayerDraft,GamePhase.MapBan,'Admin','admin'),false);
+ assert.equal(session.phase,GamePhase.PlayerDraft);
 });

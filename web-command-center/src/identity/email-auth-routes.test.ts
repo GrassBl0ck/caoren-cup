@@ -24,11 +24,12 @@ async function fixture() {
     const codes = new EmailCodeService({ now: () => now.value, deliver: async (message) => { sent.push(message); } });
     const gameTickets = new Map<string, { steamId: string; name: string }>();
     const invalidations: string[] = [];
+    const matchSession = { sessionId: 'fixture-match', phase: 'Lobby' };
     const app = express();
     app.use(express.json());
     registerIdentityAuthRoutes(app, {
         service, playerCenterSessionStore: sessions, emailCodes: codes,
-        getSession: () => ({ sessionId: 'fixture-match', phase: 'Lobby' } as any),
+        getSession: () => matchSession as any,
         onPlayerCenterSessionsRevoked: (event) => { invalidations.push(event.identityId); },
         consumeGameLoginTicket: (raw) => {
             const key = String(raw || '');
@@ -65,7 +66,7 @@ async function fixture() {
         assert.equal(response.status, 200);
         return { email, challengeId: response.data.challengeId, code: sent.at(-1)!.code };
     }
-    return { dir, store, sessions, service, sent, now, gameTickets, invalidations, request, proof,
+    return { dir, store, sessions, service, sent, now, gameTickets, invalidations, request, proof, matchSession,
         close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
     };
 }
@@ -76,12 +77,20 @@ test('email registration signs into both protected boards but cannot join CS unt
     assert.equal((await f.request('/mc.html')).status, 303);
     assert.equal((await f.request('/api/mc/info')).status, 401);
     const proof = await f.proof('new@example.com', 'register');
-    const fields = { ...proof, loginName: 'New_Player', password: 'website-password', confirmPassword: 'website-password' };
+    const fields = { ...proof, password: 'website-password', confirmPassword: 'website-password' };
     const created = await f.request('/api/account-auth/register', fields);
     assert.equal(created.status, 201);
     assert.match(created.headers.get('set-cookie')!, /HttpOnly/i);
     assert.equal(created.data.profile.hasSteamBinding, false);
-    const desktop = await f.request('/api/desktop-auth/account-login', { loginName: fields.loginName, password: fields.password, deviceId: 'website-only-device' });
+    assert.equal(created.data.profile.email, fields.email);
+    assert.equal(created.data.profile.loginName, undefined);
+    const me = await f.request('/api/player-center/me', undefined, created.cookie);
+    assert.equal(me.data.joinUnavailableReason, 'game_binding_required');
+    const login = await f.request('/api/account-auth/login', { email: fields.email.toUpperCase(), password: fields.password });
+    assert.equal(login.status, 200);
+    assert.equal((await f.request('/api/account-auth/login', { loginName: f.service.findAccountByEmail(fields.email)!.loginName, password: fields.password })).status, 401);
+
+    const desktop = await f.request('/api/desktop-auth/account-login', { email: fields.email, password: fields.password, deviceId: 'website-only-device' });
     assert.equal(desktop.status, 200);
     assert.equal((await f.service.authenticatePlayerCenterDeviceToken(desktop.data.deviceToken)).ok, true);
     assert.equal((await f.request('/cs', undefined, created.cookie)).status, 200);
@@ -90,7 +99,7 @@ test('email registration signs into both protected boards but cannot join CS unt
     assert.notEqual((await f.request('/pages/cs.html')).status, 200);
     assert.notEqual((await f.request('/cs%2ehtml')).status, 200);
     const denied = await f.request('/api/player-center/match/join', {}, created.cookie);
-    assert.equal(denied.data.error, 'steam_binding_required');
+    assert.equal(denied.data.error, 'game_binding_required');
     assert.equal(f.service.listMemberships('fixture-match').length, 0);
     assert.equal((await f.request('/api/account-auth/register', fields)).data.error, 'email_code_invalid');
     f.gameTickets.set('BINDONCE', { steamId: '76561198000019901', name: 'Game Player' });
@@ -116,7 +125,7 @@ test('old account email binding preserves identity and password; email recovery 
     const device = await f.service.issueDeviceToken(old.identity.identityId, 'old-device');
     f.gameTickets.set('ISSUEDBEFOREBIND', { steamId: '76561198000019902', name: 'Legacy Player' });
     const oldRecovery = await f.request('/api/account-recovery/game-code', { gameCode: 'ISSUEDBEFOREBIND' });
-    assert.equal(oldRecovery.status, 200);
+    assert.equal(oldRecovery.status, 410);
     assert.equal((await f.request('/api/account-email/code', { email: 'old@example.com', purpose: 'bind-email' })).status, 401);
     const proof = await f.proof('old@example.com', 'bind-email', cookie);
     const bound = await f.request('/api/player-center/account/email', { ...proof, currentPassword: old.password }, cookie);
@@ -125,7 +134,7 @@ test('old account email binding preserves identity and password; email recovery 
     const staleRecovery = await f.request('/api/account-recovery/complete', {
         recoveryTicket: oldRecovery.data.recoveryTicket, newPassword: 'should-not-work', confirmPassword: 'should-not-work',
     });
-    assert.equal(staleRecovery.data.error, 'use_email_recovery');
+    assert.equal(staleRecovery.data.error, 'endpoint_retired');
     await assert.rejects(f.service.completeAccountRecovery({ identityId: old.identity.identityId, newPassword: 'should-not-work' }), /use_email_recovery/);
     assert.equal(f.service.getLoginAccount(old.identity.identityId)!.loginName, old.account.loginName);
     assert.equal(f.service.findIdentityBySteamId('76561198000019902')!.identityId, old.identity.identityId);
@@ -133,7 +142,7 @@ test('old account email binding preserves identity and password; email recovery 
     assert.equal((await f.request('/api/player-center/me', undefined, cookie)).status, 200);
     assert.equal((await f.request('/api/player-center/me', undefined, `caoren_player_center=${other.rawToken}`)).status, 401);
     f.gameTickets.set('NOEMAILBYPASS', { steamId: '76561198000019902', name: 'Legacy Player' });
-    assert.equal((await f.request('/api/account-recovery/game-code', { gameCode: 'NOEMAILBYPASS' })).data.error, 'use_email_recovery');
+    assert.equal((await f.request('/api/account-recovery/game-code', { gameCode: 'NOEMAILBYPASS' })).data.error, 'endpoint_retired');
     f.now.value += 60_001;
     const reset = await f.proof('old@example.com', 'reset-password');
     const result = await f.request('/api/account-recovery/email', { ...reset, newPassword: 'new-password-123', confirmPassword: 'new-password-123' });
@@ -167,4 +176,32 @@ test('proof purposes, CS ownership conflicts, duplicate signup and cross-site wr
     ]);
     assert.equal(attempts.filter((item) => item.status === 'fulfilled').length, 1);
     assert.equal((await f.request('/api/steam-auth/web/start')).status, 404);
+});
+
+
+test('join availability reports binding, match phase, joined and block reasons; blocked nickname is released', async (t) => {
+    const f = await fixture(); t.after(f.close);
+    const first = await f.service.registerVerifiedEmailAccount({email:'availability@example.com',password:'test-password'});
+    const issued = await f.sessions.create(first.identity.identityId, first.account.updatedAt);
+    const cookie = `caoren_player_center=${issued.rawToken}`;
+    const me = async () => (await f.request('/api/player-center/me', undefined, cookie)).data;
+    assert.equal((await me()).joinUnavailableReason, 'game_binding_required');
+    await f.service.bindVerifiedGameIdentity(first.identity.identityId, '76561198000019904', 'Shared Nick');
+    assert.equal((await me()).joinUnavailableReason, null);
+    f.matchSession.phase = 'CaptainSelection';
+    assert.equal((await me()).joinUnavailableReason, 'match_started');
+    f.matchSession.phase = 'Scoreboard';
+    assert.equal((await me()).joinUnavailableReason, 'match_ended');
+    f.matchSession.phase = 'Lobby';
+    const joined = await f.service.joinPlayerCenterMatch(first.identity.identityId, f.matchSession.sessionId);
+    assert.ok(joined.ok);
+    assert.equal((await me()).joinUnavailableReason, 'already_joined');
+    const second = await f.service.registerVerifiedEmailAccount({email:'availability2@example.com',password:'test-password'});
+    await f.service.bindVerifiedGameIdentity(second.identity.identityId, '76561198000019905', 'Shared Nick');
+    assert.equal((await f.service.joinPlayerCenterMatch(second.identity.identityId, f.matchSession.sessionId)).reason, 'nickname_in_use');
+    if (!joined.ok) throw Error('unexpected join failure');
+    await f.service.blockMembership(joined.membership.membershipId);
+    assert.equal((await me()).joinUnavailableReason, 'blocked_for_session');
+    assert.equal((await me()).joinAvailable, false);
+    assert.equal((await f.service.joinPlayerCenterMatch(second.identity.identityId, f.matchSession.sessionId)).ok, true);
 });

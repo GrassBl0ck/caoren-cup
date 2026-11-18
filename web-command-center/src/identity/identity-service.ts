@@ -23,7 +23,8 @@ interface ServiceOptions {
 }
 
 interface LoginAccountAuthenticationInput {
-    loginName: unknown;
+    loginName?: unknown;
+    email?: unknown;
     password: unknown;
 }
 
@@ -86,7 +87,7 @@ export class LobbyIdentityService {
                 return { ok: false as const, reason: 'account_unavailable' as const };
             }
             if (!identity.steamId || !identity.gameBoundAt) {
-                return { ok: false as const, reason: 'steam_binding_required' as const };
+                return { ok: false as const, reason: 'game_binding_required' as const };
             }
             const memberships = Object.values(data.memberships).filter((membership) =>
                 membership.sessionId === sessionId && membership.identityId === identityId,
@@ -100,7 +101,7 @@ export class LobbyIdentityService {
             const nickname = identity.steamNickname || identity.displayName;
             const nicknameInUse = Object.values(data.memberships).some((membership) =>
                 membership.sessionId === sessionId && membership.identityId !== identityId &&
-                !membership.leftAt && membership.nickname === nickname,
+                !membership.leftAt && !membership.blockedAt && membership.nickname === nickname,
             );
             if (nicknameInUse) return { ok: false as const, reason: 'nickname_in_use' as const };
 
@@ -171,18 +172,18 @@ export class LobbyIdentityService {
     }
 
     // Only call after the server has consumed an email ownership challenge.
-    async registerVerifiedEmailAccount(input: { email: unknown; loginName: unknown; password: unknown }) {
+    async registerVerifiedEmailAccount(input: { email: unknown; loginName?: unknown; password: unknown }) {
         const email = normalizeEmail(input.email);
-        const loginName = validateLoginName(input.loginName);
         const password = await hashAccountPassword(input.password, { now: this.now, randomBytes: this.randomBytes });
         return this.store.mutate((data) => {
+            const loginName = generateRandomLoginName(new Set(Object.values(data.accounts).map(account => account.loginName)), this.randomBytes);
             if (Object.values(data.accounts).some((account) => account.email === email)) throw new Error('registration_unavailable');
             if (Object.values(data.accounts).some((account) => account.loginName.toLowerCase() === loginName.toLowerCase())) {
                 throw new Error('login_name_taken');
             }
             const now = this.now();
             const identityId = this.makeId(16);
-            const identity: IdentityRecord = { identityId, displayName: loginName, createdAt: now, updatedAt: now };
+            const identity: IdentityRecord = { identityId, displayName: '玩家', createdAt: now, updatedAt: now };
             const account: LoginAccountRecord = {
                 identityId, loginName, enabled: true, passwordState: 'active', password,
                 email, emailVerifiedAt: now, createdAt: now, updatedAt: now,
@@ -299,7 +300,7 @@ export class LobbyIdentityService {
     }
 
     async authenticateLoginAccount(input: LoginAccountAuthenticationInput) {
-        const account = this.findAccountByLoginName(input.loginName);
+        const account = input.email !== undefined ? this.findAccountByEmail(input.email) : this.findAccountByLoginName(input.loginName);
         if (!account || account.passwordState !== 'active' || !account.password) {
             return { ok: false as const, reason: 'invalid_credentials' as const };
         }

@@ -32,7 +32,9 @@ public sealed class CommandHelpCatalogTests
             Assert.NotEmpty(entry.WorkedExamples);
             Assert.All(entry.Sources, source => Assert.Contains("/MatchZy/blob/0.8.15/", source));
         });
-        Assert.Contains(".pause", player.Entries.Single(entry => entry.Name == ".tech").Usage);
+        Assert.Contains("/tech", player.Entries.Single(entry => entry.Name == ".tech").Usage);
+        Assert.DoesNotContain(".pause", player.Entries.Single(entry => entry.Name == ".tech").Usage);
+        Assert.Contains(CommandHelpCatalog.Load().Entries, entry => entry.Name == "/noclip" && entry.Console == "css_noclip");
         Assert.Contains(player.Entries.Single(entry => entry.Name == ".unpause").Notes, note => note.Contains("双方"));
         Assert.DoesNotContain(CommandHelpCatalog.Load().Entries, e => e.Name == "/status");
     }

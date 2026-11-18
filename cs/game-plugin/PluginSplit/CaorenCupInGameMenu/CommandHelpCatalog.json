@@ -5138,13 +5138,13 @@
     "WorkedExamples": []
   },
   {
-    "Name": "/sv_noclip",
-    "Console": "sv_noclip",
+    "Name": "/noclip",
+    "Console": "css_noclip",
     "Module": "全局管理",
     "Summary": "允许或禁止玩家 noclip",
     "Permission": "@css/root",
     "Usage": [
-      "/sv_noclip <1|0|status>"
+      "/noclip <1|0|status>"
     ],
     "Parameters": [
       "1允许玩家使用noclip，0禁止，status只查询当前状态；禁止时会清理已开启的noclip。"
@@ -5157,7 +5157,7 @@
     "ColoredUsage": [
       [
         {
-          "Text": "/sv_noclip"
+          "Text": "/noclip"
         },
         {
           "Text": " "

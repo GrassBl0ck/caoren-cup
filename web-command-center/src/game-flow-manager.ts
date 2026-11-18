@@ -199,16 +199,16 @@ const getMapBanVoteDurationSeconds = (): number => {
 };
 
 // ========== Draft flow ==========
-const scheduleDraftToMapBan = () => {
+const waitForAdministratorRosterConfirmation = () => {
     clearDraftPickTimer();
     const session = getSession();
     session.draftPickTimeoutAt = null;
     session.timerEndAt = null;
     session.timerPhase = null;
     if (session.rollTimeout) clearTimeout(session.rollTimeout);
-    session.rollTimeout = setTimeout(() => {
-        advancePhase(GamePhase.PlayerDraft, GamePhase.MapBan);
-    }, 1500);
+    session.rollTimeout = null;
+    session.draftCaptainsActive = false;
+    notifyMessage?.('分队完成，请管理员确认 A/B 阵容后进入地图 BP。');
 };
 
 const applyDraftPick = (pickedId?: string, reason: 'manual' | 'timeout' = 'manual'): Player | null => {
@@ -239,7 +239,7 @@ const startDraftPickTimerFunc = (shouldBroadcast = false) => {
     session.draftCaptainsActive = true;
 
     if (isDraftComplete()) {
-        scheduleDraftToMapBan();
+        waitForAdministratorRosterConfirmation();
         if (shouldBroadcast) broadcast?.();
         return;
     }
@@ -264,7 +264,7 @@ const finishDraftPick = (reason: 'timeout' | 'manual' = 'timeout') => {
 
     const batch = getCurrentDraftBatch();
     const team = batch?.team;
-    if (team) {
+    if (team && reason === 'timeout') {
         while (!isDraftComplete() && session.draftOrder[session.draftIndex] === team) {
             const picked = applyDraftPick(undefined, reason === 'timeout' ? 'timeout' : 'manual');
             if (!picked) break;
@@ -276,7 +276,7 @@ const finishDraftPick = (reason: 'timeout' | 'manual' = 'timeout') => {
         session.timerEndAt = null;
         session.timerPhase = null;
         broadcast?.();
-        scheduleDraftToMapBan();
+        waitForAdministratorRosterConfirmation();
     } else {
         startDraftPickTimerFunc(true);
     }
@@ -292,7 +292,7 @@ const startCaptainDraftFunc = (shouldBroadcast = true) => {
         session.draftPickTimeoutAt = null;
         session.timerEndAt = null;
         session.timerPhase = null;
-        scheduleDraftToMapBan();
+        waitForAdministratorRosterConfirmation();
         if (shouldBroadcast) broadcast?.();
         return true;
     }
@@ -1189,6 +1189,14 @@ const advancePhase = (
     if (from === GamePhase.Lobby && isDuelMode()) {
         if (!setupDuelFromLobby()) return false;
     }
+    if (from === GamePhase.PlayerDraft && nextTo === GamePhase.MapBan) {
+        const players = getGamePlayers(session);
+        if (!players.some(player => player.rosterTeam === 'A') || !players.some(player => player.rosterTeam === 'B') ||
+            players.some(player => player.rosterTeam !== 'A' && player.rosterTeam !== 'B')) {
+            notifyMessage?.('不能确认分队：请为全部参赛玩家分配 A/B 队，并确保两队都有玩家。');
+            return false;
+        }
+    }
     if (!isDuelMode() && [GamePhase.MapBan, GamePhase.PreGameSetup, GamePhase.LiveGame].includes(nextTo)) {
         const rosterCheck = validateUnbalancedRoster(session);
         if (!rosterCheck.valid) {
@@ -1396,7 +1404,7 @@ const performPhaseTransition = (to: GamePhase) => {
             session.banSequence = banSequence;
             session.timerEndAt = null;
             session.timerPhase = null;
-            if (isDraftComplete()) scheduleDraftToMapBan();
+            if (isDraftComplete()) waitForAdministratorRosterConfirmation();
             break;
         case GamePhase.MapBan:
             session.bannedMaps = [];

@@ -43,8 +43,8 @@
     <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9.2-skinpromo1">
     <link rel="stylesheet" href="/css/caoren-2026.css?v=20261019-visual1">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
-</head>
-<body class="caoren-modifiers-disabled">
+<style>body[data-page="cs"] .admin-entry-block{display:none}body[data-page="admin"] #player-center-home,body[data-page="admin"] #player-center-entry-error{display:none!important}body[data-page="admin"] .lobby-desk{display:block}body[data-page="admin"] .desk-rail{max-width:620px;margin:24px auto}body[data-page="admin"] .desk-rail .rail-block:not(.admin-entry-block){display:none}</style></head>
+<body class="caoren-modifiers-disabled" data-page="cs">
     <div class="page-shell">
     <header class="site-header">
         <a class="site-brand" href="/" aria-label="草人杯对局指挥台首页">
@@ -55,7 +55,7 @@
             </span>
         </a>
         <div class="site-header-actions">
-            <a class="header-text-link" href="/">返回板块选择</a>
+            <a class="header-text-link" href="/">返回板块选择</a><a class="header-text-link" href="/profile">个人资料</a><a class="header-text-link" href="/admin">管理员</a>
             <a id="rules-guide-link" class="header-text-link" href="/rules.html">赛前指引</a>
             <button id="update-announcement-trigger" class="header-text-link update-announcement-trigger" type="button" aria-haspopup="dialog" aria-controls="update-announcement-drawer">
                 更新公告
@@ -65,105 +65,23 @@
         </div>
     </header>
     <div id="login-area">
-        <section class="lobby-hero" aria-labelledby="lobby-hero-title">
-            <div class="lobby-hero-copy">
-                <h1 id="lobby-hero-title">草人杯<br>对局指挥台</h1>
-                <p class="hero-lede">玩家在这里登录、加入本场对局并连接服务器；管理员在同一页面分队、禁选地图、推进比赛阶段。</p>
-                <ul class="hero-facts">
-                    <li>竞技、RUSH 与单挑</li>
-                    <li>5v5 与 1v1</li>
-                    <li>网页与游戏内状态同步</li>
-                </ul>
-            </div>
-            <div class="map-mosaic" role="img" aria-label="草人杯比赛地图实拍：Mirage、Anubis、Nuke、Inferno">
-                <figure>
-                    <img src="/assets/maps/de_mirage.jpg" alt="Mirage 地图中的木箱与拱门近景" width="632" height="360" decoding="async">
-                    <figcaption>Mirage <span>de_mirage</span></figcaption>
-                </figure>
-                <figure>
-                    <img src="/assets/maps/de_anubis.jpg" alt="Anubis 地图的水路与石墙近景" width="632" height="360" decoding="async">
-                    <figcaption>Anubis <span>de_anubis</span></figcaption>
-                </figure>
-                <figure>
-                    <img src="/assets/maps/de_nuke.jpg" alt="Nuke 地图的仓库与货箱近景" width="632" height="360" decoding="async">
-                    <figcaption>Nuke <span>de_nuke</span></figcaption>
-                </figure>
-                <figure>
-                    <img src="/assets/maps/de_inferno.jpg" alt="Inferno 地图的巷道与阳台近景" width="632" height="360" decoding="async">
-                    <figcaption>Inferno <span>de_inferno</span></figcaption>
-                </figure>
-            </div>
-        </section>
-
-        <div class="lobby-desk">
-            <div class="lobby-desk-main">
-        <section id="player-center-entry" class="panel player-center-entry" aria-labelledby="player-center-entry-title">
-            <div class="login-panel-header">
-                <div>
-                    <span class="section-eyebrow">草人杯 2.0.0</span>
-                    <h2 id="player-center-entry-title">玩家中心</h2>
-                    <p>账号登录只进入玩家中心，不会自动加入比赛。</p>
-                </div>
-                <span class="status-chip">账号密码登录</span>
-            </div>
-            <div class="player-center-auth-stack">
-                <div id="player-center-login" class="player-center-auth-panel">
-                    <label>登录账号<input id="player-center-login-name" type="text" maxlength="32" autocomplete="username" placeholder="例如 cc_Abc234xy"></label>
-                    <label>密码<input id="player-center-login-password" type="password" maxlength="128" autocomplete="current-password"></label>
-                    <div class="player-center-login-save-options" style="display:flex;gap:14px;flex-wrap:wrap;margin:8px 0;font-size:13px;">
-                        <label><input id="player-center-save-login-name" type="checkbox"> 保存账号</label>
-                    </div>
-                    <label id="player-center-remember-device-row" hidden><input id="player-center-remember-device" type="checkbox"> 记住此设备（仅桌面客户端）</label>
-                    <button id="player-center-login-btn" class="primary-btn" type="button">登录玩家中心</button>
-                    <button id="player-center-game-code-toggle" class="header-text-link" type="button">使用 <code>/cclogin</code> 游戏码</button>
-                </div>
-                <div id="player-center-game-code-panel" class="player-center-auth-panel" hidden>
-                    <p>新用户请先返回首页，用邮箱注册草人杯账户。尚未绑定邮箱的老账号，可在 CS2 输入 <code>/cclogin</code> 获取一次性游戏码，在这里恢复账号。</p>
-                    <label>一次性游戏码<input id="player-center-game-code" type="text" maxlength="16" autocomplete="one-time-code"></label>
-                    <button id="player-center-game-code-btn" class="primary-btn" type="button">验证游戏码</button>
-                </div>
-                <div id="player-center-created" class="player-center-auth-panel player-center-credential-card" hidden>
-                    <h3>账号已创建，请立即保存</h3>
-                    <p>以下随机密码只显示这一次。保存后才能进入玩家中心。</p>
-                    <div><span>登录账号</span><strong id="player-center-created-login-name"></strong><button id="player-center-copy-login-name" type="button">复制账号</button></div>
-                    <div><span>随机密码</span><strong id="player-center-created-password"></strong><button id="player-center-copy-password" type="button">复制密码</button></div>
-                    <button id="player-center-credentials-saved" class="primary-btn" type="button">确认已保存</button>
-                </div>
-                <div id="player-center-recovery" class="player-center-auth-panel" hidden>
-                    <h3>恢复账号</h3>
-                    <p>现有账号：<strong id="player-center-recovery-login-name"></strong></p>
-                    <label>新密码<input id="player-center-recovery-password" type="password" maxlength="128" autocomplete="new-password"></label>
-                    <label>再次输入新密码<input id="player-center-recovery-confirm-password" type="password" maxlength="128" autocomplete="new-password"></label>
-                    <button id="player-center-recovery-btn" class="primary-btn" type="button">设置新密码并进入</button>
-                </div>
-            </div>
-            <aside class="login-side" aria-label="登录说明">
-                <h3>登录说明</h3>
-                <ul>
-                    <li><strong>保持登录</strong>连续 7 天未使用，或满 30 天，需要重新登录。</li>
-                    <li><strong>不保存密码</strong>网站只保留登录状态，不保存密码原文。</li>
-                    <li><strong>公共电脑</strong>使用后请退出账号，避免下一位玩家沿用你的会话。</li>
-                </ul>
-                <p class="login-side-note">新用户请在首页注册；已绑定邮箱可通过邮箱找回密码。未绑邮箱的老用户仍可使用 <code>/cclogin</code> 恢复账号。</p>
-            </aside>
-            <div id="player-center-entry-error" class="player-center-message" aria-live="polite"></div>
-        </section>
-
+        <div class="lobby-desk"><div class="lobby-desk-main">
+        <p id="player-center-entry-error" role="status"></p>
         <section id="player-center-home" class="panel player-center-home" hidden aria-labelledby="player-center-home-title">
             <div class="login-panel-header">
-                <div><span class="section-eyebrow">账号会话</span><h2 id="player-center-home-title">玩家中心</h2></div>
+                <div><span class="section-eyebrow">参赛状态</span><h2 id="player-center-home-title">本场比赛</h2></div>
                 <button id="player-center-logout-btn" type="button">退出账号</button>
             </div>
             <div class="player-center-profile-grid">
                 <div><span>Steam 昵称</span><strong id="player-center-steam-nickname">—</strong></div>
-                <div><span>登录账号</span><strong id="player-center-account-name">—</strong></div>
+                <div><span>邮箱</span><strong id="player-center-account-name">—</strong></div>
                 <div><span>比赛状态</span><strong id="player-center-match-status">等待中</strong></div>
             </div>
             <div class="player-center-actions">
                 <button id="player-center-join-btn" class="player-center-match-action primary-btn" type="button">加入本场比赛</button>
                 <button id="player-center-forget-device-btn" type="button" hidden>退出账号并忘记此设备</button>
             </div>
-            <p class="muted-line">账号、密码和邮箱统一在 <a href="/#account-settings">草人杯账户设置</a> 中管理，CS 与 MC 共用。</p>
+            <p class="muted-line">前往 <a href="/profile">个人资料</a> 管理邮箱、密码和 CS 游戏身份。</p>
             <div id="player-center-home-message" class="player-center-message" aria-live="polite"></div>
             <p class="muted-line">等待中 / 已开始 / 已结束仅为公开简单状态；未加入比赛时不会显示名单、比分或比赛私密数据。</p>
         </section>
@@ -186,21 +104,21 @@
                         </div>
                         <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草人杯服务器</button>
                     </div>
-                    <p class="rail-note">点击后通过 Steam 启动 CS2，并加入当前对局服务器。</p>
+                    <p class="rail-note">通过 Steam 启动 CS2。若没有响应，可在游戏控制台手动连接。</p><code id="server-connect-command">connect play.caorencup.icu</code><button id="copy-server-command" type="button">复制连接命令</button><p id="server-connect-message" role="status"></p>
                 </div>
                 <div class="rail-block">
                     <h3>客户端</h3>
                     <details class="download-menu">
                         <summary>客户端下载</summary>
                         <div class="download-menu-content">
-                            <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v1.11.1.zip" download>下载桌面客户端</a>
-                            <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v1.11.1" target="_blank" rel="noopener">GitHub 备用下载</a>
+                            <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v2.2.4.zip" download>下载桌面客户端</a>
+                            <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v2.2.4" target="_blank" rel="noopener">GitHub 备用下载</a>
                         </div>
                     </details>
                     <p class="rail-note">仅桌面客户端支持记住设备登录。</p>
                 </div>
-                <div class="rail-block">
-                    <h3>管理员</h3>
+                <div class="rail-block admin-entry-block">
+                    <h3>管理员管理台</h3>
                     <details id="admin-login-entry" class="admin-login-entry">
                         <summary>管理员登录</summary>
                         <p>管理员认证是独立流程；登录管理员不会创建玩家账号，也不会自动参赛。</p>
@@ -536,21 +454,6 @@
                         </div>
                         <div class="match-options-desc" style="margin-top:6px;">&#21482;&#29992;&#20110;&#32593;&#39029;&#27969;&#31243;&#27979;&#35797;&#65292;&#19981;&#20250;&#36827;&#20837; CS2 &#26381;&#21153;&#22120;&#65292;&#20063;&#19981;&#20250;&#20135;&#29983;&#30495;&#23454;&#20987;&#26432;&#25968;&#25454;&#12290;</div>
                     </div>
-                </div>
-
-                <div class="match-options-row" id="unbalanced-options-row" style="display:none;">
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;width:100%;">
-                        <label>
-                            <div class="match-options-title">不平衡竞技目标</div>
-                            <select id="match-option-unbalanced">
-                                <option value="false">平衡竞技</option>
-                                <option value="true">不平衡竞技</option>
-                            </select>
-                        </label>
-                        <label><div class="match-options-title">A 队人数</div><input id="match-option-team-a-size" type="number" min="1" step="1" value="3"></label>
-                        <label><div class="match-options-title">B 队人数</div><input id="match-option-team-b-size" type="number" min="1" step="1" value="5"></label>
-                    </div>
-                    <div class="match-options-desc" style="margin-top:6px;">不平衡竞技会在分队、地图 BP、赛前准备和锁队同步前校验目标人数。</div>
                 </div>
 
                 <label class="match-options-row" id="legacy-undercover-option" style="display:none;" aria-hidden="true">
@@ -949,7 +852,7 @@
     <script src="/js/caoren-dialog.js?v=1.9.2-modern-dialog11"></script>
     <script src="/js/task-template-history.js?v=undercover-ui1"></script>
     <script src="/js/ability-bp-ui.js?v=ability-bp-task7-20260720"></script>
-    <script src="/js/lobby-app.js?v=2.2.3-ability1"></script>
+    <script src="/js/lobby-app.js?v=2.2.4-ability1"></script>
     <script src="/js/update-announcement-public.js"></script>
     <script src="/js/update-announcement-admin-mutation-state.js"></script>
     <script src="/js/update-announcement-admin.js?v=1.9.2-modern-dialog8"></script>
@@ -969,7 +872,7 @@
 
 
 <script src="/js/access-admin.js?v=1.9.2-modern-dialog8"></script>
-<script src="/js/player-center.js?v=2.0.0-account-settings1"></script>
+<script src="/js/player-center.js?v=2.2.4-email1"></script>
 <script src="/js/weaponpaints-draft.js?v=1.9.2-qol2"></script>
 <script src="/js/weaponpaints-entry.js?v=1.11.1-pcskin1"></script>
 <script src="/js/weaponpaints-app.js?v=1.11.1-pcskin1"></script>

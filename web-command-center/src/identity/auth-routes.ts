@@ -21,7 +21,6 @@ import { PlayerCenterSessionRecord, PlayerCenterSessionStore } from './player-ce
 import { LobbyMembershipRecord } from './identity-types';
 import { EmailAuthError, EmailCodeService, EmailCodePurpose } from './email-codes';
 import { normalizeEmail } from './email-address';
-import { validateLoginName } from './account-foundation';
 
 const PLAYER_CENTER_COOKIE = 'caoren_player_center';
 
@@ -142,14 +141,18 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
     const playerCenterMatchView = (identityId: string) => {
         const activeSession = getActiveSession();
         const matchStatus = getMatchStatus();
-        const joined = service.listMemberships(activeSession.sessionId).some((membership) =>
-            membership.identityId === identityId && !membership.blockedAt,
-        );
+        const memberships = service.listMemberships(activeSession.sessionId).filter(m => m.identityId === identityId);
+        const joined = memberships.some(m => !m.blockedAt);
+        const blocked = memberships.some(m => !!m.blockedAt);
         const waiting = matchStatus === 'waiting';
         const identity = service.getIdentity(identityId);
+        const joinUnavailableReason = joined ? 'already_joined' : blocked ? 'blocked_for_session'
+            : matchStatus === 'ended' ? 'match_ended' : !waiting ? 'match_started'
+            : !identity?.steamId || !identity.gameBoundAt ? 'game_binding_required' : null;
         return {
             matchStatus,
-            joinAvailable: waiting && !joined && !!identity?.steamId && !!identity.gameBoundAt,
+            joinAvailable: joinUnavailableReason === null,
+            joinUnavailableReason,
             leaveAvailable: waiting && joined,
             joined,
         };
@@ -173,8 +176,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         if (!identity || !account) return undefined;
         return {
             displayName: identity.displayName,
-            steamNickname: identity.steamNickname || identity.displayName,
-            loginName: account.loginName,
+            steamNickname: identity.gameBoundAt ? (identity.steamNickname || identity.displayName) : '',
             hasBackupPassword: account.passwordState === 'active',
             email: account.email,
             emailVerified: !!account.emailVerifiedAt,
@@ -253,14 +255,13 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
 
     app.post('/api/account-auth/register', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
         try {
-            validateLoginName(req.body?.loginName);
             validateAccountPassword(req.body?.password);
             if (req.body?.password !== req.body?.confirmPassword) {
                 return res.status(400).json({ success: false, error: 'password_confirmation_mismatch' });
             }
             const email = emailCodes.consume({ ...req.body, purpose: 'register', principal: '', ip: req.ip || 'unknown' });
             const created = await service.registerVerifiedEmailAccount({
-                email, loginName: req.body.loginName, password: req.body.password,
+                email, password: req.body.password,
             });
             const issued = await centerSessions.create(created.identity.identityId, created.account.updatedAt);
             setPlayerCenterCookie(req, res, issued.rawToken, issued.session.absoluteExpiresAt - Date.now());
@@ -293,7 +294,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             await centerSessions.applyAccountChange(account.identityId, undefined, account.updatedAt);
             await dependencies.onPlayerCenterSessionsRevoked?.({ identityId: account.identityId });
             clearPlayerCenterCookie(req, res);
-            return res.json({ success: true, loginName: account.loginName });
+            return res.json({ success: true });
         } catch (error) { return emailFailure(res, error); }
     });
 
@@ -331,14 +332,14 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
     });
 
     app.post('/api/account-auth/login', async (req, res) => {
-        const loginName = typeof req.body?.loginName === 'string' ? req.body.loginName : '';
-        const keys = [`ip:${req.ip || req.socket.remoteAddress || 'unknown'}`, `account:${loginName.slice(0, 128)}`];
+        const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+        const keys = [`ip:${req.ip || req.socket.remoteAddress || 'unknown'}`, `account:${email.slice(0, 254)}`];
         const limited = accountGuard.check(keys);
         if (limited.blocked) {
             return res.status(429).json({ success: false, error: 'rate_limited', retryAt: limited.retryAt });
         }
         const result = await service.authenticateLoginAccount({
-            loginName,
+            email,
             password: req.body?.password,
         });
         if (!result.ok) {
@@ -403,7 +404,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         }
         const joined = await service.joinPlayerCenterMatch(centerSession.identityId, activeSession.sessionId);
         if (!joined.ok) {
-            const status = joined.reason === 'blocked_for_session' ? 403 : joined.reason === 'nickname_in_use' ? 409 : 401;
+            const status = joined.reason === 'blocked_for_session' ? 403 : joined.reason === 'nickname_in_use' ? 409 : joined.reason === 'game_binding_required' ? 409 : 401;
             return res.status(status).json({ success: false, error: joined.reason });
         }
         await dependencies.onPlayerCenterMatchJoined?.(joined.membership);
@@ -459,37 +460,8 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         return res.json({ success: true });
     });
 
-    app.patch('/api/player-center/account/login-name', async (req, res) => {
-        const session = await requirePlayerCenterSession(req, res);
-        if (!session) return;
-        try {
-            const result = await service.changeLoginName({
-                identityId: session.identityId,
-                currentPassword: req.body?.currentPassword,
-                newLoginName: req.body?.newLoginName,
-                currentSessionId: session.sessionId,
-                currentDeviceTokenId: session.currentDeviceTokenId,
-            });
-            const account = service.getLoginAccount(session.identityId)!;
-            const webRevocation = await centerSessions.applyAccountChange(session.identityId, session.sessionId, account.updatedAt);
-            await dependencies.onPlayerCenterSessionsRevoked?.({
-                identityId: session.identityId,
-                preserveSessionId: session.sessionId,
-            });
-            return res.json({
-                success: true,
-                profile: playerCenterProfile(session.identityId),
-                revocation: {
-                    revokeOtherPlayerCenterSessions: true,
-                    otherWebSessionsRevoked: webRevocation.revokedSessionIds.length,
-                    otherDevicesRevoked: result.revocation.revokedDeviceTokenIds.length,
-                },
-            });
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : 'account_change_failed';
-            const status = reason === 'current_password_incorrect' ? 401 : reason === 'login_name_in_use' ? 409 : 400;
-            return res.status(status).json({ success: false, error: reason });
-        }
+    app.patch('/api/player-center/account/login-name', (_req, res) => {
+        return res.status(410).json({ success: false, error: 'endpoint_retired' });
     });
 
     app.post('/api/player-center/account/password', async (req, res) => {
@@ -532,106 +504,19 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         }
     });
 
-    app.post('/api/account-recovery/game-code', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
-        const keys = [`ip:${req.ip || 'unknown'}`];
-        if (bindingGuard.check(keys).blocked) return res.status(429).json({ success: false, error: 'rate_limited' });
-        const proof = dependencies.consumeGameLoginTicket?.(req.body?.gameCode);
-        if (!proof) {
-            bindingGuard.recordFailure(keys);
-            return res.status(401).json({ success: false, error: 'game_code_invalid_or_expired' });
-        }
-        try {
-            bindingGuard.clear(keys);
-            const identity = service.findIdentityBySteamId(proof.steamId);
-            const existingAccount = identity ? service.getLoginAccount(identity.identityId) : undefined;
-            if (!existingAccount) return res.status(400).json({ success: false, error: 'account_registration_on_web' });
-            if (existingAccount.emailVerifiedAt) return res.status(400).json({ success: false, error: 'use_email_recovery' });
-            const result = await service.openOrBeginAccountRecovery({
-                steamId: proof.steamId,
-                steamNickname: proof.name,
-                existingOnly: true,
-            });
-            if (result.kind === 'account_disabled') {
-                return res.status(403).json({ success: false, error: 'account_disabled' });
-            }
-            if (result.kind !== 'recovery_required') {
-                return res.status(400).json({ success: false, error: 'account_registration_on_web' });
-            }
-            const issued = recoveryTickets.issue({ identityId: result.identityId }, 10 * 60 * 1000);
-            return res.json({
-                success: true,
-                flow: 'recovery_required',
-                loginName: result.loginName,
-                recoveryTicket: issued.ticket,
-                recoveryTicketExpiresAt: issued.expiresAt,
-            });
-        } catch (error) {
-            if (error instanceof Error && ['use_email_recovery', 'account_registration_on_web'].includes(error.message)) {
-                return res.status(400).json({ success: false, error: error.message });
-            }
-            if (error instanceof Error && error.message === 'account_disabled') {
-                return res.status(403).json({ success: false, error: 'account_disabled' });
-            }
-            return res.status(400).json({ success: false, error: 'account_recovery_failed' });
-        }
-    });
-
-    app.post('/api/account-recovery/complete', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
-        if (req.body?.newPassword !== req.body?.confirmPassword) {
-            return res.status(400).json({ success: false, error: 'password_confirmation_mismatch' });
-        }
-        try {
-            validateAccountPassword(req.body?.newPassword);
-        } catch {
-            return res.status(400).json({ success: false, error: 'password_invalid' });
-        }
-        const recovery = recoveryTickets.consume(req.body?.recoveryTicket);
-        if (!recovery) {
-            return res.status(401).json({ success: false, error: 'recovery_ticket_invalid_or_expired' });
-        }
-        if (service.getLoginAccount(recovery.identityId)?.emailVerifiedAt) {
-            return res.status(400).json({ success: false, error: 'use_email_recovery' });
-        }
-        try {
-            const result = await service.completeAccountRecovery({
-                identityId: recovery.identityId,
-                newPassword: req.body.newPassword,
-            });
-            const account = service.getLoginAccount(recovery.identityId)!;
-            const webRevocation = await centerSessions.applyAccountChange(recovery.identityId, undefined, account.updatedAt);
-            await dependencies.onPlayerCenterSessionsRevoked?.({ identityId: recovery.identityId });
-            const issued = bootstrapTickets.issue({
-                identityId: recovery.identityId,
-                accountUpdatedAt: account.updatedAt,
-            }, 30_000);
-            return res.json({
-                success: true,
-                account: result.account,
-                revocation: {
-                    revokeOtherPlayerCenterSessions: true,
-                    otherWebSessionsRevoked: webRevocation.revokedSessionIds.length,
-                    otherDevicesRevoked: result.revocation.revokedDeviceTokenIds.length,
-                },
-                sessionBootstrapTicket: issued.ticket,
-                sessionBootstrapExpiresAt: issued.expiresAt,
-            });
-        } catch (error) {
-            if (error instanceof Error && error.message === 'account_disabled') {
-                return res.status(403).json({ success: false, error: 'account_disabled' });
-            }
-            return res.status(400).json({ success: false, error: 'account_recovery_failed' });
-        }
-    });
+    for (const endpoint of ['/api/account-recovery/game-code', '/api/account-recovery/complete']) {
+        app.post(endpoint, (_req, res) => res.status(410).json({ success: false, error: 'endpoint_retired' }));
+    }
 
     app.post('/api/desktop-auth/account-login', requireAllowedDeviceAuthTransport, async (req, res) => {
-        const loginName = typeof req.body?.loginName === 'string' ? req.body.loginName : '';
-        const keys = [`desktop-ip:${req.ip || req.socket.remoteAddress || 'unknown'}`, `desktop-account:${loginName.slice(0, 128)}`];
+        const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+        const keys = [`desktop-ip:${req.ip || req.socket.remoteAddress || 'unknown'}`, `desktop-account:${email.slice(0, 254)}`];
         const limited = desktopGuard.check(keys);
         if (limited.blocked) {
             auditDesktopAuth(req, { action: 'account_login', outcome: 'rejected', reason: 'rate_limited' });
             return res.status(429).json({ success: false, error: 'rate_limited', retryAt: limited.retryAt });
         }
-        const result = await service.authenticateLoginAccount({ loginName, password: req.body?.password });
+        const result = await service.authenticateLoginAccount({ email, password: req.body?.password });
         if (!result.ok) {
             const failure = desktopGuard.recordFailure(keys);
             const reason = failure.blocked ? 'rate_limited' : result.reason;

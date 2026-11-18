@@ -27,6 +27,7 @@
       var response = await fetch('/api/public/server-status', { credentials: 'same-origin' });
       latestServerStatus = await response.json();
       if (!response.ok || !latestServerStatus.success) throw new Error('status_unavailable');
+      if (byId('server-connect-command')) byId('server-connect-command').textContent = connectCommand();
       if (status) status.textContent = latestServerStatus.pluginReady ? '服务器在线' : '服务器暂未就绪';
       if (dot) dot.classList.toggle('is-online', latestServerStatus.pluginReady === true);
       buttons.forEach(function (button) {
@@ -42,9 +43,24 @@
     }
   }
 
-  function connectServer() {
-    if (!latestServerStatus?.joinAllowed || !latestServerStatus.connectUrl) return;
-    window.location.href = latestServerStatus.connectUrl;
+  function connectMessage(text) { if (byId('server-connect-message')) byId('server-connect-message').textContent = text; }
+  function connectCommand() {
+    var url = latestServerStatus?.connectUrl || '';
+    var match = /^steam:\/\/connect\/([a-zA-Z0-9.:-]+)\/?$/.exec(url);
+    return 'connect ' + (match ? match[1] : 'play.caorencup.icu');
+  }
+  async function connectServer() {
+    if (!latestServerStatus?.joinAllowed || !/^steam:\/\/connect\/[a-zA-Z0-9.:-]+\/?$/.test(latestServerStatus.connectUrl || '')) return connectMessage('连接地址暂不可用，可在 CS2 控制台输入下方连接命令。');
+    try {
+      if (window.caorenDesktop?.connectGameServer) {
+        var result = await window.caorenDesktop.connectGameServer(latestServerStatus.connectUrl);
+        if (!result?.ok) throw new Error('steam_launch_failed');
+        connectMessage('已交给 Steam 启动。如没有进入游戏，请使用控制台连接命令。');
+      } else {
+        window.location.href = latestServerStatus.connectUrl;
+        connectMessage('已请求打开 Steam；浏览器无法确认启动结果。如没有响应，请使用控制台连接命令。');
+      }
+    } catch (_) { connectMessage('Steam 启动失败，请确认已安装并启动 Steam，或在 CS2 控制台输入下方连接命令。'); }
   }
 
   function loginAdmin() {
@@ -91,6 +107,11 @@
   Object.assign(window, { refreshIdentityAdmin, revokeIdentityDevice, revokeIdentityTokens });
 
   function boot() {
+    if (document.body.dataset.page === 'admin' && byId('admin-login-entry')) byId('admin-login-entry').open = true;
+    byId('copy-server-command')?.addEventListener('click', async function () {
+      try { await navigator.clipboard.writeText(connectCommand()); connectMessage('连接命令已复制，请粘贴到 CS2 控制台。'); }
+      catch (_) { connectMessage('请手动复制：' + connectCommand()); }
+    });
     [byId('v1333-connect-server-btn'), byId('v1333-lobby-connect-server-btn')].forEach(function (button) {
       button?.addEventListener('click', connectServer);
     });

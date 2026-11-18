@@ -13,7 +13,7 @@ Assert-WebReleaseBoundary $repoRoot $Version
 Copy-DeploymentGuide -RepoRoot $repoRoot -Version $Version -ValidateOnly
 $dataRoot = Resolve-ReleasePath $repoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
 if (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'skin-rarities.json'))) { throw 'Missing webpage item data' }
-$webEntries = @('src/server.ts', 'public/index.html', 'pages/cs.html', 'pages/mc.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', '.env.example', 'ACCOUNT-SETUP.md')
+$webEntries = @('src/server.ts', 'public/index.html', 'pages/cs.html', 'pages/mc.html', 'pages/profile.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', '.env.example', 'ACCOUNT-SETUP.md')
 foreach ($entry in $webEntries) {
     if (-not (Test-Path -LiteralPath (Resolve-ReleasePath $repoRoot ('web-command-center/' + $entry)) -PathType Leaf)) { throw "Missing unified portal entry: $entry" }
 }
@@ -26,7 +26,7 @@ if (Test-Path -LiteralPath (Resolve-ReleasePath $repoRoot $zipRelative)) { throw
 $stage = Resolve-ReleasePath $repoRoot ('release-build/web-package-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $stage
 Copy-ReleaseWebTree $repoRoot $stage $Version
-$required = @('package.json', 'package-lock.json', 'tsconfig.json', 'pages/cs.html', 'pages/mc.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', 'src/server.ts', 'public/index.html', 'weaponpaints-data/skin-rarities.json')
+$required = @('package.json', 'package-lock.json', 'tsconfig.json', 'pages/cs.html', 'pages/mc.html', 'pages/profile.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', 'src/server.ts', 'public/index.html', 'weaponpaints-data/skin-rarities.json')
 Assert-ReleaseTree $stage $required
 Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'LICENSE') -Destination (Join-Path $stage 'LICENSE')
 Copy-DeploymentGuide -RepoRoot $repoRoot -Stage $stage -Version $Version

@@ -18,16 +18,8 @@ test('player-center renderer never persists or transports desktop secrets', () =
   for (const forbidden of ['deviceToken', 'rawToken', 'selectedSteamId', 'sessionStorage', 'URLSearchParams']) {
     assert.equal(renderer.includes(forbidden), false, `renderer contains forbidden desktop secret path: ${forbidden}`);
   }
-  // The account name is optional, non-secret storage. Legacy password keys may only be removed.
-  const allowed = new Set([
-    'localStorage.removeItem(\'caoren_saved_login_password\')',
-    'localStorage.removeItem(\'caoren_saved_login_decided\')',
-    'localStorage.getItem(savedLoginNameKey)',
-    'localStorage.setItem(savedLoginNameKey, loginName)',
-    'localStorage.removeItem(savedLoginNameKey)',
-  ]);
-  const calls = renderer.match(/localStorage\.\w+\([^)]*\)/g) || [];
-  assert.equal(calls.length, (renderer.match(/\blocalStorage\b/g) || []).length);
-  for (const call of calls) assert.equal(allowed.has(call), true, `unexpected browser storage access: ${call}`);
-  assert.match(renderer, /var savedLoginNameKey = 'caoren_saved_login_name';/);
+  // Login and credential storage belong to the shared portal. CS no longer stores login names.
+  assert.doesNotMatch(renderer, /localStorage|savedLoginNameKey/);
+  const portal = fs.readFileSync(path.resolve(__dirname, '..', '..', 'web-command-center', 'public', 'js', 'portal.js'), 'utf8');
+  assert.match(portal, /loginPlayerCenter\(input.email, input.password, true\)/);
 });

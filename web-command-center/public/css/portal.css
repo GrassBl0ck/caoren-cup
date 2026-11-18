@@ -630,3 +630,10 @@ a:hover {
     scroll-behavior:auto!important
   }
 }
+
+/* Shared account navigation and the standalone profile page. */
+.portal-header .board-navigation { margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
+.portal-header .board-navigation a[href="/profile"] { color:var(--portal-lime); font-weight:700; border:1px solid currentColor; border-radius:6px; padding:8px 12px; }
+body[data-page="profile"] main { display:block; max-width:980px; margin:auto; }
+body[data-page="profile"] .account-settings h2 { padding:20px 24px; }
+@media(max-width:640px) { .portal-header { flex-wrap:wrap; padding:16px 0; gap:12px; } .portal-header .board-navigation { gap:10px; } }

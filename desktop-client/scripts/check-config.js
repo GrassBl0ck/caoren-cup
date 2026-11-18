@@ -45,7 +45,7 @@ if (!mainJs.includes('steam|steamlink')) {
   throw new Error('desktop-client must handle Steam external protocols.');
 }
 
-if (!mainJs.includes('CaorenCupDesktopClient/1.0')) {
+if (!mainJs.includes(`CaorenCupDesktopClient/${packageJson.version}`)) {
   throw new Error('desktop-client must mark its user agent so the web page can hide the client download button.');
 }
 

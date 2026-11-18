@@ -75,7 +75,7 @@ test('desktop account login can remember a device without exposing a match ident
     const { identity, account } = await createAccount(runtime, '206');
 
     const login = await requestJson(`${runtime.baseUrl}/api/desktop-auth/account-login`, 'POST', {
-        loginName: account.loginName,
+        email: account.email,
         password: 'current-pass',
         deviceId: 'desktop-device-206',
     });
@@ -166,7 +166,7 @@ const createAccount = async (runtime: Awaited<ReturnType<typeof startServer>>, s
         nickname: `Steam Player ${suffix}`,
         password: 'current-pass',
     });
-    const account = runtime.service.getLoginAccount(created.identity.identityId)!;
+    const account = await runtime.service.bindVerifiedEmail({identityId:created.identity.identityId,email:`player${suffix}@example.com`,currentPassword:'current-pass'});
     return { identity: created.identity, account };
 };
 
@@ -195,13 +195,14 @@ test('bootstrap ticket creates an HttpOnly browser session and current identity 
         profile: {
             displayName: identity.displayName,
             steamNickname: identity.steamNickname || identity.displayName,
-            loginName: account.loginName,
+            email: account.email,
             hasBackupPassword: true,
-            emailVerified: false,
+            emailVerified: true,
             hasSteamBinding: true,
         },
         matchStatus: 'started',
         joinAvailable: false,
+        joinUnavailableReason: 'match_started',
         leaveAvailable: false,
         joined: false,
     });
@@ -244,7 +245,7 @@ test('production blocks every HTTP device-auth endpoint and accepts HTTPS only f
     }
     const { account } = await createAccount(runtime, '210');
     const secure = await requestJson(`${runtime.baseUrl}/api/desktop-auth/account-login`, 'POST', {
-        loginName: account.loginName, password: 'current-pass', deviceId: 'https-device-210',
+        email: account.email, password: 'current-pass', deviceId: 'https-device-210',
     }, undefined, undefined, 'https');
     assert.equal(secure.status, 200);
     const untrusted = await startServer('untrusted-https-header');
@@ -280,45 +281,15 @@ test('account version mismatch invalidates the session and clears its cookie', a
     assert.equal(Object.keys(runtime.sessionStore.snapshot().sessions).length, 0);
 });
 
-test('login-name change verifies the current password, keeps this session, and revokes other web sessions without leaking ids', async (t) => {
-    const runtime = await startServer('rename');
-    t.after(runtime.close);
-    const { identity, account } = await createAccount(runtime, '204');
-    const current = await establish(runtime, identity.identityId, account.updatedAt);
-    const other = await establish(runtime, identity.identityId, account.updatedAt);
-
-    const wrong = await requestJson(`${runtime.baseUrl}/api/player-center/account/login-name`, 'PATCH', {
-        currentPassword: 'wrong-pass', newLoginName: 'Renamed_Player',
-    }, current.cookie);
-    assert.deepEqual({ status: wrong.status, error: wrong.body.error }, { status: 401, error: 'current_password_incorrect' });
-
-    const changed = await requestJson(`${runtime.baseUrl}/api/player-center/account/login-name`, 'PATCH', {
-        currentPassword: 'current-pass', newLoginName: 'Renamed_Player',
-    }, current.cookie);
-    assert.equal(changed.status, 200);
-    assert.deepEqual(changed.body, {
-        success: true,
-        profile: {
-            displayName: identity.displayName,
-            steamNickname: identity.steamNickname || identity.displayName,
-            loginName: 'Renamed_Player',
-            hasBackupPassword: true,
-            emailVerified: false,
-            hasSteamBinding: true,
-        },
-        revocation: {
-            revokeOtherPlayerCenterSessions: true,
-            otherWebSessionsRevoked: 1,
-            otherDevicesRevoked: 0,
-        },
-    });
-    assert.equal(JSON.stringify(changed.body).match(/sessionId|tokenId|identityId|steamId/i), null);
-    assert.equal((await requestJson(`${runtime.baseUrl}/api/player-center/me`, 'GET', undefined, current.cookie)).status, 200);
-    assert.equal((await requestJson(`${runtime.baseUrl}/api/player-center/me`, 'GET', undefined, other.cookie)).status, 401);
-    assert.deepEqual(runtime.socketInvalidations, [{
-        identityId: identity.identityId,
-        preserveSessionId: Object.values(runtime.sessionStore.snapshot().sessions)[0].sessionId,
-    }]);
+test('public login-name editing is retired and leaves account and session unchanged', async (t) => {
+    const runtime = await startServer('rename-retired'); t.after(runtime.close);
+    const {identity,account} = await createAccount(runtime,'204');
+    const current = await establish(runtime,identity.identityId,account.updatedAt);
+    const changed = await requestJson(`${runtime.baseUrl}/api/player-center/account/login-name`, 'PATCH', {currentPassword:'current-pass',newLoginName:'Renamed_Player'}, current.cookie);
+    assert.equal(changed.status,410);
+    assert.equal(changed.body.error,'endpoint_retired');
+    assert.equal(runtime.service.getLoginAccount(identity.identityId)?.loginName,account.loginName);
+    assert.equal((await requestJson(`${runtime.baseUrl}/api/player-center/me`, 'GET',undefined,current.cookie)).status,200);
 });
 
 test('password change preserves the current session, rejects confirmation mismatch, and logout revokes only the current token', async (t) => {

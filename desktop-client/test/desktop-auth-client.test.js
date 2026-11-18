@@ -66,7 +66,7 @@ test('remembered account login stores the token in the main process without retu
     fetch: async (url, options) => {
       assert.equal(String(url).endsWith('/api/desktop-auth/account-login'), true);
       assert.deepEqual(JSON.parse(options.body), {
-        loginName: 'cc_Player', password: 'secret-pass', deviceId: 'new-device-id',
+        email: 'player@example.com', password: 'secret-pass', deviceId: 'new-device-id',
       });
       return { ok: true, json: async () => ({
         success: true,
@@ -78,7 +78,7 @@ test('remembered account login stores the token in the main process without retu
     },
   });
 
-  const result = await client.loginAccount('cc_Player', 'secret-pass', true);
+  const result = await client.loginAccount('player@example.com', 'secret-pass', true);
 
   assert.deepEqual(result, {
     ok: true,
@@ -196,7 +196,7 @@ test('failed safeStorage account login revokes the newly issued server token', a
     randomUUID: () => 'device-id',
   });
 
-  assert.deepEqual(await client.loginAccount('cc_Player', 'secret-pass', true), {
+  assert.deepEqual(await client.loginAccount('player@example.com', 'secret-pass', true), {
     ok: false, reason: 'safe_storage_unavailable',
   });
   assert.equal(routes[1].url.endsWith('/api/desktop-auth/logout'), true);

@@ -4,9 +4,10 @@ const path = require('node:path');
 const { COMMAND_CENTER_URL } = require('./client-config');
 const { DeviceCredentialStore } = require('./device-credentials');
 const { DesktopAuthClient } = require('./desktop-auth-client');
+const { connectGameServer } = require('./game-connect');
 
 const PLACEHOLDER_URL = 'https://your-caoren-command-center.example.com';
-const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/1.0';
+const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/2.2.4';
 const commandCenterUrl = normalizeCommandCenterUrl(process.env.CAOREN_COMMAND_CENTER_URL || COMMAND_CENTER_URL);
 
 let mainWindow = null;
@@ -58,13 +59,17 @@ function requireTrustedIpc(event) {
 }
 
 function registerDesktopIpc() {
+  ipcMain.handle('caoren:game:connect', async (event, payload) => {
+    requireTrustedIpc(event);
+    return connectGameServer(shell, payload?.connectUrl);
+  });
   ipcMain.handle('caoren:player-center:auto-login', async (event) => {
     requireTrustedIpc(event);
     return desktopAuthClient.authenticateDevice();
   });
   ipcMain.handle('caoren:player-center:account-login', async (event, payload) => {
     requireTrustedIpc(event);
-    return desktopAuthClient.loginAccount(payload?.loginName, payload?.password, payload?.rememberDevice === true);
+    return desktopAuthClient.loginAccount(payload?.email, payload?.password, payload?.rememberDevice === true);
   });
   ipcMain.handle('caoren:player-center:clear-rejected-device', (event) => {
     requireTrustedIpc(event);
@@ -166,7 +171,7 @@ function createCommandCenterWindow() {
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isExternalProtocol(url)) {
-      shell.openExternal(url);
+      void shell.openExternal(url).catch(() => dialog.showErrorBox('无法打开外部链接', '请确认已安装 Steam，或使用浏览器/CS2 控制台打开目标地址。'));
       return { action: 'deny' };
     }
 
@@ -174,7 +179,7 @@ function createCommandCenterWindow() {
       return { action: 'allow' };
     }
 
-    shell.openExternal(url);
+    void shell.openExternal(url).catch(() => dialog.showErrorBox('无法打开外部链接', '请确认已安装 Steam，或使用浏览器/CS2 控制台打开目标地址。'));
     return { action: 'deny' };
   });
 
@@ -182,16 +187,16 @@ function createCommandCenterWindow() {
     if (isSameCommandCenterUrl(url)) return;
     if (isExternalProtocol(url)) {
       event.preventDefault();
-      shell.openExternal(url);
+      void shell.openExternal(url).catch(() => dialog.showErrorBox('无法打开外部链接', '请确认已安装 Steam，或使用浏览器/CS2 控制台打开目标地址。'));
       return;
     }
 
     event.preventDefault();
-    shell.openExternal(url);
+    void shell.openExternal(url).catch(() => dialog.showErrorBox('无法打开外部链接', '请确认已安装 Steam，或使用浏览器/CS2 控制台打开目标地址。'));
   });
 
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedUrl) => {
-    if (!validatedUrl || validatedUrl.startsWith('data:')) return;
+    if (errorCode === -3 || !validatedUrl || validatedUrl.startsWith('data:') || isExternalProtocol(validatedUrl)) return;
     dialog.showErrorBox(
       '草人杯指挥台连接失败',
       `无法打开草人杯指挥台。\n\n地址：${validatedUrl}\n错误：${errorDescription} (${errorCode})`

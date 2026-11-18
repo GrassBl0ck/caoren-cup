@@ -1,150 +1,36 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const test = require('node:test');
-const vm = require('node:vm');
-
-const source = fs.readFileSync(path.join(__dirname, '../public/js/player-center.js'), 'utf8');
-const profile = { steamNickname: 'Test player', loginName: 'cc_test' };
-
-async function page({ saved = {}, session = false, logoutFails = false, storageFails = false } = {}) {
-  const storage = new Map(Object.entries(saved));
-  const reads = [];
-  const writes = [];
-  const requests = [];
-  const events = [];
-  const elements = new Map();
-  const element = (id) => {
-    if (!elements.has(id)) elements.set(id, {
-      value: '', checked: false, hidden: false, textContent: '', handlers: {},
-      classList: { toggle() {} },
-      addEventListener(type, handler) { this.handlers[type] = handler; },
-    });
-    return elements.get(id);
-  };
-  const localStorage = {
-    getItem(key) { reads.push(key); if (storageFails) throw Error('storage unavailable'); return storage.get(key) ?? null; },
-    setItem(key, value) { writes.push([key, value]); if (storageFails) throw Error('storage unavailable'); storage.set(key, value); },
-    removeItem(key) { if (storageFails) throw Error('storage unavailable'); storage.delete(key); },
-  };
-  const fetch = async (url, options = {}) => {
-    requests.push({ url, body: options.body && JSON.parse(options.body) });
-    let status = 200;
-    let data = { success: true, profile, joined: false, joinAvailable: true };
-    if (url === '/api/player-center/me' && !session) { status = 401; data = { success: false }; }
-    if (url === '/api/account-auth/login') data = { success: true, sessionBootstrapTicket: 'one-time-ticket' };
-    if (url === '/api/player-center/logout' && logoutFails) throw Error('offline');
-    return { ok: status === 200, status, json: async () => data };
-  };
-  const window = {
-    addEventListener() {},
-    dispatchEvent(event) { events.push(event); return true; },
-  };
-  class CustomEvent {
-    constructor(type, init) { this.type = type; this.detail = init?.detail; }
-  }
-  vm.runInNewContext(source, {
-    document: { readyState: 'complete', getElementById: element },
-    window, localStorage, fetch, setTimeout, CustomEvent,
-  });
-  // Drain the startup request and its async continuations without a timed sleep.
-  await new Promise(setImmediate);
-  return { storage, reads, writes, requests, events, window, element };
+const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('node:assert/strict'),test=require('node:test');
+const source=fs.readFileSync(path.join(__dirname,'../public/js/player-center.js'),'utf8');
+async function page({joined=false,status='waiting',reason=null,connected=true,admin=false,logoutRace=false}={}){
+ const elements=new Map(),handlers={},requests=[],emits=[],redirects=[];
+ function element(id){if(!elements.has(id))elements.set(id,{hidden:true,textContent:'',disabled:false,handlers:{},classList:{toggle(){}},addEventListener(e,f){this.handlers[e]=f},appendChild(el){elements.set(el.id,el)}});return elements.get(id)}
+ let match={success:true,profile:{email:'p@example.com'},joined,matchStatus:status,joinAvailable:status==='waiting'&&!joined&&!reason,leaveAvailable:status==='waiting'&&joined,joinUnavailableReason:reason};
+ const socket={connected,on(e,f){handlers[e]=f},emit(e,d){emits.push({e,d})},connect(){this.connected=true}};
+ let holdNext=false,releaseHeld;
+ const fetch=async(url,options={})=>{requests.push(url);if(logoutRace && url.endsWith('/logout'))handlers.PLAYER_CENTER_SESSION_INVALID();let data={...match};if(url==='/api/player-center/me'&&holdNext){holdNext=false;await new Promise(resolve=>releaseHeld=resolve)}if(url.endsWith('/socket-ticket'))data={success:true,socketTicket:'fresh-'+requests.length};if(url.endsWith('/join')){match={...match,joined:true,joinAvailable:false,leaveAvailable:true};data={...match,socketTicket:'join-ticket'}}if(url.endsWith('/leave')){match={...match,joined:false,joinAvailable:true,leaveAvailable:false};data={...match}}return {ok:true,status:200,json:async()=>data}};
+ vm.runInNewContext(source,{document:{body:{dataset:{page:admin?'admin':'cs'}},readyState:'complete',getElementById:element,createElement(){return {addEventListener(e,f){this.handler=f}}}},window:{caorenDesktop:logoutRace?{logoutDevice:async()=>{assert.deepEqual(redirects,[]);return {ok:true}}}:undefined,__caorenCupLobbySocket:socket,dispatchEvent(){},addEventListener(){},location:{replace(p){redirects.push(p)}}},CustomEvent:function(){},fetch});
+ const drain=()=>new Promise(setImmediate);await drain();
+ return {element,handlers,requests,emits,socket,redirects,drain,holdNextMe(){holdNext=true},releaseMe(){releaseHeld()},setMatch(next){match={...match,...next}}};
 }
+test('CS restores account state without another account login',async()=>{const p=await page();assert.deepEqual(p.requests,['/api/player-center/me']);assert.equal(p.element('player-center-account-name').textContent,'p@example.com');assert.equal(p.element('player-center-join-btn').disabled,false)});
+test('waiting status refreshes a formerly disabled join button',async()=>{const p=await page({status:'started',reason:'match_started'});assert.equal(p.element('player-center-join-btn').disabled,true);assert.match(p.element('player-center-home-message').textContent,/比赛已经开始/);p.setMatch({matchStatus:'waiting',joinAvailable:true,joinUnavailableReason:null});p.handlers.GAME_STATE({matchStatus:'waiting'});await p.drain();assert.equal(p.element('player-center-join-btn').disabled,false)});
+test('unbound Steam identity has a visible profile instruction',async()=>{const p=await page({reason:'game_binding_required'});assert.match(p.element('player-center-home-message').textContent,/个人资料.*绑定/);assert.equal(p.element('player-center-join-btn').disabled,true)});
+test('reconnect requests a new single use ticket rather than replaying a pending ticket',async()=>{const p=await page({joined:true});assert.equal(p.emits.length,1);p.handlers.connect();await p.drain();assert.equal(p.emits.length,2);assert.notEqual(p.emits[0].d.ticket,p.emits[1].d.ticket)});
+test('socket login failure reports a retry without automatic unbounded retries',async()=>{const p=await page({joined:true});const count=p.requests.length;p.handlers.LOGIN_RESPONSE({success:false,message:'ticket expired'});assert.match(p.element('player-center-home-message').textContent,/连接失败.*重新进入比赛/);assert.equal(p.requests.length,count)});
+test('both socket quit and match-ended notifications refresh membership',async()=>{const p=await page({joined:true});p.setMatch({joined:false,joinAvailable:true,leaveAvailable:false});p.handlers.LOGIN_RESPONSE({success:false,message:'你已退出游戏'});await p.drain();assert.equal(p.element('player-center-join-btn').textContent,'加入本场比赛')});
+test('admin page does not request a player session',async()=>{const p=await page({admin:true});assert.deepEqual(p.requests,[])});
 
-test('startup removes only legacy saved-password keys without reading the password', async () => {
-  const p = await page({ saved: {
-    caoren_saved_login_name: 'cc_old', caoren_saved_login_password: 'old-secret',
-    caoren_saved_login_decided: '1', unrelated_preference: 'keep',
-  } });
-  assert.equal(p.storage.has('caoren_saved_login_password'), false);
-  assert.equal(p.storage.has('caoren_saved_login_decided'), false);
-  assert.equal(p.reads.includes('caoren_saved_login_password'), false);
-  assert.equal(p.element('player-center-login-name').value, 'cc_old');
-  assert.equal(p.element('player-center-login-password').value, '');
-  assert.equal(p.storage.get('unrelated_preference'), 'keep');
+test('server invalidation during logout waits for desktop credential clearing before navigation',async()=>{
+ const p=await page({logoutRace:true});
+ await p.element('player-center-logout-btn').handlers.click();
+ assert.deepEqual(p.redirects,['/']);
 });
 
-test('account login saves only the selected account name and exchanges the session ticket', async () => {
-  const p = await page();
-  p.element('player-center-login-name').value = 'cc_test';
-  p.element('player-center-login-password').value = 'test-secret';
-  p.element('player-center-save-login-name').checked = true;
-  await p.element('player-center-login-btn').handlers.click();
-  assert.equal(p.storage.get('caoren_saved_login_name'), 'cc_test');
-  assert.equal(p.writes.some(([, value]) => value === 'test-secret'), false);
-  assert.equal(p.element('player-center-login-password').value, '');
-  assert.deepEqual(p.requests.find((r) => r.url === '/api/player-center/session').body, {
-    sessionBootstrapTicket: 'one-time-ticket',
-  });
-  assert.equal(p.element('player-center-home').hidden, false);
-  assert.equal(p.requests.some((r) => r.url === '/api/player-center/match/join'), false);
-});
-
-test('existing session restores the player center without sending a saved password', async () => {
-  const p = await page({ session: true, saved: { caoren_saved_login_password: 'old-secret' } });
-  assert.equal(p.element('player-center-home').hidden, false);
-  assert.deepEqual(p.requests.map((r) => r.url), ['/api/player-center/me']);
-});
-
-test('unchecking save account removes only the saved account name', async () => {
-  const p = await page({ saved: { caoren_saved_login_name: 'cc_old', unrelated_preference: 'keep' } });
-  p.element('player-center-login-name').value = 'cc_test';
-  p.element('player-center-login-password').value = 'test-secret';
-  p.element('player-center-save-login-name').checked = false;
-  await p.element('player-center-login-btn').handlers.click();
-  assert.equal(p.storage.has('caoren_saved_login_name'), false);
-  assert.equal(p.storage.get('unrelated_preference'), 'keep');
-});
-
-test('confirmed logout returns to the entry page', async () => {
-  const p = await page({ session: true });
-  await p.element('player-center-logout-btn').handlers.click();
-  assert.equal(p.element('player-center-home').hidden, true);
-  assert.match(p.element('player-center-entry-error').textContent, /已退出/);
-});
-
-test('unavailable browser storage does not prevent account login', async () => {
-  const p = await page({ storageFails: true });
-  p.element('player-center-login-name').value = 'cc_test';
-  p.element('player-center-login-password').value = 'test-secret';
-  await p.element('player-center-login-btn').handlers.click();
-  assert.equal(p.element('player-center-home').hidden, false);
-});
-
-test('failed logout keeps the current view and reports that logout was not confirmed', async () => {
-  const p = await page({ session: true, logoutFails: true });
-  await p.element('player-center-logout-btn').handlers.click();
-  assert.equal(p.element('player-center-home').hidden, false);
-  assert.match(p.element('player-center-home-message').textContent, /退出失败/);
-});
-
-test('restored account session is broadcast without exposing credentials', async () => {
-  const p = await page({ session: true });
-  assert.deepEqual(
-    p.events.map((event) => [event.type, event.detail.active]),
-    [['caoren:player-center-session', true]],
-  );
-  assert.equal(p.window.__caorenPlayerCenterSessionActive, true);
-  assert.equal(JSON.stringify(p.events.map((event) => event.detail)).includes('secret'), false);
-});
-
-test('visiting without a session never broadcasts an active account', async () => {
-  const p = await page();
-  assert.equal(p.events.some((event) => event.detail.active === true), false);
-});
-
-test('logging out broadcasts an inactive account session', async () => {
-  const p = await page({ session: true });
-  await p.element('player-center-logout-btn').handlers.click();
-  assert.equal(p.events.at(-1).type, 'caoren:player-center-session');
-  assert.equal(p.events.at(-1).detail.active, false);
-  assert.equal(p.window.__caorenPlayerCenterSessionActive, false);
-});
-
-test('failed logout keeps the account session marked active', async () => {
-  const p = await page({ session: true, logoutFails: true });
-  await p.element('player-center-logout-btn').handlers.click();
-  assert.equal(p.window.__caorenPlayerCenterSessionActive, true);
-  assert.equal(p.events.at(-1).detail.active, true);
+test('a new public status arriving during an older me request is refreshed after that request',async()=>{
+ const p=await page({status:'started',reason:'match_started'});
+ p.holdNextMe();p.handlers.GAME_STATE({matchStatus:'started'});
+ p.setMatch({matchStatus:'waiting',joinAvailable:true,joinUnavailableReason:null});
+ p.handlers.GAME_STATE({matchStatus:'waiting'});p.releaseMe();
+ await p.drain();await p.drain();
+ assert.equal(p.element('player-center-join-btn').disabled,false);
+ assert.equal(p.requests.filter(url=>url==='/api/player-center/me').length,3);
 });

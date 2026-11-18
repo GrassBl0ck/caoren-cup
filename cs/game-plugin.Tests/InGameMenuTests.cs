@@ -382,6 +382,19 @@ public sealed class InGameMenuTests
     }
 
     [Fact]
+    public void Catalog_gamemode_pause_entries_dispatch_admin_commands()
+    {
+        var host = new FakeMenuHost();
+        var nav = BuildCatalogNavigator(host);
+        nav.Open(Sid, "gamemode");
+        nav.HandleClick(Sid, "nav_next", true);
+        nav.HandleClick(Sid, "menu_btn_1", true);
+        nav.HandleClick(Sid, "menu_btn_2", true);
+        Assert.Contains("css_pause", host.PlayerCommands);
+        Assert.Contains("css_unpause", host.PlayerCommands);
+    }
+
+    [Fact]
     public void Catalog_matchzy_asay_uses_chat_relay()
     {
         var host = new FakeMenuHost();

@@ -12,11 +12,12 @@ test('accepts a complete 3v5 roster', () => {
     assert.equal(validateUnbalancedRoster(session(players)).valid, true);
 });
 
-test('rejects a balanced roster when 3v5 is configured', () => {
+test('accepts the administrator assigned roster despite retired legacy 3v5 targets', () => {
     const players = [...Array(4)].map(() => ({ rosterTeam: 'A' })).concat([...Array(4)].map(() => ({ rosterTeam: 'B' })));
     const result = validateUnbalancedRoster(session(players));
-    assert.equal(result.valid, false);
-    assert.match(result.blockers.join(' '), /A 队需要 3 人/);
+    assert.equal(result.valid, true);
+    assert.equal(result.targetA, 4);
+    assert.equal(result.targetB, 4);
 });
 
 test('rejects unassigned players and missing bindings for team lock', () => {
@@ -31,4 +32,11 @@ test('ignores duel and balanced matches', () => {
     assert.equal(validateUnbalancedRoster(session(players, false)).valid, true);
     const duel = session(players); duel.matchOptions.matchMode = 'duel';
     assert.equal(validateUnbalancedRoster(duel).valid, true);
+});
+
+test('requires both teams and refuses unassigned players in administrator assigned mode', () => {
+    const result = validateUnbalancedRoster(session([{rosterTeam:'A'}, {}]));
+    assert.equal(result.valid, false);
+    assert.match(result.blockers.join(' '), /未分入 A\/B/);
+    assert.match(result.blockers.join(' '), /A\/B 两队/);
 });

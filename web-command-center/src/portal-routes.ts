@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { LobbyIdentityService } from './identity/identity-service';
 import { PlayerCenterSessionStore } from './identity/player-center-session-store';
 
@@ -23,7 +24,7 @@ export function registerBoardPages(app: express.Express, options: {
         }
         return true;
     }
-    for (const board of ['cs', 'mc'] as const) {
+    for (const board of ['cs', 'mc', 'profile'] as const) {
         app.get([`/${board}`, `/${board}/`, `/${board}.html`], async (req, res) => {
             res.setHeader('Cache-Control', 'no-store');
             try {
@@ -34,6 +35,14 @@ export function registerBoardPages(app: express.Express, options: {
             }
         });
     }
+    // The management page shares the CS rendering template, with an independent admin login.
+    app.get(['/admin', '/admin/'], async (_req, res) => {
+        res.setHeader('Cache-Control', 'no-store');
+        try {
+            const html = await readFile(path.resolve(options.pagesDirectory, 'cs.html'), 'utf8');
+            return res.type('html').send(html.replace(/(<body\b[^>]*\bdata-page=)"cs"/, '$1"admin"').replace('[草人杯] CS 大厅', '[草人杯] 管理员管理台'));
+        } catch { return res.status(503).type('text').send('[草人杯]管理页面暂时无法读取，请稍后重试。'); }
+    });
     app.get('/api/mc/info', async (req, res) => {
         res.setHeader('Cache-Control', 'no-store');
         try {
