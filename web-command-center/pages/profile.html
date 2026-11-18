@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>[草人杯] 个人资料</title><link rel="stylesheet" href="/css/portal.css"><script defer src="/js/portal.js?v=2.2.4-email1"></script></head><body data-page="profile"><div class="portal-shell"><header class="portal-header"><a class="portal-brand" href="/">草人杯</a><nav class="board-navigation"><a href="/">板块选择</a><a href="/cs">CS</a><a href="/mc">MC</a><a href="/profile" aria-current="page">个人资料</a><a href="/admin">管理员</a><button id="logout" type="button">退出登录</button></nav></header><main><p id="auth-message" class="form-message" role="status"></p><section id="board-picker"><h1>你好，<span id="account-name">玩家</span></h1>        <section class="account-settings" id="account-settings"><h2>个人资料与游戏身份</h2>
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>[草人杯] 个人资料</title><link rel="stylesheet" href="/css/portal.css"><script defer src="/js/portal.js?v=2.2.5-ccbind1"></script></head><body data-page="profile"><div class="portal-shell"><header class="portal-header"><a class="portal-brand" href="/">草人杯</a><nav class="board-navigation"><a href="/">板块选择</a><a href="/cs">CS</a><a href="/mc">MC</a><a href="/profile" aria-current="page">个人资料</a><a href="/admin">管理员</a><button id="logout" type="button">退出登录</button></nav></header><main><p id="auth-message" class="form-message" role="status"></p><section id="board-picker"><h1>你好，<span id="account-name">玩家</span></h1>        <section class="account-settings" id="account-settings"><h2>个人资料与游戏身份</h2>
           <div class="settings-grid">
             <section><h3>账户邮箱</h3><p id="login-name-status" class="muted"></p></section>
             <section><h3>修改密码</h3>
@@ -19,7 +19,7 @@
               </form>
             </section>
             <section><h3>CS 游戏身份</h3><p id="steam-status" class="muted"></p>
-              <form id="bind-steam-form" hidden><p class="muted">进入草人杯 CS2 服务器，输入 <code>/cclogin</code>，将游戏中的一次性码填在这里。</p><label>一次性游戏码<input name="code" autocomplete="one-time-code" maxlength="16" required></label><button class="secondary-button" type="submit">绑定 CS 游戏身份</button></form>
+              <form id="bind-steam-form" hidden><p class="muted">进入草人杯 CS2 服务器，在聊天栏输入 <code>/ccbind</code>，再将一次性绑定码填在这里。</p><label>一次性绑定码<input name="code" autocomplete="one-time-code" maxlength="16" required></label><button class="secondary-button" type="submit">绑定 CS 游戏身份</button></form>
               <p class="small-note">只有参加 CS 比赛时才需要绑定，进入 MC 板块不需要。</p>
             </section>
           </div>

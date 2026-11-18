@@ -55,6 +55,7 @@ public sealed partial class CaorenCupCorePlugin
         AddCommand("gm", "统一切换和控制游戏模式（简写）", OnGameModeCommand);
         AddCommand("gamemode_cvar", "设置当前游戏模式 CVar", OnGameModeCvarCommand);
         AddCommand("ccrestore", "恢复指定回合的自动备份。用法：/ccrestore <回合数>", OnRestoreRoundCommand);
+        AddCommand("css_ccrestore", "恢复指定回合的自动备份。用法：/ccrestore <回合数>", OnRestoreRoundCommand);
         AddCommandListener("noclip", OnNoclipCommand, HookMode.Pre);
         RegisterEventHandler<EventPlayerChat>(OnTeamChatForSpectators, HookMode.Post);
     }
@@ -85,7 +86,7 @@ public sealed partial class CaorenCupCorePlugin
         Reply(player, "/ccrestore <回合数> : 恢复当前模式指定回合的自动备份（管理员）");
         Reply(player, "/pause (/p)、/unpause (/up) : 管理员暂停/恢复；/tac、/tech : 玩家战术/技术暂停（草人杯正式比赛）");
         Reply(player, "=== 杂项 ===");
-        Reply(player, "/cclogin : 获取草人杯网页登录码");
+        Reply(player, "/ccbind : 获取草人杯 CS 游戏身份绑定码");
         Reply(player, "/ccstate : 查看网页指挥台连接状态");
         Reply(player, "/ccsnapshot : 手动推送一次网页比赛快照");
         Reply(player, "/duel help : 查看游戏内单挑全部命令");
@@ -356,7 +357,7 @@ public sealed partial class CaorenCupCorePlugin
     {
         if (!HasRoot(player))
         {
-            Reply(player, "你没有权限恢复回合。目的是恢复正式模式的自动备份，不是 MatchZy Practice 回溯。");
+            Reply(player, "只有管理员可以恢复正式比赛回合。");
             return;
         }
 
@@ -366,7 +367,8 @@ public sealed partial class CaorenCupCorePlugin
             return;
         }
 
-        if (GameModes.State.Lifecycle is not (GameModeLifecycleState.Warmup or GameModeLifecycleState.Live))
+        if (!OwnsPauseCommands || ReadGameRules() is not { WarmupPeriod: false, GameRestart: false } rules
+            || rules.GamePhase == MatchEndedPhase || _finishedMatchRevision == GameModes.State.Revision)
         {
             Reply(player, "当前没有正在运行的正式 Gamemode，不能恢复回合。");
             return;
@@ -378,9 +380,15 @@ public sealed partial class CaorenCupCorePlugin
             return;
         }
 
-        var fileName = $"caoren_backup_round{round}.txt";
+        var fileName = (GameModes as GameModeRuntime)?.GetRoundBackupFileName(round);
+        if (fileName is null || !File.Exists(Path.Combine(Server.GameDirectory, "csgo", fileName)))
+        {
+            Reply(player, $"本场第 {round} 回合没有可用备份。若所有回合都缺少备份，请核对服务端启动参数 -allow_round_backup_files。");
+            return;
+        }
+
         Server.ExecuteCommand($"mp_backup_restore_load_file {fileName}");
-        CaorenCupChat.PrintToChatAll($"已请求恢复第 {round} 回合备份：{fileName}。CS2 将按原生备份机制处理恢复。");
+        CaorenCupChat.PrintToChatAll($"管理员已请求恢复至第 {round} 回合开局，等待 CS2 载入备份。");
     }
 
     private void OnGameModeCommand(CCSPlayerController? player, CommandInfo info)

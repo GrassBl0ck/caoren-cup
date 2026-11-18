@@ -10,7 +10,7 @@ namespace CaorenCup.Core;
 public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
 {
     public override string ModuleName => "CaorenCup Core";
-    public override string ModuleVersion => "2.2.4";
+    public override string ModuleVersion => "2.2.5";
     public override string ModuleAuthor => "Graslock + AI";
     public int ContractVersion => CaorenCupCoreAccess.CurrentContractVersion;
     private CaorenCupConfigStore _configStore = null!;

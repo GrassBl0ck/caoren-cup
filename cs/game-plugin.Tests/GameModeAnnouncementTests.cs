@@ -39,6 +39,44 @@ public sealed class GameModeAnnouncementTests
     }
 
     [Fact]
+    public void Round_backups_use_engine_numbers_and_are_scoped_to_the_live_match()
+    {
+        CaorenCupPracticeState.EnterSleep();
+        var provider = new Provider("round-backup", []) { EndWarmupOnLive = true };
+        CaorenCupGameModeRegistry.Register(provider);
+        var commands = new List<string>();
+        var map = "de_ancient";
+        Action? timer = null;
+        var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timer = callback,
+            commands.Add, () => map, _ => { });
+        try
+        {
+            Assert.True(runtime.SelectMode(provider.Descriptor.Id).Success);
+            Assert.True(runtime.Start().Success);
+            Assert.Null(runtime.GetRoundBackupFileName(1));
+            Assert.NotNull(timer);
+            timer();
+
+            var first = runtime.GetRoundBackupFileName(1);
+            Assert.NotNull(first);
+            Assert.EndsWith("_round00.txt", first);
+            Assert.EndsWith("_round09.txt", runtime.GetRoundBackupFileName(10));
+            var prefix = first[..^"_round00.txt".Length];
+            var prefixCommand = $"mp_backup_round_file {prefix}";
+            Assert.Contains(prefixCommand, commands);
+            Assert.True(commands.IndexOf(prefixCommand) < commands.IndexOf("mp_warmup_end"));
+
+            map = "de_mirage";
+            Assert.Null(runtime.GetRoundBackupFileName(1));
+            Assert.True(runtime.Stop().Success);
+            Assert.True(runtime.Start().Success);
+            timer();
+            Assert.NotEqual(first, runtime.GetRoundBackupFileName(1));
+        }
+        finally { CaorenCupGameModeRegistry.Unregister(provider); }
+    }
+
+    [Fact]
     public void Rejected_requests_do_not_publish_success_and_overrides_describe_deferred_application()
     {
         CaorenCupPracticeState.EnterSleep();
@@ -134,6 +172,7 @@ public sealed class GameModeAnnouncementTests
     {
         public bool RejectWarmup { get; init; }
         public bool ResetWarmup { get; init; }
+        public bool EndWarmupOnLive { get; init; }
         public GameModeDescriptor Descriptor { get; } = new(id, "测试模式", "Test", [], null, 15, cvars ?? []);
         public GameModeResult ValidateStart(GameModeStartRequest request, GameModeRuntimeContext context) => GameModeResult.Ok("ok");
         public GameModeResult OnWarmupStarted(GameModeRuntimeContext context)
@@ -141,7 +180,11 @@ public sealed class GameModeAnnouncementTests
             if (ResetWarmup) context.ExecuteServerCommand("css_reset_plu");
             return RejectWarmup ? GameModeResult.Fail("资源未就绪") : GameModeResult.Ok("ok");
         }
-        public GameModeResult OnLiveStarted(GameModeRuntimeContext context) => GameModeResult.Ok("ok");
+        public GameModeResult OnLiveStarted(GameModeRuntimeContext context)
+        {
+            if (EndWarmupOnLive) context.ExecuteServerCommand("mp_warmup_end");
+            return GameModeResult.Ok("ok");
+        }
         public GameModeResult OnStopped(GameModeRuntimeContext context) => GameModeResult.Ok("ok");
     }
 }

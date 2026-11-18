@@ -9,8 +9,8 @@ const source = fs.readFileSync(sourcePath, 'utf8');
 
 for (const text of [
   '# 草人杯完整规则',
-  '玩家中心账号登录',
-  '开户与账号恢复',
+  '邮箱注册与登录',
+  '绑定 CS 游戏身份',
   'SteamID64',
   '本场确认',
   'connect play.caorencup.icu',
@@ -29,11 +29,12 @@ for (const obsolete of [
   '!ccbind 绑定码 完成绑定',
   '使用邀请码加入',
   '!cccode',
-  '!ccbind',
+  '/cclogin',
+  '老账号保留原有身份与数据',
 ]) {
   assert.ok(!source.includes(obsolete), `仍包含旧默认绑定说明：${obsolete}`);
 }
 
-assert.match(source, /\/cclogin[\s\S]{0,100}(唯一|开户|恢复)/);
+assert.match(source, /\/ccbind[^\n]*一次性.*绑定码/);
 assert.match(source, /HTTP[\s\S]{0,160}(独立密码|不要.*共用)/);
 console.log('rules content contract checks passed');

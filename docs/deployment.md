@@ -58,7 +58,7 @@ WEB_BIND_HOST=127.0.0.1
 
 `WEB_BIND_HOST` 未设置时保留原监听方式；正式部署必须显式设置为本机地址。这样 Nginx 和同机游戏桥接仍能访问 `http://127.0.0.1:3000`，外部玩家无法直连明文 3000 入口。其他机器上的客户端或桥接连接切换到 HTTPS 域名后，才能收紧监听范围。
 
-当前账户通过邮箱验证码注册并使用账号密码登录，CS 游戏身份通过 `/cclogin` 验证。SMTP 配置见[账户说明](../web-command-center/ACCOUNT-SETUP.md)。
+玩家通过邮箱验证码注册，之后用邮箱和密码登录。CS 游戏身份通过 `/ccbind` 获取一次性码，再在个人资料页绑定。SMTP 配置见[账户说明](../web-command-center/ACCOUNT-SETUP.md)。
 
 首次部署前备份实际网页文件、Nginx 配置、PM2 状态以及 `runtime/identity-store*.json`、`runtime/player-center-sessions*.json`。部署时仅覆盖本次核对的文件，保留备案页脚、现有客户端包、游戏插件、账号数据和比赛状态。只重启网页服务；验证主域名、www 跳转、HTTPS 认证、3000 公网不可达和游戏桥接心跳，再确认完成。回滚恢复本次文件、Nginx 配置及原监听设置，不用旧身份库覆盖部署期间的新增数据。
 

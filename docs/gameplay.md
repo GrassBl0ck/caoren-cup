@@ -92,6 +92,6 @@ FunCommands 提供血量、伤害、友伤、经济、弹药、二段跳、FOV�
 
 ## 配置与账号
 
-分模块配置和命令别名见[开发说明](development.md)。当前玩家账号密码登录、游戏码开户 / 恢复与明确加入比赛的规则见[桥接说明](plugin-web-bridge.md)。
+分模块配置和命令别名见[开发说明](development.md)。邮箱登录、CS 游戏身份绑定及加入比赛的步骤见[桥接说明](plugin-web-bridge.md)。
 
 返回[项目首页](../README.md)。

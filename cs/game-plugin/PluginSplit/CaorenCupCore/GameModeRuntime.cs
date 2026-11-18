@@ -20,6 +20,8 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
     private ActiveGameModeState _state = new(null, GameModeLifecycleState.Lobby, DefaultWarmupSeconds, 0);
     private ICaorenCupGameModeProvider? _activeProvider;
     private string? _cvarOwner;
+    private string? _roundBackupPrefix;
+    private string? _roundBackupMap;
 
     public GameModeRuntime(
         ManagedCvarScope managedCvars,
@@ -38,6 +40,16 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
     }
 
     public ActiveGameModeState State => _state;
+
+    internal string? GetRoundBackupFileName(int round)
+    {
+        if (_state.Lifecycle != GameModeLifecycleState.Live || round < 1 || _roundBackupPrefix is null
+            || !string.Equals(_roundBackupMap, _getCurrentMap(), StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        // The engine's round00 file holds the start of the first played round.
+        return $"{_roundBackupPrefix}_round{round - 1:D2}.txt";
+    }
 
     public IReadOnlyList<GameModeDescriptor> AvailableModes =>
         CaorenCupGameModeRegistry.Snapshot()
@@ -214,6 +226,11 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
                 : definition.DefaultValue;
             _executeServerCommand($"{definition.Name} {value}");
         }
+        _roundBackupPrefix = $"caoren_backup_{Guid.NewGuid():N}";
+        _roundBackupMap = _getCurrentMap();
+        _executeServerCommand("mp_backup_round_auto 1");
+        _executeServerCommand($"mp_backup_round_file {_roundBackupPrefix}");
+        _executeServerCommand("mp_backup_round_file_pattern %prefix%_round%round%.txt");
         var result = _activeProvider.OnLiveStarted(CreateContext());
         if (!result.Success)
         {

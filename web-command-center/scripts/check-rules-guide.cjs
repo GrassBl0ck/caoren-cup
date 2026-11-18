@@ -11,9 +11,9 @@ for (const id of ['rules-join', 'rules-modes', 'rules-cs2', 'rules-conduct', 'ru
   assert.ok(html.includes(`id="${id}"`), `缺少规则章节：${id}`);
 }
 for (const text of [
-  '账号密码登录',
-  '使用 <code>/cclogin</code>',
-  '没有账号或忘记凭据',
+  '邮箱注册与登录',
+  '<code>/ccbind</code>',
+  '忘记密码可在首页用邮箱验证码重设',
   '不平衡竞技',
   '卧底模式',
   '.sp 1/3/5/r',
@@ -24,7 +24,7 @@ for (const text of [
 }
 assert.ok(!html.includes('<h3>固定成员</h3>'), '玩家指引不应继续使用固定成员分类标题');
 assert.ok(!html.includes('<h3>临时参赛者</h3>'), '玩家指引不应继续使用临时参赛者分类标题');
-for (const obsolete of ['邀请码', '!cccode', '!ccbind', '输入 SteamID64 与密码']) {
+for (const obsolete of ['邀请码', '!cccode', '!ccbind 绑定码', '/cclogin', '账号密码登录', '原有账号和游戏数据保留', '输入 SteamID64 与密码']) {
   assert.ok(!html.includes(obsolete), `赛前指引仍包含旧登录文案：${obsolete}`);
 }
 

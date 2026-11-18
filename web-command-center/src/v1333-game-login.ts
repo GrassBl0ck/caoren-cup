@@ -59,7 +59,7 @@ export const v1333IssueGameLoginCode = (steamIdRaw: unknown, nameRaw: unknown): 
     return ticket;
 };
 
-// /cclogin 的单次游戏码只允许由已登录身份绑定、未绑邮箱的老账号恢复接口消费。
+// /ccbind 的单次游戏码供已登录的玩家绑定 CS 游戏身份。
 export const v1333ConsumeGameLoginTicket = (codeRaw: unknown): GameLoginTicket | undefined => {
     v1333CleanupGameLoginTickets();
     const code = normalizeLoginText(codeRaw).toUpperCase();

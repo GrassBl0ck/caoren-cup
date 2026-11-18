@@ -31,10 +31,10 @@ cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/CaorenCupWebBridge/Cao
 |---|---|
 | 网站账户 | 邮箱注册、账户密码与恢复流程 |
 | 网页管理员 | 网站 `ADMIN_PASSWORD`，按页面管理员入口使用 |
-| CS 玩家身份 | 进入 CS2 后获取 `/cclogin` 一次性码，在网页账户设置中绑定或恢复 |
+| CS 玩家身份 | 进入 CS2 后用 `/ccbind` 获取一次性码，在网页个人资料中绑定 |
 | CS 游戏管理员 | CSS 的 `configs/admins.json` 与 SteamID64 |
 
-首次注册要确认邮件实际收到。登录网站后再进入 CS2，在游戏聊天使用 `/cclogin`，按网页提示完成身份验证，然后明确加入本场比赛。账号登录、加入场次、桥接确认游戏身份分别检查。
+首次注册要确认邮件实际收到。用邮箱登录网站后进入 CS2，在游戏聊天栏输入 `/ccbind`，回到网站个人资料页填入一次性绑定码，然后在 CS 板块点击“加入本场比赛”。分别检查网页登录、加入场次和桥接身份确认。
 
 ## 3. 最小联通测试
 

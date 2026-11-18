@@ -11,6 +11,7 @@ using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Events;
 using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
@@ -22,7 +23,7 @@ namespace CaorenCupPlugin;
 public sealed partial class CaorenCupPlugin : BasePlugin
 {
     public override string ModuleName => "CaorenCup Command Center Bridge";
-    public override string ModuleVersion => "2.2.4";
+    public override string ModuleVersion => "2.2.5";
     public override string ModuleAuthor => "CaorenCup";
     public override string ModuleDescription => "Bridge trusted CS2 identity, score and match stats to the CaorenCup web command center.";
 
@@ -72,6 +73,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     private bool _lobbyRemindersEnabled = true;
     private bool _demoRecording;
     private string? _demoRecordingName;
+    private long? _demoAttemptedRevision;
     private DateTimeOffset _lastSuccessfulLobbyStateSync;
     private int _webStateRefreshInProgress;
     private int _webStateGeneration;
@@ -148,7 +150,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         _http.DefaultRequestHeaders.Remove("x-caoren-plugin-token");
         _http.DefaultRequestHeaders.Add("x-caoren-plugin-token", _config.PluginToken);
 
-        AddCommand("css_cclogin", "获取草人杯网页登录码。用法：/cclogin", OnGameLoginCommand);
+        AddCommand("css_ccbind", "获取草人杯 CS 游戏身份绑定码。用法：/ccbind", OnGameBindCommand);
         AddCommand("css_ccreg", "查看草人杯网页注册指引。用法：/ccreg", OnGameRegistrationCommand);
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
@@ -160,6 +162,12 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         AddCommand("css_duelbridge_cvar_ready", "内部命令：由单挑插件在 CVar 恢复状态变化时触发。", OnDuelBridgeCvarReadyCommand);
         RegisterListener<Listeners.OnTick>(OnTick);
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
+        RegisterListener<Listeners.OnMapEnd>(StopDemoRecordingIfNeeded);
+        RegisterEventHandler<EventCsWinPanelMatch>((_, _) =>
+        {
+            StopDemoRecordingIfNeeded();
+            return HookResult.Continue;
+        });
         RegisterEventHandler<EventPlayerChat>(OnRegistrationChat);
         RegisterEventHandler<EventPlayerDisconnect>(OnRegistrationDisconnect);
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
@@ -186,7 +194,10 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         }, TimerFlags.REPEAT));
         _timers.Add(AddTimer(1.0f, () =>
         {
-            if (!_isUnloading) ShowLobbyEntryReminders();
+            if (_isUnloading) return;
+            if (_demoRecording && CaorenCupCoreAccess.TryGet()?.GameModes.State.Revision != _demoAttemptedRevision)
+                StopDemoRecording();
+            ShowLobbyEntryReminders();
         }, TimerFlags.REPEAT));
 
         Logger.LogInformation("{Name} loaded. CommandCenter={BaseUrl}", ModuleName, _config.CommandCenterBaseUrl);
@@ -198,6 +209,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     public override void Unload(bool hotReload)
     {
         CleanupAuthority("plugin unload");
+        StopDemoRecordingIfNeeded();
         CaorenCupMatchAuthority.BridgeCompatibilityCommandsEnabled = false;
         _isUnloading = true;
         StopTimers();
@@ -274,7 +286,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
 
         var steamId = player!.SteamID.ToString();
         CancelRegistration(steamId);
-        ReplyToPlayer(player, "[草人杯] 请前往 https://caorencup.icu/，用邮箱验证码注册并自设账号密码；登录后使用 /cclogin 的一次性码绑定 CS 游戏身份。请勿在游戏聊天中输入密码。");
+        ReplyToPlayer(player, "[草人杯] 请前往 https://caorencup.icu/，用邮箱验证码注册并设置密码；登录后使用 /ccbind 的一次性码绑定 CS 游戏身份。请勿在游戏聊天中输入密码。");
     }
 
     private HookResult OnRegistrationChat(EventPlayerChat @event, GameEventInfo info)
@@ -379,7 +391,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
 
     private CCSPlayerController? FindPlayerBySteamId(string steamId) => Utilities.GetPlayers().FirstOrDefault(player => IsRealPlayer(player) && player.SteamID.ToString() == steamId);
 
-    private void OnGameLoginCommand(CCSPlayerController? player, CommandInfo command)
+    private void OnGameBindCommand(CCSPlayerController? player, CommandInfo command)
     {
         if (!IsRealPlayer(player))
         {
@@ -389,11 +401,11 @@ public sealed partial class CaorenCupPlugin : BasePlugin
 
         var steamId = player!.SteamID.ToString();
         var name = SafePlayerName(player);
-        ReplyToPlayer(player, "[草人杯] 正在生成网页登录码...");
-        _ = RequestGameLoginCodeAsync(player, steamId, name);
+        ReplyToPlayer(player, "[草人杯] 正在生成 CS 游戏身份绑定码...");
+        _ = RequestGameBindCodeAsync(player, steamId, name);
     }
 
-    private async Task RequestGameLoginCodeAsync(CCSPlayerController player, string steamId, string name)
+    private async Task RequestGameBindCodeAsync(CCSPlayerController player, string steamId, string name)
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         try
@@ -411,25 +423,25 @@ public sealed partial class CaorenCupPlugin : BasePlugin
                 {
                     var minutes = Math.Max(1, result.ExpiresInSeconds / 60);
                     var validText = minutes >= 60 ? $"约 {Math.Max(1, minutes / 60)} 小时" : $"约 {minutes} 分钟";
-                    ShowGameLoginCodeNotice(player, result.Code, validText);
+                    ShowGameBindCodeNotice(player, result.Code, validText);
                 }
                 else
                 {
-                    var error = string.IsNullOrWhiteSpace(result?.Error) ? "网页指挥台没有返回登录码。" : result!.Error;
-                    ReplyToPlayer(player, $"[草人杯] 获取网页登录码失败：{error}");
+                    var error = string.IsNullOrWhiteSpace(result?.Error) ? "网页指挥台没有返回绑定码。" : result!.Error;
+                    ReplyToPlayer(player, $"[草人杯] 获取身份绑定码失败：{error}");
                 }
             }
             else
             {
                 var error = ExtractErrorMessage(body);
-                ReplyToPlayer(player, $"[草人杯] 获取网页登录码失败：{error}");
+                ReplyToPlayer(player, $"[草人杯] 获取身份绑定码失败：{error}");
                 Logger.LogWarning("Game login code failed: {Body}", body);
             }
         }
         catch (Exception ex)
         {
             if (!ShouldProcessPluginContinuation(_isUnloading)) return;
-            ReplyToPlayer(player, "[草人杯] 获取网页登录码失败：无法连接网页指挥台。");
+            ReplyToPlayer(player, "[草人杯] 获取身份绑定码失败：无法连接网页指挥台。");
             Logger.LogError(ex, "Game login code failed: cannot connect to command center");
         }
     }
@@ -561,6 +573,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     {
         if (ObserveAuthoritativeRoundStart()) return HookResult.Continue;
         var mode = CaorenCupCoreAccess.TryGet()?.GameModes.State;
+        TryStartCoreDemo(mode);
         if (mode is { ModeId: "random", Lifecycle: GameModeLifecycleState.Live } && mode.Revision != _randomLiveRevision)
         {
             ResetLiveMatchStats(0);
@@ -1037,28 +1050,23 @@ public sealed partial class CaorenCupPlugin : BasePlugin
             _scoreCt = Math.Max(0, state.ScoreCT);
             _scoreT = Math.Max(0, state.ScoreT);
         }
-
-        SyncDemoRecording(state);
     }
 
-    private void SyncDemoRecording(PluginHeartbeatResponse? state)
+    private void TryStartCoreDemo(ActiveGameModeState? mode)
     {
-        if (_matchRuntimeBridge?.IsActive == true) return;
-        var modeState = CaorenCupCoreAccess.TryGet()?.GameModes.State;
-        var modeId = modeState?.ModeId?.Trim().ToLowerInvariant();
-        var modeIsLive = modeState?.Lifecycle == GameModeLifecycleState.Live;
-        var matchEnded = state?.MatchFinished == true ||
-            string.Equals(state?.Phase, "Scoreboard", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(state?.Phase, "PostGameAccusation", StringComparison.OrdinalIgnoreCase);
+        if (mode is not { Lifecycle: GameModeLifecycleState.Live, ModeId: { Length: > 0 } modeId }
+            || _demoAttemptedRevision == mode.Revision || CaorenCupPracticeState.IsPracticeActive
+            || CaorenCupMatchAuthority.IsOwned || _matchRuntimeBridge?.IsActive == true || IsServerWarmup())
+            return;
 
-        if (modeIsLive && !matchEnded && !_demoRecording && !string.IsNullOrWhiteSpace(modeId))
+        StopDemoRecordingIfNeeded();
+        _demoAttemptedRevision = mode.Revision;
+        if (ConVar.Find("tv_enable")?.GetPrimitiveValue<bool>() != true)
         {
-            StartDemoRecording(modeId!);
+            Logger.LogWarning("Cannot start the Gamemode demo: GOTV must be enabled before loading the map (tv_enable 1).");
+            return;
         }
-        else if ((!modeIsLive || matchEnded) && _demoRecording)
-        {
-            StopDemoRecording();
-        }
+        StartDemoRecording(modeId);
     }
 
     private void StartDemoRecording(string modeId)
@@ -1069,16 +1077,20 @@ public sealed partial class CaorenCupPlugin : BasePlugin
             ? "nomatch"
             : new string(_currentMatchId!.Where(char.IsLetterOrDigit).Take(12).ToArray());
         var fileName = $"caorencup_{DateTime.Now:yyyyMMdd_HHmmss}_{safeMode}_{matchPart}";
-        var gameCsgoDirectory = new DirectoryInfo(ModuleDirectory);
-        for (var index = 0; index < 6 && gameCsgoDirectory.Parent is not null; index++)
-            gameCsgoDirectory = gameCsgoDirectory.Parent;
-        var demoDirectory = Path.Combine(gameCsgoDirectory.FullName, "demos", "caorencup");
-        Directory.CreateDirectory(demoDirectory);
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(Server.GameDirectory, "csgo", "demos", "caorencup"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Logger.LogError(ex, "Cannot create the Gamemode demo directory.");
+            return;
+        }
         var recordName = $"demos/caorencup/{fileName}";
         Server.ExecuteCommand($"tv_record {recordName}");
         _demoRecording = true;
         _demoRecordingName = recordName;
-        Logger.LogInformation("Demo recording started: {DemoName}", recordName);
+        Logger.LogInformation("Requested GOTV demo recording: {DemoName}", recordName);
     }
 
     private void StopDemoRecording()
@@ -2336,17 +2348,17 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         });
     }
 
-    private void ShowGameLoginCodeNotice(CCSPlayerController player, string code, string validText)
+    private void ShowGameBindCodeNotice(CCSPlayerController player, string code, string validText)
     {
         var displayCode = code.Trim().ToUpperInvariant();
 
         ReplyToPlayer(player, "[草人杯] =================================");
         ReplyToPlayer(player, $"[草人杯]  你的 CS 身份验证码： {displayCode}");
-        ReplyToPlayer(player, "[草人杯]  登录草人杯网站，在“账户与游戏身份”中输入此码绑定；未绑邮箱的老账号也可用它恢复账号。");
+        ReplyToPlayer(player, "[草人杯]  用邮箱登录草人杯网站，在“个人资料”的“CS 游戏身份”中输入此码绑定。");
         ReplyToPlayer(player, "[草人杯]  此码仅能使用一次，验证成功后立即失效");
         ReplyToPlayer(player, $"[草人杯]  未使用时有效期：{validText}；重新获取新码后旧码失效");
         ReplyToPlayer(player, "[草人杯] =================================");
-        ReplyToPlayerCenter(player, $"CS 身份验证码：{displayCode}\n请回草人杯网站输入");
+        ReplyToPlayerCenter(player, $"CS 身份验证码：{displayCode}\n请在草人杯网站的个人资料页输入");
     }
 
     private void ReplyToPlayerCenter(CCSPlayerController? player, string message)

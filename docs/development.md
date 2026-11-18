@@ -73,7 +73,7 @@ npm run check
 
 长期账号身份默认位于忽略的 `web-command-center/runtime/identity-store.json`，与单场比赛 Session 分离。账号密码使用 scrypt 和随机盐保存，设备令牌只存安全哈希；桌面端凭据保存及自动登录使用既有设备登录流程。更新前备份并保留身份与其他运行数据。
 
-当前新账户通过邮箱验证码注册并设置账号密码；CS 身份使用 `/cclogin` 取得的单次游戏码绑定或恢复。登录玩家中心或管理员入口后，玩家需要明确加入当前场次。SMTP 配置见[账户说明](../web-command-center/ACCOUNT-SETUP.md)。
+新账户通过邮箱验证码注册并设置密码，使用邮箱和密码登录。在游戏内输入 `/ccbind` 获取一次性码，再到网站个人资料页绑定 CS 身份。需要参赛时，在 CS 板块点击“加入本场比赛”。SMTP 配置见[账户说明](../web-command-center/ACCOUNT-SETUP.md)。
 
 ## 构建单个插件
 
