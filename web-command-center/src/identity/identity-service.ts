@@ -77,7 +77,7 @@ export class LobbyIdentityService {
         this.randomBytes = options.randomBytes || crypto.randomBytes;
     }
 
-    async joinPlayerCenterMatch(identityId: string, sessionId: string) {
+    async joinPlayerCenterMatch(identityId: string, sessionId: string, allowPendingBinding = false) {
         const now = this.now();
         return this.store.mutate((data) => {
             const identity = data.identities[identityId];
@@ -86,7 +86,8 @@ export class LobbyIdentityService {
                 (account.passwordState === 'active' && !account.password)) {
                 return { ok: false as const, reason: 'account_unavailable' as const };
             }
-            if (!identity.steamId || !identity.gameBoundAt) {
+            const boundSteamId = identity.gameBoundAt ? identity.steamId : undefined;
+            if (!boundSteamId && !allowPendingBinding) {
                 return { ok: false as const, reason: 'game_binding_required' as const };
             }
             const memberships = Object.values(data.memberships).filter((membership) =>
@@ -112,10 +113,10 @@ export class LobbyIdentityService {
                 identityId,
                 nickname,
                 identityLevel: 'longTerm',
-                confirmationState: identity.steamId ? 'confirmed' : 'unavailable',
-                confirmationReason: identity.steamId ? undefined : 'steam_not_available',
-                trustedSteamId: identity.steamId,
-                confirmedAt: identity.steamId ? now : undefined,
+                confirmationState: boundSteamId ? 'confirmed' : 'unavailable',
+                confirmationReason: boundSteamId ? undefined : 'steam_not_available',
+                trustedSteamId: boundSteamId,
+                confirmedAt: boundSteamId ? now : undefined,
                 joinedAt: now,
                 updatedAt: now,
             };
@@ -229,7 +230,7 @@ export class LobbyIdentityService {
     }
 
     // Steam identity comes from a consumed CS2 bridge ticket, never from client form fields.
-    async bindVerifiedGameIdentity(identityId: string, steamIdRaw: unknown, nicknameRaw: unknown) {
+    async bindVerifiedGameIdentity(identityId: string, steamIdRaw: unknown, nicknameRaw: unknown, sessionId?: string) {
         const steamId = strictSteamId(steamIdRaw);
         if (!steamId) throw new Error('steam_id_invalid');
         return this.store.mutate((data) => {
@@ -241,8 +242,19 @@ export class LobbyIdentityService {
             identity.steamId = steamId;
             identity.steamNickname = String(nicknameRaw || '').trim().slice(0, 128) || identity.displayName;
             identity.displayName = identity.steamNickname;
-            identity.gameBoundAt = this.now();
-            identity.updatedAt = this.now();
+            const now = this.now();
+            identity.gameBoundAt = now;
+            identity.updatedAt = now;
+            for (const membership of Object.values(data.memberships)) {
+                if (!sessionId || membership.sessionId !== sessionId || membership.identityId !== identityId
+                    || membership.identityLevel !== 'longTerm' || membership.leftAt || membership.blockedAt
+                    || (membership.trustedSteamId && membership.trustedSteamId !== steamId)) continue;
+                membership.confirmationState = 'confirmed';
+                membership.confirmationReason = undefined;
+                membership.trustedSteamId = steamId;
+                membership.confirmedAt = now;
+                membership.updatedAt = now;
+            }
             return identity;
         });
     }
@@ -554,6 +566,20 @@ export class LobbyIdentityService {
                 },
             };
         });
+    }
+
+    checkCsBindings(steamIds: unknown): Record<string, boolean> | undefined {
+        if (!Array.isArray(steamIds)) return undefined;
+        const requested = new Set(steamIds.slice(0, 128).map(strictSteamId).filter((id): id is string => !!id));
+        if (requested.size === 0) return {};
+        const snapshot = this.store.snapshot();
+        const bound = new Set<string>();
+        for (const identity of Object.values(snapshot.identities)) {
+            if (identity.steamId && requested.has(identity.steamId)
+                && identity.gameBoundAt && snapshot.accounts[identity.identityId]?.enabled)
+                bound.add(identity.steamId);
+        }
+        return Object.fromEntries([...requested].map(id => [id, bound.has(id)]));
     }
 
     listLobbySteamIds(sessionId: string): string[] {

@@ -1,3 +1,4 @@
+using CaorenCup.Contracts.MatchRuntime;
 using CaorenCupPlugin.MatchRuntime;
 using CaorenCupPlugin.Practice;
 using System.Net.Http.Json;
@@ -20,10 +21,10 @@ using Microsoft.Extensions.Logging;
 namespace CaorenCupPlugin;
 
 [MinimumApiVersion(367)]
-public sealed partial class CaorenCupPlugin : BasePlugin
+public sealed partial class CaorenCupPlugin : BasePlugin, ICaorenCupHostedMatchAdministration
 {
     public override string ModuleName => "CaorenCup Command Center Bridge";
-    public override string ModuleVersion => "2.2.5";
+    public override string ModuleVersion => "2.3.0";
     public override string ModuleAuthor => "CaorenCup";
     public override string ModuleDescription => "Bridge trusted CS2 identity, score and match stats to the CaorenCup web command center.";
 
@@ -51,7 +52,10 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     private CaorenConfig _config = new();
     private string? _currentMatchId;
     private int _currentRound;
-    private long _randomLiveRevision = -1;
+    private string? _trackedCoreMatchId;
+    private long _trackedCoreRoundTimeline;
+    private readonly SortedDictionary<int, CoreRoundCheckpoint> _coreRoundCheckpoints = [];
+    private sealed record CoreRoundCheckpoint(int ScoreCt, int ScoreT, Dictionary<string, BridgePlayerStats> Players);
     private int _scoreCt;
     private int _scoreT;
     private long _eventSequence;
@@ -70,10 +74,11 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     private bool _duelCvarRestorePending;
     private volatile bool _isUnloading;
     private bool _hasSuccessfulLobbyStateSync;
-    private bool _lobbyRemindersEnabled = true;
+    private LobbyReminderMode _lobbyReminderMode;
     private bool _demoRecording;
     private string? _demoRecordingName;
-    private long? _demoAttemptedRevision;
+    private string? _demoAttemptedMatchId;
+    private long _demoAttemptedTimeline;
     private DateTimeOffset _lastSuccessfulLobbyStateSync;
     private int _webStateRefreshInProgress;
     private int _webStateGeneration;
@@ -139,13 +144,14 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     {
         _isUnloading = false;
         LoadConfig();
-        _matchRuntimeBridge = new MatchRuntimeBridgeAdapter(new CounterStrikeMatchRuntimeHost());
+        CaorenCupMatchAdministration.PublishHosted(this);
         _practiceRuntime = new PracticeRuntime();
         _practiceLineups = new PracticeLineupStore(Path.Combine(ModuleDirectory, "practice-lineups"));
         AddCommand(AbilitySyncProtocol.AckCommandName, "内部异能同步确认", OnAbilitySyncAckCommand);
         AddCommand(AbilityRuntimeProtocol.ReadyCommandName, "内部异能运行时就绪", OnAbilityRuntimeReadyCommand);
-        CaorenCupMatchAuthority.BridgeCompatibilityCommandsEnabled = _config.CaorenMatchRuntimeEnabled && !MatchRuntimeOwnership.IsMatchZyLoaded;
-        if (_config.CaorenMatchRuntimeEnabled) RegisterMatchCompatibilityCommands();
+        var registerFormalCommands = _config.CaorenMatchRuntimeEnabled || IsManagedFormalInstance;
+        CaorenCupMatchAuthority.BridgeCompatibilityCommandsEnabled = registerFormalCommands && !MatchRuntimeOwnership.IsMatchZyLoaded;
+        if (registerFormalCommands) RegisterMatchCompatibilityCommands();
         _http.BaseAddress = new Uri(_config.CommandCenterBaseUrl.TrimEnd('/') + "/");
         _http.DefaultRequestHeaders.Remove("x-caoren-plugin-token");
         _http.DefaultRequestHeaders.Add("x-caoren-plugin-token", _config.PluginToken);
@@ -155,7 +161,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         AddCommand("css_ccstate", "查看草人杯指挥台连接状态", OnStateCommand);
         AddCommand("css_ccsnapshot", "手动向草人杯指挥台推送一次战绩快照", OnSnapshotCommand);
         AddCommand("css_notice", "向草人杯玩家发送醒目提示。用法：/notice all|undercover|und|detective|det|task|nor [内容]", OnNoticeCommand);
-        AddCommand("css_lobbyreminder", "控制大厅验证提醒。用法：/lobbyreminder on|off|1|0", OnLobbyReminderCommand);
+        AddCommand("css_lobbyreminder", "控制大厅验证提醒。用法：/lobbyreminder 0|1|2", OnLobbyReminderCommand);
         AddCommand("css_duelbridge_begin", "内部命令：由单挑插件在单挑开始时触发。", OnDuelBridgeBeginCommand);
         AddCommand("css_duelbridge_cleanup_restart", "内部命令：由单挑插件在决定清理重启时触发。", OnDuelBridgeCleanupRestartCommand);
         AddCommand("css_duelbridge_round_start", "内部命令：由单挑插件在回合开始时触发。", OnDuelBridgeRoundStartCommand);
@@ -170,6 +176,17 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         });
         RegisterEventHandler<EventPlayerChat>(OnRegistrationChat);
         RegisterEventHandler<EventPlayerDisconnect>(OnRegistrationDisconnect);
+        RegisterEventHandler<EventPlayerConnectFull>((connection, _) =>
+        {
+            var player = connection.Userid;
+            if (IsRealPlayer(player) && _lobbyReminderMode == LobbyReminderMode.RequireBinding)
+            {
+                _nextBindingReminder.Remove(player!.SteamID.ToString());
+                Server.NextFrame(TickBindingAdmission);
+                RequestMatchStateHeartbeat();
+            }
+            return HookResult.Continue;
+        });
         AddCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _outboundWorker = Task.Run(() => ProcessOutboundQueueAsync(_outboundCts.Token));
 
@@ -195,14 +212,27 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         _timers.Add(AddTimer(1.0f, () =>
         {
             if (_isUnloading) return;
-            if (_demoRecording && CaorenCupCoreAccess.TryGet()?.GameModes.State.Revision != _demoAttemptedRevision)
+            var mode = CaorenCupCoreAccess.TryGet()?.GameModes.State;
+            if (_demoRecording && (mode?.Lifecycle != GameModeLifecycleState.Live || mode.MatchId != _demoAttemptedMatchId))
                 StopDemoRecording();
             ShowLobbyEntryReminders();
+            TickBindingAdmission();
         }, TimerFlags.REPEAT));
 
         Logger.LogInformation("{Name} loaded. CommandCenter={BaseUrl}", ModuleName, _config.CommandCenterBaseUrl);
-        _timers.Add(AddTimer(1.0f, () => { if (!_isUnloading && RuntimeOwnsMatch) RefreshRuntimeRosterPlayers(); },TimerFlags.REPEAT));
-        _ = SendHeartbeatAsync();
+        _timers.Add(AddTimer(1.0f, () =>
+        {
+            if (_isUnloading || !RuntimeOwnsMatch) return;
+            RefreshRuntimeRosterPlayers();
+            TryStartReadyMatch();
+        }, TimerFlags.REPEAT));
+        if (IsManagedFormalInstance)
+        {
+            // The engine has no player list during plugin load. Map or player callbacks and
+            // the admission timer will enforce this mode after the engine comes up.
+            _bindingReminderMatchId = Environment.GetEnvironmentVariable("CAOREN_FORMAL_MATCH_ID");
+            _lobbyReminderMode = LobbyReminderMode.RequireBinding;
+        }
         _ = RefreshWebStateAsync();
     }
 
@@ -212,6 +242,8 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         StopDemoRecordingIfNeeded();
         CaorenCupMatchAuthority.BridgeCompatibilityCommandsEnabled = false;
         _isUnloading = true;
+        CaorenCupMatchAdministration.WithdrawHosted(this);
+        RemoveBindingHud();
         StopTimers();
         RemoveCommandListener("jointeam", OnJoinTeamCommand, HookMode.Pre);
         _outboundCts.Cancel();
@@ -330,7 +362,11 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         var player = @event.Userid;
         var steamId = @event.Xuid != 0 ? @event.Xuid.ToString()
             : player?.IsValid == true ? player.SteamID.ToString() : string.Empty;
-        if (!string.IsNullOrWhiteSpace(steamId)) CancelRegistration(steamId);
+        if (!string.IsNullOrWhiteSpace(steamId))
+        {
+            CancelRegistration(steamId);
+            _nextBindingReminder.Remove(steamId);
+        }
         return HookResult.Continue;
     }
 
@@ -501,19 +537,18 @@ public sealed partial class CaorenCupPlugin : BasePlugin
 
         if (command.ArgCount < 2)
         {
-            var status = _lobbyRemindersEnabled ? "开启" : "关闭";
-            ReplyToPlayer(player, $"[草人杯] 大厅验证提醒当前为：{status}。用法：/lobbyreminder on|off|1|0");
+            ReplyToPlayer(player, $"大厅验证提醒当前为 {(int)_lobbyReminderMode}：{DescribeLobbyReminder(_lobbyReminderMode)}。");
             return;
         }
 
-        if (!LobbyReminderPolicy.TryParseEnabled(command.ArgByIndex(1), out var enabled))
+        if (command.ArgCount != 2 || !LobbyReminderPolicy.TryParseMode(command.ArgByIndex(1), out var mode))
         {
-            ReplyToPlayer(player, "[草人杯] 参数无效。用法：/lobbyreminder on|off|1|0");
+            ReplyToPlayer(player, "用法：/lobbyreminder 0|1|2（关闭、软提醒、绑定候场）。");
             return;
         }
 
-        _lobbyRemindersEnabled = enabled;
-        PrintToAllPlayers($"大厅验证提醒已{(enabled ? "开启" : "关闭")}。");
+        SetLobbyReminderMode(mode);
+        PrintToAllPlayers($"大厅验证提醒已切换为 {(int)mode}：{DescribeLobbyReminder(mode)}。");
     }
 
     private string BuildNoticeMessage(CommandInfo command)
@@ -573,18 +608,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     {
         if (ObserveAuthoritativeRoundStart()) return HookResult.Continue;
         var mode = CaorenCupCoreAccess.TryGet()?.GameModes.State;
-        TryStartCoreDemo(mode);
-        if (mode is { ModeId: "random", Lifecycle: GameModeLifecycleState.Live } && mode.Revision != _randomLiveRevision)
-        {
-            ResetLiveMatchStats(0);
-            _randomLiveRevision = mode.Revision;
-        }
-        _currentRound++;
-        if (mode is { ModeId: "random", Lifecycle: GameModeLifecycleState.Live })
-        {
-            var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
-            if (rules is not null) _currentRound = rules.TotalRoundsPlayed + 1;
-        }
+        if (!TrackCoreMatchRound(mode)) _currentRound++;
         RefreshRoundHealthState();
         EnforceTeamAssignments();
         QueueEvent("round_start", new
@@ -893,6 +917,8 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return;
         var heartbeatRequest = _heartbeatResponseOrder.NextRequest();
+        var formalMatch = RuntimeOwnsMatch ? _matchRuntimeBridge : null;
+        var combatBatch = formalMatch?.ReadCombatBatch();
         try
         {
             var response = await _http.PostAsJsonAsync("api/plugin/heartbeat", new
@@ -901,14 +927,17 @@ public sealed partial class CaorenCupPlugin : BasePlugin
                 heartbeatStartedAtTicks = _heartbeatStartedAtTicks,
                 heartbeatSequence = heartbeatRequest.Sequence,
                 mapName = SafeMapName(),
-                matchRuntimeProtocolVersion = 1,
+                bindingCheckSteamIds = GetConnectedRealPlayerSteamIds().ToArray(),
+                formalHostMatchId = Environment.GetEnvironmentVariable("CAOREN_FORMAL_MATCH_ID"),
+                matchRuntimeProtocolVersion = _matchRuntimeBridge is null ? 0 : 1,
                 abilitySyncProtocolVersion = CaorenCupAbilityAccess.TryGet() is null ? 0 : 1,
                 matchController = _currentMatchController,
                 matchRuntimeEnabled = RuntimeOwnsMatch,
-                matchRuntime = RuntimeOwnsMatch ? _matchRuntimeBridge?.Snapshot : null,
-                matchRuntimeEvents = RuntimeOwnsMatch ? _matchRuntimeBridge?.Events.ToArray() : null,
-                demoSegments = RuntimeOwnsMatch ? _matchRuntimeBridge?.DemoSegments.ToArray() : null,
-                matchRestorePoints = RuntimeOwnsMatch ? _matchRuntimeBridge?.RestorePoints.ToArray() : null,
+                matchRuntime = formalMatch?.HeartbeatSnapshot,
+                matchRuntimeEvents = formalMatch?.Events.ToArray(),
+                matchCombatBatch = combatBatch,
+                demoSegments = formalMatch?.DemoSegments.ToArray(),
+                matchRestorePoints = formalMatch?.RestorePoints.ToArray(),
                 gameMode = GameModeBridgePolicy.ToHeartbeatState(CaorenCupCoreAccess.TryGet()?.GameModes.State),
                 availableGameModes = CaorenCupCoreAccess.TryGet()?.GameModes.AvailableModes.Where(mode => mode.Available).Select(mode => mode.Id).ToArray(),
             }, _jsonOptions);
@@ -926,9 +955,12 @@ public sealed partial class CaorenCupPlugin : BasePlugin
                         var stateDisposition = HeartbeatResponseDisposition.Expired;
                         await GameThreadApplicationScheduler.ScheduleAsync(
                             GameThreadApplicationScheduler.HibernationSafeServerSchedule,
-                            () => stateDisposition = ApplyHeartbeatStateOnGameThread(
-                                state,
-                                heartbeatRequest.Sequence));
+                            () =>
+                            {
+                                if (combatBatch is not null && state?.MatchId == combatBatch.MatchId)
+                                    formalMatch?.AcknowledgeCombatBatch(combatBatch, state.MatchCombatThrough);
+                                stateDisposition = ApplyHeartbeatStateOnGameThread(state, heartbeatRequest.Sequence);
+                            });
                         return stateDisposition;
                     },
                     (heartbeatState, stateDisposition) =>
@@ -1022,10 +1054,16 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         PluginHeartbeatResponse? state,
         bool replaceIsolatedState)
     {
-        if (state?.MatchRuntimeEnabled != true && _matchRuntimeBridge?.IsActive == true) CleanupAuthority("web runtime disabled");
-        _webMatchRuntimeEnabled = state?.MatchRuntimeEnabled == true;
-        _runtimeModeId = state?.GameModeId ?? "competitive";
-        _currentMatchController = state?.MatchController ?? "matchzy";
+        ApplyBindingStatus(state?.BindingStatus);
+        var ownsHostedMatch = _matchRuntimeBridge?.RequiresAuthority == true;
+        var localMatchLive = CaorenCupCoreAccess.TryGet()?.GameModes.State.Lifecycle == GameModeLifecycleState.Live;
+        if (ownsHostedMatch && state?.MatchId != _matchRuntimeBridge!.Snapshot.MatchId) return;
+        if (!ownsHostedMatch)
+        {
+            _webMatchRuntimeEnabled = state?.MatchRuntimeEnabled == true;
+            _runtimeModeId = state?.GameModeId ?? "competitive";
+            _currentMatchController = state?.MatchController ?? "matchzy";
+        }
         _currentWebPhase = state?.Phase;
         _abilityModeRequired = state?.AbilityModeEnabled == true;
         _abilitySyncConfirmed = state?.AbilitySyncConfirmed == true;
@@ -1040,10 +1078,10 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         else if (heartbeatMatchId != null && heartbeatMatchId != _currentMatchId)
         {
             _currentMatchId = heartbeatMatchId;
-            _stats.Clear();
+            if (!localMatchLive) _stats.Clear();
         }
 
-        if (state != null && CaorenCupCoreAccess.TryGet()?.GameModes.State.ModeId != "random" &&
+        if (state != null && !localMatchLive &&
             !RuntimeOwnsMatch && ShouldApplyWebMatchCounters(_duelTelemetryIsolation.IsActive))
         {
             _currentRound = Math.Max(0, state.CurrentRound);
@@ -1052,31 +1090,70 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         }
     }
 
-    private void TryStartCoreDemo(ActiveGameModeState? mode)
+    private bool TrackCoreMatchRound(ActiveGameModeState? mode)
     {
-        if (mode is not { Lifecycle: GameModeLifecycleState.Live, ModeId: { Length: > 0 } modeId }
-            || _demoAttemptedRevision == mode.Revision || CaorenCupPracticeState.IsPracticeActive
-            || CaorenCupMatchAuthority.IsOwned || _matchRuntimeBridge?.IsActive == true || IsServerWarmup())
+        if (mode is not { Lifecycle: GameModeLifecycleState.Live, MatchId: { } matchId })
+            return false;
+        var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+        if (rules is not { WarmupPeriod: false }) return false;
+
+        var round = rules.TotalRoundsPlayed + 1;
+        if (_trackedCoreMatchId != matchId)
+        {
+            _trackedCoreMatchId = matchId;
+            _trackedCoreRoundTimeline = mode.RoundTimeline;
+            _coreRoundCheckpoints.Clear();
+            ResetLiveMatchStats(0);
+        }
+        if (_trackedCoreRoundTimeline != mode.RoundTimeline)
+        {
+            _trackedCoreRoundTimeline = mode.RoundTimeline;
+            if (_coreRoundCheckpoints.TryGetValue(round, out var checkpoint))
+            {
+                ApplyPlayerStats(checkpoint.Players);
+                _scoreCt = checkpoint.ScoreCt;
+                _scoreT = checkpoint.ScoreT;
+            }
+            else
+            {
+                Logger.LogWarning("No local stats checkpoint for match {MatchId}, round {Round}.", matchId, round);
+            }
+
+            foreach (var invalidated in _coreRoundCheckpoints.Keys.Where(number => number > round).ToArray())
+                _coreRoundCheckpoints.Remove(invalidated);
+        }
+
+        _currentRound = round;
+        if (!_coreRoundCheckpoints.ContainsKey(round))
+            _coreRoundCheckpoints.Add(round, new CoreRoundCheckpoint(_scoreCt, _scoreT, CapturePlayerStats()));
+        TryStartCoreDemo(mode);
+        return true;
+    }
+
+    private void TryStartCoreDemo(ActiveGameModeState mode)
+    {
+        if (mode.ModeId is not { Length: > 0 } modeId || mode.MatchId is not { } matchId
+            || (_demoAttemptedMatchId == matchId && _demoAttemptedTimeline == mode.RoundTimeline)
+            || CaorenCupPracticeState.IsPracticeActive || CaorenCupMatchAuthority.IsOwnedOutsideCore)
             return;
 
         StopDemoRecordingIfNeeded();
-        _demoAttemptedRevision = mode.Revision;
+        _demoAttemptedMatchId = matchId;
+        _demoAttemptedTimeline = mode.RoundTimeline;
         if (ConVar.Find("tv_enable")?.GetPrimitiveValue<bool>() != true)
         {
             Logger.LogWarning("Cannot start the Gamemode demo: GOTV must be enabled before loading the map (tv_enable 1).");
             return;
         }
-        StartDemoRecording(modeId);
+        StartDemoRecording(modeId, matchId, mode.RoundTimeline + 1);
     }
 
-    private void StartDemoRecording(string modeId)
+    private void StartDemoRecording(string modeId, string matchId, long part)
     {
         var safeMode = new string(modeId.Where(char.IsLetterOrDigit).ToArray());
         if (safeMode.Length == 0) safeMode = "unknown";
-        var matchPart = string.IsNullOrWhiteSpace(_currentMatchId)
-            ? "nomatch"
-            : new string(_currentMatchId!.Where(char.IsLetterOrDigit).Take(12).ToArray());
-        var fileName = $"caorencup_{DateTime.Now:yyyyMMdd_HHmmss}_{safeMode}_{matchPart}";
+        var matchPart = new string(matchId.Where(char.IsAsciiLetterOrDigit).Take(16).ToArray());
+        var fileName = $"caorencup_{DateTime.Now:yyyyMMdd_HHmmss}_{safeMode}_{matchPart}_part{part:D2}";
         try
         {
             Directory.CreateDirectory(Path.Combine(Server.GameDirectory, "csgo", "demos", "caorencup"));
@@ -1251,6 +1328,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
             {
                 if (_isUnloading) return;
                 StartTeamAssignmentsSafetyTimer();
+                _ = SendHeartbeatAsync();
             });
         }
         if (!_isUnloading) _ = RefreshWebStateAsync();
@@ -1285,7 +1363,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
             var isRealPlayer = IsRealPlayer(player);
             var steamId = isRealPlayer ? player.SteamID.ToString() : string.Empty;
             if (!LobbyReminderPolicy.ShouldRemind(
-                _lobbyRemindersEnabled,
+                _lobbyReminderMode == LobbyReminderMode.Remind,
                 isRealPlayer,
                 steamId,
                 hasSuccessfulSync,
@@ -1429,8 +1507,13 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     private void QueueEvent(string type, object payload)
     {
         if (!ShouldPublishMatchTelemetry()) return;
-        if (_matchRuntimeBridge?.RequiresAuthority == true)
-            payload = MatchRuntimeTelemetry.AttachRoundIdentity(payload, _matchRuntimeBridge.Snapshot, _jsonOptions);
+        if (_matchRuntimeBridge is { RequiresAuthority: true } formalMatch)
+        {
+            var snapshot = formalMatch.Snapshot;
+            if (snapshot.CurrentRoundKey is not null && MatchRuntimeTelemetry.IsCombatEvent(type))
+                formalMatch.RecordCombatEvent(type, MatchRuntimeTelemetry.AttachRoundIdentity(payload, snapshot, _jsonOptions));
+            return;
+        }
 
         if (PluginTelemetryPolicy.IsBatchable(type))
         {
@@ -1736,7 +1819,8 @@ public sealed partial class CaorenCupPlugin : BasePlugin
     {
         if (!ShouldProcessPluginContinuation(_isUnloading)) return Task.FromResult(false);
         var command = heartbeatCommand.Command;
-        if (WebCommandGameThreadDispatcher.IsBlockedByCaorenRuntime(command,_matchRuntimeBridge?.RequiresAuthority == true)) return Task.FromResult(true);
+        if (WebCommandGameThreadDispatcher.IsBlockedByCaorenRuntime(command, CaorenCupMatchAuthority.IsOwned))
+            return Task.FromResult(true);
         if (!IsHeartbeatCommandSourceCurrent(heartbeatCommand))
         {
             Logger.LogWarning(
@@ -1811,7 +1895,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
         {
             ResetEntertainmentAbilitySyncState(null);
         }
-        else if (string.Equals(command.Type, MatchRuntimeBridgeAdapter.WebCommandType, StringComparison.OrdinalIgnoreCase))
+        else if (string.Equals(command.Type, FormalMatchRuntime.WebCommandType, StringComparison.OrdinalIgnoreCase))
         {
             ApplyRuntimeWebCommand(command);
         }
@@ -1947,6 +2031,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin
 
         foreach (var player in Utilities.GetPlayers().Where(IsRealPlayer))
         {
+            if (IsBindingAdmissionRequired(player)) continue;
             var steamId = player.SteamID.ToString();
             if (!_teamAssignments.TryGetValue(steamId, out var targetTeam)) continue;
 
@@ -1971,7 +2056,14 @@ public sealed partial class CaorenCupPlugin : BasePlugin
 
     private HookResult OnJoinTeamCommand(CCSPlayerController? player, CommandInfo command)
     {
-        if (!_teamLockEnabled || !IsRealPlayer(player)) return HookResult.Continue;
+        if (!IsRealPlayer(player)) return HookResult.Continue;
+        if (IsBindingAdmissionRequired(player!))
+        {
+            // Spectator requests still work. Every path into T or CT is gated on the server.
+            if (command.ArgCount > 1 && command.GetArg(1) == "1") return HookResult.Continue;
+            return HookResult.Handled;
+        }
+        if (!_teamLockEnabled) return HookResult.Continue;
 
         var steamId = player!.SteamID.ToString();
         if (_teamAssignmentBypass.Contains(steamId)) return HookResult.Continue;
@@ -2548,9 +2640,11 @@ public sealed class PluginCommand
 
 public sealed class PluginHeartbeatResponse
 {
+    [JsonPropertyName("bindingStatus")] public Dictionary<string, bool>? BindingStatus { get; set; }
     [JsonPropertyName("matchController")] public string? MatchController { get; set; }
     [JsonPropertyName("matchRuntimeEnabled")] public bool MatchRuntimeEnabled { get; set; }
     [JsonPropertyName("matchRuntime")] public MatchRuntimeSnapshot? MatchRuntime { get; set; }
+    [JsonPropertyName("matchCombatThrough")] public long MatchCombatThrough { get; set; }
     [JsonPropertyName("matchRuntimeDefinition")] public JsonElement MatchRuntimeDefinition { get; set; }
     [JsonPropertyName("matchRestorePoints")] public List<RoundRestorePoint> MatchRestorePoints { get; set; } = [];
     [JsonPropertyName("abilityModeEnabled")] public bool AbilityModeEnabled { get; set; }

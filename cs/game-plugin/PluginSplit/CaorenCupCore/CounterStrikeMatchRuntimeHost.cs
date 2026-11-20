@@ -1,15 +1,19 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Modules.Cvars;
 
-namespace CaorenCupPlugin.MatchRuntime;
+using CaorenCup.Contracts.MatchRuntime;
+
+namespace CaorenCup.Core;
 
 public sealed class CounterStrikeMatchRuntimeHost : IMatchRuntimeHost
 {
     private readonly MatchServerCvarScope _cvars = new(ReadCurrentValue, Server.ExecuteCommand);
     private readonly List<string> _demoSegments = [];
     private bool _demoRunning;
+    private string? _recordingMatchId;
 
     public IReadOnlyList<string> DemoSegments => _demoSegments;
+    public bool WaitForEngineRestore => true;
 
     public void ApplyFormalMatchConfig() => _cvars.Apply(
     [
@@ -19,6 +23,7 @@ public sealed class CounterStrikeMatchRuntimeHost : IMatchRuntimeHost
         new("mp_halftime", "0", "1"),
         new("mp_overtime_enable", "0", "1"),
         new("mp_autoteambalance", "0", "1"),
+        new("mp_warmup_pausetimer", "1", "0"),
         new("mp_limitteams", "0", "2"),
     ]);
 
@@ -32,7 +37,12 @@ public sealed class CounterStrikeMatchRuntimeHost : IMatchRuntimeHost
 
     public void StartDemo(MatchDefinition definition)
     {
-        var fileName = BuildDemoFileName(definition, DateTime.UtcNow);
+        if (_recordingMatchId != definition.MatchId)
+        {
+            _recordingMatchId = definition.MatchId;
+            _demoSegments.Clear();
+        }
+        var fileName = BuildDemoFileName(definition, DateTime.UtcNow) + $"_part{_demoSegments.Count + 1:D2}";
         Server.ExecuteCommand($"tv_record {fileName}");
         _demoSegments.Add(fileName + ".dem");
         _demoRunning = true;
@@ -64,6 +74,8 @@ public sealed class CounterStrikeMatchRuntimeHost : IMatchRuntimeHost
         if (string.IsNullOrWhiteSpace(fileName)
             || fileName.Any(character => !(char.IsLetterOrDigit(character) || character is '_' or '-' or '.')))
             throw new ArgumentException("Valve backup file name is unsafe.", nameof(fileName));
+        if (!File.Exists(Path.Combine(Server.GameDirectory, "csgo", fileName)))
+            throw new FileNotFoundException("该回合没有可用的 CS2 备份。");
         Server.ExecuteCommand($"mp_backup_restore_load_file {fileName}");
     }
 
@@ -81,7 +93,7 @@ public sealed class CounterStrikeMatchRuntimeHost : IMatchRuntimeHost
         try
         {
             var current = ConVar.Find(name)?.StringValue;
-            return global::CaorenCupPlugin.MatchRuntime.RuntimeCvarValue.TryNormalizeSafeValue(current, out var normalized)
+            return RuntimeCvarValue.TryNormalizeSafeValue(current, out var normalized)
                 ? normalized
                 : fallback;
         }

@@ -1,4 +1,4 @@
-namespace CaorenCupPlugin.MatchRuntime;
+namespace CaorenCup.Contracts.MatchRuntime;
 
 internal enum RoundTransition
 {

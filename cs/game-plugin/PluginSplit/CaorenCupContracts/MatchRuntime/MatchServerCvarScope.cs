@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace CaorenCupPlugin.MatchRuntime;
+namespace CaorenCup.Contracts.MatchRuntime;
 
 public sealed record MatchCvarSetting(string Name, string Value, string Fallback);
 
@@ -30,15 +30,15 @@ public sealed class MatchServerCvarScope
     public void Set(string name, string value, string fallback)
     {
         if (!SafeName.IsMatch(name)) throw new ArgumentException("Match cvar name is unsafe.", nameof(name));
-        if (!global::CaorenCupPlugin.MatchRuntime.RuntimeCvarValue.TryNormalizeSafeValue(value, out var normalizedValue))
+        if (!RuntimeCvarValue.TryNormalizeSafeValue(value, out var normalizedValue))
             throw new ArgumentException("Match cvar value is unsafe.", nameof(value));
-        if (!global::CaorenCupPlugin.MatchRuntime.RuntimeCvarValue.TryNormalizeSafeValue(fallback, out var normalizedFallback))
+        if (!RuntimeCvarValue.TryNormalizeSafeValue(fallback, out var normalizedFallback))
             throw new ArgumentException("Match cvar fallback is unsafe.", nameof(fallback));
 
         if (!_restore.ContainsKey(name))
         {
             var current = _readCurrentValue(name, normalizedFallback);
-            _restore[name] = global::CaorenCupPlugin.MatchRuntime.RuntimeCvarValue.TryNormalizeSafeValue(current, out var normalizedCurrent)
+            _restore[name] = RuntimeCvarValue.TryNormalizeSafeValue(current, out var normalizedCurrent)
                 ? normalizedCurrent
                 : normalizedFallback;
         }

@@ -6,6 +6,9 @@ import { createInitialSession, getSession, setSession } from './session-manager'
 import { clearFlowUndoHistory } from './flow-undo-manager';
 import { GAME_MODE_MANIFESTS, modeUsesUndercoverFlow, modeUsesUnbalancedRoster, normalizeGameModeId, normalizeGameModeOverrides } from './game-mode';
 
+import { isFormalMatchId } from './formal-server-lifecycle';
+import { supportsFormalMatchMode } from './match-runtime-types';
+
 const SNAPSHOT_VERSION = 3;
 const SNAPSHOT_DIR = path.resolve(__dirname, '..', 'runtime');
 const SNAPSHOT_PATH = path.join(SNAPSHOT_DIR, 'live-session-snapshot.json');
@@ -72,6 +75,7 @@ export const buildSessionSnapshotPayload = (
         abilitySyncRevision: session.abilitySyncRevision,
         abilitySyncState: session.abilitySyncState,
         liveGameData: session.liveGameData,
+        formalServer: session.formalServer,
         matchRuntime: session.matchRuntime,
         matchRuntimeRevision: session.matchRuntimeRevision,
         matchRuntimeEventEpoch: session.matchRuntimeEventEpoch,
@@ -127,16 +131,21 @@ const normalizeRestoredSession = (raw: any, version: 1 | 2 | 3): GameSession => 
     restored.matchOptions.gameModeCvarOverrides = normalizeGameModeOverrides(gameModeId, restored.matchOptions.gameModeCvarOverrides);
     restored.matchOptions.matchMode = restored.matchOptions.matchMode === 'duel' ? 'duel' : 'competitive';
     restored.bridgeProtocolCapabilities = { matchRuntime: 0, abilitySync: 0 };
-    const validCaorenRuntime = restored.matchOptions.matchRuntimeEnabled === true
-        && ['competitive','ability'].includes(gameModeId)
+    if (restored.formalServer?.matchId !== restored.matchId || !isFormalMatchId(restored.matchId))
+        restored.formalServer = undefined;
+    const canRestoreFormalMatch = restored.matchOptions.matchRuntimeEnabled === true
+        && supportsFormalMatchMode(gameModeId)
         && version === 3
-        && restored.matchOptions.matchController === 'caoren'
+        && restored.matchOptions.matchMode !== 'duel'
+        && restored.matchOptions.matchController === 'caoren';
+    const validCaorenRuntime = canRestoreFormalMatch
         && restored.matchRuntime?.matchId === restored.matchId
         && Number.isSafeInteger(restored.matchRuntime?.revision)
         && Number.isSafeInteger(restored.matchRuntime?.runtimeEpoch)
         && Number(restored.matchRuntime?.runtimeEpoch) > 0;
     restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : restored.matchOptions.matchController === 'matchzy' ? 'matchzy' : 'caoren';
-    restored.matchOptions.matchRuntimeEnabled = validCaorenRuntime;
+    restored.matchOptions.matchRuntimeEnabled = validCaorenRuntime
+        || (canRestoreFormalMatch && restored.phase === GamePhase.PreGameSetup && restored.formalServer !== undefined);
     if (!validCaorenRuntime) {
         restored.matchRuntime = undefined;
         restored.matchRuntimeEventEpoch = undefined;
@@ -282,8 +291,10 @@ export const saveSessionSnapshotNow = () => {
     try {
         const payload = serializeSessionSnapshot(getSession());
         writeSnapshotAtomically(SNAPSHOT_PATH, payload);
+        return true;
     } catch (err) {
         console.warn('[SessionPersistence] failed to save snapshot:', err);
+        return false;
     }
 };
 

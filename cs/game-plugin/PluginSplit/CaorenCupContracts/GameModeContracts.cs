@@ -89,7 +89,11 @@ public sealed record ActiveGameModeState(
     GameModeLifecycleState Lifecycle,
     int WarmupSeconds,
     long Revision,
-    string? Error = null);
+    string? Error = null)
+{
+    public string? MatchId { get; init; }
+    public long RoundTimeline { get; init; }
+}
 
 public static class CaorenCupGameModeRegistry
 {

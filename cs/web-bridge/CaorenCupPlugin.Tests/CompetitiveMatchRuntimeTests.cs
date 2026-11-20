@@ -1,3 +1,4 @@
+using CaorenCup.Contracts.MatchRuntime;
 using CaorenCupPlugin.MatchRuntime;
 using Xunit;
 

@@ -1,3 +1,5 @@
+using CaorenCup.Contracts.MatchRuntime;
+
 namespace CaorenCupPlugin;
 
 /// <summary>
@@ -197,7 +199,7 @@ internal static class WebCommandGameThreadDispatcher
         if (!runtimeActive) return false;
         if (string.Equals(
                 command.Type,
-                MatchRuntime.MatchRuntimeBridgeAdapter.WebCommandType,
+                FormalMatchRuntime.WebCommandType,
                 StringComparison.OrdinalIgnoreCase))
         {
             return false;

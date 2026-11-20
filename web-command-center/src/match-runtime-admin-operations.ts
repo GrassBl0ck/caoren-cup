@@ -4,7 +4,7 @@ import type { BridgeCommand } from './plugin-command-queue';
 import { cancelPluginCommands } from './plugin-command-queue';
 import { enqueueMatchRuntimeCommand, type MatchRuntimeAction } from './match-runtime-orchestrator';
 import { GamePhase, type GameSession, type MatchController } from './types';
-import type { MatchRuntimeStage } from './match-runtime-types';
+import { supportsFormalMatchMode, type MatchRuntimeStage } from './match-runtime-types';
 
 export type MatchRuntimeAdminAction =
     | 'SET_MATCH_CONTROLLER'
@@ -98,7 +98,7 @@ const setController = (
     if (session.phase !== GamePhase.Lobby) return response(false, 'PHASE_LOCKED', '只能在大厅阶段切换比赛控制器。');
     const controller = payload.controller;
     if (controller !== 'matchzy' && controller !== 'caoren') return response(false, 'INVALID_CONTROLLER', '比赛控制器格式无效。');
-    if (payload.enabled === true && !['competitive','ability'].includes(session.matchOptions.gameModeId || 'competitive')) return response(false, 'MODE_NOT_SUPPORTED', '该模式不能启用测试比赛运行时。');
+    if (payload.enabled === true && !supportsFormalMatchMode(session.matchOptions.gameModeId)) return response(false, 'MODE_NOT_SUPPORTED', '该模式暂不支持正式比赛流程。');
     session.matchOptions.matchRuntimeEnabled = payload.enabled === true && controller === 'caoren' && session.matchOptions.matchMode !== 'duel';
     session.matchOptions.matchController = controller as MatchController;
     session.matchRuntime = undefined;
@@ -169,7 +169,8 @@ export const applyMatchRuntimeAdminAction = (
     if (typedAction === 'MATCH_RUNTIME_RESTORE') {
         const round = Number(payload.round);
         if (!Number.isSafeInteger(round) || round <= 0) return response(false, 'INVALID_ROUND', '恢复回合必须是正整数。');
-        const confirmationPayload = { round };
+        const confirmationPayload = { round, matchId: runtime.matchId, revision: runtime.revision,
+            timeline: runtime.runtimeEpoch, currentRoundKey: runtime.currentRoundKey };
         if (!payload.confirmationToken) {
             const confirmationToken = confirmations.issue(actorId, typedAction, confirmationPayload);
             return response(false, 'CONFIRMATION_REQUIRED', `确认恢复到第 ${round} 回合开始前？`, {
@@ -182,7 +183,9 @@ export const applyMatchRuntimeAdminAction = (
         return queue(session, 'restore', { targetRound: round, requestedAt: confirmations.now() }, runtime.stage);
     }
 
-    const confirmationPayload = { reason: String(payload.reason || 'administrator') };
+    const confirmationPayload = { reason: String(payload.reason || 'administrator'),
+        matchId: runtime.matchId, revision: runtime.revision, timeline: runtime.runtimeEpoch,
+        currentRoundKey: runtime.currentRoundKey };
     if (!payload.confirmationToken) {
         const confirmationToken = confirmations.issue(actorId, typedAction, confirmationPayload);
         return response(false, 'CONFIRMATION_REQUIRED', '确认终止当前正式比赛？', {

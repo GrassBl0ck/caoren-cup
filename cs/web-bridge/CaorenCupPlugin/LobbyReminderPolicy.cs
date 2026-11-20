@@ -2,6 +2,13 @@ using System.Text.RegularExpressions;
 
 namespace CaorenCupPlugin;
 
+public enum LobbyReminderMode
+{
+    Off,
+    Remind,
+    RequireBinding
+}
+
 public static partial class LobbyReminderPolicy
 {
     public static bool ShouldRemind(
@@ -19,6 +26,19 @@ public static partial class LobbyReminderPolicy
         if (!SteamId64Pattern().IsMatch(normalizedSteamId)) return false;
         if (now - lastSuccessfulSync > maxAge) return false;
         return !lobbySteamIds.Contains(normalizedSteamId);
+    }
+
+    public static bool TryParseMode(string? input, out LobbyReminderMode mode)
+    {
+        if (input?.Trim() == "2")
+        {
+            mode = LobbyReminderMode.RequireBinding;
+            return true;
+        }
+
+        var valid = TryParseEnabled(input, out var enabled);
+        mode = enabled ? LobbyReminderMode.Remind : LobbyReminderMode.Off;
+        return valid;
     }
 
     public static bool TryParseEnabled(string? input, out bool enabled)

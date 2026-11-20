@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Reflection;
+using CaorenCup.Contracts.MatchRuntime;
+using CaorenCup.Core;
 using CaorenCupPlugin.MatchRuntime;
 using CaorenCupPlugin.Practice;
 using Xunit;
@@ -12,7 +14,7 @@ public sealed class MatchBridgeIntegrationTests
     public void Runtime_load_requires_feature_flag_and_caoren_controller()
     {
         var host = new FakeMatchRuntimeHost();
-        var adapter = new MatchRuntimeBridgeAdapter(host);
+        var adapter = new FormalMatchRuntime(host);
         var payload = LoadPayload();
 
         var disabled = adapter.ApplyWebCommand(payload, featureEnabled: false, matchController: "caoren");
@@ -23,6 +25,32 @@ public sealed class MatchBridgeIntegrationTests
         Assert.Equal("CONTROLLER_CONFLICT", matchzy.Code);
         Assert.True(caoren.Ok);
         Assert.Equal(MatchStage.Staging, adapter.Snapshot.Stage);
+    }
+
+    [Fact]
+    public void Formal_combat_stays_queued_until_the_same_batch_is_acknowledged()
+    {
+        var runtime = CreateGoingLiveAdapter();
+        Assert.True(runtime.OnNativeRoundStart(isWarmup: false).Ok);
+        var options = global::CaorenCupPlugin.CaorenCupPlugin.CreatePluginJsonOptions();
+        var first = MatchRuntimeTelemetry.AttachRoundIdentity(new { damage = 35 }, runtime.Snapshot, options);
+        Assert.True(runtime.RecordCombatEvent("player_hurt", first));
+
+        var batch = runtime.ReadCombatBatch()!;
+        Assert.Single(batch.Events);
+        Assert.Equal(batch.Through, runtime.ReadCombatBatch()!.Through); // No acknowledgement after a disconnected heartbeat.
+        var second = MatchRuntimeTelemetry.AttachRoundIdentity(new { damage = 17 }, runtime.Snapshot, options);
+        Assert.True(runtime.RecordCombatEvent("player_hurt", second));
+        runtime.AcknowledgeCombatBatch(batch, batch.Through + 1);
+        Assert.Equal(2, runtime.ReadCombatBatch()!.Events.Count);
+
+        runtime.AcknowledgeCombatBatch(batch, batch.Through);
+        Assert.True(JsonElement.DeepEquals(second, Assert.Single(runtime.ReadCombatBatch()!.Events).Payload));
+        Assert.True(runtime.Cleanup("restart match").Ok);
+        Assert.True(runtime.ApplyWebCommand(LoadPayload(), true, "caoren").Ok);
+        var restarted = runtime.ReadCombatBatch()!;
+        Assert.True(restarted.RuntimeEpoch > batch.RuntimeEpoch);
+        Assert.Empty(restarted.Events);
     }
 
     [Fact]
@@ -41,6 +69,54 @@ public sealed class MatchBridgeIntegrationTests
     }
 
     [Fact]
+    public void Timed_warmup_does_not_allow_ready_check_before_deadline()
+    {
+        var time = new AdjustableTimeProvider();
+        var adapter = new FormalMatchRuntime(new FakeMatchRuntimeHost(), time);
+        Assert.True(adapter.ApplyWebCommand(LoadPayload(), true, "caoren").Ok);
+        Assert.True(ApplyPayload(adapter, "begin_warmup", new { warmupSeconds = 12 }).Ok);
+
+        Assert.False(adapter.TryFinishWarmup());
+        Assert.Equal("WARMUP_IN_PROGRESS", adapter.ApplyWebCommand(CommandPayload("begin_ready_check"), true, "caoren").Code);
+        time.Now = time.Now.AddSeconds(12);
+        Assert.True(adapter.TryFinishWarmup());
+        Assert.Equal(MatchStage.ReadyCheck, adapter.Snapshot.Stage);
+        Assert.Null(adapter.HeartbeatSnapshot.WarmupEndsAtUnixMs);
+        Assert.False(adapter.TryFinishWarmup());
+    }
+
+    [Fact]
+    public void Recovery_keeps_warmup_deadline_ready_intent_and_event_sequence()
+    {
+        var clock = new AdjustableTimeProvider();
+        var original = new FormalMatchRuntime(new FakeMatchRuntimeHost(), clock);
+        Assert.True(original.ApplyWebCommand(LoadPayload(), true, "caoren").Ok);
+        Assert.True(ApplyPayload(original, "begin_warmup", new { warmupSeconds = 30 }).Ok);
+        Assert.True(ApplyPayload(original, "set_ready_from_web", new { steamId = "76561198100000001", ready = true }).Ok);
+        var saved = original.HeartbeatSnapshot;
+        clock.Now = clock.Now.AddSeconds(10);
+        var host = new FakeMatchRuntimeHost();
+        var recovered = new FormalMatchRuntime(host, clock);
+        Assert.True(recovered.RecoverFromWeb(LoadPayload(), saved).Ok);
+        Assert.Equal(saved.WarmupEndsAtUnixMs, recovered.HeartbeatSnapshot.WarmupEndsAtUnixMs);
+        var confirmed = Assert.Single(recovered.HeartbeatSnapshot.ReadySeats!, seat => seat.Confirmed);
+        Assert.False(confirmed.Connected);
+        Assert.False(recovered.TryFinishWarmup());
+        Assert.Empty(host.DemoSegments);
+        Assert.DoesNotContain("pause-match", host.Log);
+
+        clock.Now = clock.Now.AddSeconds(20);
+        Assert.True(recovered.TryFinishWarmup());
+        Assert.Equal(saved.LastEventSequence + 1, Assert.Single(recovered.Events).Sequence);
+    }
+
+    private sealed class AdjustableTimeProvider : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = DateTimeOffset.Parse("2026-11-20T08:00:00Z");
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Fact]
     public void Going_live_native_round_start_emits_explicit_match_start_and_opens_round()
     {
         var adapter = CreateGoingLiveAdapter();
@@ -53,6 +129,45 @@ public sealed class MatchBridgeIntegrationTests
         Assert.Single(adapter.DemoSegments);
         Assert.Contains(adapter.Events, item => item.Type == "match_started");
         Assert.Contains(adapter.Events, item => item.Type == "round_started");
+    }
+
+    [Fact]
+    public void Pregame_addition_amends_the_roster_once_and_stops_at_live_start()
+    {
+        var adapter = CreateLoadedAdapter();
+        var seat = new { seatId = "extra", steamId = "76561198200000009", roster = "B", name = "Late" };
+        Assert.True(ApplyPayload(adapter, "add_pregame_seat", seat).Ok);
+        Assert.False(ApplyPayload(adapter, "add_pregame_seat", seat).Ok);
+        Assert.Equal("extra", Assert.Single(adapter.Events).AddedSeat?.SeatId);
+        Assert.Contains(adapter.CurrentRosterAssignments, assignment => assignment.SteamId == seat.steamId);
+        Assert.False(adapter.CanAutomaticallyStart(abilitySyncConfirmed: true));
+
+        var live = CreateGoingLiveAdapter();
+        Assert.True(live.OnNativeRoundStart(isWarmup: false).Ok);
+        Assert.Equal("INVALID_STAGE", ApplyPayload(live, "add_pregame_seat", seat).Code);
+    }
+
+    [Fact]
+    public void Native_restore_waits_for_the_target_round_before_advancing_the_timeline()
+    {
+        var host = new FakeMatchRuntimeHost { WaitForEngineRestore = true };
+        var adapter = CreateGoingLiveAdapter(host);
+        Assert.True(adapter.OnNativeRoundStart(isWarmup: false, engineRound: 1).Ok);
+        Assert.True(adapter.OnNativeRoundEnd(EngineSide.CounterTerrorist).Ok);
+        Assert.True(adapter.OnNativeRoundStart(isWarmup: false, engineRound: 2).Ok);
+
+        var result = ApplyPayload(adapter, "restore", new { targetRound = 1 });
+        Assert.Equal("RESTORE_REQUESTED", result.Code);
+        Assert.Equal(1, adapter.Snapshot.RuntimeEpoch);
+        Assert.Equal(1, adapter.Snapshot.CompletedRounds);
+        Assert.Equal("RESTORE_PENDING", adapter.OnNativeRoundStart(false, engineRound: 3).Code);
+        Assert.Equal(1, adapter.Snapshot.RuntimeEpoch);
+
+        Assert.Equal("ROUND_RESTORED", adapter.OnNativeRoundStart(false, engineRound: 1).Code);
+        Assert.Equal(2, adapter.Snapshot.RuntimeEpoch);
+        Assert.Equal(0, adapter.Snapshot.CompletedRounds);
+        Assert.Equal(MatchPauseState.TechnicalPaused, adapter.Snapshot.PauseState);
+        Assert.Single(adapter.RestorePoints);
     }
 
     [Fact]
@@ -248,7 +363,7 @@ public sealed class MatchBridgeIntegrationTests
         original.OnNativeRoundEnd(EngineSide.CounterTerrorist);
         var saved = original.Snapshot;
         var host = new FakeMatchRuntimeHost();
-        var recovered = new MatchRuntimeBridgeAdapter(host);
+        var recovered = new FormalMatchRuntime(host);
 
         var result = recovered.RecoverFromWeb(LoadPayload(), saved, original.RestorePoints);
 
@@ -272,7 +387,7 @@ public sealed class MatchBridgeIntegrationTests
             ["76561198000000001"] = new("A1", 3, 2, 1, 450),
         });
         original.OnNativeRoundEnd(EngineSide.CounterTerrorist);
-        var recovered = new MatchRuntimeBridgeAdapter(new FakeMatchRuntimeHost());
+        var recovered = new FormalMatchRuntime(new FakeMatchRuntimeHost());
         Assert.True(recovered.RecoverFromWeb(LoadPayload(), original.Snapshot, original.RestorePoints).Ok);
 
         var restored = ApplyPayload(recovered, "restore", new { targetRound = 1 });
@@ -287,7 +402,7 @@ public sealed class MatchBridgeIntegrationTests
     {
         var command = new PluginCommand
         {
-            Type = MatchRuntimeBridgeAdapter.WebCommandType,
+            Type = FormalMatchRuntime.WebCommandType,
             Payload = CommandPayload("begin_warmup"),
         };
 
@@ -300,7 +415,7 @@ public sealed class MatchBridgeIntegrationTests
     {
         var runtime = new PluginCommand
         {
-            Type = MatchRuntimeBridgeAdapter.WebCommandType,
+            Type = FormalMatchRuntime.WebCommandType,
             Payload = CommandPayload("begin_warmup"),
         };
         var assignments = new PluginCommand
@@ -432,14 +547,14 @@ public sealed class MatchBridgeIntegrationTests
         Assert.Equal(expected, Assert.IsType<bool>(method!.Invoke(null, [enabled, controller, stage])));
     }
 
-    private static MatchRuntimeBridgeAdapter CreateLoadedAdapter(FakeMatchRuntimeHost? host = null)
+    private static FormalMatchRuntime CreateLoadedAdapter(FakeMatchRuntimeHost? host = null)
     {
-        var adapter = new MatchRuntimeBridgeAdapter(host ?? new FakeMatchRuntimeHost());
+        var adapter = new FormalMatchRuntime(host ?? new FakeMatchRuntimeHost());
         Assert.True(adapter.ApplyWebCommand(LoadPayload(), true, "caoren").Ok);
         return adapter;
     }
 
-    private static MatchRuntimeBridgeAdapter CreateGoingLiveAdapter(FakeMatchRuntimeHost? host = null)
+    private static FormalMatchRuntime CreateGoingLiveAdapter(FakeMatchRuntimeHost? host = null)
     {
         var adapter = CreateLoadedAdapter(host);
         ApplyPayload(adapter, "observe_player", new { steamId = "76561198000000001", side = "CT", connected = true });
@@ -452,14 +567,14 @@ public sealed class MatchBridgeIntegrationTests
         return adapter;
     }
 
-    private static MatchCommandResult Apply(MatchRuntimeBridgeAdapter adapter, string action)
+    private static MatchCommandResult Apply(FormalMatchRuntime adapter, string action)
     {
         var result = adapter.ApplyWebCommand(CommandPayload(action), true, "caoren");
         Assert.True(result.Ok, result.Message);
         return result;
     }
 
-    private static MatchCommandResult ApplyPayload(MatchRuntimeBridgeAdapter adapter, string action, object extra)
+    private static MatchCommandResult ApplyPayload(FormalMatchRuntime adapter, string action, object extra)
     {
         var basePayload = new Dictionary<string, object?>
         {
@@ -518,6 +633,7 @@ public sealed class MatchBridgeIntegrationTests
         public List<string> Log { get; } = [];
         public List<string> MutableDemoSegments { get; } = [];
         public IReadOnlyList<string> DemoSegments => MutableDemoSegments;
+        public bool WaitForEngineRestore { get; init; }
 
         public void ApplyFormalMatchConfig() => Log.Add("apply-config");
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
-namespace CaorenCupPlugin.MatchRuntime;
+namespace CaorenCup.Contracts.MatchRuntime;
 
 public enum MatchStage
 {
@@ -46,7 +47,9 @@ public sealed record MatchDefinition(
     string TeamAName,
     string TeamBName,
     EngineSide TeamAInitialSide,
-    IReadOnlyList<MatchSeat> Seats);
+    IReadOnlyList<MatchSeat> Seats,
+    string ModeId = "competitive",
+    int? WarmupSeconds = null);
 
 public sealed record MatchCommandResult(bool Ok, string Code, string Message = "");
 
@@ -70,7 +73,22 @@ public sealed record MatchEvent(
     EngineSide? TeamAEngineSide = null,
     EngineSide? WinningEngineSide = null,
     JsonElement? Players = null,
-    long? OccurredAtUnixMs = null);
+    long? OccurredAtUnixMs = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] MatchSeat? AddedSeat = null);
+
+public sealed record BridgePlayerStats(string Name, int Kills, int Deaths, int Assists, int Damage);
+
+public sealed record RoundRestorePoint(
+    int RoundNumber,
+    string RoundKey,
+    string ValveBackupFile,
+    MatchRuntimeSnapshot MatchSnapshot,
+    string AbilityCheckpointId,
+    string StatsCheckpointId,
+    IReadOnlyList<SubstitutionRecord> Substitutions,
+    PauseSnapshot PauseSnapshot,
+    IReadOnlyList<string> DemoSegments,
+    IReadOnlyDictionary<string, BridgePlayerStats>? BridgeStats = null);
 
 public sealed record MatchRuntimeSnapshot(
     string? MatchId,
@@ -88,6 +106,9 @@ public sealed record MatchRuntimeSnapshot(
     string? CurrentRoundKey,
     long LastEventSequence)
 {
+    public IReadOnlyList<MatchReadySeat>? ReadySeats { get; init; }
+    public long? WarmupEndsAtUnixMs { get; init; }
+
     public static MatchRuntimeSnapshot Empty { get; } = new(
         null,
         0,

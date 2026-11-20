@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CaorenCupPlugin;
+using CaorenCup.Contracts.MatchRuntime;
 using CaorenCupPlugin.MatchRuntime;
 using Xunit;
 

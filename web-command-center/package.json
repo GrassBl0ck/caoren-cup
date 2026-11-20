@@ -1,6 +1,6 @@
 {
   "name": "caoren-cup-web",
-  "version": "2.2.5",
+  "version": "2.3.0",
   "private": true,
   "type": "commonjs",
   "scripts": {
@@ -33,7 +33,7 @@
     "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts",
     "test:game-mode": "tsx --test src/game-mode.test.ts src/random-mode-integration.test.ts",
     "test:ability": "tsx --test src/ability*.test.ts && node scripts/check-ability-bp-ui.cjs",
-    "test:match-runtime": "tsx --test src/match-runtime*.test.ts"
+    "test:match-runtime": "tsx --test src/match-runtime*.test.ts src/formal-server-lifecycle.test.ts"
   },
   "dependencies": {
     "express": "^4.18.3",

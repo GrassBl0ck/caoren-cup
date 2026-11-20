@@ -35,6 +35,24 @@ const requirePersistenceApi = () => {
     };
 };
 
+test('restores a managed formal launch before the first game heartbeat', () => {
+    const { serialize, deserialize } = requirePersistenceApi();
+    const session = createInitialSession();
+    session.phase = GamePhase.PreGameSetup;
+    session.matchOptions.matchRuntimeEnabled = true;
+    session.matchOptions.matchController = 'caoren';
+    session.selectedMap = 'Mirage';
+    session.selectedSide = 'CT';
+    session.formalServer = {
+        matchId: session.matchId, mapName: 'de_mirage', stage: 'starting', startRequestedAt: 1000,
+    };
+
+    const restored = deserialize(serialize(session));
+    assert.equal(restored?.matchOptions.matchRuntimeEnabled, true);
+    assert.deepEqual(restored?.formalServer, session.formalServer);
+    assert.equal(restored?.matchRuntime, undefined);
+});
+
 const createAbilityDraftSession = (timeoutAt: number) => {
     const session = createInitialSession();
     session.phase = GamePhase.AbilityDraft;

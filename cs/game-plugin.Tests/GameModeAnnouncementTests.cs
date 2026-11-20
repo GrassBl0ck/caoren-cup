@@ -16,7 +16,7 @@ public sealed class GameModeAnnouncementTests
         CaorenCupGameModeRegistry.Register(provider);
         var messages = new List<string>();
         Action? timer = null;
-        var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timer = callback,
+        using var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timer = callback,
             _ => { }, () => "de_ancient", messages.Add);
         try
         {
@@ -47,7 +47,7 @@ public sealed class GameModeAnnouncementTests
         var commands = new List<string>();
         var map = "de_ancient";
         Action? timer = null;
-        var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timer = callback,
+        using var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timer = callback,
             commands.Add, () => map, _ => { });
         try
         {
@@ -72,6 +72,45 @@ public sealed class GameModeAnnouncementTests
             Assert.True(runtime.Start().Success);
             timer();
             Assert.NotEqual(first, runtime.GetRoundBackupFileName(1));
+        }
+        finally { CaorenCupGameModeRegistry.Unregister(provider); }
+    }
+
+    [Fact]
+    public void Round_restore_waits_for_the_requested_engine_round_and_ignores_expired_timers()
+    {
+        var provider = new Provider("round-restore");
+        CaorenCupGameModeRegistry.Register(provider);
+        var commands = new List<string>();
+        var messages = new List<string>();
+        var timers = new List<Action>();
+        using var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timers.Add(callback),
+            commands.Add, () => "de_ancient", messages.Add);
+        try
+        {
+            Assert.True(runtime.SelectMode(provider.Descriptor.Id).Success);
+            Assert.True(runtime.Start().Success);
+            timers[0]();
+
+            Assert.True(runtime.RequestRoundRestore(3).Success);
+            Assert.False(runtime.RequestRoundRestore(3).Success);
+            Assert.False(runtime.ConfirmRoundRestore(4));
+            Assert.Equal(0, runtime.RoundTimeline);
+            Assert.Single(commands, command => command.StartsWith("mp_backup_restore_load_file "));
+            timers[1]();
+            Assert.False(runtime.RoundRestorePending);
+            Assert.Contains("超时", messages[^1]);
+            Assert.False(runtime.ConfirmRoundRestore(3));
+
+            Assert.True(runtime.RequestRoundRestore(3).Success);
+            timers[1]();
+            Assert.True(runtime.RoundRestorePending);
+            Assert.True(runtime.ConfirmRoundRestore(3));
+            Assert.Equal(1, runtime.RoundTimeline);
+            Assert.Contains("已恢复", messages[^1]);
+            timers[2]();
+            Assert.False(runtime.ConfirmRoundRestore(3));
+            Assert.Contains("已恢复", messages[^1]);
         }
         finally { CaorenCupGameModeRegistry.Unregister(provider); }
     }
@@ -128,7 +167,7 @@ public sealed class GameModeAnnouncementTests
         var provider = new Provider("timer-generation");
         CaorenCupGameModeRegistry.Register(provider);
         var timers = new List<Action>();
-        var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timers.Add(callback), _ => { }, () => "de_ancient", _ => { });
+        using var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, callback) => timers.Add(callback), _ => { }, () => "de_ancient", _ => { });
         try
         {
             runtime.SelectMode(provider.Descriptor.Id); runtime.Start(); runtime.Stop(); runtime.Start();
@@ -146,7 +185,7 @@ public sealed class GameModeAnnouncementTests
         CaorenCupGameModeRegistry.Register(provider);
         var queuedCommands = new List<string>();
         var resetCalls = 0;
-        var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, _) => { }, queuedCommands.Add,
+        using var runtime = new GameModeRuntime(new ManagedCvarScope(), (_, _) => { }, queuedCommands.Add,
             () => "de_ancient", _ => { }, () =>
             {
                 resetCalls++;

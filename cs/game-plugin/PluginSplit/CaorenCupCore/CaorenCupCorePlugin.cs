@@ -1,4 +1,5 @@
 using CaorenCup.Contracts;
+using CaorenCup.Contracts.MatchRuntime;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Timers;
@@ -7,16 +8,17 @@ using CaorenCup.Features;
 namespace CaorenCup.Core;
 
 /// <summary>拆分第一阶段的最小核心插件；玩法及旧命令仍在原插件中。</summary>
-public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
+public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi, ICaorenCupMatchAdministration, ICaorenCupFormalMatch
 {
     public override string ModuleName => "CaorenCup Core";
-    public override string ModuleVersion => "2.2.5";
+    public override string ModuleVersion => "2.3.0";
     public override string ModuleAuthor => "Graslock + AI";
     public int ContractVersion => CaorenCupCoreAccess.CurrentContractVersion;
     private CaorenCupConfigStore _configStore = null!;
     public CaorenCupConfig Config => _configStore.Config;
     public ManagedCvarScope ManagedCvars { get; private set; } = new();
     public ICaorenCupGameModeRuntime GameModes { get; private set; } = null!;
+    public FormalMatchRuntime FormalMatch { get; } = new(new CounterStrikeMatchRuntimeHost(), useServerAuthority: true);
     public string LegacyConfigPath => _configStore.LegacyConfigPath;
     public string ModulesDirectory => _configStore.ModulesDirectory;
     private PlayerPreferenceStore _preferences = null!;
@@ -62,6 +64,7 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
         ScheduleMatchZyPracticeOnlyGuard();
         RegisterCoreCommands();
         RegisterGameModePauseCommands();
+        RegisterEventHandler<EventRoundStart>(ConfirmEngineRoundRestore, HookMode.Pre);
     }
 
 
@@ -78,6 +81,17 @@ public sealed partial class CaorenCupCorePlugin : BasePlugin, ICaorenCupCoreApi
     public override void Unload(bool hotReload)
     {
         ClearCorePause(resumeMatch: OwnsPauseCommands);
+        (GameModes as GameModeRuntime)?.Dispose();
+        if (FormalMatch.RequiresAuthority)
+        {
+            try
+            {
+                var result = FormalMatch.Cleanup("core unload");
+                if (!result.Ok) Console.Error.WriteLine($"[草人杯] {result.Message}");
+            }
+            catch (Exception ex) { Console.Error.WriteLine($"[草人杯] 正式比赛清理失败：{ex.Message}"); }
+            finally { CaorenCupMatchAuthority.Release(FormalMatch); }
+        }
         UnregisterMatchZyPracticeStateListeners();
         CaorenCupPreferencesAccess.Withdraw(_preferences);
         CaorenCupCoreAccess.Withdraw(this);

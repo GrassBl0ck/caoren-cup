@@ -1,4 +1,7 @@
-import { applyRuntimeRoundStatistics, restoreStatsCheckpoint } from './match-runtime-statistics';
+import {
+    applyRuntimeCombatStatistics, applyRuntimeRoundStatistics, eventRoundNumber,
+    restoreStatsCheckpoint, RUNTIME_COMBAT_EVENT_TYPES,
+} from './match-runtime-statistics';
 import { isBridgeMatchRuntimeEnabled } from './match-runtime-orchestrator';
 import type {
     MatchRuntimeEvent,
@@ -52,7 +55,12 @@ export const applyMatchRuntimeSnapshot = (
         restoreStatsCheckpoint(session, Math.max(1, Math.floor(snapshot.completedRounds) + 1));
     }
 
+    const previous = currentEpoch === snapshot.runtimeEpoch && session.matchRuntime?.revision === snapshot.revision
+        ? session.matchRuntime : undefined;
     session.matchRuntime = clone(snapshot);
+    if (!Array.isArray(snapshot.readySeats)) session.matchRuntime.readySeats = previous?.readySeats;
+    if (snapshot.stage === 'warmup' && snapshot.warmupEndsAtUnixMs == null)
+        session.matchRuntime.warmupEndsAtUnixMs = previous?.warmupEndsAtUnixMs;
     session.matchRuntimeRevision = snapshot.revision;
     if (snapshot.runtimeEpoch > Number(session.matchRuntimeEventEpoch || 0)) {
         session.matchRuntimeEventEpoch = snapshot.runtimeEpoch;
@@ -75,6 +83,7 @@ export const applyMatchRuntimeSnapshot = (
 const knownEventTypes = new Set([
     'warmup_started',
     'ready_check_started',
+    'roster_seat_added',
     'going_live',
     'match_started',
     'round_started',
@@ -104,7 +113,20 @@ export const applyMatchRuntimeEvent = (
     if (!knownEventTypes.has(event.type)) return result(false, 'UNKNOWN_EVENT');
 
     const live = ensureLiveData(session);
-    if (event.type === 'match_started') {
+    if (event.type === 'roster_seat_added') {
+        const seat = event.addedSeat;
+        const candidate = seat && Object.values(session.players).find(player =>
+            player.playerId === seat.seatId && player.steamId === seat.steamId);
+        if (!candidate || candidate.role !== 'Spectator' || (seat?.roster !== 'a' && seat?.roster !== 'b'))
+            return result(false, 'INVALID_ROSTER_UPDATE');
+        const team = seat.roster === 'a' ? 'A' : 'B';
+        candidate.role = 'Player';
+        candidate.rosterTeam = team;
+        candidate.gameRole = 'Soldier';
+        candidate.isReady = false;
+        if (!session.teams[team].players.includes(candidate.playerId))
+            session.teams[team].players.push(candidate.playerId);
+    } else if (event.type === 'match_started') {
         if (session.phase === GamePhase.PreGameSetup) session.phase = GamePhase.LiveGame;
         live.formalStatsStarted = true;
         live.formalRoundStartRaw = 1;
@@ -119,6 +141,34 @@ export const applyMatchRuntimeEvent = (
     session.matchRuntimeEventEpoch = event.runtimeEpoch;
     session.matchRuntimeLastEventSequence = event.sequence;
     return result(true, 'APPLIED');
+};
+
+export const applyMatchCombatBatch = (session: GameSession, batch: any): number => {
+    const runtime = session.matchRuntime;
+    if (!runtime || !batch || batch.matchId !== runtime.matchId || batch.revision !== runtime.revision
+        || batch.runtimeEpoch !== runtime.runtimeEpoch || !Array.isArray(batch.events)
+        || batch.events.length > 128 || !Number.isSafeInteger(batch.through) || batch.through < 0)
+        return 0;
+
+    let previousSequence = 0;
+    for (const item of batch.events) {
+        const event = item?.payload;
+        if (!RUNTIME_COMBAT_EVENT_TYPES.has(item?.type) || !event
+            || event.matchId !== runtime.matchId || event.revision !== runtime.revision
+            || event.runtimeEpoch !== runtime.runtimeEpoch || !eventRoundNumber(event)
+            || typeof event.eventId !== 'string' || !/^[a-f0-9]{32}$/.test(event.eventId)
+            || !Number.isSafeInteger(event.eventSequence) || event.eventSequence <= previousSequence
+            || !Number.isFinite(event.occurredAtUnixMs) || event.occurredAtUnixMs <= 0)
+            return 0;
+        previousSequence = event.eventSequence;
+    }
+    if (previousSequence !== batch.through) return 0;
+
+    const live = ensureLiveData(session);
+    live.formalTelemetryPending = batch.events.length > 0;
+    live.formalTelemetryIncomplete = batch.incomplete === true;
+    for (const entry of batch.events) applyRuntimeCombatStatistics(session, entry.type, entry.payload);
+    return previousSequence;
 };
 
 export interface MatchRuntimeHeartbeatPayload {

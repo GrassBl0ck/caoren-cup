@@ -8,7 +8,8 @@ import {
 import { cancelPluginCommands } from './plugin-command-queue';
 import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
 import { isBridgeMatchRuntimeEnabled } from './match-runtime-orchestrator';
-import { markStandardMatchLiveFromMatchZy } from './game-flow-manager';
+import { advancePhase, markStandardMatchLiveFromMatchZy } from './game-flow-manager';
+import { formalServerLifecycle } from './formal-server-lifecycle';
 // plugin-api.ts
 import express from 'express';
 import { GamePhase, WsEvents, LiveGameData } from './types';
@@ -45,10 +46,10 @@ import { validateUnbalancedRosterForTeamLock } from './unbalanced-roster';
 import { getGameModeRoundRules } from './game-mode-rounds';
 import { GAME_MODE_MANIFESTS } from './game-mode';
 import { PluginHeartbeatOrder } from './plugin-heartbeat-order';
-import { scheduleSessionSnapshotSave } from './session-persistence';
+import { saveSessionSnapshotNow, scheduleSessionSnapshotSave } from './session-persistence';
 import { enqueueAbilityRuntimeStop } from './ability-runtime-orchestrator';
 import {
-    applyMatchRuntimeHeartbeat,
+    applyMatchCombatBatch, applyMatchRuntimeHeartbeat,
     shouldTreatRoundStartAsLegacyMatchzy,
 } from './match-runtime-projection';
 import type { MatchRuntimeEvent, MatchRuntimeSnapshot } from './match-runtime-types';
@@ -262,11 +263,16 @@ export function registerPluginRoutes(app: express.Express, deps: {
     });
 
     app.post('/api/plugin/heartbeat', requirePluginAuth, (req, res) => {
+        const session = getSession();
+        const formalHost = session.formalServer;
+        if (formalHost?.matchId === session.matchId && formalHost.stage !== 'closed'
+            && req.body?.formalHostMatchId !== formalHost.matchId) {
+            return res.status(409).json({ success: false, ignored: true, error: '本场正由指定的正式服实例提供。' });
+        }
         // Reject before touching the session or taking commands from the outbound queue.
         if (!heartbeatOrder.accept(req.body)) {
             return res.status(409).json({ success: false, ignored: true, error: '过期或无效的插件心跳' });
         }
-        const session = getSession();
         session.bridgeProtocolCapabilities = {
             matchRuntime: req.body?.matchRuntimeProtocolVersion === 1 ? 1 : 0,
             abilitySync: req.body?.abilitySyncProtocolVersion === 1 ? 1 : 0,
@@ -318,13 +324,23 @@ export function registerPluginRoutes(app: express.Express, deps: {
             demoSegments: req.body?.demoSegments,
             restorePoints: req.body?.matchRestorePoints,
         });
+        const combatThrough = projection.snapshotApplied ? applyMatchCombatBatch(session, req.body?.matchCombatBatch) : 0;
         if (projection.snapshotApplied || projection.eventsApplied > 0) scheduleSessionSnapshotSave();
+        if (projection.snapshotApplied && session.formalServer && session.formalServer.matchId === req.body?.formalHostMatchId && session.matchRuntime?.stage === 'completed'
+            && session.liveGameData?.formalTelemetryPending !== true && session.phase === GamePhase.LiveGame) {
+            advancePhase(GamePhase.LiveGame, session.matchOptions.undercoverModeEnabled
+                ? GamePhase.PostGameAccusation : GamePhase.Scoreboard);
+        }
+        formalServerLifecycle.observe(session, req.body?.formalHostMatchId, req.body?.mapName, () => {
+            if (getSession() === session) broadcastState();
+        });
         broadcastState();
         res.json({
             success: true,
             matchId: session.matchId,
             phase: session.phase,
-            gameModeId: session.gameModeRuntime?.modeId,
+            bindingStatus: lobbyIdentityService.checkCsBindings(req.body?.bindingCheckSteamIds),
+            gameModeId: session.gameModeRuntime?.modeId ?? session.matchOptions.gameModeId,
             gameModeRevision: session.gameModeRuntime?.revision,
             scoreCT: session.liveGameData.scoreCT || 0,
             scoreT: session.liveGameData.scoreT || 0,
@@ -333,6 +349,7 @@ export function registerPluginRoutes(app: express.Express, deps: {
             matchController: session.matchOptions.matchController || 'caoren',
             matchRuntimeEnabled: session.matchOptions.matchRuntimeEnabled === true,
             matchRuntime: session.matchRuntime,
+            matchCombatThrough: combatThrough > 0 && saveSessionSnapshotNow() ? combatThrough : 0,
             matchRuntimeDefinition: session.matchRuntime ? buildMatchRuntimeDefinition(session) : undefined,
             matchRestorePoints: session.matchRestorePoints || [],
             abilityModeEnabled: session.matchOptions.abilityModeEnabled === true,

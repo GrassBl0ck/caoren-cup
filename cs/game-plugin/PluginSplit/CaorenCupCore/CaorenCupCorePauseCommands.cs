@@ -19,7 +19,7 @@ public sealed partial class CaorenCupCorePlugin
     private bool _awaitingTacticalConfirmation;
 
     private bool OwnsPauseCommands => GameModes.State.Lifecycle == GameModeLifecycleState.Live
-        && !CaorenCupMatchAuthority.IsOwned && !CaorenCupPracticeState.IsPracticeActive;
+        && !CaorenCupMatchAuthority.IsOwnedOutsideCore && !CaorenCupPracticeState.IsPracticeActive;
 
     private void RegisterGameModePauseCommands()
     {
@@ -48,23 +48,24 @@ public sealed partial class CaorenCupCorePlugin
         if (command.ArgCount != 1) return RejectPause(player, "暂停指令不接受额外参数。");
         if (!playerPause && !HasRoot(player)) return RejectPause(player, "只有管理员可以使用 /pause 或 /unpause。玩家请使用 /tac 或 /tech。");
         if (_finishedMatchRevision == _pauseMatchRevision) return RejectPause(player, "本场比赛已结束。");
+        if (GameModes is GameModeRuntime { RoundRestorePending: true })
+            return RejectPause(player, "正在等待 CS2 载入回合。");
+
+        if (!playerPause)
+        {
+            var adminResult = ApplyMatchAdminAction(new(resume ? MatchAdminAction.Resume : MatchAdminAction.Pause));
+            return adminResult.Success ? HookResult.Stop : RejectPause(player, adminResult.Message);
+        }
 
         var rules = ReadGameRules();
         if (rules is null || rules.WarmupPeriod || rules.GameRestart)
             return RejectPause(player, "正式回合尚未就绪，请稍后重试。");
         if (rules.GamePhase == MatchEndedPhase) return RejectPause(player, "本场比赛已结束。");
-        if (resume)
-        {
-            if (!_gameModePause.Active && !rules.MatchWaitingForResume) return RejectPause(player, "比赛当前没有暂停。");
-            ResumeCoreMatch("管理员已请求恢复比赛。");
-            return HookResult.Stop;
-        }
-
         if (rules.MatchWaitingForResume) return RejectPause(player, "比赛正在暂停。");
-        if (playerPause && (player is not { IsValid: true, IsBot: false, IsHLTV: false }
-            || player.Team is not (CsTeam.Terrorist or CsTeam.CounterTerrorist)))
+        if (player is not { IsValid: true, IsBot: false, IsHLTV: false }
+            || player.Team is not (CsTeam.Terrorist or CsTeam.CounterTerrorist))
             return RejectPause(player, "只有已加入 CT 或 T 的参赛玩家可以申请暂停。");
-        if (playerPause && (!rules.FreezePeriod || rules.GamePhase == HalftimePhase || rules.SwitchingTeamsAtRoundReset))
+        if (!rules.FreezePeriod || rules.GamePhase == HalftimePhase || rules.SwitchingTeamsAtRoundReset)
             return RejectPause(player, "请在回合开始的冻结时间内申请暂停。");
 
         var tactical = name == "css_tac";
@@ -80,7 +81,7 @@ public sealed partial class CaorenCupCorePlugin
         _pauseRequestedAt = Server.EngineTime;
         Server.ExecuteCommand("mp_pause_match");
         if (!tactical)
-            CaorenCupChat.PrintToChatAll(playerPause ? "已请求技术暂停，请管理员确认后恢复。" : "管理员已请求暂停，CS2 将在安全时点处理。");
+            CaorenCupChat.PrintToChatAll("已请求技术暂停，请管理员确认后恢复。");
         return HookResult.Stop;
     }
 
@@ -113,7 +114,7 @@ public sealed partial class CaorenCupCorePlugin
     {
         long? revision = OwnsPauseCommands ? GameModes.State.Revision : null;
         if (_pauseMatchRevision == revision) return;
-        ClearCorePause(resumeMatch: !CaorenCupMatchAuthority.IsOwned && !CaorenCupPracticeState.IsPracticeActive);
+        ClearCorePause(resumeMatch: !CaorenCupMatchAuthority.IsOwnedOutsideCore && !CaorenCupPracticeState.IsPracticeActive);
         _pauseMatchRevision = revision;
     }
 
@@ -128,6 +129,8 @@ public sealed partial class CaorenCupCorePlugin
     {
         if (OwnsPauseCommands) _finishedMatchRevision = GameModes.State.Revision;
         ClearCorePause(resumeMatch: false);
+        if ((GameModes as GameModeRuntime)?.FinishLiveMatch() is { Success: false } result)
+            Console.Error.WriteLine($"[草人杯] {result.Message}");
     }
 
     private void ResumeCoreMatch(string message)

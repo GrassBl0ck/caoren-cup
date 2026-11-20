@@ -10,6 +10,7 @@ import {
 } from './types';
 import { getSession } from './session-manager';
 import { restoreSessionSnapshot, saveSessionSnapshotNow, scheduleSessionSnapshotSave } from './session-persistence';
+import { formalServerLifecycle } from './formal-server-lifecycle';
 import { loadTaskPresets } from './task-preset-store';
 import { findPlayerById, generateBindCode, sanitizeGameStateForViewer } from './player-utils';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
@@ -407,6 +408,10 @@ setInterval(() => {
     }
     pollAbilityFlowTimeouts(now);
 }, 1000);
+
+setInterval(() => {
+    formalServerLifecycle.poll(getSession(), broadcastState);
+}, 2500);
 
 const PORT = process.env.PORT || 3000;
 Promise.all([

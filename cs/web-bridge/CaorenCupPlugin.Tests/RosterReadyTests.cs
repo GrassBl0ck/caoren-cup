@@ -1,3 +1,4 @@
+using CaorenCup.Contracts.MatchRuntime;
 using CaorenCupPlugin.MatchRuntime;
 using Xunit;
 
@@ -20,6 +21,36 @@ public sealed class RosterReadyTests
         Assert.Empty(gate.MissingSeatIds);
         Assert.Empty(gate.WrongSideSeatIds);
         Assert.Equal(["seat-b2"], gate.NotReadySeatIds);
+    }
+
+    [Fact]
+    public void Web_confirmation_waits_for_arrival_on_the_assigned_side()
+    {
+        var coordinator = CreateCoordinator();
+        Assert.Equal("AWAITING_ARRIVAL", coordinator.SetReady(A1, true, allowBeforeArrival: true).Code);
+
+        coordinator.ObservePlayer(A1, EngineSide.Terrorist, connected: true);
+        var seat = coordinator.GetSeatStatuses().Single(s => s.SeatId == "seat-a1");
+        Assert.True(seat.Confirmed);
+        Assert.False(seat.OnExpectedSide);
+        Assert.False(coordinator.ValidateStart().Allowed);
+
+        ObserveAllCorrectly(coordinator);
+        coordinator.SetReady(A2, true);
+        coordinator.SetReady(B1, true);
+        coordinator.SetReady(B2, true);
+        Assert.True(coordinator.ValidateStart().Allowed);
+    }
+
+    [Fact]
+    public void Pending_web_confirmation_does_not_transfer_to_a_replacement()
+    {
+        var coordinator = CreateCoordinator();
+        coordinator.SetReady(A1, true, allowBeforeArrival: true);
+        var result = coordinator.Substitute("seat-a1", "76561198222222222", "A 队替补", 1, atSafeBoundary: true);
+
+        Assert.True(result.Ok);
+        Assert.False(coordinator.GetSeatStatuses().Single(s => s.SeatId == "seat-a1").Confirmed);
     }
 
     [Fact]

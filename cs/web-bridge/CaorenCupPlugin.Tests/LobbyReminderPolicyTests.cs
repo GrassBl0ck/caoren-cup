@@ -5,6 +5,18 @@ namespace CaorenCupPlugin.Tests;
 
 public sealed class LobbyReminderPolicyTests
 {
+    [Theory]
+    [InlineData("0", LobbyReminderMode.Off)]
+    [InlineData("off", LobbyReminderMode.Off)]
+    [InlineData("1", LobbyReminderMode.Remind)]
+    [InlineData("on", LobbyReminderMode.Remind)]
+    [InlineData("2", LobbyReminderMode.RequireBinding)]
+    public void Command_accepts_all_three_modes_and_existing_aliases(string input, LobbyReminderMode expected)
+    {
+        Assert.True(LobbyReminderPolicy.TryParseMode(input, out var mode));
+        Assert.Equal(expected, mode);
+    }
+
     private const string ValidSteamId = "76561198000000060";
     private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(10_000);
     private static readonly TimeSpan MaxAge = TimeSpan.FromSeconds(15);

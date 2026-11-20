@@ -93,7 +93,7 @@ public sealed partial class CaorenCupCorePlugin
         if (HasRoot(player))
         {
             Reply(player, "/notice <范围> <内容> : 向玩家发送醒目提示（管理员）");
-            Reply(player, "/lobbyreminder on|off|1|0 : 开启或关闭大厅验证提醒（管理员）");
+            Reply(player, "/lobbyreminder 0|1|2 : 关闭提醒、软提醒或绑定候场（管理员）");
         }
     }
 
@@ -361,34 +361,14 @@ public sealed partial class CaorenCupCorePlugin
             return;
         }
 
-        if (CaorenCupPracticeState.IsPracticeActive)
-        {
-            Reply(player, "当前处于 MatchZy Practice，不能使用 /ccrestore；请先 /sleep。");
-            return;
-        }
-
-        if (!OwnsPauseCommands || ReadGameRules() is not { WarmupPeriod: false, GameRestart: false } rules
-            || rules.GamePhase == MatchEndedPhase || _finishedMatchRevision == GameModes.State.Revision)
-        {
-            Reply(player, "当前没有正在运行的正式 Gamemode，不能恢复回合。");
-            return;
-        }
-
-        if (info.ArgCount < 2 || !int.TryParse(info.GetArg(1), out var round) || round is < 1 or > 999)
+        if (info.ArgCount != 2 || !int.TryParse(info.GetArg(1), out var round) || round is < 1 or > 999)
         {
             Reply(player, "用法：/ccrestore <回合数>，回合数必须是 1 到 999 的整数。");
             return;
         }
 
-        var fileName = (GameModes as GameModeRuntime)?.GetRoundBackupFileName(round);
-        if (fileName is null || !File.Exists(Path.Combine(Server.GameDirectory, "csgo", fileName)))
-        {
-            Reply(player, $"本场第 {round} 回合没有可用备份。若所有回合都缺少备份，请核对服务端启动参数 -allow_round_backup_files。");
-            return;
-        }
-
-        Server.ExecuteCommand($"mp_backup_restore_load_file {fileName}");
-        CaorenCupChat.PrintToChatAll($"管理员已请求恢复至第 {round} 回合开局，等待 CS2 载入备份。");
+        var result = ApplyMatchAdminAction(new(MatchAdminAction.RestoreRound, Round: round));
+        if (!result.Success) Reply(player, result.Message);
     }
 
     private void OnGameModeCommand(CCSPlayerController? player, CommandInfo info)
@@ -409,10 +389,10 @@ public sealed partial class CaorenCupCorePlugin
         string action = info.GetArg(1).Trim().ToLowerInvariant();
         GameModeResult result = action switch
         {
-            "status" => GameModeResult.Ok(GameModes.GetStatusText()),
-            "start" => GameModes.Start(),
-            "stop" => GameModes.Stop(),
-            _ => GameModes.SelectMode(action),
+            "status" => GameModeResult.Ok(ReadMatchAdminState().Status),
+            "start" => ApplyMatchAdminAction(new(MatchAdminAction.Start)),
+            "stop" => ApplyMatchAdminAction(new(MatchAdminAction.Stop)),
+            _ => ApplyMatchAdminAction(new(MatchAdminAction.SelectMode, ModeId: action)),
         };
         if (!result.Success || action == "status" || (action == "stop" && GameModes.State.ModeId is null))
             Reply(player, result.Message);

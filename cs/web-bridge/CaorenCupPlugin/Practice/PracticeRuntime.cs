@@ -1,3 +1,4 @@
+using CaorenCup.Contracts.MatchRuntime;
 using CaorenCupPlugin.MatchRuntime;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Modules.Cvars;
@@ -139,7 +140,7 @@ public sealed class PracticeRuntime
         try
         {
             var current = ConVar.Find(name)?.StringValue;
-            return global::CaorenCupPlugin.MatchRuntime.RuntimeCvarValue.TryNormalizeSafeValue(current, out var normalized)
+            return RuntimeCvarValue.TryNormalizeSafeValue(current, out var normalized)
                 ? normalized
                 : fallback;
         }

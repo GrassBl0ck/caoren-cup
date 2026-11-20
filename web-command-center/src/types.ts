@@ -311,6 +311,8 @@ export interface LiveGameData {
     roundBaseOffset?: number;
     formalRoundStartRaw?: number;
     formalStatsStarted?: boolean;
+    formalTelemetryPending?: boolean;
+    formalTelemetryIncomplete?: boolean;
     statsUnavailableReason?: string;
     [key: string]: any;
 }
@@ -358,6 +360,7 @@ export interface GameSession {
     matchId: string;
     matchOptions: MatchOptions;
     gameModeRuntime?: GameModeRuntimeState;
+    formalServer?: import('./formal-server-lifecycle').FormalServerState;
     availableGameModes?: GameModeId[];
     players: Record<string, Player>;
     playerOrder: string[];

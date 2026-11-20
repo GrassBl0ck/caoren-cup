@@ -4,6 +4,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { Player, WsEvents } from './types';
 import { getSession } from './session-manager';
+import { formalServerLifecycle } from './formal-server-lifecycle';
 import { normalizeSteamId, normalizeLoginText, generateBindCode } from './player-utils';
 import { LobbyIdentityService } from './identity/identity-service';
 import { lobbyIdentityService } from './identity/identity-runtime';
@@ -76,7 +77,8 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
 }) {
     const identityService = deps.identityService || lobbyIdentityService;
     app.get('/api/public/server-status', (_req, res) => {
-        const live = getSession().liveGameData;
+        const session = getSession();
+        const live = session.liveGameData;
         const lastHeartbeatAt = live?.lastPluginHeartbeatAt || null;
         const heartbeatFresh = !!lastHeartbeatAt && Date.now() - Number(lastHeartbeatAt) < V1333_PLUGIN_ONLINE_TTL_MS;
         const pluginReady = live?.pluginConnected === true && heartbeatFresh;
@@ -84,7 +86,8 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
             success: true,
             online: pluginReady,
             pluginReady,
-            joinAllowed: !!V1333_GAME_SERVER_CONNECT_URL,
+            joinAllowed: !!V1333_GAME_SERVER_CONNECT_URL && (!formalServerLifecycle.isAvailableFor(session) || session.matchOptions?.matchRuntimeEnabled !== true
+                || (pluginReady && session.formalServer?.matchId === session.matchId && session.formalServer.stage === 'ready')),
             pluginConnected: live?.pluginConnected === true,
             heartbeatFresh,
             lastHeartbeatAt,

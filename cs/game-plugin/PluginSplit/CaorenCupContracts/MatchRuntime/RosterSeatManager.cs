@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace CaorenCupPlugin.MatchRuntime;
+namespace CaorenCup.Contracts.MatchRuntime;
 
 public sealed record SubstitutionRecord(
     string SeatId,
@@ -51,12 +51,17 @@ public sealed class RosterSeatManager
     public RosterSeatManager(MatchDefinition definition)
     {
         _teamAEngineSide = definition.TeamAInitialSide;
-        foreach (var seat in definition.Seats)
-        {
-            var state = new RosterSeatState(seat, ExpectedSide(seat.Roster));
-            _seatsById.Add(state.SeatId, state);
-            _seatsBySteamId.Add(state.CurrentSteamId, state);
-        }
+        foreach (var seat in definition.Seats) Add(seat);
+    }
+
+    internal bool CanAdd(MatchSeat seat) => SteamId64.IsMatch(seat.SteamId) &&
+        !_seatsById.ContainsKey(seat.SeatId) && !_seatsBySteamId.ContainsKey(seat.SteamId);
+
+    internal void Add(MatchSeat seat)
+    {
+        var state = new RosterSeatState(seat, ExpectedSide(seat.Roster));
+        _seatsById.Add(state.SeatId, state);
+        _seatsBySteamId.Add(state.CurrentSteamId, state);
     }
 
     public IReadOnlyCollection<RosterSeatState> Seats => _seatsById.Values;

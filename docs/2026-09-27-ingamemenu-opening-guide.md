@@ -33,6 +33,18 @@ F6/F7 再按一次会关闭对应菜单。以上按键只是示例，原来有�
 
 暂不建议把 Esc 覆盖为 `css_crcmenu_back`：覆盖会改变 CS2 原有暂停菜单入口，目前尚未实现“没有草人杯菜单时仍打开原生暂停菜单”的自动回退。界面只保留“返回”；直接退出使用 `css_crcmenu_exit`。
 
+## 管理员按住快捷菜单
+
+比赛快捷菜单默认留空。在游戏里输入 `/crcadmin_bind z`，或在控制台输入 `css_crcadmin_bind z`，可以查看完整指引。先在控制台执行 `bind "z"` 查询原绑定。选好空闲键或确认覆盖后，执行以下三行：
+
+```text
+alias "+crc_admin_menu" "css_crcadmin_hold_open"
+alias "-crc_admin_menu" "css_crcadmin_hold_close"
+bind "z" "+crc_admin_menu"
+```
+
+按住键打开比赛快捷菜单，松开收起。用 `unbind "z"` 可以取消此键绑定。预设公告可在菜单插件目录的 `data/admin-announcements.json` 中保存为 JSON 字符串数组；修改后重载菜单插件。
+
 ## 个人设置
 
 两个菜单都有个人设置页，使用同一份个人偏好：

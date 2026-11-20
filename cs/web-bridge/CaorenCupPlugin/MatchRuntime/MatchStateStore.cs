@@ -2,21 +2,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using CaorenCup.Contracts.MatchRuntime;
+
 namespace CaorenCupPlugin.MatchRuntime;
 
 public sealed record MatchStateIdentity(string MatchId, int Revision, long RuntimeEpoch);
-
-public sealed record RoundRestorePoint(
-    int RoundNumber,
-    string RoundKey,
-    string ValveBackupFile,
-    MatchRuntimeSnapshot MatchSnapshot,
-    string AbilityCheckpointId,
-    string StatsCheckpointId,
-    IReadOnlyList<SubstitutionRecord> Substitutions,
-    PauseSnapshot PauseSnapshot,
-    IReadOnlyList<string> DemoSegments,
-    IReadOnlyDictionary<string, BridgePlayerStats>? BridgeStats = null);
 
 public sealed record MatchStateFile(
     int SchemaVersion,

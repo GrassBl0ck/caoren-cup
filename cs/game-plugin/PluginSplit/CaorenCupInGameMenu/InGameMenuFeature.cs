@@ -19,7 +19,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
     private const float ChatRelayTimeoutSeconds = 60f;
 
     public override string ModuleName => "CaorenCup In Game Menu";
-    public override string ModuleVersion => "2.2.4";
+    public override string ModuleVersion => "2.3.0";
     public override string ModuleAuthor => "Graslock + AI";
 
     private IMenuHudSurface _surface = null!;
@@ -32,7 +32,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
     private readonly System.Collections.Generic.Dictionary<string, ChatRelayEntry> _chatRelays = new();
 
     public string GetHelpEntry() => _enabled
-        ? "/crcmenu_admin 管理菜单(root)；/crcmenu 玩家菜单；/crcvote A 投票；/crcmenu_back 返回"
+        ? "/crcmenu_admin 管理菜单(root)；/crcadmin_bind 绑键指引；/crcmenu 玩家菜单；/crcvote A 投票；/crcmenu_back 返回"
         : "/crcmenu_admin - 管理员游戏内菜单(当前禁用)";
 
     public string GetStatusInfo() =>
@@ -58,6 +58,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         _navigator = new MenuNavigator();
         _commandHelp = CommandHelpCatalog.Load();
         new AdminMenuCatalog(this, _navigator).RegisterMinimalAdminPage();
+        RegisterHeldMatchMenu();
 
         AddCommand("css_crcmenu_admin", "打开管理员游戏内菜单", OnMenuCommand);
         AddCommand("css_ca", "打开管理员游戏内菜单", OnMenuCommand);
@@ -140,6 +141,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
     private void OnHudClicked(CCSPlayerController player, CCSCustomHudLayout layout, string buttonId)
     {
         if (!player.IsValid) return;
+        if (HandleHeldMatchClick(player, layout, buttonId)) return;
         if (CustomHudMenuSurface.IsBusinessButton(buttonId) &&
             ((_personalSurface.IsOurLayout(layout) && _personalViews.ContainsKey(player.SteamID.ToString()))
             || (_voteSurface.IsOurLayout(layout) && _votePages.ContainsKey(player.SteamID.ToString()))
@@ -223,6 +225,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
     private void CloseAllMenus(VoteEndReason reason = VoteEndReason.MapChanged)
     {
         ResetVoting(reason);
+        CloseAllHeldMatchMenus();
         _navigator.CloseAll();
         _surface.RemoveEntity();
         CancelAllChatRelays();
@@ -235,6 +238,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
             : player?.IsValid == true ? player.SteamID.ToString() : string.Empty;
         if (steamId.Length == 0) return HookResult.Continue;
         _randomMenus.Remove(steamId);
+        CloseHeldMatchMenu(steamId, player);
         TrackDisconnectedPlayer(steamId);
         OnVotingPlayerDisconnected(steamId);
         _navigator.Close(steamId);

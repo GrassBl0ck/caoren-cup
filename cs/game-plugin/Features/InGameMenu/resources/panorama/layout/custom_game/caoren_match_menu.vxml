@@ -1,0 +1,27 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/csgostyles.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_match_menu.vcss_c" />
+    </styles>
+    <Panel class="QuickMatchRoot" hittest="false">
+        <Panel id="dialog" class="QuickMatchPanel Hidden" hittest="true">
+            <Label class="QuickTitle" text="{s:quick_title}" />
+            <Label class="QuickStatus" text="{s:quick_status}" />
+            <Button id="quick_item_0" class="QuickAction Hidden"><Label text="{s:quick_label_0}" /></Button>
+            <Button id="quick_item_1" class="QuickAction Hidden"><Label text="{s:quick_label_1}" /></Button>
+            <Button id="quick_item_2" class="QuickAction Hidden"><Label text="{s:quick_label_2}" /></Button>
+            <Button id="quick_item_3" class="QuickAction Hidden"><Label text="{s:quick_label_3}" /></Button>
+            <Button id="quick_item_4" class="QuickAction Hidden"><Label text="{s:quick_label_4}" /></Button>
+            <Button id="quick_item_5" class="QuickAction Hidden"><Label text="{s:quick_label_5}" /></Button>
+            <Button id="quick_item_6" class="QuickAction Hidden"><Label text="{s:quick_label_6}" /></Button>
+            <Button id="quick_item_7" class="QuickAction Hidden"><Label text="{s:quick_label_7}" /></Button>
+            <Panel class="QuickFooter">
+                <Button id="quick_back" class="QuickNav Hidden"><Label text="返回" /></Button>
+                <Button id="quick_previous" class="QuickNav Hidden"><Label text="上一页" /></Button>
+                <Label class="QuickPage" text="{s:quick_page}" />
+                <Button id="quick_next" class="QuickNav Hidden"><Label text="下一页" /></Button>
+            </Panel>
+            <Label class="QuickHint" text="松开快捷键返回游戏" />
+        </Panel>
+    </Panel>
+</root>

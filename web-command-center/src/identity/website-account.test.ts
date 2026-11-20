@@ -38,6 +38,25 @@ test('a verified website account can log in without entering either game and sur
     assert.equal(reloaded.snapshot().identities[runtime.identity.identityId].steamId, undefined);
 });
 
+test('a formal room admits pending binding and verifies the same membership after binding', async () => {
+    const runtime = await websiteAccount();
+    const identityId = runtime.identity.identityId;
+    const sessionId = 'formal-cs-match';
+    const steamId = '76561198000009931';
+    const joined = await runtime.service.joinPlayerCenterMatch(identityId, sessionId, true);
+    assert.equal(joined.ok, true);
+    if (!joined.ok) return;
+    assert.equal(joined.membership.trustedSteamId, undefined);
+    assert.deepEqual(runtime.service.checkCsBindings([steamId]), { [steamId]: false });
+
+    await runtime.service.bindVerifiedGameIdentity(identityId, steamId, 'Website Player', sessionId);
+    const [bound] = runtime.service.listMemberships(sessionId);
+    assert.equal(bound.membershipId, joined.membership.membershipId);
+    assert.equal(bound.trustedSteamId, steamId);
+    assert.equal(bound.confirmationState, 'confirmed');
+    assert.deepEqual(runtime.service.checkCsBindings([steamId, 'junk']), { [steamId]: true });
+});
+
 test('a website account without a trusted Steam binding cannot join the CS match', async () => {
     const runtime = await websiteAccount();
     const result = await runtime.service.joinPlayerCenterMatch(runtime.identity.identityId, 'test-cs-match');

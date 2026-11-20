@@ -7,9 +7,12 @@ namespace CaorenCup.Core;
 /// 统一管理模式选择、CVar 托管、Warmup 和 Live 生命周期。
 /// 具体玩法由已注册的 Gamemode provider 提供。
 /// </summary>
-public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
+public sealed class GameModeRuntime : ICaorenCupGameModeRuntime, IDisposable
 {
     private const int DefaultWarmupSeconds = 15;
+    private const int RoundRestoreTimeoutSeconds = 12;
+    private const string AuthorityConflict = "其他模式正在控制比赛，请先结束该模式。";
+    private const string CleanupRequired = "当前模式尚未恢复服务器设置，请先重试停止。";
     private readonly ManagedCvarScope _managedCvars;
     private readonly Action<float, Action> _scheduleTimer;
     private readonly Action<string> _executeServerCommand;
@@ -19,9 +22,12 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
     private readonly Dictionary<string, string> _overrides = new(StringComparer.OrdinalIgnoreCase);
     private ActiveGameModeState _state = new(null, GameModeLifecycleState.Lobby, DefaultWarmupSeconds, 0);
     private ICaorenCupGameModeProvider? _activeProvider;
+    private bool _providerNeedsStop;
     private string? _cvarOwner;
     private string? _roundBackupPrefix;
     private string? _roundBackupMap;
+    private sealed record PendingRoundRestore(int Round);
+    private PendingRoundRestore? _pendingRoundRestore;
 
     public GameModeRuntime(
         ManagedCvarScope managedCvars,
@@ -40,6 +46,12 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
     }
 
     public ActiveGameModeState State => _state;
+    internal string? MatchId => _state.MatchId;
+    internal long RoundTimeline => _state.RoundTimeline;
+    internal bool RoundRestorePending => _pendingRoundRestore is not null;
+
+    private bool OwnsMatch => CaorenCupMatchAuthority.IsOwnedBy(this);
+    internal bool CleanupPending => _state.Lifecycle == GameModeLifecycleState.Error && OwnsMatch;
 
     internal string? GetRoundBackupFileName(int round)
     {
@@ -51,6 +63,48 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
         return $"{_roundBackupPrefix}_round{round - 1:D2}.txt";
     }
 
+    internal GameModeResult RequestRoundRestore(int round)
+    {
+        if (RoundRestorePending)
+            return GameModeResult.Fail("正在等待 CS2 载入上一条回合恢复请求。");
+        var fileName = GetRoundBackupFileName(round);
+        if (fileName is null || !OwnsMatch)
+            return GameModeResult.Fail("当前没有可恢复回合的正式对局。");
+
+        var pending = new PendingRoundRestore(round);
+        _pendingRoundRestore = pending;
+        try
+        {
+            _scheduleTimer(RoundRestoreTimeoutSeconds, () =>
+            {
+                if (!ReferenceEquals(_pendingRoundRestore, pending)) return;
+                _pendingRoundRestore = null;
+                _notify($"等待 CS2 载入第 {round} 回合超时。管理员可以重试。");
+            });
+            _executeServerCommand($"mp_backup_restore_load_file {fileName}");
+        }
+        catch (Exception ex)
+        {
+            _pendingRoundRestore = null;
+            return GameModeResult.Fail($"提交回合恢复失败：{ex.Message}");
+        }
+
+        var message = $"管理员已请求恢复至第 {round} 回合开局，等待 CS2 载入备份。";
+        _notify(message);
+        return GameModeResult.Ok(message);
+    }
+
+    internal bool ConfirmRoundRestore(int round)
+    {
+        if (_pendingRoundRestore?.Round != round || _state.Lifecycle != GameModeLifecycleState.Live || !OwnsMatch)
+            return false;
+
+        _pendingRoundRestore = null;
+        _state = _state with { RoundTimeline = _state.RoundTimeline + 1 };
+        _notify($"CS2 已恢复第 {round} 回合。");
+        return true;
+    }
+
     public IReadOnlyList<GameModeDescriptor> AvailableModes =>
         CaorenCupGameModeRegistry.Snapshot()
             .Select(provider => provider.Descriptor)
@@ -59,7 +113,8 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
 
     public GameModeResult SelectMode(string modeId)
     {
-        if (CaorenCupMatchAuthority.IsOwned) return GameModeResult.Fail("当前由草人杯比赛运行时控制，请先结束比赛。");
+        if (CaorenCupMatchAuthority.IsOwnedByAnother(this)) return GameModeResult.Fail(AuthorityConflict);
+        if (CleanupPending) return GameModeResult.Fail(CleanupRequired);
         var normalized = NormalizeModeId(modeId);
         if (string.IsNullOrWhiteSpace(normalized))
             return GameModeResult.Fail("模式 ID 不能为空。");
@@ -83,6 +138,8 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
         _state = _state with
         {
             ModeId = provider.Descriptor.Id,
+            MatchId = null,
+            RoundTimeline = 0,
             Lifecycle = GameModeLifecycleState.Lobby,
             WarmupSeconds = provider.Descriptor.DefaultWarmupSeconds,
             Error = null,
@@ -103,6 +160,8 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
 
     public GameModeResult SetOverride(string name, string value, bool webSource)
     {
+        if (CaorenCupMatchAuthority.IsOwnedByAnother(this)) return GameModeResult.Fail(AuthorityConflict);
+        if (CleanupPending) return GameModeResult.Fail(CleanupRequired);
         if (_activeProvider is null || string.IsNullOrWhiteSpace(_state.ModeId))
             return GameModeResult.Fail("请先选择模式。");
         if (_state.Lifecycle is GameModeLifecycleState.Warmup or GameModeLifecycleState.Live)
@@ -126,7 +185,8 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
 
     public GameModeResult Start(string? mapName = null, int? warmupSeconds = null)
     {
-        if (CaorenCupMatchAuthority.IsOwned) return GameModeResult.Fail("当前由草人杯比赛运行时控制，请先结束比赛。");
+        if (CaorenCupMatchAuthority.IsOwnedByAnother(this)) return GameModeResult.Fail(AuthorityConflict);
+        if (CleanupPending) return GameModeResult.Fail(CleanupRequired);
         if (_activeProvider is null)
             return GameModeResult.Fail("请先选择模式。");
         if (CaorenCupPracticeState.IsPracticeActive)
@@ -138,33 +198,41 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
         if (seconds is < 1 or > 300)
             return GameModeResult.Fail("Warmup 秒数必须在 1 到 300 之间。");
 
+        if (!CaorenCupMatchAuthority.TryAcquireCore(this))
+            return GameModeResult.Fail(AuthorityConflict);
+
+        _state = _state with { MatchId = Guid.NewGuid().ToString("N"), RoundTimeline = 0 };
+        try { return BeginWarmup(_activeProvider, mapName, seconds); }
+        catch (Exception ex) { return FailAndRestore($"启动模式失败：{ex.Message}"); }
+    }
+
+    private GameModeResult BeginWarmup(ICaorenCupGameModeProvider provider, string? mapName, int seconds)
+    {
         var request = new GameModeStartRequest(
-            _activeProvider.Descriptor.Id,
+            provider.Descriptor.Id,
             mapName ?? _getCurrentMap(),
             seconds,
             new Dictionary<string, string>(_overrides, StringComparer.OrdinalIgnoreCase));
         var context = CreateContext();
-        var validation = _activeProvider.ValidateStart(request, context);
+        var validation = provider.ValidateStart(request, context);
         if (!validation.Success)
-            return Fail(validation.Message);
+            return FailAndRestore(validation.Message);
 
-        var cvarValidation = GameModeCvarValidator.Validate(
-            _activeProvider.Descriptor,
-            request.Overrides,
-            webSource: true);
+        var cvarValidation = GameModeCvarValidator.Validate(provider.Descriptor, request.Overrides, webSource: true);
         if (!cvarValidation.Success)
-            return Fail(cvarValidation.Message);
+            return FailAndRestore(cvarValidation.Message);
 
         _executeServerCommand("exec grass/default_common.cfg");
-        if (!string.IsNullOrWhiteSpace(_activeProvider.Descriptor.ConfigFileName))
-            _executeServerCommand($"exec grass/{_activeProvider.Descriptor.ConfigFileName}");
+        if (!string.IsNullOrWhiteSpace(provider.Descriptor.ConfigFileName))
+            _executeServerCommand($"exec grass/{provider.Descriptor.ConfigFileName}");
 
-        var warmup = _activeProvider.OnWarmupStarted(context);
+        _providerNeedsStop = true;
+        var warmup = provider.OnWarmupStarted(context);
         if (!warmup.Success)
-            return Fail(warmup.Message);
+            return FailAndRestore(warmup.Message);
 
         _managedCvars.ResetOwner(_cvarOwner ?? string.Empty);
-        foreach (var definition in _activeProvider.Descriptor.Cvars)
+        foreach (var definition in provider.Descriptor.Cvars)
         {
             var value = request.Overrides.TryGetValue(definition.Name, out var overrideValue)
                 ? overrideValue
@@ -180,30 +248,31 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
             Error = null,
             Revision = _state.Revision + 1,
         };
-        _notify($"已启动 {_activeProvider.Descriptor.DisplayName}，Warmup {seconds} 秒。");
         var warmupRevision = _state.Revision;
-        _scheduleTimer(seconds, () => { if (_state.Revision == warmupRevision) EnterLive(); });
+        _scheduleTimer(seconds, () => OnWarmupExpired(warmupRevision));
+        _notify($"已启动 {provider.Descriptor.DisplayName}，Warmup {seconds} 秒。");
         return GameModeResult.Ok("模式已进入 Warmup。");
     }
 
     public GameModeResult Stop()
     {
-        if (CaorenCupMatchAuthority.IsOwned) return GameModeResult.Fail("当前由草人杯比赛运行时控制，请先结束比赛。");
+        if (CaorenCupMatchAuthority.IsOwnedByAnother(this)) return GameModeResult.Fail(AuthorityConflict);
         if (_activeProvider is null)
         {
             _state = _state with { Lifecycle = GameModeLifecycleState.Stopped, Revision = _state.Revision + 1 };
             return GameModeResult.Ok("当前没有正在运行的模式。");
         }
 
-        var result = _activeProvider.OnStopped(CreateContext());
-        _managedCvars.ResetOwner(_cvarOwner ?? string.Empty);
-        _state = _state with
-        {
-            Lifecycle = result.Success ? GameModeLifecycleState.Stopped : GameModeLifecycleState.Error,
-            Error = result.Success ? null : result.Message,
-            Revision = _state.Revision + 1,
-        };
-        if (result.Success) _notify($"已停止 {_activeProvider.Descriptor.DisplayName}，模式 CVar 已恢复。");
+        if (!CaorenCupMatchAuthority.TryAcquireCore(this))
+            return GameModeResult.Fail(AuthorityConflict);
+
+        _pendingRoundRestore = null;
+        var result = RestoreModeSettings(_activeProvider);
+        if (!result.Success) return SetError(result.Message);
+
+        _state = _state with { Lifecycle = GameModeLifecycleState.Stopped, Error = null, Revision = _state.Revision + 1 };
+        CaorenCupMatchAuthority.Release(this);
+        _notify($"已停止 {_activeProvider.Descriptor.DisplayName}，模式 CVar 已恢复。");
         return result;
     }
 
@@ -214,30 +283,53 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
         return $"模式：{mode} | 状态：{_state.Lifecycle} | Warmup：{_state.WarmupSeconds} 秒{error}";
     }
 
-    private void EnterLive()
+    internal GameModeResult? FinishLiveMatch() =>
+        OwnsMatch && _state.Lifecycle == GameModeLifecycleState.Live ? Stop() : null;
+
+    public void Dispose()
     {
-        if (_state.Lifecycle != GameModeLifecycleState.Warmup || _activeProvider is null) return;
+        if (!OwnsMatch) return;
+        try
+        {
+            var result = Stop();
+            if (!result.Success) Console.Error.WriteLine($"[草人杯] {result.Message}");
+        }
+        finally { CaorenCupMatchAuthority.Release(this); }
+    }
+
+    private void OnWarmupExpired(long revision)
+    {
+        if (!OwnsMatch || _state.Revision != revision
+            || _state.Lifecycle != GameModeLifecycleState.Warmup || _activeProvider is null) return;
+
+        GameModeResult result;
+        try { result = EnterLive(_activeProvider); }
+        catch (Exception ex) { result = GameModeResult.Fail(ex.Message); }
+        if (!result.Success)
+        {
+            var failure = FailAndRestore(result.Message);
+            _notify($"模式进入正式比赛失败：{failure.Message}");
+        }
+    }
+
+    private GameModeResult EnterLive(ICaorenCupGameModeProvider provider)
+    {
         // exec 的配置可能晚于 Start 中的设值执行。正式开局前再次应用已校验参数，
         // 不重建托管快照，停止时仍恢复启动前的值。
-        foreach (var definition in _activeProvider.Descriptor.Cvars)
+        foreach (var definition in provider.Descriptor.Cvars)
         {
             var value = _overrides.TryGetValue(definition.Name, out var overrideValue)
                 ? overrideValue
                 : definition.DefaultValue;
             _executeServerCommand($"{definition.Name} {value}");
         }
-        _roundBackupPrefix = $"caoren_backup_{Guid.NewGuid():N}";
+        _roundBackupPrefix = $"caoren_backup_{MatchId}";
         _roundBackupMap = _getCurrentMap();
         _executeServerCommand("mp_backup_round_auto 1");
         _executeServerCommand($"mp_backup_round_file {_roundBackupPrefix}");
         _executeServerCommand("mp_backup_round_file_pattern %prefix%_round%round%.txt");
-        var result = _activeProvider.OnLiveStarted(CreateContext());
-        if (!result.Success)
-        {
-            Fail(result.Message);
-            _notify("模式进入正式比赛失败，已进入错误状态并恢复托管参数，请管理员检查日志。");
-            return;
-        }
+        var result = provider.OnLiveStarted(CreateContext());
+        if (!result.Success) return result;
 
         _state = _state with
         {
@@ -245,12 +337,37 @@ public sealed class GameModeRuntime : ICaorenCupGameModeRuntime
             Error = null,
             Revision = _state.Revision + 1,
         };
-        _notify($"{_activeProvider.Descriptor.DisplayName} Warmup 结束，已进入正式比赛。");
+        _notify($"{provider.Descriptor.DisplayName} Warmup 结束，已进入正式比赛。");
+        return result;
     }
 
-    private GameModeResult Fail(string message)
+    private GameModeResult FailAndRestore(string message)
     {
-        _managedCvars.ResetOwner(_cvarOwner ?? string.Empty);
+        var cleanup = RestoreModeSettings(_providerNeedsStop ? _activeProvider : null);
+        if (!cleanup.Success) return SetError($"{message}。{cleanup.Message}");
+
+        var result = SetError(message);
+        CaorenCupMatchAuthority.Release(this);
+        return result;
+    }
+
+    private GameModeResult RestoreModeSettings(ICaorenCupGameModeProvider? provider)
+    {
+        try
+        {
+            var result = provider?.OnStopped(CreateContext()) ?? GameModeResult.Ok("模式设置已恢复。");
+            if (result.Success) _providerNeedsStop = false;
+            _managedCvars.ResetOwner(_cvarOwner ?? string.Empty);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            return GameModeResult.Fail($"模式设置恢复失败，请重试停止：{ex.Message}");
+        }
+    }
+
+    private GameModeResult SetError(string message)
+    {
         _state = _state with
         {
             Lifecycle = GameModeLifecycleState.Error,

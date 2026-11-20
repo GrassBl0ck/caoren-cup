@@ -1,0 +1,14 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/csgostyles.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_binding_hud.vcss_c" />
+    </styles>
+    <Panel class="BindingHudRoot" hittest="false">
+        <Panel id="binding_hud" class="BindingHudPanel Hidden" hittest="false">
+            <Label class="BindingHudTitle" text="[草人杯] 绑定账号后加入队伍" />
+            <Label text="1. 打开草人杯房间网页，登录或注册账号" />
+            <Label text="2. 在游戏聊天里输入 /ccbind，获取一次性绑定码" />
+            <Label text="3. 在网页输入绑定码，等待服务器确认" />
+        </Panel>
+    </Panel>
+</root>

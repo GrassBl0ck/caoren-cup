@@ -1,4 +1,5 @@
 // player-utils.ts
+import { formalServerLifecycle } from './formal-server-lifecycle';
 import {
     AbilityBanState,
     AbilityDraftState,
@@ -174,6 +175,7 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
     const revealAllPostgame = session.phase === 'Scoreboard';
     const s: any = { ...session };
     s.serverNow = Date.now();
+    s.formalServerAvailable = formalServerLifecycle.isAvailableFor(session);
     s.abilityCatalog = getAbilityCatalog().map((ability) => ({
         id: ability.id,
         name: ability.name,

@@ -1,10 +1,15 @@
 using System.Text.Json;
 
+using CaorenCup.Contracts.MatchRuntime;
+
 namespace CaorenCupPlugin.MatchRuntime;
 
 public static class MatchRuntimeTelemetry
 {
     private static long _eventSequence;
+
+    public static bool IsCombatEvent(string type) => type is
+        "player_death" or "player_blind" or "player_hurt" or "weapon_fire" or "player_jump" or "player_crouch_sample";
 
     public static JsonElement AttachRoundIdentity(object payload, MatchRuntimeSnapshot snapshot, JsonSerializerOptions options)
     {

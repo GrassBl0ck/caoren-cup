@@ -3,13 +3,13 @@ import type { BridgeCommand } from './plugin-command-queue';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import { getGamePlayers } from './player-utils';
 import type { GameSession } from './types';
-import type { MatchRuntimeStage } from './match-runtime-types';
+import { supportsFormalMatchMode, type MatchRuntimeStage } from './match-runtime-types';
 
 export const isBridgeMatchRuntimeEnabled = (session: GameSession): boolean =>
     session.matchOptions?.matchRuntimeEnabled === true
     && session.matchOptions?.matchController === 'caoren'
     && session.matchOptions?.matchMode !== 'duel'
-    && ['competitive', 'ability'].includes(session.matchOptions?.gameModeId || 'competitive');
+    && supportsFormalMatchMode(session.matchOptions?.gameModeId);
 
 export const MATCH_RUNTIME_COMMAND_TYPE = 'MATCH_RUNTIME_COMMAND';
 
@@ -19,6 +19,8 @@ export type MatchRuntimeAction =
     | 'begin_ready_check'
     | 'begin_going_live'
     | 'confirm_side_swap'
+    | 'set_ready_from_web'
+    | 'add_pregame_seat'
     | 'tactical_pause'
     | 'technical_pause'
     | 'confirm_unpause'
@@ -49,6 +51,8 @@ export const buildMatchRuntimeDefinition = (session: GameSession): Record<string
                 ? session.abilitySyncState.revision
                 : Math.max(1, Math.floor(Number(session.matchRuntimeRevision || 1))),
         mapName: normalizeMapName(session.selectedMap),
+        modeId: session.matchOptions.gameModeId || 'competitive',
+        warmupSeconds: Math.floor(session.matchOptions.gameModeWarmupSeconds ?? 15),
         teamAName: String(session.matchOptions.teamAName || 'A队').trim().slice(0, 32) || 'A队',
         teamBName: String(session.matchOptions.teamBName || 'B队').trim().slice(0, 32) || 'B队',
         teamAInitialSide: session.selectedSide,

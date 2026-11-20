@@ -74,7 +74,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $resources 'addoninfo.txt') -Destination $content
     $compilerArgs = @('-game',(Join-Path $Cs2Root 'game\csgo'))
     $expected = @()
-    foreach ($name in @('caoren_admin_menu','caoren_player_menu','caoren_vote','caoren_ability_hud')) {
+    foreach ($name in @('caoren_admin_menu','caoren_player_menu','caoren_vote','caoren_ability_hud','caoren_binding_hud','caoren_match_menu')) {
         foreach ($part in @(@{Dir='layout';Ext='vxml'},@{Dir='styles';Ext='vcss'})) {
             $relative = "panorama\$($part.Dir)\custom_game\$name.$($part.Ext)"
             $compilerArgs += @('-i',(Join-Path $content $relative))

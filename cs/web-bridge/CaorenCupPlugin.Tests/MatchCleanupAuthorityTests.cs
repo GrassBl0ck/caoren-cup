@@ -2,6 +2,7 @@ using System.Text.Json;
 using CaorenCup.Contracts;
 using CaorenCup.Core;
 using CaorenCup.Features;
+using CaorenCup.Contracts.MatchRuntime;
 using CaorenCupPlugin.MatchRuntime;
 using CaorenCupPlugin.Practice;
 using Xunit;
@@ -18,7 +19,7 @@ public sealed class MatchCleanupAuthorityTests
     public void Completed_match_retains_authority_until_explicit_cleanup_succeeds()
     {
         var host = new FailingRestoreHost();
-        var adapter = new MatchRuntimeBridgeAdapter(host);
+        var adapter = new FormalMatchRuntime(host, useServerAuthority: true);
         var load = JsonSerializer.SerializeToElement(new {
             action = "load", matchId = "cleanup", revision = 1, mapName = "de_mirage",
             teamAName = "A", teamBName = "B", teamAInitialSide = "CT",
@@ -27,15 +28,20 @@ public sealed class MatchCleanupAuthorityTests
                 new { seatId = "b", roster = "B", steamId = "76561198000000002", name = "B", isCaptain = true },
             },
         });
-        Assert.True(adapter.ApplyWebCommand(load, true, "caoren").Ok);
-        Apply(adapter, "begin_warmup");
-        Apply(adapter, "begin_ready_check");
-        Apply(adapter, "begin_going_live");
         using var core = new CoreFixture();
-        var owner = new object();
-        Assert.True(CaorenCupMatchAuthority.TryAcquire(owner));
+        core.AssertCanStart();
+        Assert.Equal("CONTROLLER_CONFLICT", adapter.ApplyWebCommand(load, true, "caoren").Code);
+        core.Stop();
+
         try
         {
+            Assert.True(adapter.ApplyWebCommand(load, true, "caoren").Ok);
+            Assert.True(CaorenCupMatchAuthority.IsOwnedBy(adapter));
+            core.AssertBlocked();
+            Apply(adapter, "begin_warmup");
+            Apply(adapter, "begin_ready_check");
+            Apply(adapter, "begin_going_live");
+
             MatchRoundResult? result = null;
             for (var round = 0; round < 13; round++)
             {
@@ -47,24 +53,24 @@ public sealed class MatchCleanupAuthorityTests
             Assert.Equal(MatchStage.Completed, adapter.Snapshot.Stage);
             Assert.False(adapter.IsActive);
             Assert.True(adapter.PendingCleanup);
-            Assert.False(MatchRuntimeOwnership.TryReleaseIfIdle(owner, adapter.RequiresAuthority, false));
+            Assert.True(CaorenCupMatchAuthority.IsOwnedBy(adapter));
             core.AssertBlocked();
             Assert.Equal("CVAR_RESTORE_PENDING", adapter.ApplyWebCommand(load, true, "caoren").Code);
             Assert.Equal("CVAR_RESTORE_PENDING", adapter.Cleanup("retry still fails").Code);
-            Assert.False(MatchRuntimeOwnership.TryReleaseIfIdle(owner, adapter.RequiresAuthority, false));
+            Assert.True(CaorenCupMatchAuthority.IsOwnedBy(adapter));
             core.AssertBlocked();
 
             host.RestoreSucceeds = true;
             Assert.True(adapter.Cleanup("administrator retry").Ok);
             Assert.Equal(MatchStage.Completed, adapter.Snapshot.Stage);
             Assert.False(adapter.PendingCleanup);
-            Assert.True(MatchRuntimeOwnership.TryReleaseIfIdle(owner, adapter.RequiresAuthority, false));
+            Assert.False(CaorenCupMatchAuthority.IsOwnedBy(adapter));
             core.AssertCanStart();
             var attempts = host.RestoreAttempts;
             Assert.True(adapter.Cleanup("late cleanup").Ok);
             Assert.Equal(attempts, host.RestoreAttempts);
         }
-        finally { CaorenCupMatchAuthority.Release(owner); }
+        finally { CaorenCupMatchAuthority.Release(adapter); }
     }
 
     [Theory]
@@ -104,7 +110,7 @@ public sealed class MatchCleanupAuthorityTests
         finally { CaorenCupMatchAuthority.Release(owner); }
     }
 
-    private static void Apply(MatchRuntimeBridgeAdapter adapter, string action) =>
+    private static void Apply(FormalMatchRuntime adapter, string action) =>
         Assert.True(adapter.ApplyWebCommand(JsonSerializer.SerializeToElement(new {
             action, matchId = adapter.Snapshot.MatchId, revision = adapter.Snapshot.Revision,
             runtimeEpoch = adapter.Snapshot.RuntimeEpoch, force = true, abilitySyncConfirmed = true,
@@ -132,7 +138,16 @@ public sealed class MatchCleanupAuthorityTests
             Assert.True(_core.Start().Success);
             Assert.Contains("mp_warmup_start", _commands);
         }
-        public void Dispose() => CaorenCupGameModeRegistry.Unregister(_provider);
+        public void Stop()
+        {
+            Assert.True(_core.Stop().Success);
+            _commands.Clear();
+        }
+        public void Dispose()
+        {
+            _core.Dispose();
+            CaorenCupGameModeRegistry.Unregister(_provider);
+        }
     }
 
     private sealed class Provider : ICaorenCupGameModeProvider

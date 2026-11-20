@@ -1,4 +1,4 @@
-namespace CaorenCupPlugin.MatchRuntime;
+namespace CaorenCup.Contracts.MatchRuntime;
 
 public interface IMatchServerActions
 {
@@ -110,6 +110,12 @@ public sealed class RoundBackupManager
 
     public RestoreCommitResult CommitRestore(RestorePlan plan, IMatchRestoreTarget target)
     {
+        var begun = BeginRestore(plan, target);
+        return begun.Ok ? CompleteRestore(plan, target) : begun;
+    }
+
+    public RestoreCommitResult BeginRestore(RestorePlan plan, IMatchRestoreTarget target)
+    {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(target);
         try
@@ -117,6 +123,18 @@ public sealed class RoundBackupManager
             _server.Pause();
             target.EnterRestoring();
             _server.RestoreValveBackup(plan.Target.ValveBackupFile);
+            return new(true, "RESTORE_REQUESTED");
+        }
+        catch (Exception ex)
+        {
+            return new(false, "RESTORE_FAILED", ex.Message);
+        }
+    }
+
+    public RestoreCommitResult CompleteRestore(RestorePlan plan, IMatchRestoreTarget target)
+    {
+        try
+        {
             var restoredSnapshot = plan.Target.MatchSnapshot with
             {
                 RuntimeEpoch = plan.NewRuntimeEpoch,
@@ -127,6 +145,8 @@ public sealed class RoundBackupManager
             target.RestoreAbility(plan.Target.AbilityCheckpointId, plan.NewRuntimeEpoch);
             target.ReapplyRosterAndCvars();
             target.EnterTechnicalPause();
+            foreach (var round in _restorePoints.Keys.Where(round => round > plan.Target.RoundNumber).ToArray())
+                _restorePoints.Remove(round);
             return new(true, "RESTORED");
         }
         catch (Exception ex)

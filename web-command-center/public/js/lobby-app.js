@@ -457,22 +457,60 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             };
             let html = '<section id="caoren-match-runtime-panel" class="match-options-panel" style="margin-bottom:14px;">';
             html += '<h3 style="margin-top:0;">草人杯比赛运行时</h3>';
+            if (state.formalServerAvailable) {
+                const host = state.formalServer;
+                if (!host || host.stage === 'error') {
+                    if (isAdmin && state.phase === 'PreGameSetup' && (!host || !runtime))
+                        html += '<button class="primary-btn" onclick="openFormalServer()">开服候场</button>';
+                }
+                if (host && host.stage !== 'ready')
+                    html += '<p>' + htmlEscape(host.message || { starting: '等待服务器和地图就绪…', archiving: '正在归档…',
+                        stopping: '正在关闭比赛服务器…', closed: '已归档，服务器已关闭。' }[host.stage] || '') + '</p>';
+            }
+            if (isAdmin && state.phase === 'PreGameSetup' && (!runtime || ['staging', 'warmup', 'readyCheck'].includes(runtime.stage))) {
+                const waiting = Object.values(state.players || {}).filter(player => player.role === 'Spectator' && !player.rosterTeam);
+                if (waiting.length) html += '<p>候场玩家</p><ul>' + waiting.map(player => {
+                    const id = escapeAttr(player.playerId);
+                    return `<li>${htmlEscape(player.name)} <button onclick="addPregamePlayer('${id}', 'A')">加入 A 队</button> <button onclick="addPregamePlayer('${id}', 'B')">加入 B 队</button></li>`;
+                }).join('') + '</ul>';
+            }
             if (!runtime) {
-                html += '<p>运行时尚未加载。请先确认地图、A/B 阵容、SteamID 和选边。</p>';
-                if (isAdmin) html += '<button class="primary-btn" onclick="adminMatchRuntimeAction(\'MATCH_RUNTIME_PREPARE\')">加载比赛配置</button>';
+                html += '<p>请先确认地图、分队和绑定状态。</p>';
+                if (isAdmin && (!state.formalServerAvailable || state.formalServer?.stage === 'ready'))
+                    html += '<button class="primary-btn" onclick="adminMatchRuntimeAction(\'MATCH_RUNTIME_PREPARE\')">加载比赛配置</button>';
                 return html + '</section>';
             }
             html += `<div class="match-options-status">阶段：<b>${htmlEscape(stageLabels[runtime.stage] || runtime.stage)}</b> ｜ A ${Number(runtime.scoreA || 0)} : ${Number(runtime.scoreB || 0)} B ｜ epoch ${Number(runtime.runtimeEpoch || 0)} ｜ 暂停：${htmlEscape(runtime.pauseState || 'running')}</div>`;
             if (runtime.currentRoundKey) html += `<p style="font-size:13px;color:#64748b;">当前回合：${htmlEscape(runtime.currentRoundKey)}</p>`;
-            if (!isAdmin) {
-                html += runtime.stage === 'readyCheck'
-                    ? '<p>请确认自己已进入正确队伍，并在游戏内输入 <code>.ready</code>。</p>'
-                    : '<p>比赛流程由草人杯运行时管理，请留意游戏内 Ready、暂停和恢复提示。</p>';
-                return html + '</section>';
+            if (['staging', 'warmup', 'readyCheck'].includes(runtime.stage)) {
+                const seats = Array.isArray(runtime.readySeats) ? runtime.readySeats : [];
+                const readyCount = seats.filter(seat => seat.confirmed && seat.onExpectedSide).length;
+                if (seats.length > 0) html += '<p>已准备 ' + readyCount + ' / ' + seats.length + '</p>';
+                if (isAdmin) {
+                    const players = Object.values(state.players || {}).filter(player => player.rosterTeam === 'A' || player.rosterTeam === 'B');
+                    if (players.length > 0) html += '<ul>' + players.map(player => {
+                        const seat = seats.find(item => item.seatId === player.playerId);
+                        const status = !player.steamIdBound ? '待绑定'
+                            : !seat?.connected ? (seat?.confirmed ? '已确认，待进服' : '待进服')
+                            : !seat.onExpectedSide ? '待进入指定队伍' : seat.confirmed ? '已准备' : '待准备';
+                        return '<li>' + htmlEscape(player.name) + ' · ' + player.rosterTeam + ' 队 · ' + status + '</li>';
+                    }).join('') + '</ul>';
+                }
+                const ownSeat = seats.find(seat => seat.seatId === myPlayerId);
+                if (!isAdmin && ownSeat) {
+                    if (ownSeat.confirmed) {
+                        html += ownSeat.onExpectedSide ? '<p>你已准备。</p>' : '<p>已确认，等待你进服并加入指定队伍。</p>';
+                    } else {
+                        html += '<button class="primary-btn" onclick="readyForMatch()">准备</button>';
+                        html += '<p>也可以在游戏里输入 <code>.r</code>。</p>';
+                    }
+                }
             }
+            if (!isAdmin) return html + '</section>';
             html += '<div class="match-options-actions" style="flex-wrap:wrap;">';
             if (runtime.stage === 'staging') html += '<button onclick="adminMatchRuntimeAction(\'MATCH_RUNTIME_WARMUP\')">进入暖身</button>';
-            if (runtime.stage === 'warmup') html += '<button onclick="adminMatchRuntimeAction(\'MATCH_RUNTIME_READY_CHECK\')">开始 Ready 检查</button>';
+            if (runtime.stage === 'warmup' && !runtime.warmupEndsAtUnixMs)
+                html += '<button onclick="adminMatchRuntimeAction(\'MATCH_RUNTIME_READY_CHECK\')">开始 Ready 检查</button>';
             if (runtime.stage === 'readyCheck') html += '<button class="primary-btn" onclick="adminMatchRuntimeAction(\'MATCH_RUNTIME_START\')">全员就绪后开赛</button>';
             if (runtime.stage === 'halftime' || runtime.stage === 'overtimeHalftime') html += '<button class="primary-btn" onclick="adminMatchRuntimeAction(\'MATCH_RUNTIME_SIDE_SWAP\')">确认换边</button>';
             if (['firstHalf', 'secondHalf', 'overtime'].includes(runtime.stage)) {
@@ -1869,6 +1907,13 @@ if (window._caorenModifiersEnabled !== true) {
             if (state.phase === 'PreGameSetup') {
                 const role = currentPlayer?.gameRole;
                 let html = renderDuelControlPanel(state, currentPlayer);
+                if (state.matchOptions?.matchRuntimeEnabled === true && currentPlayer
+                    && currentPlayer.role !== 'Admin' && !currentPlayer.steamIdBound) {
+                    html += '<section class="match-options-panel"><p>进服后在旁观席输入 <code>/ccbind</code>，把一次性码填到这里。</p>'
+                        + '<form onsubmit="submitRoomBinding(event)"><label>CS 绑定码 '
+                        + '<input name="code" required autocomplete="one-time-code" maxlength="32"></label> '
+                        + '<button type="submit">绑定</button></form></section>';
+                }
                 html += renderCaorenMatchRuntimePanel(state, isAdmin);
                 const abilityPreGameDecision = resolveAbilityPreGameRenderDecision(state);
 
@@ -2052,6 +2097,15 @@ if (window._caorenModifiersEnabled !== true) {
                     html += '</div>';
                 }
 
+                if (state.formalServer?.stage === 'closed') {
+                    const archive = '/api/player-center/match/archive/' + encodeURIComponent(state.matchId);
+                    html += '<p><a href="' + archive + '">查看归档战绩</a></p>';
+                    for (const [index, demo] of (live.demoSegments || []).entries()) {
+                        html += '<p><a href="' + archive + '/demo/' + encodeURIComponent(demo) + '">下载 Demo ' + (index + 1) + '</a></p>';
+                    }
+                } else if (state.formalServer) {
+                    html += '<p>' + htmlEscape(state.formalServer.message || '等待保存本场战绩和 Demo。') + '</p>';
+                }
                 html += '<div id="postmatch-panels"></div>';
 
                 if (undercoverEnabled && state.accusations && Object.keys(state.accusations).length > 0) {
@@ -3469,6 +3523,43 @@ if (window._caorenModifiersEnabled !== true) {
         function confirmAbilityBanChoice() { ws.emit('ABILITY_BAN_CONFIRM', { playerId: myPlayerId }); }
         function chooseAbilityDraft(abilityId) { ws.emit('ABILITY_PICK_UPDATE', { playerId: myPlayerId, abilityId }); }
         function confirmAbilityDraftChoice() { ws.emit('ABILITY_PICK_CONFIRM', { playerId: myPlayerId }); }
+        async function submitRoomBinding(event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const input = form.elements.namedItem('code');
+            const button = form.querySelector('button');
+            button.disabled = true;
+            try {
+                const response = await fetch('/api/player-center/account/steam', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                    body: JSON.stringify({ code: input.value.trim() })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    const error = result.error === 'steam_identity_in_use' ? '这个 Steam 已绑定其他草人杯账号。'
+                        : result.error === 'rate_limited' ? '尝试次数过多，请稍后再试。'
+                        : '绑定未成功，请检查绑定码或在游戏里重新输入 /ccbind。';
+                    showLobbyNotice(error, 'error');
+                    return;
+                }
+                form.reset();
+                showLobbyNotice('CS 游戏身份已绑定。', 'success');
+            } catch {
+                showLobbyNotice('暂时无法连接网页，请稍后重试。', 'error');
+            } finally {
+                button.disabled = false;
+            }
+        }
+
+        function openFormalServer() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'OPEN_FORMAL_SERVER' }); }
+
+        function addPregamePlayer(playerId, team) {
+            ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADD_PREGAME_PLAYER', payload: { playerId, team } });
+        }
+
+        function readyForMatch() { ws.emit('MATCH_RUNTIME_PLAYER_READY', { playerId: myPlayerId }); }
+
         function readyPlayer() { ws.emit('PLAYER_READY', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
         function ackUndercoverTask() { ws.emit('UNDERCOVER_TASK_ACK', { playerId: myPlayerId }); document.getElementById('rules-modal').style.display = 'none'; }
         function updateRoleCounts() { const u = parseInt(document.getElementById('undercover-count').value) || 0; const d = parseInt(document.getElementById('detective-count').value) || 0; ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_ROLES_COUNT', payload: { undercoverCount: u, detectiveCount: d } }); }
@@ -3503,6 +3594,10 @@ if (window._caorenModifiersEnabled !== true) {
             chooseAbilityDraft,
             confirmAbilityDraftChoice,
             readyPlayer,
+            readyForMatch,
+            openFormalServer,
+            addPregamePlayer,
+            submitRoomBinding,
             ackUndercoverTask,
             updateRoleCounts,
             setPlayerRole,

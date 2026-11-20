@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'node:path';
 import { getSession } from '../session-manager';
 import {
     AccountRecoveryTicket,
@@ -21,6 +22,7 @@ import { PlayerCenterSessionRecord, PlayerCenterSessionStore } from './player-ce
 import { LobbyMembershipRecord } from './identity-types';
 import { EmailAuthError, EmailCodeService, EmailCodePurpose } from './email-codes';
 import { normalizeEmail } from './email-address';
+import { readFormalArchive } from '../formal-server-lifecycle';
 
 const PLAYER_CENTER_COOKIE = 'caoren_player_center';
 
@@ -138,6 +140,12 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         return 'started';
     });
 
+    const allowsPendingBinding = (session: ReturnType<typeof getSession>): boolean =>
+        session.matchOptions?.matchRuntimeEnabled === true && session.matchOptions?.matchController === 'caoren';
+
+    const canJoinLateRoom = (session: ReturnType<typeof getSession>): boolean =>
+        allowsPendingBinding(session) && ['PreGameSetup', 'LiveGame'].includes(session.phase);
+
     const playerCenterMatchView = (identityId: string) => {
         const activeSession = getActiveSession();
         const matchStatus = getMatchStatus();
@@ -147,8 +155,9 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         const waiting = matchStatus === 'waiting';
         const identity = service.getIdentity(identityId);
         const joinUnavailableReason = joined ? 'already_joined' : blocked ? 'blocked_for_session'
-            : matchStatus === 'ended' ? 'match_ended' : !waiting ? 'match_started'
-            : !identity?.steamId || !identity.gameBoundAt ? 'game_binding_required' : null;
+            : matchStatus === 'ended' ? 'match_ended' : !waiting && !canJoinLateRoom(activeSession) ? 'match_started'
+            : (!identity?.steamId || !identity.gameBoundAt) && !allowsPendingBinding(activeSession)
+                ? 'game_binding_required' : null;
         return {
             matchStatus,
             joinAvailable: joinUnavailableReason === null,
@@ -309,8 +318,14 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             return res.status(400).json({ success: false, error: 'game_code_invalid' });
         }
         try {
-            await service.bindVerifiedGameIdentity(session.identityId, ticket.steamId, ticket.name);
+            const activeSessionId = getActiveSession().sessionId;
+            await service.bindVerifiedGameIdentity(session.identityId, ticket.steamId, ticket.name, activeSessionId);
             bindingGuard.clear(keys);
+            if (getActiveSession().sessionId === activeSessionId) {
+                const membership = service.listMemberships(activeSessionId).find(candidate =>
+                    candidate.identityId === session.identityId && !candidate.blockedAt);
+                if (membership) await dependencies.onPlayerCenterMatchJoined?.(membership);
+            }
             return res.json({ success: true, profile: playerCenterProfile(session.identityId) });
         } catch (error) {
             const reason = error instanceof Error ? error.message : '';
@@ -385,6 +400,24 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         }
     });
 
+    app.get('/api/player-center/match/archive/:matchId', async (req, res) => {
+        const session = await requirePlayerCenterSession(req, res);
+        if (!session) return;
+        const archive = await readFormalArchive(req.params.matchId, service.getIdentity(session.identityId)?.steamId);
+        if (!archive) return res.status(404).json({ success: false, error: 'match_archive_unavailable' });
+        return res.json({ success: true, ...archive.result });
+    });
+
+    app.get('/api/player-center/match/archive/:matchId/demo/:file', async (req, res) => {
+        const session = await requirePlayerCenterSession(req, res);
+        if (!session) return;
+        const archive = await readFormalArchive(req.params.matchId, service.getIdentity(session.identityId)?.steamId);
+        const requestedFile = req.params.file;
+        if (!archive || !archive.result.demos.includes(requestedFile))
+            return res.status(404).json({ success: false, error: 'match_archive_unavailable' });
+        return res.download(path.join(archive.directory, requestedFile));
+    });
+
     app.get('/api/player-center/me', async (req, res) => {
         const session = await requirePlayerCenterSession(req, res);
         if (!session) return;
@@ -399,10 +432,10 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         const centerSession = await requirePlayerCenterSession(req, res);
         if (!centerSession) return;
         const activeSession = getActiveSession();
-        if (activeSession.phase !== 'Lobby') {
+        if (activeSession.phase !== 'Lobby' && !canJoinLateRoom(activeSession)) {
             return res.status(409).json({ success: false, error: 'match_not_waiting' });
         }
-        const joined = await service.joinPlayerCenterMatch(centerSession.identityId, activeSession.sessionId);
+        const joined = await service.joinPlayerCenterMatch(centerSession.identityId, activeSession.sessionId, allowsPendingBinding(activeSession));
         if (!joined.ok) {
             const status = joined.reason === 'blocked_for_session' ? 403 : joined.reason === 'nickname_in_use' ? 409 : joined.reason === 'game_binding_required' ? 409 : 401;
             return res.status(status).json({ success: false, error: joined.reason });

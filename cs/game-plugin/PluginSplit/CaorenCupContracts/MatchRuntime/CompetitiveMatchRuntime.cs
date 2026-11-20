@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace CaorenCupPlugin.MatchRuntime;
+namespace CaorenCup.Contracts.MatchRuntime;
 
 public sealed class CompetitiveMatchRuntime
 {
@@ -41,15 +41,30 @@ public sealed class CompetitiveMatchRuntime
         if (_stage is not MatchStage.Disabled and not MatchStage.Completed and not MatchStage.Aborted)
             return Failure("RUNTIME_BUSY", "当前已有未结束的正式比赛。");
 
+        _runtimeEpoch = _definition is { } previous
+            && previous.MatchId == definition.MatchId && previous.Revision == definition.Revision
+            ? _runtimeEpoch + 1
+            : 1;
         _definition = definition;
         _rounds = new RoundCoordinator();
         _events.Clear();
         _eventSequence = 0;
-        _runtimeEpoch = 1;
         _stage = MatchStage.Staging;
         _pauseState = MatchPauseState.Running;
         _teamAEngineSide = definition.TeamAInitialSide;
         _sideSwapPending = false;
+        return Success();
+    }
+
+    public MatchCommandResult AddPregameSeat(MatchSeat seat)
+    {
+        if (_definition is null || _stage is not (MatchStage.Staging or MatchStage.Warmup or MatchStage.ReadyCheck))
+            return InvalidStage();
+        var updated = _definition with { Seats = _definition.Seats.Append(seat).ToArray() };
+        var validation = ValidateDefinition(updated);
+        if (!validation.Ok) return validation;
+        _definition = updated;
+        Publish("roster_seat_added", addedSeat: seat);
         return Success();
     }
 
@@ -213,16 +228,17 @@ public sealed class CompetitiveMatchRuntime
         _rounds.Restore(snapshot);
         _runtimeEpoch = snapshot.RuntimeEpoch;
         _stage = snapshot.Stage;
-        _pauseState = MatchPauseState.TechnicalPaused;
+        _pauseState = snapshot.Stage is MatchStage.Staging or MatchStage.Warmup or MatchStage.ReadyCheck
+            ? MatchPauseState.Running : MatchPauseState.TechnicalPaused;
         _teamAEngineSide = snapshot.TeamAEngineSide;
         _sideSwapPending = snapshot.SideSwapPending;
         _events.Clear();
-        _eventSequence = 0;
+        _eventSequence = Math.Max(0, snapshot.LastEventSequence);
         return Success("RECOVERED");
     }
 
     private void Publish(string type, string? roundKey = null, int? roundNumber = null,
-        EngineSide? winningEngineSide = null, JsonElement? players = null)
+        EngineSide? winningEngineSide = null, JsonElement? players = null, MatchSeat? addedSeat = null)
     {
         if (_definition is null) return;
         _eventSequence++;
@@ -237,7 +253,8 @@ public sealed class CompetitiveMatchRuntime
             roundNumber is null ? null : _teamAEngineSide,
             winningEngineSide,
             players?.Clone(),
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()));
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            addedSeat));
     }
 
     private static MatchCommandResult ValidateDefinition(MatchDefinition definition)

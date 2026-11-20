@@ -1,6 +1,6 @@
 using System.Globalization;
-namespace CaorenCupPlugin.MatchRuntime;
-internal static class RuntimeCvarValue {
+namespace CaorenCup.Contracts.MatchRuntime;
+public static class RuntimeCvarValue {
     public static bool TryNormalizeSafeValue(string? raw, out string normalized)
     {
         normalized = string.Empty;

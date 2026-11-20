@@ -1,6 +1,6 @@
-namespace CaorenCupPlugin.MatchRuntime;
+using CaorenCup.Contracts.MatchRuntime;
 
-public sealed record BridgePlayerStats(string Name, int Kills, int Deaths, int Assists, int Damage);
+namespace CaorenCupPlugin.MatchRuntime;
 
 public sealed class BridgeStatsCheckpoint
 {

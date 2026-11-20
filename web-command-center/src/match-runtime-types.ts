@@ -1,3 +1,6 @@
+export const supportsFormalMatchMode = (modeId: string | undefined): boolean =>
+    modeId === undefined || modeId === 'competitive' || modeId === 'ability';
+
 export type MatchRuntimeStage =
     | 'disabled'
     | 'staging'
@@ -20,6 +23,13 @@ export type MatchRuntimePauseState =
     | 'restorePending'
     | 'restoring';
 
+export interface MatchReadySeat {
+    seatId: string;
+    confirmed: boolean;
+    connected: boolean;
+    onExpectedSide: boolean;
+}
+
 export interface MatchRuntimeSnapshot {
     matchId: string;
     revision: number;
@@ -35,6 +45,8 @@ export interface MatchRuntimeSnapshot {
     sideSwapPending: boolean;
     currentRoundKey: string | null;
     lastEventSequence: number;
+    readySeats?: MatchReadySeat[];
+    warmupEndsAtUnixMs?: number | null;
 }
 
 export interface MatchRuntimeEvent {
@@ -49,6 +61,7 @@ export interface MatchRuntimeEvent {
     teamAEngineSide?: 'terrorist' | 'counterTerrorist';
     winningEngineSide?: 'terrorist' | 'counterTerrorist';
     players?: Array<{ steamId: string; team: string; isAlive?: boolean; health?: number; maxHealth?: number }>;
+    addedSeat?: { seatId: string; steamId: string; roster: 'a' | 'b' };
 }
 
 export interface MatchRuntimeProjectionResult {

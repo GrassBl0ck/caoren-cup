@@ -37,6 +37,8 @@ import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './ga
 import { ADMIN_PASSWORD, DEV_PLAYER_LOGIN_ENABLED } from './game-constants';
 import { cancelPluginCommands, enqueuePluginCommand } from './plugin-command-queue';
 import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
+import { enqueueMatchRuntimeCommand } from './match-runtime-orchestrator';
+import { formalServerLifecycle } from './formal-server-lifecycle';
 import { assignTaskGridToPlayer } from './task-system';
 import { loadTaskPresets, createTaskPreset, renameTaskPreset, deleteTaskPreset } from './task-preset-store';
 import { normalizeDuelMap, normalizeDuelRounds, normalizeDuelUtilityMode, getDuelTotalRounds, resolveDuelMapConfig } from './duel-config';
@@ -441,6 +443,50 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const admin = findPlayerById(session, data.playerId);
             if (!admin || admin.role !== 'Admin') {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有管理员才能执行此操作' });
+                return;
+            }
+
+            if (data.action === 'ADD_PREGAME_PLAYER') {
+                const targetId = String(data.payload?.playerId || '');
+                const team = data.payload?.team;
+                const target = findPlayerById(session, targetId);
+                const runtime = session.matchRuntime;
+                if (session.phase !== GamePhase.PreGameSetup || !session.matchOptions.matchRuntimeEnabled
+                    || session.matchOptions.matchController !== 'caoren' || (team !== 'A' && team !== 'B')
+                    || !target || target.role !== 'Spectator' || target.rosterTeam
+                    || (runtime && !['staging', 'warmup', 'readyCheck'].includes(runtime.stage))) {
+                    socket.emit(WsEvents.NOTIFICATION, { message: '只能在正式开赛前添加候场玩家。' });
+                    return;
+                }
+                if (runtime) {
+                    const queued = /^7656119[0-9]{10}$/.test(target.steamId || '') && enqueueMatchRuntimeCommand(session,
+                        'add_pregame_seat', { seatId: targetId, steamId: target.steamId, name: target.name, roster: team });
+                    socket.emit(WsEvents.NOTIFICATION, { message: queued
+                        ? '已请求加人，等待游戏服务器确认。' : '请确保玩家已绑定、游戏服务器已就绪后重试。' });
+                    return;
+                }
+                target.role = 'Player';
+                target.gameRole = 'Soldier';
+                target.isReady = false;
+                if (!assignPlayerToRoster(targetId, team)) {
+                    target.role = 'Spectator';
+                    return;
+                }
+                broadcastState();
+                persistSessionNow?.();
+                return;
+            }
+
+            if (data.action === 'OPEN_FORMAL_SERVER') {
+                try {
+                    await formalServerLifecycle.open(session, () => {
+                        if (getSession() === session) broadcastState();
+                    });
+                } catch (error) {
+                    socket.emit(WsEvents.NOTIFICATION, {
+                        message: session.formalServer?.message || (error instanceof Error ? error.message : '开服失败。'),
+                    });
+                }
                 return;
             }
 
@@ -1148,6 +1194,36 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 finishAbilityDraftBatch('manual');
             }
         });
+        socket.on('MATCH_RUNTIME_PLAYER_READY', (data: { playerId?: string } = {}) => {
+            const playerId = data?.playerId;
+            if (!playerId || !isAuthenticatedActor(playerId)) return;
+            const session = getSession();
+            const player = findPlayerById(session, playerId);
+            if (!player || player.role === 'Admin' || player.role === 'Spectator'
+                || (player.rosterTeam !== 'A' && player.rosterTeam !== 'B')) return;
+            const runtime = session.matchRuntime;
+            if (!runtime || !['staging', 'warmup', 'readyCheck'].includes(runtime.stage)) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '当前阶段不能确认比赛准备。' });
+                return;
+            }
+            if (!/^7656119[0-9]{10}$/.test(player.steamId || '')) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '请先绑定 CS 游戏身份，再确认准备。' });
+                return;
+            }
+            if (session.matchOptions.undercoverModeEnabled && player.gameRole === 'Undercover'
+                && player.undercoverTaskAckStage !== 'read') {
+                socket.emit(WsEvents.NOTIFICATION, { message: '请先确认卧底任务表。' });
+                return;
+            }
+            const queued = enqueueMatchRuntimeCommand(session, 'set_ready_from_web', {
+                steamId: player.steamId,
+                ready: true,
+            });
+            socket.emit(WsEvents.NOTIFICATION, {
+                message: queued ? '已提交准备，等待游戏服务器确认。' : '比赛服务器暂不可用，请稍后再试。',
+            });
+        });
+
         socket.on('PLAYER_READY', (data: { playerId: string }) => {
             const session = getSession();
             if (!isAuthenticatedActor(data.playerId)) return;

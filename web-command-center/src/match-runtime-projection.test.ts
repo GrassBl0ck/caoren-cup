@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    applyMatchCombatBatch,
     applyMatchRuntimeHeartbeat,
     applyMatchRuntimeEvent,
     applyMatchRuntimeSnapshot,
@@ -61,6 +62,25 @@ test('snapshot projects score and identity without guessing that the match start
     assert.equal(current.liveGameData?.currentRound, 6);
 });
 
+test('server-confirmed late addition keeps existing roles and promotes only the waiting player', () => {
+    const current = session();
+    current.players.early = { playerId: 'early', name: 'Early', role: 'Player',
+        rosterTeam: 'A', isReady: true, gameRole: 'Undercover' };
+    current.players.late = { playerId: 'late', name: 'Late', role: 'Spectator',
+        isReady: false, steamId: '76561198000000003' };
+    applyMatchRuntimeSnapshot(current, snapshot({ stage: 'readyCheck' }));
+    const added = { ...event(1, 'roster_seat_added'), addedSeat: {
+        seatId: 'late', steamId: '76561198000000003', roster: 'b' as const,
+    } };
+    assert.equal(applyMatchRuntimeEvent(current, added).applied, true);
+    assert.equal(current.players.early.gameRole, 'Undercover');
+    assert.equal(current.players.early.isReady, true);
+    assert.equal(current.players.late.gameRole, 'Soldier');
+    assert.equal(current.players.late.rosterTeam, 'B');
+    assert.deepEqual(current.teams.B.players, ['late']);
+    assert.equal(applyMatchRuntimeEvent(current, added).applied, false);
+});
+
 test('only explicit match_started promotes pregame to live and duplicates are ignored', () => {
     const current = session();
     applyMatchRuntimeSnapshot(current, snapshot());
@@ -73,6 +93,25 @@ test('only explicit match_started promotes pregame to live and duplicates are ig
     assert.equal(current.liveGameData?.formalStatsStarted, true);
     assert.equal(duplicate.applied, false);
     assert.equal(duplicate.code, 'DUPLICATE_OR_STALE_EVENT');
+});
+
+test('retries formal combat after a website outage without counting it twice or accepting a stale epoch', () => {
+    const current = session();
+    applyMatchRuntimeSnapshot(current, snapshot());
+    applyMatchRuntimeEvent(current, event(1, 'match_started'));
+    applyMatchRuntimeEvent(current, { ...event(2, 'round_started'), occurredAtUnixMs: 100 });
+    const payload = { ...event(10, 'player_hurt'), eventId: 'a'.repeat(32), eventSequence: 99,
+        occurredAtUnixMs: 110, roundNumber: 1 };
+    const batch = { matchId: current.matchId, revision: 2, runtimeEpoch: 4, through: 99,
+        incomplete: false, events: [{ type: 'player_hurt', payload }] };
+    assert.equal(applyMatchCombatBatch(current, { ...batch, runtimeEpoch: 3 }), 0);
+    assert.equal(applyMatchCombatBatch(current, batch), 99);
+    assert.equal(applyMatchCombatBatch(current, batch), 99);
+    assert.equal(current.matchRuntimeStatsJournal?.[1].combat.length, 1);
+    assert.equal(current.liveGameData?.formalTelemetryPending, true);
+
+    applyMatchCombatBatch(current, { ...batch, through: 0, events: [] });
+    assert.equal(current.liveGameData?.formalTelemetryPending, false);
 });
 
 test('old epoch events and mismatched matches cannot mutate the session', () => {
