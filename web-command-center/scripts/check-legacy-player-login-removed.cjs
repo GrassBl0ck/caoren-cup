@@ -52,7 +52,7 @@ const playerCenter = read('public/js/player-center.js');
 const socketHandlers = read('src/socket-handlers.ts');
 const gameCodeLogin = read('src/v1333-game-login.ts');
 const authRoutes = read('src/identity/auth-routes.ts');
-for (const token of ['加入本场比赛', 'admin-login-password', 'href="/profile"', 'href="/admin"']) {
+for (const token of ['加入本场比赛', 'admin-login-password', 'href="/profile"']) {
   assert.ok(index.includes(token), `required login flow is missing from UI: ${token}`);
 }
 for (const token of ['/api/account-auth/login', '/api/player-center/match/join', 'PLAYER_CENTER_MATCH_LOGIN']) {

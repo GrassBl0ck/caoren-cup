@@ -3,68 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="草人杯，一起玩点不一样的。一个草人杯账户，进入 CS 和 Minecraft 板块。">
-  <title>[草人杯] 2.0 · 一起玩点不一样的</title>
-  <link rel="stylesheet" href="/css/portal.css">
-  <script defer src="/js/portal.js?v=2.2.5-ccbind1"></script>
+  <title>草台杯客户端下载</title>
+  <link rel="icon" href="/assets/brand-icon.png">
+  <style>
+    :root { color-scheme: dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; background: #121416; color: #f6f2eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; min-height: 100svh; display: grid; grid-template-rows: 1fr auto; }
+    main { align-self: center; justify-self: center; padding: 36px 20px; width: min(100%, 400px); text-align: center; }
+    h1 { margin: 0 0 42px; }
+    h1 img { display: block; width: min(100%, 260px); height: auto; margin: auto; }
+    .download { display: inline-block; border-radius: 5px; padding: 16px 32px; background: #ff793e; color: #201209; text-decoration: none; font-weight: 750; }
+    .download:hover { background: #ff9766; }
+    a:focus-visible { outline: 3px solid white; outline-offset: 5px; }
+    .details { color: #bdc0c2; font-size: .875rem; margin: 14px 0 0; }
+    .notice { margin: 24px 0 0; color: #c7cace; font-size: .9375rem; line-height: 1.8; text-align: left; }
+    footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; padding: 20px; }
+    footer a { color: #adb0b3; font-size: .75rem; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
 </head>
-<body data-page="portal">
-  <div class="portal-shell">
-    <header class="portal-header">
-      <a class="portal-brand" href="/" aria-label="草人杯首页"><span class="brand-symbol">草</span><span>草人杯<small>CAOREN CUP</small></span></a>
-      <span class="header-caption">一起玩点不一样的</span>
-      <nav class="board-navigation"><a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v2.2.4.zip" download>客户端下载</a><a id="profile-link" href="/profile" hidden>个人资料</a><a href="/admin">管理员</a></nav><button id="logout" class="quiet-button" type="button" hidden>退出登录</button>
-    </header>
-    <p id="portal-message" class="form-message" role="status" aria-live="polite"></p>
-<main>
-      <section class="portal-intro">
-        <span class="eyebrow">玩家的聚会，从这里开始</span>
-        <h1>一群朋友，<br>两种<span>快乐。</span></h1>
-        <p>紧张的对枪，也有方块世界里的奇思妙想。<br>一个草人杯账户，随时换个世界继续玩。</p>
-        <div class="intro-tags"><span>CS2 自定义娱乐赛</span><span>Minecraft 原版客户端</span></div>
-      </section>
-      <section id="account-auth" class="account-card" aria-labelledby="auth-title">
-        <div class="card-topline"><span class="eyebrow">草人杯账户</span><span class="tiny-status">CS · MC 通用</span></div>
-        <h2 id="auth-title">先登录，再出发</h2>
-        <p class="muted">使用邮箱注册并登录，CS 与 MC 共用。</p>
-        <div class="auth-tabs" aria-label="账户操作">
-          <button type="button" data-auth-tab="login" aria-pressed="true">登录</button>
-          <button type="button" data-auth-tab="register" aria-pressed="false">注册</button>
-          <button type="button" data-auth-tab="reset-password" aria-pressed="false">找回密码</button>
-        </div>
-        <form id="login-form" data-auth-panel="login">
-          <label>邮箱<input name="email" type="email" autocomplete="username" maxlength="254" required placeholder="注册时验证的邮箱"></label>
-          <label>密码<input name="password" type="password" autocomplete="current-password" maxlength="128" required placeholder="输入密码"></label>
-          <label id="remember-device-label" class="checkbox-label" hidden><input name="rememberDevice" type="checkbox">记住此设备（仅桌面客户端）</label>
-          <button class="primary-button wide" type="submit">登录草人杯 <span aria-hidden="true">↗</span></button>
-        </form>
-        <form id="register-form" data-auth-panel="register" hidden>
-          <label>邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="用于验证和找回密码"></label>
-          <div class="code-row"><label>邮箱验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required placeholder="6 位验证码"></label><button type="button" data-send-code="register">发送验证码</button></div>
-          <label>自设密码<input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required placeholder="8–128 位，使用草人杯独立密码"></label>
-          <label>确认密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
-          <button class="primary-button wide" type="submit">注册并进入 <span aria-hidden="true">↗</span></button>
-        </form>
-        <form id="reset-form" data-auth-panel="reset-password" hidden>
-          <label>绑定的邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
-          <div class="code-row"><label>邮箱验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label><button type="button" data-send-code="reset-password">发送验证码</button></div>
-          <label>新密码<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
-          <label>确认新密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
-          <button class="primary-button wide" type="submit">重设密码</button>
-        </form>
-        <p id="mail-availability" class="service-note" hidden></p>
-        <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
-      </section>
-      <section id="board-picker" class="board-picker" aria-labelledby="boards-title" hidden>
-        <div class="section-heading"><div><span class="eyebrow">选择今天的主场</span><h2 id="boards-title">你好，<span id="account-name">玩家</span>。</h2></div><span class="muted">随时切换，登录状态相通</span></div>
-        <div class="board-grid">
-          <a class="board-card board-cs" href="/cs"><div class="board-art cs-art" aria-hidden="true"><span>CS</span><i></i></div><div class="board-content"><span class="eyebrow">COUNTER-STRIKE 2</span><h3>CS 板块 <span aria-hidden="true">↗</span></h3><p>组队、选图，开一场属于我们的比赛。<br>竞技、RUSH、单挑和更多娱乐玩法。</p><span class="card-link">进入现有草人杯大厅</span></div></a>
-          <a class="board-card board-mc" href="/mc"><div class="board-art mc-art" aria-hidden="true"><span>MC</span><i></i><b></b></div><div class="board-content"><span class="eyebrow">MINECRAFT</span><h3>MC 板块 <span aria-hidden="true">↗</span></h3><p>坐垫上的对决，方块里的新玩法。<br>了解游戏规则，和朋友一起加入服务器。</p><span class="card-link">探索玩法与入服指引</span></div></a>
-        </div>
-
-      </section>
-    </main>
-    <footer class="portal-footer"><span>草人杯 2.0 · 朋友的下一场游戏</span><div><a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">冀ICP备2026043660号-1</a><a href="https://beian.mps.gov.cn/#/query/webSearch?code=13102402000558" target="_blank" rel="noreferrer">冀公网安备13102402000558号</a></div></footer>
-  </div>
+<body>
+  <main>
+    <h1><img src="/assets/brand.png" alt="草台杯"></h1>
+    <a class="download" href="/downloads/caotai-cup-setup.msi" download>下载 Windows 客户端</a>
+    <p class="details">v2.4.0 · Windows x64 · MSI · {{installerSize}}</p>
+    <p class="notice">因架构调整，草台杯（原草人杯）将不再提供网页端服务，请通过上面的按钮下载客户端以继续参与游戏，感谢理解。</p>
+    <p class="notice">当前正式房间开放竞技和异能。RUSH、单挑等其他模式暂未开放。</p>
+  </main>
+  <footer>
+    <a href="https://beian.miit.gov.cn/" rel="noreferrer">冀ICP备2026043660号-1</a>
+    <a href="https://beian.mps.gov.cn/#/query/webSearch?code=13102402000558" rel="noreferrer">冀公网安备13102402000558号</a>
+  </footer>
 </body>
 </html>

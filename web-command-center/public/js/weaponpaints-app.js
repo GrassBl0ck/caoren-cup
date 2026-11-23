@@ -53,7 +53,7 @@
         return new Promise((resolve, reject) => {
             const ws = socket();
             if (!ws) return reject(new Error('大厅连接尚未建立，请稍后重试。'));
-            const timer = setTimeout(() => reject(new Error('换肤服务响应超时，请检查健康状态。')), 12000);
+            const timer = setTimeout(() => reject(new Error('等待服务器回复超时，请重新打开换肤中心确认状态。')), 12000);
             const callback = (response) => {
                 clearTimeout(timer);
                 if (response?.success === false) reject(new Error(response.error || '换肤操作失败。'));
@@ -68,17 +68,22 @@
         return (await emit(WEAPONPAINTS_ACTION, request)).data;
     };
 
-    function renderHealth() {
+    function renderHealth(health) {
         const host = el('weaponpaints-health');
-        const health = state.status?.health;
         if (!host) return;
-        if (health?.ok) {
-            host.className = 'weaponpaints-health ok';
-            host.textContent = '本地目录与数据库均正常。';
+        const messages = [];
+        if (health?.settings?.error) {
+            messages.push('无法读取换肤设置，请联系管理员。');
+        } else if (health?.settings?.enabled === false) {
+            messages.push('网页换肤总开关已关闭。');
         } else {
-            host.className = 'weaponpaints-health error';
-            host.textContent = health?.database?.error || health?.catalog?.error || '换肤服务当前不可用。';
+            if (health?.catalog?.ok === false) messages.push('无法读取皮肤目录。');
+            if (health?.database?.ok === false) messages.push('无法读取或保存换肤配置。');
         }
+        // The game bridge applies skins in game. Browsing and saving use the web service.
+        host.hidden = messages.length === 0;
+        host.className = host.hidden ? 'weaponpaints-health' : 'weaponpaints-health error';
+        host.textContent = messages.join(' ');
     }
 
     function renderAdminBar() {
@@ -861,11 +866,7 @@
         if (search) search.value = '';
         const adminBar = el('weaponpaints-admin-bar');
         if (adminBar) adminBar.hidden = true;
-        const health = el('weaponpaints-health');
-        if (health) {
-            health.className = 'weaponpaints-health';
-            health.textContent = '正在检查换肤服务...';
-        }
+        renderHealth(null);
         const unsavedDialog = el('weaponpaints-unsaved-dialog');
         if (unsavedDialog) unsavedDialog.hidden = true;
         const unsavedError = el('weaponpaints-unsaved-error');
@@ -885,21 +886,22 @@
         const panel = el('weaponpaints-panel');
         panel.hidden = false;
         state.open = true;
+        renderHealth(null);
+        notice('');
         setPromoVisibility(false);
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         try {
             state.status = await emit(WEAPONPAINTS_STATUS);
-            renderHealth();
+            renderHealth(state.status.health);
+            if (state.status.health?.settings?.error || state.status.health?.settings?.enabled === false) return;
             if (!state.status.canUse) {
-                throw new Error(state.status.health?.settings?.enabled === false
-                    ? '网页换肤总开关已关闭，请联系管理员开启后再试。'
-                    : '请先使用有效玩家中心账号登录。');
+                throw new Error('请确认已登录草人杯并绑定 Steam 账号。');
             }
             state.targetSteamId = state.status.isAdmin ? (state.status.targets?.[0]?.steamId || '') : '';
             renderAdminBar(); renderTeams(); renderCategories();
             await loadTarget();
             await loadCatalog(false);
         } catch (error) { notice(error.message, 'error'); }
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     async function resetTarget() {

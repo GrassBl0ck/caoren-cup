@@ -12,7 +12,7 @@ const scoring = fs.readFileSync(path.join(root, 'src', 'scoring.ts'), 'utf8');
 assert.match(index, /id="match-runtime-controller"/);
 assert.match(index, /id="match-option-team-a-name"/);
 assert.match(index, /id="match-option-team-b-name"/);
-assert.match(index, /草人杯比赛运行时/);
+assert.match(index, /草台杯比赛运行时/);
 assert.match(lobby, /function renderCaorenMatchRuntimePanel\(/);
 assert.match(lobby, /MATCH_RUNTIME_PREPARE/);
 assert.match(lobby, /MATCH_RUNTIME_READY_CHECK/);

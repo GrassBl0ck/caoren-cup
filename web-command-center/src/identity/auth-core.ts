@@ -15,6 +15,7 @@ export interface PlayerCenterMatchSocketTicket {
     identityId: string;
     sessionId: string;
     membershipId: string;
+    desktopHost?: boolean;
 }
 
 export interface AccountRecoveryTicket {

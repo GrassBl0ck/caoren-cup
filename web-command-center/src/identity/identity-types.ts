@@ -8,10 +8,27 @@ export interface IdentityRecord {
     displayName: string;
     steamId?: string;
     steamNickname?: string;
-    // 仅由可信 CS2 桥接路径写入；CS 参赛要求可信游戏身份，网站账户可独立注册。
+    additionalSteamIds?: string[];
+    customDisplayName?: boolean;
+    desktopRoomGuide?: 'pending' | 'done';
+    avatarJpeg?: string;
+    // 仅由可信 CS2 桥接或 Steam 官方身份验证写入。
     gameBoundAt?: number;
     createdAt: number;
     updatedAt: number;
+}
+
+export const ownsSteamIdentity = (identity: IdentityRecord, steamId: string): boolean =>
+    identity.steamId === steamId || identity.additionalSteamIds?.includes(steamId) === true;
+
+export const isVerifiedSteamIdentity = (identity: IdentityRecord, steamId: string): boolean =>
+    (identity.steamId === steamId && !!identity.gameBoundAt) || identity.additionalSteamIds?.includes(steamId) === true;
+
+export function isDesktopAvatar(value: unknown): value is string {
+    if (typeof value !== 'string' || value.length > 24_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+    const bytes = Buffer.from(value, 'base64');
+    return bytes.length > 4 && bytes.toString('base64') === value &&
+        bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255])) && bytes.subarray(-2).equals(Buffer.from([255, 217]));
 }
 
 export type LoginAccountPasswordState = 'active' | 'recovery_required' | 'steam_only';

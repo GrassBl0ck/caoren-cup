@@ -1,8 +1,10 @@
-# Caoren Cup / 草人杯
+# Caotai Cup / 草台杯
 
-草人杯是一个面向自定义比赛和朋友间娱乐对局的社区项目，包含 **Counter-Strike 2（CS）** 与 **Minecraft Java（MC）** 两个板块。
+草台杯是一个面向自定义比赛和朋友间娱乐对局的社区项目，包含 **Counter-Strike 2（CS）** 与 **Minecraft Java（MC）** 两个板块。
 
-CS 提供赛事组织、身份玩法、娱乐模式和服务器工具；MC 提供坐垫战争等自研玩法。两个板块共用网站和草人杯账户，网站提供 CS 赛事大厅、玩家中心，以及 MC 玩法介绍和入服指引。
+CS 提供赛事组织、身份玩法、娱乐模式和服务器工具；MC 提供坐垫战争等自研玩法。官网提供 Windows 客户端下载。CS 正式房间现开放竞技和异能，MC 服务器内容独立安装。
+
+[下载 Windows 客户端](https://caorencup.icu/) · [v2.4.0 完整发行与安装说明](https://github.com/GrassBl0ck/caoren-cup/releases/tag/v2.4.0)
 
 [CS 板块](#草人杯-cs) · [MC 板块](#草人杯-mc) · [部署与下载](#部署与下载) · [致谢与仓库引用](#致谢与仓库引用)
 

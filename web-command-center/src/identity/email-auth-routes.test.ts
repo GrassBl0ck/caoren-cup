@@ -49,6 +49,7 @@ async function fixture() {
         const response = await fetch(base + url, {
             method: body === undefined ? 'GET' : 'POST', redirect: 'manual',
             headers: {
+                'user-agent': 'CaorenCupDesktopClient/2.2.4',
                 ...(body === undefined ? {} : { 'content-type': 'application/json' }),
                 ...(cookie ? { cookie } : {}), ...(origin ? { origin } : {}),
             },
@@ -71,7 +72,7 @@ async function fixture() {
     };
 }
 
-test('email registration signs into both protected boards but cannot join CS until a trusted game binding', async (t) => {
+test('desktop email registration opens CS while MC stays retired and joining requires a trusted game binding', async (t) => {
     const f = await fixture(); t.after(f.close);
     assert.equal((await f.request('/cs')).status, 303);
     assert.equal((await f.request('/mc.html')).status, 303);
@@ -94,7 +95,7 @@ test('email registration signs into both protected boards but cannot join CS unt
     assert.equal(desktop.status, 200);
     assert.equal((await f.service.authenticatePlayerCenterDeviceToken(desktop.data.deviceToken)).ok, true);
     assert.equal((await f.request('/cs', undefined, created.cookie)).status, 200);
-    assert.equal((await f.request('/mc', undefined, created.cookie)).status, 200);
+    assert.equal((await f.request('/mc', undefined, created.cookie)).headers.get('location'), '/');
     assert.equal((await f.request('/api/mc/info', undefined, created.cookie)).data.premiumOnly, true);
     assert.notEqual((await f.request('/pages/cs.html')).status, 200);
     assert.notEqual((await f.request('/cs%2ehtml')).status, 200);

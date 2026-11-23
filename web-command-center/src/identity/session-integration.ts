@@ -17,9 +17,9 @@ export const applyMembershipToPlayer = (player: Player, membership: LobbyMembers
 };
 
 export const attachMembershipToSession = (session: GameSession, membership: LobbyMembershipRecord): Player => {
-    let player = Object.values(session.players).find((candidate) =>
+    let player = Object.values(session.players).find((candidate) => candidate.role !== 'Admin' && (
         candidate.membershipId === membership.membershipId ||
-        (!!candidate.identityId && candidate.identityId === membership.identityId),
+        (!!candidate.identityId && candidate.identityId === membership.identityId)),
     );
     if (!player) {
         const playerId = uuidv4();

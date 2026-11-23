@@ -53,6 +53,25 @@ test('restores a managed formal launch before the first game heartbeat', () => {
     assert.equal(restored?.matchRuntime, undefined);
 });
 
+test('a desktop room keeps its chosen formal mode while waiting for its server', () => {
+    const { serialize, deserialize } = requirePersistenceApi();
+    const session = createInitialSession();
+    session.desktopFormalRoom = true;
+    session.phase = GamePhase.PreGameSetup;
+    session.matchOptions.gameModeId = 'ability';
+    session.matchOptions.matchRuntimeEnabled = true;
+    session.matchOptions.matchController = 'caoren';
+    const restored = deserialize(serialize(session));
+    assert.equal(restored?.matchOptions.gameModeId, 'ability');
+    assert.equal(restored?.matchOptions.matchRuntimeEnabled, true);
+    assert.equal(restored?.formalServer, undefined);
+    session.matchOptions.gameModeId = 'random';
+    assert.equal(deserialize(serialize(session))?.matchOptions.matchRuntimeEnabled, false);
+    session.matchOptions.gameModeId = 'ability';
+    session.phase = GamePhase.LiveGame;
+    assert.equal(deserialize(serialize(session))?.matchOptions.matchRuntimeEnabled, false);
+});
+
 const createAbilityDraftSession = (timeoutAt: number) => {
     const session = createInitialSession();
     session.phase = GamePhase.AbilityDraft;

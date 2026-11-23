@@ -191,6 +191,7 @@ export interface Player {
     rosterTeam?: RosterTeam;
     team?: Team;
     isReady: boolean;
+    lobbyReady?: 'self' | 'forced';
     undercoverTaskAckStage?: UndercoverTaskAckStage;
     stats?: MatchStats;
     sideStats?: SideMatchStats;
@@ -356,6 +357,7 @@ export interface MatchOptions {
 
 export interface GameSession {
     sessionId: string;
+    desktopFormalRoom?: boolean;
     phase: GamePhase;
     matchId: string;
     matchOptions: MatchOptions;

@@ -35,9 +35,10 @@ import {
 } from './game-flow-manager';
 import { clearDraftPickTimer, clearMapVoteTimer, clearAllFlowTimers } from './game-timers';
 import { ADMIN_PASSWORD, DEV_PLAYER_LOGIN_ENABLED } from './game-constants';
+import { desktopRoomAdmins } from './desktop-formal-room';
 import { cancelPluginCommands, enqueuePluginCommand } from './plugin-command-queue';
 import { enqueueCurrentAbilitySync } from './ability-sync-orchestrator';
-import { enqueueMatchRuntimeCommand } from './match-runtime-orchestrator';
+import { canConfirmUndercoverReady, enqueueMatchRuntimeCommand } from './match-runtime-orchestrator';
 import { formalServerLifecycle } from './formal-server-lifecycle';
 import { assignTaskGridToPlayer } from './task-system';
 import { loadTaskPresets, createTaskPreset, renameTaskPreset, deleteTaskPreset } from './task-preset-store';
@@ -328,6 +329,18 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const ticket = playerCenterMatchSocketTickets.consume(data?.ticket);
             const session = getSession();
             const identityId = String(socket.data.identityId || '');
+            if (ticket?.desktopHost) {
+                const host = session.players[ticket.membershipId];
+                if (!identityId || ticket.identityId !== identityId || ticket.sessionId !== session.sessionId ||
+                    host?.role !== 'Admin' || host.identityId !== identityId || !session.desktopFormalRoom ||
+                    !lobbyIdentityService.getLoginAccount(identityId)?.enabled || !desktopRoomAdmins.allows(identityId, lobbyIdentityService)) {
+                    socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '房间管理员权限失效，请回到客户端重新进入。' });
+                    return;
+                }
+                host.isOnline = true;
+                establishSocketIdentity(socket, host, `欢迎，${host.name}！已进入房间管理。`);
+                return;
+            }
             const membership = ticket ? lobbyIdentityService.getMembership(ticket.membershipId) : undefined;
             const account = ticket ? lobbyIdentityService.getLoginAccount(ticket.identityId) : undefined;
             const identity = ticket ? lobbyIdentityService.getIdentity(ticket.identityId) : undefined;
@@ -352,7 +365,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
         }) => {
             const session = getSession();
             const admin = socket.data.playerId ? findPlayerById(session, socket.data.playerId) : undefined;
-            if (!admin || admin.role !== 'Admin') {
+            if (!admin || admin.role !== 'Admin' || (session.desktopFormalRoom &&
+                (!admin.identityId || socket.data.identityId !== admin.identityId || !desktopRoomAdmins.allows(admin.identityId, lobbyIdentityService)))) {
                 socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, error: 'admin_required' });
                 return;
             }
@@ -393,7 +407,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const session = getSession();
             const rawName = String(data?.name || '').trim();
             const extraParam = String(data?.extraParam || '').trim();
-            if (extraParam !== ADMIN_PASSWORD) {
+            if (session.desktopFormalRoom || !ADMIN_PASSWORD || extraParam !== ADMIN_PASSWORD) {
                 socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员密码错误。' });
                 return;
             }
@@ -401,7 +415,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const name = (isDevPlayer ? rawName.slice(2).trim() : rawName) || (isDevPlayer ? 'DevPlayer' : 'Admin');
             const role: PlayerRole = isDevPlayer ? 'Player' : 'Admin';
             const existingByName = Object.values(session.players).find((player) =>
-                player.role === role && player.name === name,
+                player.role === role && player.name === name && !player.identityId,
             );
             const existing = existingByName;
 
@@ -441,7 +455,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const session = getSession();
             if (!isAuthenticatedActor(data.playerId)) return;
             const admin = findPlayerById(session, data.playerId);
-            if (!admin || admin.role !== 'Admin') {
+            if (!admin || admin.role !== 'Admin' || (session.desktopFormalRoom &&
+                (!admin.identityId || socket.data.identityId !== admin.identityId || !desktopRoomAdmins.allows(admin.identityId, lobbyIdentityService)))) {
                 socket.emit(WsEvents.NOTIFICATION, { message: '只有管理员才能执行此操作' });
                 return;
             }
@@ -1210,9 +1225,8 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 socket.emit(WsEvents.NOTIFICATION, { message: '请先绑定 CS 游戏身份，再确认准备。' });
                 return;
             }
-            if (session.matchOptions.undercoverModeEnabled && player.gameRole === 'Undercover'
-                && player.undercoverTaskAckStage !== 'read') {
-                socket.emit(WsEvents.NOTIFICATION, { message: '请先确认卧底任务表。' });
+            if (!canConfirmUndercoverReady(session, player)) {
+                socket.emit(WsEvents.NOTIFICATION, { message: '请等待身份发放，并确认你的卧底任务。' });
                 return;
             }
             const queued = enqueueMatchRuntimeCommand(session, 'set_ready_from_web', {

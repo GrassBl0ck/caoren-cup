@@ -13,18 +13,18 @@
     registration_unavailable: '无法使用这些信息注册。如果已有账号，请登录或找回密码。',
     password_invalid: '密码需要 8–128 位。', password_confirmation_mismatch: '两次输入的密码不一致。',
     current_password_incorrect: '当前账号密码不正确。', email_already_bound: '该账号已经绑定邮箱。', email_unavailable: '无法绑定这个邮箱。',
-    steam_identity_in_use: '这个 CS 游戏身份已经属于另一个草人杯账号，请登录原账号，不会自动合并账号。',
+    steam_identity_in_use: '这个 CS 游戏身份已经属于另一个草台杯账号，请登录原账号，不会自动合并账号。',
     steam_already_bound: '当前账号已绑定其他 CS 游戏身份。', game_code_invalid: '游戏码不正确或已过期，请在 CS2 重新输入 /ccbind。',
     game_code_invalid_or_expired: '游戏码不正确或已过期，请在 CS2 重新输入 /ccbind。',
     account_registration_on_web: '这个游戏身份尚无老账号，请先使用邮箱注册，再绑定 CS 游戏身份。',
     use_email_recovery: '这个账号已绑定邮箱，请使用邮箱验证码找回密码。',
-    rate_limited: '操作过于频繁，请稍后重试。', origin_not_allowed: '请从草人杯网站页面操作。',
+    rate_limited: '操作过于频繁，请稍后重试。', origin_not_allowed: '请在草台杯客户端中重试。',
     safe_storage_unavailable: 'Windows 安全凭据存储不可用，请取消“记住此设备”后登录。',
-    player_center_session_invalid: '登录已失效，请重新登录。', DEVICE_AUTH_TRANSPORT_NOT_ALLOWED: '请使用网站的 HTTPS 地址。'
+    player_center_session_invalid: '登录已失效，请重新登录。', DEVICE_AUTH_TRANSPORT_NOT_ALLOWED: '请重新打开客户端并登录。'
   };
   function message(id, text, error) {
     var target = byId(id);
-    if (target) { target.textContent = text ? '[草人杯] ' + text : ''; target.dataset.error = String(!!error); }
+    if (target) { target.textContent = text ? '[草台杯] ' + text : ''; target.dataset.error = String(!!error); }
   }
   async function request(url, body, method) {
     var response = await fetch(url, {
@@ -61,7 +61,7 @@
     if (byId('steam-status')) byId('steam-status').textContent = profile.hasSteamBinding ? '已绑定：' + (profile.steamNickname || 'CS 游戏身份') : '尚未绑定。参加 CS 比赛前请绑定游戏身份。';
     if (byId('bind-steam-form')) byId('bind-steam-form').hidden = !!profile.hasSteamBinding;
     var next = new URLSearchParams(window.location.search).get('next');
-    if (next === 'cs' || next === 'mc' || next === 'profile') window.location.replace('/' + next);
+    if (next === 'cs' || next === 'profile') window.location.replace('/' + next);
   }
   async function refresh() {
     try { setSignedIn(await request('/api/player-center/me')); lastSessionFailureStatus = undefined; return true; }
@@ -172,7 +172,7 @@
     if (input.newPassword !== input.confirmPassword) throw new Error(messages.password_confirmation_mismatch);
     var result = await request('/api/player-center/account/password', input);
     form.reset(); setSignedIn(result);
-    message('account-message', '密码已修改，其他网页会话和其他设备已撤销。');
+    message('account-message', '密码已修改，其他设备需要重新登录。');
   }, 'account-message');
   handleForm('bind-email-form', async function (input, form) {
     await request('/api/player-center/account/email', emailProof('bind-email', input));
@@ -199,7 +199,7 @@
     if (!mailAvailable) {
       if (!byId('mail-availability')) return;
       byId('mail-availability').hidden = false;
-      byId('mail-availability').textContent = '[草人杯]邮箱服务暂未启用。已有账号仍可登录，新用户请稍后注册。';
+      byId('mail-availability').textContent = '[草台杯]邮箱服务暂未启用。已有账号仍可登录，新用户请稍后注册。';
     }
   }).catch(function () { message('auth-message', '暂时无法读取服务状态，请稍后重试。', true); });
   refresh().then(async function (signedIn) {

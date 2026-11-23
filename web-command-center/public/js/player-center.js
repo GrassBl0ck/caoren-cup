@@ -4,6 +4,8 @@
   function byId(id) { return document.getElementById(id); }
   function socket() { return window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket; }
   var current = {}, profile = {}, refreshing = false, ticketInFlight = false, operationInFlight = false;
+  var hostView = !!window.caorenDesktop?.inspectSteam && /(?:^\?|&)desktopHost=1(?:&|$)/.test(window.location.search);
+  var accountTool = !!window.caorenDesktop && /(?:^\?|&)desktopView=(?:skins|updates)(?:&|$)/.test(window.location.search);
   var previousPublicStatus, resumeRequested = false, logoutInFlight = false, refreshPending = false;
   var reasons = {
     game_binding_required: '参加比赛前，请在个人资料中绑定 CS 游戏身份。',
@@ -38,7 +40,7 @@
       button.classList.toggle('joined', data.joined === true);
     }
     message(data.joined ? (data.leaveAvailable ? '已加入本场比赛。' : '已参赛，比赛开始后暂不能退出名单。') : (reasons[data.joinUnavailableReason] || (data.joinAvailable ? '可以加入本场比赛。' : '正在等待参赛状态同步。')));
-    if (byId('player-center-resume-btn')) byId('player-center-resume-btn').hidden = !data.joined;
+    if (byId('player-center-resume-btn')) byId('player-center-resume-btn').hidden = !data.joined && !hostView;
     sessionActive(true);
   }
   async function refreshSession(resume) {
@@ -51,7 +53,7 @@
       if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); return; }
       if (!result.ok) { message('参赛状态读取失败，请检查网络后重试。'); return; }
       render(result.data);
-      if (resumeRequested && result.data.joined) await requestTicket();
+      if (resumeRequested && (result.data.joined || hostView)) await requestTicket();
       resumeRequested = false;
     } finally {
       refreshing = false;
@@ -60,10 +62,14 @@
   }
   async function requestTicket() {
     var ws = socket();
-    if (!current.joined || ticketInFlight || !ws || !ws.connected) return;
+    if (accountTool || (!current.joined && !hostView) || ticketInFlight || !ws || !ws.connected) return;
     ticketInFlight = true;
     try {
-      var result = await request('/api/player-center/match/socket-ticket', {});
+      var liveSteam = hostView ? await window.caorenDesktop.inspectSteam() : undefined;
+      if (hostView && !liveSteam?.ok) return message('请先用入房时的 Steam 账号登录。');
+      var result = hostView
+        ? await request('/api/player-center/desktop-room/host-ticket', { steamId: liveSteam.steamId })
+        : await request('/api/player-center/match/socket-ticket', {});
       if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); return; }
       if (!result.ok) { message('比赛连接恢复失败，请点击“重新进入比赛”重试。'); return; }
       // Tickets are single-use and short-lived. Never queue them across a disconnect.
@@ -111,7 +117,7 @@
       ws.on('PLAYER_CENTER_SESSION_INVALID', function () { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); });
       ws.on('PLAYER_CENTER_MATCH_ENDED', function () { refreshSession(false); });
       ws.on('LOGIN_RESPONSE', function (data) {
-        if (!data.success && current.joined && !data.resetClient) message('比赛连接失败：' + (data.message || '票据已过期') + '。请点击“重新进入比赛”重试。');
+        if (!data.success && (current.joined || hostView) && !data.resetClient) message('比赛连接失败：' + (data.message || '票据已过期') + '。请点击“重新进入比赛”重试。');
         if (!data.success && (data.resetClient || data.message === '你已退出游戏')) refreshSession(false);
       });
       ws.on('GAME_STATE', function (state) {

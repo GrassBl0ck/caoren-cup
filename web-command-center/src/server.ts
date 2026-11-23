@@ -30,6 +30,7 @@ import {
     injectFlowBroadcast,
     injectNotify,
     applyMatchOptions,
+    advancePhase,
     finishDraftPick,
     finishMapVote,
     finishSideVote,
@@ -193,6 +194,18 @@ registerIdentityAuthRoutes(app, {
     consumeGameLoginTicket: v1333ConsumeGameLoginTicket,
     playerCenterMatchSocketTickets,
     onPlayerCenterSessionsRevoked: invalidatePlayerCenterSockets,
+    desktopRoomActions: {
+        publish: broadcastState,
+        start: (host) => advancePhase(GamePhase.Lobby, GamePhase.CaptainSelection, host.name, host.playerId),
+        changeMode: (modeId) => {
+            const current = getSession().matchOptions;
+            current.abilityModeEnabled = modeId === 'ability';
+            applyMatchOptions({
+                ...current, gameModeId: modeId, matchMode: 'competitive',
+                matchController: 'caoren', matchRuntimeEnabled: true,
+            });
+        },
+    },
     onDesktopAuthAudit: (event) => {
         // 不记录 Bearer、完整 SteamID 或 Cookie；HTTP 风险由 transport 字段明确保留。
         console.info('[DesktopAuthAudit]', JSON.stringify(event));

@@ -2,7 +2,11 @@
 
 首次安装请按[完整部署指南](deployment/README.md)选择系统和组件。发行包根目录 `INSTALL.md` 的此链接由打包器指向随包的 `guide/docs/deployment/README.md`。Windows 服务端路线未验证，Linux 新环境及玩法验收范围见指南。
 
-当前玩家用邮箱和密码登录，CS 游戏身份使用游戏内 `/ccbind` 生成一次性绑定码。升级时配套更新网站和 CS 网页桥接插件。
+## v2.4.0 安装与升级
+
+玩家从官网下载 Windows 客户端或使用发行页的 MSI。管理员从 v2.3.0 升级时，更新网页包、安装其锁定依赖并保留账号、配置和比赛数据。CS 与 MC 可以继续使用 v2.3.0 程序。
+
+将同版 MSI 放入网页根目录的 `public/downloads/caotai-cup-setup.msi`，也可以设置 `CAOTAI_INSTALLER_PATH` 指向独立存放的 MSI。自建服的 Steam 绑定和管理员邮箱配置见网页包根目录的 `ACCOUNT-SETUP.md`。正式房间目前开放竞技、异能。
 
 ## v2.0.0 双板块与账户升级（历史）
 

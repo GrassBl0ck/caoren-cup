@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import test from 'node:test';
-import { FormalServerLifecycle } from './formal-server-lifecycle';
+import { FormalServerLifecycle, listFormalArchives, readFormalArchive } from './formal-server-lifecycle';
 import { createInitialSession } from './session-manager';
 import { GamePhase } from './types';
 import type { MatchRuntimeSnapshot } from './match-runtime-types';
@@ -108,4 +110,35 @@ test('a missing initial game heartbeat allows the administrator to retry launch'
     assert.equal(session.formalServer?.stage, 'error');
     await lifecycle.open(session, () => {});
     assert.equal(starts, 2);
+});
+
+test('archive listing and details are available only to an identity that played in the match', async (t) => {
+    const root = await mkdtemp(path.resolve(__dirname, '..', 'test-formal-archive-'));
+    const prior = process.env.CAOREN_FORMAL_ARCHIVE_ROOT;
+    process.env.CAOREN_FORMAL_ARCHIVE_ROOT = root;
+    t.after(async () => {
+        if (prior === undefined) delete process.env.CAOREN_FORMAL_ARCHIVE_ROOT;
+        else process.env.CAOREN_FORMAL_ARCHIVE_ROOT = prior;
+        await rm(root, { recursive: true, force: true });
+    });
+    const primary = '76561198000000451';
+    const played = '76561198000000452';
+    const stranger = '76561198000000453';
+    const own = 'c0000000-0000-4000-8000-000000000001';
+    const other = 'c0000000-0000-4000-8000-000000000002';
+    const demo = `round_${own}_segment1.dem`;
+    for (const [matchId, steamId] of [[own, played], [other, stranger]]) {
+        const dir = path.join(root, matchId);
+        await mkdir(dir);
+        await writeFile(path.join(dir, 'match.json'), JSON.stringify({
+            matchId, mapName: 'de_mirage', scoreA: 13, scoreB: 8, archivedAt: 5000,
+            players: [{ name: '玩家', steamId, team: 'A' }], demos: [demo, '../unsafe.dem'],
+        }));
+    }
+    assert.deepEqual(await listFormalArchives([primary, played]), [{
+        matchId: own, mapName: 'de_mirage', scoreA: 13, scoreB: 8, archivedAt: 5000,
+    }]);
+    assert.equal(await readFormalArchive(other, [primary, played]), undefined);
+    assert.deepEqual((await readFormalArchive(own, [primary, played]))?.result.players, [{ name: '玩家', team: 'A' }]);
+    assert.deepEqual((await readFormalArchive(own, [primary, played]))?.result.demos, [demo]);
 });

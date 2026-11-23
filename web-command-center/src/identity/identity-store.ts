@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { generateRandomLoginName, validateLoginName } from './account-foundation';
-import { IdentityStoreData, IdentityStoreDataLegacy, LoginAccountRecord } from './identity-types';
+import { IdentityStoreData, IdentityStoreDataLegacy, isDesktopAvatar, LoginAccountRecord } from './identity-types';
 import { normalizeEmail } from './email-address';
 
 const createEmptyData = (): IdentityStoreData => ({
@@ -95,8 +95,24 @@ const validateCurrentData = (parsed: Record<string, unknown>): IdentityStoreData
             if (existing) throw new Error('identity SteamID is duplicated');
             steamIdentityIds.set(identityValue.steamId, identityKey);
         }
+        if (identityValue.additionalSteamIds !== undefined) {
+            if (!identityValue.steamId || !Array.isArray(identityValue.additionalSteamIds)) {
+                throw new Error('identity additional SteamIDs are invalid');
+            }
+            for (const steamId of identityValue.additionalSteamIds) {
+                if (typeof steamId !== 'string' || !/^7656119\d{10}$/.test(steamId)) {
+                    throw new Error('identity additional SteamID is invalid');
+                }
+                if (steamIdentityIds.has(steamId)) throw new Error('identity SteamID is duplicated');
+                steamIdentityIds.set(steamId, identityKey);
+            }
+        }
         if (identityValue.steamNickname !== undefined && typeof identityValue.steamNickname !== 'string') {
             throw new Error('identity Steam nickname is invalid');
+        }
+        if ((identityValue.customDisplayName !== undefined && typeof identityValue.customDisplayName !== 'boolean') ||
+            (identityValue.avatarJpeg !== undefined && !isDesktopAvatar(identityValue.avatarJpeg))) {
+            throw new Error('identity desktop profile is invalid');
         }
     }
 

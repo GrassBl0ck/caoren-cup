@@ -280,14 +280,15 @@ interface FormalArchiveManifest {
     players: Array<{ steamId?: string; name: string; team: 'A' | 'B'; stats?: unknown; finalScore?: number; scoreBreakdown?: unknown }>;
 }
 
-export const readFormalArchive = async (matchId: unknown, steamId: string | undefined) => {
+export const readFormalArchive = async (matchId: unknown, steamIds: string | readonly string[] | undefined) => {
     const root = process.env.CAOREN_FORMAL_ARCHIVE_ROOT?.trim();
-    if (!steamId || !root || !path.isAbsolute(root) || !isFormalMatchId(matchId)) return undefined;
+    if (!steamIds || !root || !path.isAbsolute(root) || !isFormalMatchId(matchId)) return undefined;
+    const owns = new Set(typeof steamIds === 'string' ? [steamIds] : steamIds);
     const directory = path.join(root, matchId);
     try {
         const manifest = JSON.parse(await fs.readFile(path.join(directory, 'match.json'), 'utf8')) as FormalArchiveManifest;
         if (manifest.matchId !== matchId || !Array.isArray(manifest.players)
-            || !manifest.players.some(player => player.steamId === steamId)) return undefined;
+            || !manifest.players.some(player => typeof player.steamId === 'string' && owns.has(player.steamId))) return undefined;
         const demos = Array.isArray(manifest.demos) ? manifest.demos.filter(name =>
             typeof name === 'string' && fileNamePattern.test(name) && name.includes('_' + matchId + '_')) : [];
         return {
@@ -304,5 +305,28 @@ export const readFormalArchive = async (matchId: unknown, steamId: string | unde
         return undefined;
     }
 };
+
+export async function listFormalArchives(steamIds: readonly string[]) {
+    const root = process.env.CAOREN_FORMAL_ARCHIVE_ROOT?.trim();
+    if (!steamIds.length || !root || !path.isAbsolute(root)) return [];
+    let entries;
+    try {
+        entries = await fs.readdir(root, { withFileTypes: true });
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw error;
+    }
+    const matchIds = entries.filter(entry => entry.isDirectory() && isFormalMatchId(entry.name)).map(entry => entry.name);
+    const summaries = [];
+    for (let offset = 0; offset < matchIds.length; offset += 16) {
+        const batch = await Promise.all(matchIds.slice(offset, offset + 16).map(matchId => readFormalArchive(matchId, steamIds)));
+        for (const archive of batch) {
+            if (!archive) continue;
+            const { matchId, mapName, scoreA, scoreB, archivedAt } = archive.result;
+            summaries.push({ matchId, mapName, scoreA, scoreB, archivedAt });
+        }
+    }
+    return summaries.sort((a, b) => b.archivedAt - a.archivedAt).slice(0, 30);
+}
 
 export const formalServerLifecycle = new FormalServerLifecycle(createActions());

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>登录草台杯</title><link rel="icon" type="image/png" href="/assets/brand-icon.png">
+  <link rel="stylesheet" href="/css/portal.css">
+  <script defer src="/js/portal.js?v=2.2.5-ccbind1"></script>
+</head>
+<body data-page="portal">
+  <div class="portal-shell">
+    <header class="portal-header">
+      <a class="portal-brand" href="/" aria-label="草台杯首页"><img src="/assets/brand.png" alt="草台杯" width="106" height="34"></a>
+      <nav class="board-navigation"><a id="profile-link" href="/profile" hidden>个人资料</a></nav><button id="logout" class="quiet-button" type="button" hidden>退出登录</button>
+    </header>
+    <p id="portal-message" class="form-message" role="status" aria-live="polite"></p>
+<main>
+      <section id="account-auth" class="account-card" aria-labelledby="auth-title">
+        <h2 id="auth-title">登录草台杯</h2>
+        <div class="auth-tabs" aria-label="账户操作">
+          <button type="button" data-auth-tab="login" aria-pressed="true">登录</button>
+          <button type="button" data-auth-tab="register" aria-pressed="false">注册</button>
+          <button type="button" data-auth-tab="reset-password" aria-pressed="false">找回密码</button>
+        </div>
+        <form id="login-form" data-auth-panel="login">
+          <label>邮箱<input name="email" type="email" autocomplete="username" maxlength="254" required placeholder="注册时验证的邮箱"></label>
+          <label>密码<input name="password" type="password" autocomplete="current-password" maxlength="128" required placeholder="输入密码"></label>
+          <label id="remember-device-label" class="checkbox-label" hidden><input name="rememberDevice" type="checkbox">记住此设备（仅桌面客户端）</label>
+          <button class="primary-button wide" type="submit">登录草台杯 <span aria-hidden="true">↗</span></button>
+        </form>
+        <form id="register-form" data-auth-panel="register" hidden>
+          <label>邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="用于验证和找回密码"></label>
+          <div class="code-row"><label>邮箱验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required placeholder="6 位验证码"></label><button type="button" data-send-code="register">发送验证码</button></div>
+          <label>自设密码<input name="password" type="password" autocomplete="new-password" minlength="8" maxlength="128" required placeholder="8–128 位，使用草台杯独立密码"></label>
+          <label>确认密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+          <button class="primary-button wide" type="submit">注册并进入 <span aria-hidden="true">↗</span></button>
+        </form>
+        <form id="reset-form" data-auth-panel="reset-password" hidden>
+          <label>绑定的邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+          <div class="code-row"><label>邮箱验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label><button type="button" data-send-code="reset-password">发送验证码</button></div>
+          <label>新密码<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+          <label>确认新密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
+          <button class="primary-button wide" type="submit">重设密码</button>
+        </form>
+        <p id="mail-availability" class="service-note" hidden></p>
+        <p id="auth-message" class="form-message" role="status" aria-live="polite"></p>
+      </section>
+      <p id="board-picker" hidden><span id="account-name"></span>，你已登录。</p>
+    </main>
+  </div>
+</body>
+</html>

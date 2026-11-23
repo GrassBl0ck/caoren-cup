@@ -19,10 +19,13 @@ import {
 import { LobbyIdentityService } from './identity-service';
 import { AccountLoginGuard, validateAccountPassword } from './password-auth';
 import { PlayerCenterSessionRecord, PlayerCenterSessionStore } from './player-center-session-store';
-import { LobbyMembershipRecord } from './identity-types';
+import { isVerifiedSteamIdentity, LobbyMembershipRecord } from './identity-types';
+import { desktopRoomAdmins } from '../desktop-formal-room';
 import { EmailAuthError, EmailCodeService, EmailCodePurpose } from './email-codes';
 import { normalizeEmail } from './email-address';
-import { readFormalArchive } from '../formal-server-lifecycle';
+import { listFormalArchives, readFormalArchive } from '../formal-server-lifecycle';
+import { registerSteamBindingRoutes } from './steam-binding-routes';
+import { registerDesktopRoomRoutes } from './desktop-room-routes';
 
 const PLAYER_CENTER_COOKIE = 'caoren_player_center';
 
@@ -46,6 +49,11 @@ export interface IdentityAuthRouteDependencies {
     onPlayerCenterMatchJoined?: (membership: LobbyMembershipRecord) => void | Promise<void>;
     onPlayerCenterMatchLeft?: (identityId: string, membershipId: string) => void | Promise<void>;
     consumeGameLoginTicket?: (code: unknown) => { steamId: string; name: string } | undefined;
+    desktopRoomActions?: {
+        publish: () => void;
+        start: (host: import('../types').Player) => boolean;
+        changeMode: (modeId: import('../types').GameModeId) => void;
+    };
     emailCodes?: EmailCodeService;
     onDesktopAuthAudit?: (event: {
         action: 'account_login' | 'device_login' | 'rotation_confirm' | 'logout';
@@ -234,6 +242,21 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             .json({ success: false, error: code });
     };
 
+    registerSteamBindingRoutes(app, {
+        service,
+        authenticate: requirePlayerCenterSession,
+        sameOrigin,
+        publicOrigin: process.env.STEAM_BINDING_ORIGIN,
+        proxyUrl: process.env.STEAM_BINDING_PROXY_URL,
+    });
+    if (dependencies.desktopRoomActions) registerDesktopRoomRoutes(app, {
+        ...dependencies.desktopRoomActions,
+        service, authenticate: requirePlayerCenterSession, sameOrigin,
+        getSession: getActiveSession,
+        onPlayerJoined: (membership) => dependencies.onPlayerCenterMatchJoined?.(membership),
+        issuePlayerSocketTicket: issuePlayerCenterMatchSocketTicket,
+    });
+
     app.get('/api/public/account-capabilities', (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
         res.json({ success: true, emailRegistrationAvailable: emailCodes.enabled, steamQuickLoginAvailable: false });
@@ -400,10 +423,21 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         }
     });
 
+    app.get('/api/player-center/match/archive', async (req, res) => {
+        const session = await requirePlayerCenterSession(req, res);
+        if (!session) return;
+        try {
+            const matches = await listFormalArchives(archiveSteamIds(session.identityId));
+            return res.json({ success: true, matches });
+        } catch {
+            return res.status(503).json({ success: false, error: 'match_archive_unavailable' });
+        }
+    });
+
     app.get('/api/player-center/match/archive/:matchId', async (req, res) => {
         const session = await requirePlayerCenterSession(req, res);
         if (!session) return;
-        const archive = await readFormalArchive(req.params.matchId, service.getIdentity(session.identityId)?.steamId);
+        const archive = await readFormalArchive(req.params.matchId, archiveSteamIds(session.identityId));
         if (!archive) return res.status(404).json({ success: false, error: 'match_archive_unavailable' });
         return res.json({ success: true, ...archive.result });
     });
@@ -411,12 +445,17 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
     app.get('/api/player-center/match/archive/:matchId/demo/:file', async (req, res) => {
         const session = await requirePlayerCenterSession(req, res);
         if (!session) return;
-        const archive = await readFormalArchive(req.params.matchId, service.getIdentity(session.identityId)?.steamId);
+        const archive = await readFormalArchive(req.params.matchId, archiveSteamIds(session.identityId));
         const requestedFile = req.params.file;
         if (!archive || !archive.result.demos.includes(requestedFile))
             return res.status(404).json({ success: false, error: 'match_archive_unavailable' });
         return res.download(path.join(archive.directory, requestedFile));
     });
+
+    function archiveSteamIds(identityId: string): string[] {
+        const identity = service.getIdentity(identityId);
+        return [...(identity?.steamId ? [identity.steamId] : []), ...(identity?.additionalSteamIds ?? [])];
+    }
 
     app.get('/api/player-center/me', async (req, res) => {
         const session = await requirePlayerCenterSession(req, res);
@@ -435,7 +474,8 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         if (activeSession.phase !== 'Lobby' && !canJoinLateRoom(activeSession)) {
             return res.status(409).json({ success: false, error: 'match_not_waiting' });
         }
-        const joined = await service.joinPlayerCenterMatch(centerSession.identityId, activeSession.sessionId, allowsPendingBinding(activeSession));
+        const joined = await service.joinPlayerCenterMatch(centerSession.identityId, activeSession.sessionId,
+            !activeSession.desktopFormalRoom && allowsPendingBinding(activeSession));
         if (!joined.ok) {
             const status = joined.reason === 'blocked_for_session' ? 403 : joined.reason === 'nickname_in_use' ? 409 : joined.reason === 'game_binding_required' ? 409 : 401;
             return res.status(status).json({ success: false, error: joined.reason });
@@ -446,6 +486,25 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             ...issuePlayerCenterMatchSocketTicket(centerSession.identityId, joined.membership),
             ...playerCenterMatchView(centerSession.identityId),
         });
+    });
+
+    app.post('/api/player-center/desktop-room/host-ticket', sameOrigin, async (req, res) => {
+        const centerSession = await requirePlayerCenterSession(req, res);
+        if (!centerSession) return;
+        const identity = service.getIdentity(centerSession.identityId);
+        const steamId: unknown = req.body?.steamId;
+        const room = getActiveSession();
+        const host = Object.values(room.players).find(player => player.role === 'Admin' && player.identityId === centerSession.identityId);
+        if (!room.desktopFormalRoom || !host || !identity || typeof steamId !== 'string' ||
+            host.steamId !== steamId || !desktopRoomAdmins.allows(centerSession.identityId, service) ||
+            !isVerifiedSteamIdentity(identity, steamId)) {
+            return res.status(403).json({ success: false, error: 'admin_required' });
+        }
+        const issued = matchSocketTickets.issue({
+            identityId: centerSession.identityId, sessionId: room.sessionId,
+            membershipId: host.playerId, desktopHost: true,
+        }, 30_000);
+        return res.json({ success: true, socketTicket: issued.ticket });
     });
 
     app.post('/api/player-center/match/socket-ticket', async (req, res) => {

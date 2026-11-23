@@ -66,6 +66,7 @@ export const buildSessionSnapshotPayload = (
         sideVote: session.sideVote,
         selectedSide: session.selectedSide,
         matchOptions: session.matchOptions,
+        desktopFormalRoom: session.desktopFormalRoom,
         undercoverCount: session.undercoverCount,
         detectiveCount: session.detectiveCount,
         rolesReleased: session.rolesReleased,
@@ -143,9 +144,13 @@ const normalizeRestoredSession = (raw: any, version: 1 | 2 | 3): GameSession => 
         && Number.isSafeInteger(restored.matchRuntime?.revision)
         && Number.isSafeInteger(restored.matchRuntime?.runtimeEpoch)
         && Number(restored.matchRuntime?.runtimeEpoch) > 0;
+    const desktopRoomAwaitingLaunch = restored.desktopFormalRoom === true
+        && [GamePhase.Lobby, GamePhase.CaptainSelection, GamePhase.Roll, GamePhase.PlayerDraft, GamePhase.MapBan,
+            GamePhase.SidePick, GamePhase.AbilityBan, GamePhase.AbilityDraft, GamePhase.PreGameSetup].includes(restored.phase);
     restored.matchOptions.matchController = restored.matchOptions.matchMode === 'duel' ? 'caoren' : restored.matchOptions.matchController === 'matchzy' ? 'matchzy' : 'caoren';
     restored.matchOptions.matchRuntimeEnabled = validCaorenRuntime
-        || (canRestoreFormalMatch && restored.phase === GamePhase.PreGameSetup && restored.formalServer !== undefined);
+        || (canRestoreFormalMatch && (desktopRoomAwaitingLaunch
+            || (restored.phase === GamePhase.PreGameSetup && restored.formalServer !== undefined)));
     if (!validCaorenRuntime) {
         restored.matchRuntime = undefined;
         restored.matchRuntimeEventEpoch = undefined;

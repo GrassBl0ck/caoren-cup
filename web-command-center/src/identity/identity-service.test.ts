@@ -21,6 +21,40 @@ const makeService = async (name: string, nowRef = { value: 1_000 }) => {
     return { dir, store, service, nowRef };
 };
 
+test('verified additional Steam IDs persist, belong to one account and do not replace the selected match identity', async (t) => {
+    const { dir, service } = await makeService('multiple-steam-ids');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const primary = '76561198000000701';
+    const secondary = '76561198000000702';
+    const other = '76561198000000703';
+    const { identity } = await createTestLoginAccount(service, {
+        steamId: primary, nickname: 'Cup player', password: 'current-pass',
+    });
+    const otherAccount = await createTestLoginAccount(service, {
+        steamId: other, nickname: 'Other player', password: 'current-pass',
+    });
+    await service.linkVerifiedSteamIdentity(identity.identityId, secondary);
+    await service.linkVerifiedSteamIdentity(identity.identityId, secondary);
+    await assert.rejects(service.linkVerifiedSteamIdentity(otherAccount.identity.identityId, secondary), /steam_identity_in_use/);
+    const joined = await service.joinPlayerCenterMatch(identity.identityId, 'desktop-room', false, secondary);
+    assert.equal(joined.ok, true);
+    if (!joined.ok) return;
+    assert.equal(joined.membership.trustedSteamId, secondary);
+    assert.deepEqual(await service.joinPlayerCenterMatch(identity.identityId, 'desktop-room', false, primary),
+        { ok: false, reason: 'match_steam_locked' });
+    assert.deepEqual(await service.joinPlayerCenterMatch(identity.identityId, 'desktop-room', false, other),
+        { ok: false, reason: 'game_binding_required' });
+    await service.confirmLongTermPresence('desktop-room', [{steamId: primary, name: 'Primary Steam'}]);
+    assert.deepEqual(service.listLobbySteamIds('desktop-room'), [secondary]);
+    const store = new IdentityStore(path.join(dir, 'identity-store.json'));
+    await store.load();
+    const reloaded = new LobbyIdentityService(store);
+    assert.equal(reloaded.findIdentityBySteamId(secondary)?.identityId, identity.identityId);
+    assert.equal(reloaded.getIdentity(identity.identityId)?.steamId, primary);
+    assert.deepEqual(reloaded.getIdentity(identity.identityId)?.additionalSteamIds, [secondary]);
+    assert.deepEqual(reloaded.checkCsBindings([primary, secondary]), { [primary]: true, [secondary]: true });
+});
+
 test('player-center device authentication never creates match membership and enforces expiry', async (t) => {
     const nowRef = { value: 10_000 };
     const { dir, service } = await makeService('player-center-token', nowRef);

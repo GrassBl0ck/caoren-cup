@@ -2,7 +2,7 @@ import { isCurrentAbilitySyncConfirmed } from './ability-phase-one-policy';
 import type { BridgeCommand } from './plugin-command-queue';
 import { enqueuePluginCommand } from './plugin-command-queue';
 import { getGamePlayers } from './player-utils';
-import type { GameSession } from './types';
+import type { GameSession, Player } from './types';
 import { supportsFormalMatchMode, type MatchRuntimeStage } from './match-runtime-types';
 
 export const isBridgeMatchRuntimeEnabled = (session: GameSession): boolean =>
@@ -12,6 +12,10 @@ export const isBridgeMatchRuntimeEnabled = (session: GameSession): boolean =>
     && supportsFormalMatchMode(session.matchOptions?.gameModeId);
 
 export const MATCH_RUNTIME_COMMAND_TYPE = 'MATCH_RUNTIME_COMMAND';
+
+export const canConfirmUndercoverReady = (session: GameSession, player: Player): boolean =>
+    !session.matchOptions.undercoverModeEnabled || (session.rolesReleased && !!player.gameRole &&
+        (player.gameRole !== 'Undercover' || player.undercoverTaskAckStage === 'read'));
 
 export type MatchRuntimeAction =
     | 'load'

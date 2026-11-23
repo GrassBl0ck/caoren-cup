@@ -1,12 +1,12 @@
 {
   "name": "caoren-cup-web",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "start": "tsx src/server.ts",
     "dev": "tsx src/server.ts",
-    "check": "npm run typecheck && npm run test:game-mode && npm run test:caoren-modules && npm run test:postmatch-fun-stats && npm run test:plugin-telemetry && npm run test:modern-dialog-ui && npm run test:undercover-logic && npm run test:undercover-task-ui && npm run test:match-command-policy && npm run test:duel-runtime && npm run test:duel-admin-only && npm run test:player-center-ui && npm run test:legacy-login-removed && npm run test:lobby-identity && npm run test:weaponpaints && npm run test:rules-content && npm run test:rules-pdf && npm run test:rules-guide && npm run test:update-announcements && npm run test:update-announcement-ui && npm run test:phase-rollback && npm run test:game-inactivity && npm run test:ability && npm run test:match-runtime",
+    "check": "npm run typecheck && npm run test:game-mode && npm run test:caoren-modules && npm run test:postmatch-fun-stats && npm run test:plugin-telemetry && npm run test:modern-dialog-ui && npm run test:undercover-logic && npm run test:undercover-task-ui && npm run test:match-command-policy && npm run test:duel-runtime && npm run test:duel-admin-only && npm run test:player-center-ui && npm run test:legacy-login-removed && npm run test:lobby-identity && npm run test:weaponpaints && npm run test:rules-content && npm run test:rules-pdf && npm run test:rules-guide && npm run test:update-announcements && npm run test:update-announcement-ui && npm run test:flow-undo && npm run test:flow-undo-ui && npm run test:game-inactivity && npm run test:ability && npm run test:match-runtime",
     "typecheck": "tsc --noEmit",
     "test:caoren-modules": "node scripts/check-caoren-modules.cjs",
     "test:postmatch-fun-stats": "node scripts/check-postmatch-fun-stats.cjs",
@@ -33,7 +33,7 @@
     "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts",
     "test:game-mode": "tsx --test src/game-mode.test.ts src/random-mode-integration.test.ts",
     "test:ability": "tsx --test src/ability*.test.ts && node scripts/check-ability-bp-ui.cjs",
-    "test:match-runtime": "tsx --test src/match-runtime*.test.ts src/formal-server-lifecycle.test.ts"
+    "test:match-runtime": "tsx --test src/match-runtime*.test.ts src/formal-server-lifecycle.test.ts src/desktop-formal-room.test.ts"
   },
   "dependencies": {
     "express": "^4.18.3",
@@ -41,6 +41,7 @@
     "mysql2": "^3.23.2",
     "nodemailer": "^10.3.1",
     "socket.io": "^4.7.5",
+    "undici": "^7.30.2",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

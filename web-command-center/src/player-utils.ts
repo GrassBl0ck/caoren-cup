@@ -198,7 +198,7 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
             confirmationState: p.confirmationState,
             confirmationReason: viewer?.role === 'Admin' || p.playerId === viewerId ? p.confirmationReason : undefined,
             gameRole: revealRole ? p.gameRole : undefined,
-            rosterTeam: p.rosterTeam, team: p.team, isReady: p.isReady,
+            rosterTeam: p.rosterTeam, team: p.team, isReady: p.isReady, lobbyReady: p.lobbyReady, isOnline: p.isOnline,
             undercoverTaskAckStage: p.undercoverTaskAckStage,
             steamIdBound: !!p.steamId,
             steamId: revealAllPostgame || viewer?.role === 'Admin' || p.playerId === viewerId ? p.steamId : undefined,

@@ -1,3 +1,4 @@
+import { canStartDesktopRoom } from './desktop-formal-room';
 import { isBridgeMatchRuntimeEnabled } from './match-runtime-orchestrator';
 // game-flow-manager.ts
 import { v4 as uuidv4 } from 'uuid';
@@ -1175,6 +1176,7 @@ const advancePhase = (
     let nextTo = resolveNextPhaseByMatchOptions(from, to);
     const session = getSession();
     if (session.phase !== from) return false;
+    if (from === GamePhase.Lobby && session.desktopFormalRoom && !canStartDesktopRoom(session)) return false;
     if (from === GamePhase.Lobby && isDuelMode()) nextTo = GamePhase.PreGameSetup;
     const checkpoint = recordUndo &&
         REVERSIBLE_PREGAME_PHASES.includes(from) &&

@@ -1,6 +1,6 @@
 import express from 'express';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { LobbyIdentityService } from './identity/identity-service';
 import { PlayerCenterSessionStore } from './identity/player-center-session-store';
 
@@ -8,7 +8,41 @@ export function registerBoardPages(app: express.Express, options: {
     service: LobbyIdentityService;
     sessions: PlayerCenterSessionStore;
     pagesDirectory: string;
+    installerPath?: string;
 }) {
+    const publicDirectory = path.resolve(options.pagesDirectory, '..', 'public');
+    const installerRoute = '/downloads/caotai-cup-setup.msi';
+    const installer = options.installerPath || process.env.CAOTAI_INSTALLER_PATH ||
+        path.join(publicDirectory, installerRoute.slice(1));
+    app.get(installerRoute, (_req, res) => {
+        res.set('Cache-Control', 'no-cache');
+        res.download(installer, '草台杯客户端-安装程序.msi');
+    });
+
+    // The shipped client uses the same page URLs. This marker selects the UI only.
+    const home = ['/', '/index.html'];
+    const features = ['cs', 'profile', 'admin', 'rules', 'mc'].flatMap(name => ['/' + name, '/' + name + '.html']);
+    app.get([...home, ...features], async (req, res, next) => {
+        res.vary('User-Agent');
+        res.set('Cache-Control', 'private, no-store');
+        const desktop = /(?:^|\s)CaorenCupDesktopClient\/\d+\.\d+\.\d+(?:\s|$)/.test(req.get('User-Agent') || '');
+        const page = req.path.toLowerCase().replace(/\/+$/, '') || '/';
+        if (home.includes(page)) {
+            if (desktop) return res.sendFile(path.join(options.pagesDirectory, 'login.html'), { cacheControl: false });
+            try {
+                const [html, file] = await Promise.all([readFile(path.join(publicDirectory, 'index.html'), 'utf8'), stat(installer)]);
+                if (!file.isFile()) throw new Error('Installer unavailable');
+                return res.type('html').send(html.replace('{{installerSize}}', (file.size / 1048576).toFixed(1) + ' MiB'));
+            } catch {
+                return res.status(503).type('text').send('草台杯安装包暂时无法下载，请稍后重试。');
+            }
+        }
+        if (!desktop || page === '/mc' || page === '/mc.html') return res.redirect(303, '/');
+        if (page === '/rules' || page === '/rules.html') {
+            return res.sendFile(path.join(publicDirectory, 'rules.html'), { cacheControl: false });
+        }
+        next();
+    });
     async function authenticated(req: express.Request) {
         const cookie = String(req.header('cookie') || '').split(';').map((part) => part.trim())
             .find((part) => part.startsWith('caoren_player_center='));
@@ -24,24 +58,24 @@ export function registerBoardPages(app: express.Express, options: {
         }
         return true;
     }
-    for (const board of ['cs', 'mc', 'profile'] as const) {
+    for (const board of ['cs', 'profile'] as const) {
         app.get([`/${board}`, `/${board}/`, `/${board}.html`], async (req, res) => {
             res.setHeader('Cache-Control', 'no-store');
             try {
                 if (!await authenticated(req)) return res.redirect(303, `/?next=${board}`);
                 return res.sendFile(path.resolve(options.pagesDirectory, `${board}.html`));
             } catch {
-                return res.status(503).type('text').send('[草人杯]暂时无法读取登录状态，请稍后重试。');
+                return res.status(503).type('text').send('[草台杯]暂时无法读取登录状态，请稍后重试。');
             }
         });
     }
     // The management page shares the CS rendering template, with an independent admin login.
-    app.get(['/admin', '/admin/'], async (_req, res) => {
+    app.get(['/admin', '/admin.html'], async (_req, res) => {
         res.setHeader('Cache-Control', 'no-store');
         try {
             const html = await readFile(path.resolve(options.pagesDirectory, 'cs.html'), 'utf8');
-            return res.type('html').send(html.replace(/(<body\b[^>]*\bdata-page=)"cs"/, '$1"admin"').replace('[草人杯] CS 大厅', '[草人杯] 管理员管理台'));
-        } catch { return res.status(503).type('text').send('[草人杯]管理页面暂时无法读取，请稍后重试。'); }
+            return res.type('html').send(html.replace(/(<body\b[^>]*\bdata-page=)"cs"/, '$1"admin"').replace('[草台杯] CS 大厅', '[草台杯] 管理员管理台'));
+        } catch { return res.status(503).type('text').send('[草台杯]管理页面暂时无法读取，请稍后重试。'); }
     });
     app.get('/api/mc/info', async (req, res) => {
         res.setHeader('Cache-Control', 'no-store');

@@ -4,7 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../public/js/portal.js'), 'utf8');
-const html = fs.readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../pages/login.html'), 'utf8');
 
 async function page({ bridge, signedIn = false, responses = {}, hash = '', profilePage = false } = {}) {
   const elements = new Map();
@@ -102,8 +102,8 @@ test('failed login preserves the password for correction and shows the email err
  const p=await page({responses:{'/api/account-auth/login':{status:401,data:{success:false,error:'invalid_credentials'}}}});
  await p.submit(); assert.match(p.elements.get('auth-message').textContent,/邮箱或密码/);assert.equal(p.login.fields.password.value,'test-password');
 });
-test('CS and MC expose standalone profile and independent administrator routes', () => {
- for(const board of ['cs','mc']) { const text=fs.readFileSync(path.join(__dirname,'../pages/'+board+'.html'),'utf8');assert.match(text,/href="\/profile"/);assert.match(text,/href="\/admin"/); }
+test('desktop account entry exposes authentication without a board selector', () => {
+ assert.doesNotMatch(html, /href="\/(?:mc|admin)"|class="board-card/);
  assert.doesNotMatch(html,/name="loginName"|legacy-code-form|change-login-name-form|id="account-settings"/);
 });
 test('profile supports password changes without a username editor', async () => {

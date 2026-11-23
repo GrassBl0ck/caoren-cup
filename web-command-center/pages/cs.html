@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[草人杯] CS 大厅</title>
+    <title>[草台杯] CS 大厅</title><link rel="icon" type="image/png" href="/assets/brand-icon.png">
     <!-- Stage 3.14.1: voice QA scoring records + map voters shown on BP cards -->
     <script src="/socket.io/socket.io.js"></script>
 <script>
@@ -47,15 +47,10 @@
 <body class="caoren-modifiers-disabled" data-page="cs">
     <div class="page-shell">
     <header class="site-header">
-        <a class="site-brand" href="/" aria-label="草人杯对局指挥台首页">
-            <span class="brand-mark" aria-hidden="true">草</span>
-            <span class="brand-text">
-                <strong>草人杯</strong>
-                <small>CAOREN CUP · CS2</small>
-            </span>
+        <a class="site-brand" href="/" aria-label="草台杯对局指挥台首页">
+            <img src="/assets/brand.png" alt="草台杯" width="106" height="34">
         </a>
         <div class="site-header-actions">
-            <a class="header-text-link" href="/">返回板块选择</a><a class="header-text-link" href="/profile">个人资料</a><a class="header-text-link" href="/admin">管理员</a>
             <a id="rules-guide-link" class="header-text-link" href="/rules.html">赛前指引</a>
             <button id="update-announcement-trigger" class="header-text-link update-announcement-trigger" type="button" aria-haspopup="dialog" aria-controls="update-announcement-drawer">
                 更新公告
@@ -102,20 +97,9 @@
                             <span id="v1333-server-dot" class="server-status-dot" aria-hidden="true"></span>
                             <strong id="v1333-server-status">正在读取服务器状态...</strong>
                         </div>
-                        <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草人杯服务器</button>
+                        <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草台杯服务器</button>
                     </div>
                     <p class="rail-note">通过 Steam 启动 CS2。若没有响应，可在游戏控制台手动连接。</p><code id="server-connect-command">connect play.caorencup.icu</code><button id="copy-server-command" type="button">复制连接命令</button><p id="server-connect-message" role="status"></p>
-                </div>
-                <div class="rail-block">
-                    <h3>客户端</h3>
-                    <details class="download-menu">
-                        <summary>客户端下载</summary>
-                        <div class="download-menu-content">
-                            <a id="caoren-desktop-client-download" href="/downloads/CaorenCupClient-v2.2.4.zip" download>下载桌面客户端</a>
-                            <a id="caoren-desktop-client-github-download" href="https://github.com/GrassBl0ck/caoren-cup/releases/tag/v2.2.4" target="_blank" rel="noopener">GitHub 备用下载</a>
-                        </div>
-                    </details>
-                    <p class="rail-note">仅桌面客户端支持记住设备登录。</p>
                 </div>
                 <div class="rail-block admin-entry-block">
                     <h3>管理员管理台</h3>
@@ -371,18 +355,18 @@
                             <input id="game-mode-warmup-seconds" type="number" min="1" max="300" step="1" value="15">
                         </label>
                     </div>
-                    <div class="match-options-desc" style="margin-top:6px;">网页完成阵容和模式设置后，由管理员开始；Warmup 结束后由 Gamemode 自动开始正式比赛。</div>
+                    <div class="match-options-desc" style="margin-top:6px;">在客户端完成阵容和模式设置后，由管理员开始；Warmup 结束后由 Gamemode 自动开始正式比赛。</div>
                 </div>
 
                 <label class="match-options-row">
                     <div style="width:100%;">
                         <div class="match-options-title">测试比赛控制器</div>
-                        <label><input type="checkbox" id="match-option-runtime-enabled">启用草人杯正式比赛流程（竞技／异能）</label>
+                        <label><input type="checkbox" id="match-option-runtime-enabled">启用草台杯正式比赛流程（竞技／异能）</label>
                         <select id="match-runtime-controller" style="width:100%;margin-top:6px;">
                             <option value="matchzy">MatchZy（现有回滚路径）</option>
-                            <option value="caoren">草人杯比赛运行时</option>
+                            <option value="caoren">草台杯比赛运行时</option>
                         </select>
-                        <div class="match-options-desc">测试阶段默认保留 MatchZy。选择草人杯后，正式比赛、Ready、暂停、换边和恢复由草人杯桥接插件管理。</div>
+                        <div class="match-options-desc">测试阶段默认保留 MatchZy。选择草台杯后，正式比赛、Ready、暂停、换边和恢复由草台杯桥接插件管理。</div>
                     </div>
                 </label>
 
@@ -470,7 +454,7 @@
                 <label class="match-options-row">
                     <input type="checkbox" id="match-option-caoren">
                     <div>
-                        <div class="match-options-title">启用 CaorenCup 修改</div>
+                        <div class="match-options-title">启用 草台杯修改</div>
                         <div class="match-options-desc">第一阶段只记录本局是否启用。第二阶段再接入网页可视化修改面板和游戏内插件下发。</div>
                     </div>
                 </label>
@@ -527,12 +511,12 @@
 
             <div id="admin-tab-mods" class="admin-view-panel" data-admin-view-panel="mods" role="tabpanel">
                 <div id="admin-mods-empty-state" class="match-options-panel admin-mods-empty-state">
-                    <h4>CaorenCup 修改</h4>
-                    <div class="match-options-status">本局未启用 CaorenCup 修改。需要使用娱乐修改时，先到“本局设置”里开启并保存。</div>
+                    <h4>草台杯修改</h4>
+                    <div class="match-options-status">本局未启用 草台杯修改。需要使用娱乐修改时，先到“本局设置”里开启并保存。</div>
                 </div>
             <div id="caoren-mod-panel" class="caoren-mod-panel" style="display:none;">
-                <h4>CaorenCup 修改可视化面板</h4>
-                <div id="caoren-mod-status" class="caoren-mod-status">请先在“本局模式设置”中启用 CaorenCup 修改。</div>
+                <h4>草台杯修改可视化面板</h4>
+                <div id="caoren-mod-status" class="caoren-mod-status">请先在“本局模式设置”中启用 草台杯修改。</div>
                 <div class="caoren-mod-grid">
                     <div class="caoren-mod-card">
                         <h5>无中生有：弹药 / 道具概率</h5>
@@ -740,7 +724,7 @@
             <header class="caoren-dialog-header">
                 <span class="caoren-dialog-icon" aria-hidden="true">!</span>
                 <div>
-                    <span class="section-eyebrow">草人杯操作确认</span>
+                    <span class="section-eyebrow">草台杯操作确认</span>
                     <h2 id="caoren-dialog-title">请确认操作</h2>
                 </div>
             </header>
@@ -778,7 +762,7 @@
 
     <section id="weaponpaints-panel" class="weaponpaints-panel panel" hidden aria-labelledby="weaponpaints-title">
         <header class="weaponpaints-header">
-            <div><span class="section-eyebrow">Caoren Cup v1.9</span><h2 id="weaponpaints-title">换肤工坊</h2><p>网页与桌面客户端共用；保存后会按回合安全规则应用。</p></div>
+            <div><span class="section-eyebrow">Caotai Cup v1.9</span><h2 id="weaponpaints-title">换肤工坊</h2><p>保存的搭配会在回合允许时生效。</p></div>
             <button id="weaponpaints-close-btn" type="button" aria-label="关闭换肤工坊">关闭</button>
         </header>
         <div id="weaponpaints-health" class="weaponpaints-health" aria-live="polite">正在检查换肤服务...</div>
@@ -839,7 +823,7 @@
     </aside>
 
     <footer class="site-legal-footer" aria-label="网站备案信息">
-        <p class="footer-brand">草人杯 · CS2 自定义娱乐赛</p>
+        <p class="footer-brand">草台杯 · CS2 自定义娱乐赛</p>
         <div class="footer-legal-links">
         <a href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">冀ICP备2026043660号-1</a>
         <a href="https://beian.mps.gov.cn/#/query/webSearch?code=13102402000558" target="_blank" rel="noreferrer">
