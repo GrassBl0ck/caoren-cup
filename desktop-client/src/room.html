@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>草台杯 CS</title>
+  <link rel="stylesheet" href="room.css">
+  <script defer src="room.js"></script>
+</head>
+<body class="at-home">
+  <nav class="bar" aria-label="客户端">
+    <button class="brand" id="home" type="button" aria-label="草台杯，本场比赛" aria-current="page">
+      <img class="brand-image" src="brand.png" width="106" height="34" alt="草台杯">
+    </button>
+    <div class="bar-actions">
+      <button id="rules" class="guide-link" type="button">赛前指引</button>
+      <button id="account-toggle" class="bar-icon" type="button" aria-label="账户" title="账户" popovertarget="account-menu">
+        <span id="guest-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.925 20.056a6 6 0 0 0-11.851.001"/><circle cx="12" cy="11" r="4"/><circle cx="12" cy="12" r="10"/></svg></span>
+        <span id="account-avatar" hidden></span>
+      </button>
+      <button id="more" class="menu-toggle" type="button" popovertarget="room-menu" aria-label="更多" title="更多" hidden><span aria-hidden="true"></span></button>
+    </div>
+    <div id="account-menu" popover aria-label="账户">
+      <button id="account" type="button">登录或注册</button>
+      <button id="profile" type="button" hidden>昵称与头像</button>
+      <button id="skins" type="button" hidden>换肤中心</button>
+    </div>
+    <div id="room-menu" popover>
+      <button id="history" type="button" hidden>战绩与 Demo</button>
+      <button id="updates" type="button" hidden>更新公告</button>
+      <button id="player-view" type="button" hidden>参赛视图</button>
+      <button id="host-view" type="button" hidden>房间管理</button>
+    </div>
+  </nav>
+  <main>
+    <header class="scene">
+      <img src="room-banner.jpg" class="art" alt="">
+      <div>
+        <h1 id="phase" hidden></h1>
+        <div class="match-action" id="match-action" hidden>
+          <button id="join-player" class="primary" type="button" hidden>加入比赛</button>
+          <button id="ready" class="primary" type="button" aria-pressed="false" hidden>准备</button>
+          <button id="connect" class="primary" type="button" hidden>进入 CS2</button>
+        </div>
+        <div class="entry-actions">
+          <button id="enter-room" class="primary" type="button"><span id="entry-label">登录 / 注册</span><span class="entry-arrow" aria-hidden="true">→</span></button>
+          <button id="enter-host" type="button" hidden>管理员身份<span class="entry-arrow" aria-hidden="true">→</span></button>
+        </div>
+        <p id="entry-message" role="status"></p>
+      </div>
+    </header>
+    <section id="room-announcement" class="room-strip" aria-labelledby="announcement-title" hidden>
+      <h2 id="announcement-title">大厅公告</h2>
+      <div id="announcement-body"></div>
+    </section>
+    <div class="floor" id="room-floor" hidden>
+      <section id="roster" aria-labelledby="roster-title" hidden>
+        <h2 id="roster-title">参赛阵容</h2>
+        <div id="rosters"></div>
+      </section>
+      <aside aria-label="本场操作">
+        <section id="onboarding" class="callout" hidden>
+          <h2 id="onboarding-title"></h2>
+          <div id="steam-account" hidden>
+            <img id="steam-avatar" width="48" height="48" alt="" hidden>
+            <span id="steam-avatar-placeholder" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+            </span>
+            <strong id="steam-name"></strong>
+          </div>
+          <p id="onboarding-text"></p>
+          <button id="onboarding-action" class="primary" type="button" hidden></button>
+        </section>
+        <div id="controls" hidden>
+          <div id="lobby-readiness" hidden>
+            <h2>准备情况</h2>
+            <p class="ratio"><strong id="ready-count"></strong><span id="roster-total"></span></p>
+            <div id="lobby-readiness-meter" role="progressbar" aria-label="房间准备进度" aria-valuemin="0"></div>
+          </div>
+          <label id="mode-edit" hidden>比赛模式<select id="mode-choice"></select></label>
+          <p id="match-details" hidden></p>
+          <div class="actions">
+            <button id="join-host" type="button" hidden>以管理员身份进入</button>
+            <button id="start" class="primary" type="button" hidden>开始游戏</button>
+            <button id="force" type="button" hidden>强制准备</button>
+            <button id="phase-page" type="button" hidden>继续当前阶段</button>
+            <button id="open-server" class="primary" type="button" hidden>开服候场</button>
+            <button id="game-ready" type="button" hidden>进服确认</button>
+            <button id="copy-connect" type="button" hidden>复制连接指令</button>
+          </div>
+          <label class="auto" id="auto-join-label" hidden><input type="checkbox" id="auto-join">开服后自动加入</label>
+        </div>
+        <p id="feedback" role="status"></p>
+      </aside>
+      <section class="tasks" id="tasks" hidden>
+        <h2>我的卧底任务</h2><ul id="task-list"></ul>
+      </section>
+    </div>
+  </main>
+  <dialog id="force-dialog" aria-labelledby="force-title">
+    <header class="sheet-heading"><h2 id="force-title">确认强制准备</h2></header>
+    <div class="sheet-content"><p>将以下玩家标记为已准备</p><ul id="force-players"></ul></div>
+    <div class="dialog-actions"><button id="force-cancel" type="button" autofocus>取消</button><button id="force-confirm" class="primary" type="button">确认强制准备</button></div>
+  </dialog>
+  <dialog id="profile-dialog" aria-labelledby="edit-profile-title">
+    <header class="sheet-heading"><h2 id="edit-profile-title">昵称与头像</h2></header>
+    <div class="sheet-content">
+      <div class="avatar-editor">
+        <canvas id="profile-preview" width="128" height="128" aria-label="头像预览"></canvas>
+        <div class="avatar-actions">
+          <label class="choose-avatar">选择头像<input id="profile-image" type="file" accept="image/png,image/jpeg,image/webp"></label>
+          <button id="profile-clear" type="button">清除头像</button>
+        </div>
+      </div>
+      <label class="profile-field">游戏昵称<input id="profile-name" maxlength="64" autocomplete="nickname"></label>
+      <p id="profile-message" role="status"></p>
+    </div>
+    <div class="dialog-actions"><button id="profile-cancel" type="button">取消</button><button id="profile-save" class="primary" type="button">保存</button></div>
+  </dialog>
+  <dialog id="history-dialog" aria-labelledby="history-title">
+    <header class="sheet-heading"><h2 id="history-title">战绩与 Demo</h2></header>
+    <div class="sheet-content"><p id="history-status" role="status"></p><ul id="history-matches"></ul>
+      <section id="history-result" aria-label="比赛详情" hidden></section>
+    </div>
+    <div class="dialog-actions"><button id="history-close" type="button">关闭</button></div>
+  </dialog>
+</body>
+</html>

@@ -27,9 +27,9 @@ const lock = JSON.parse(readFileSync(join(__dirname, '..', 'package-lock.json'),
 if (lock.version !== packageJson.version || lock.packages[''].version !== packageJson.version) {
   throw new Error('client package and lockfile versions must match.');
 }
-const homepage = readFileSync(join(__dirname, '..', '..', 'web-command-center', 'public', 'index.html'), 'utf8');
-if (!homepage.includes(`href="/downloads/CaorenCupClient-v${packageJson.version}.zip"`)) {
-  throw new Error('the website download must match the client version.');
+const installer = readFileSync(join(__dirname, 'build-installer.js'), 'utf8');
+if (!packageJson.scripts['package:installer'] || !installer.includes("createTarget(['msi'], Arch.x64)")) {
+  throw new Error('the Windows release must provide the x64 MSI installer.');
 }
 
 const mainJs = readFileSync(join(__dirname, '..', 'src', 'main.js'), 'utf8');

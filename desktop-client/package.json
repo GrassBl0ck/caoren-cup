@@ -1,16 +1,18 @@
 {
   "name": "caoren-cup-desktop-client",
-  "version": "2.2.4",
+  "version": "2.4.0",
   "private": true,
-  "description": "Caoren Cup player-center Windows desktop client.",
+  "description": "Caotai Cup player-center Windows desktop client.",
   "main": "src/main.js",
   "scripts": {
     "dev": "electron .",
     "package:win": "electron-builder --win portable",
+    "package:installer": "node scripts/build-installer.js",
+    "package:full": "electron-builder --win portable -c.afterAllArtifactBuild=./scripts/prepare-images.js",
     "check": "node scripts/check-config.js && node --check src/main.js && node --check src/preload.js && node --check src/device-credentials.js && node --check src/desktop-auth-client.js && node --check src/client-config.js && node --check scripts/check-config.js",
     "test": "node --test test/*.test.js"
   },
-  "author": "CaorenCup",
+  "author": "草台杯",
   "license": "MIT",
   "devDependencies": {
     "electron": "^33.4.11",
@@ -18,8 +20,8 @@
   },
   "build": {
     "appId": "com.caorencup.client",
-    "productName": "CaorenCupClient",
-    "artifactName": "CaorenCupClient-桌面客户端-v${version}.${ext}",
+    "productName": "草台杯客户端",
+    "artifactName": "草台杯客户端-v${version}.${ext}",
     "directories": {
       "output": "dist"
     },
@@ -31,6 +33,7 @@
       "target": [
         "portable"
       ],
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false
     }
   }
