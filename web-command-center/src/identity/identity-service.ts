@@ -291,28 +291,55 @@ export class LobbyIdentityService {
         });
     }
 
-    async updateDesktopProfile(identityId: string, nameRaw: unknown, avatarRaw?: unknown) {
+    async updateDesktopProfile(identityId: string, nameRaw: unknown, avatarRaw?: unknown, mode?: unknown) {
         const name = typeof nameRaw === 'string' ? nameRaw.trim().normalize('NFC') : '';
         if (!name || [...name].length > 32 || Buffer.byteLength(name, 'utf8') > 127 || /[\p{Cc}\p{Cf}]/u.test(name)) {
             throw new Error('display_name_invalid');
         }
         const avatar = isDesktopAvatar(avatarRaw) ? avatarRaw : undefined;
         if (avatarRaw !== undefined && avatarRaw !== null && !avatar) throw new Error('avatar_invalid');
+        if (mode !== undefined && mode !== 'steam' && mode !== 'logo' && mode !== 'custom') throw new Error('avatar_invalid');
+        if ((mode === 'custom' && !avatar) || (avatar && (mode === 'logo' || mode === 'steam'))) throw new Error('avatar_invalid');
         return this.store.mutate(data => {
             const identity = data.identities[identityId];
             if (!identity || !data.accounts[identityId]?.enabled) throw new Error('account_unavailable');
             identity.displayName = name;
             identity.customDisplayName = true;
-            if (avatarRaw === null) delete identity.avatarJpeg;
-            else if (avatar) identity.avatarJpeg = avatar;
+            if (avatarRaw !== undefined || mode !== undefined) {
+                if (avatar) identity.avatarJpeg = avatar;
+                else delete identity.avatarJpeg;
+                if (mode === 'logo') identity.avatarLogo = true;
+                else delete identity.avatarLogo;
+            }
             identity.updatedAt = this.now();
             return identity;
         });
     }
 
-    desktopRoomProfiles(identityIds: readonly string[]): Record<string, { avatarJpeg?: string }> {
+    async rememberSteamAvatar(identityId: string, steamId: string, jpeg: unknown) {
+        const image = isDesktopAvatar(jpeg) ? jpeg : undefined;
+        if (!image && jpeg !== null) throw new Error('avatar_invalid');
+        const current = this.getIdentity(identityId);
+        if (!current || !isVerifiedSteamIdentity(current, steamId)) throw new Error('game_binding_required');
+        if (current.steamAvatarJpegs?.[steamId] === image) return current;
+        return this.store.mutate(data => {
+            const identity = data.identities[identityId];
+            if (!identity || !data.accounts[identityId]?.enabled || !isVerifiedSteamIdentity(identity, steamId))
+                throw new Error('game_binding_required');
+            if (!image) {
+                if (identity.steamAvatarJpegs) delete identity.steamAvatarJpegs[steamId];
+            } else (identity.steamAvatarJpegs ??= {})[steamId] = image;
+            return identity;
+        });
+    }
+
+    desktopRoomProfiles(identityIds: readonly string[]) {
         const identities = this.store.snapshot().identities;
-        return Object.fromEntries(identityIds.flatMap(id => identities[id] ? [[id, { avatarJpeg: identities[id].avatarJpeg }]] : []));
+        return Object.fromEntries(identityIds.flatMap(id => identities[id] ? [[id, identities[id]]] : [])) as Record<string, IdentityRecord>;
+    }
+
+    avatarIdentities() {
+        return Object.values(this.store.snapshot().identities);
     }
 
     gameDisplayNames(steamIds: unknown): Record<string, string> | undefined {

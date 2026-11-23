@@ -111,7 +111,11 @@ const validateCurrentData = (parsed: Record<string, unknown>): IdentityStoreData
             throw new Error('identity Steam nickname is invalid');
         }
         if ((identityValue.customDisplayName !== undefined && typeof identityValue.customDisplayName !== 'boolean') ||
-            (identityValue.avatarJpeg !== undefined && !isDesktopAvatar(identityValue.avatarJpeg))) {
+            (identityValue.avatarJpeg !== undefined && !isDesktopAvatar(identityValue.avatarJpeg)) ||
+            (identityValue.avatarLogo !== undefined && identityValue.avatarLogo !== true) ||
+            (identityValue.steamAvatarJpegs !== undefined && (!isRecord(identityValue.steamAvatarJpegs) ||
+                Object.entries(identityValue.steamAvatarJpegs).some(([id, jpeg]) =>
+                    !/^7656119\d{10}$/.test(id) || !isDesktopAvatar(jpeg))))) {
             throw new Error('identity desktop profile is invalid');
         }
     }

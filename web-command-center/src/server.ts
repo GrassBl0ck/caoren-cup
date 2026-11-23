@@ -52,6 +52,7 @@ import { registerIdentityAuthRoutes } from './identity/auth-routes';
 import { registerBoardPages } from './portal-routes';
 import { normalizeUnbalancedRosterOptions } from './unbalanced-roster';
 import { GAME_MODE_MANIFESTS, normalizeGameModeId, normalizeGameModeOverrides, modeUsesUndercoverFlow, modeUsesUnbalancedRoster } from './game-mode';
+import { gameAvatars } from './game-avatars';
 import { initializeIdentityRuntime, lobbyIdentityService, playerCenterBootstrapTickets, playerCenterMatchSocketTickets, playerCenterSessionStore } from './identity/identity-runtime';
 import { bindPlayerCenterSocketIdentity } from './identity/player-center-socket';
 import { attachMembershipToSession, detachMatchMembershipsForScoreboard, removeIdentityFromSession } from './identity/session-integration';
@@ -426,9 +427,10 @@ setInterval(() => {
     formalServerLifecycle.poll(getSession(), broadcastState);
 }, 2500);
 
+
 const PORT = process.env.PORT || 3000;
 Promise.all([
-    initializeIdentityRuntime(),
+    initializeIdentityRuntime().then(() => gameAvatars.initialize(lobbyIdentityService.avatarIdentities())),
     initializeWeaponPaintsRuntime(),
     updateAnnouncementService.initialize(),
 ])

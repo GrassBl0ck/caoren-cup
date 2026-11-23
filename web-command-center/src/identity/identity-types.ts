@@ -12,6 +12,8 @@ export interface IdentityRecord {
     customDisplayName?: boolean;
     desktopRoomGuide?: 'pending' | 'done';
     avatarJpeg?: string;
+    avatarLogo?: true;
+    steamAvatarJpegs?: Record<string, string>;
     // 仅由可信 CS2 桥接或 Steam 官方身份验证写入。
     gameBoundAt?: number;
     createdAt: number;

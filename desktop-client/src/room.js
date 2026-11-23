@@ -53,6 +53,14 @@ let updating = false;
 let busy = false;
 let modeListSignature;
 let uploadAvatar;
+let avatarMode;
+let avatarEdited = false;
+let previewRevision = 0;
+let uploadRevision = 0;
+let steamSyncBusy = false;
+let steamSyncPending = false;
+let lastSteamUpload;
+let retrySteamUploadAt = 0;
 
 function feedback(value, source = '') {
   const notice = byId('feedback');
@@ -130,34 +138,29 @@ async function refreshBulletin() {
   } catch { /* Keep the last published bulletin during a temporary connection failure. */ }
   finally { readingBulletin = false; }
 }
-const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-
-function playerAvatar(name, jpeg) {
-  if (jpeg) {
-    const avatar = document.createElement('img');
-    avatar.className = 'avatar';
-    avatar.alt = '';
-    avatar.src = 'data:image/jpeg;base64,' + jpeg;
-    return avatar;
-  }
-  const letters = Array.from(graphemes.segment(name.trim()), part => part.segment);
-  const character = letters.findLast(letter => /\p{Script=Han}/u.test(letter)) || letters[0] || '玩';
-  const avatar = textElement('span', character, 'avatar stamp');
-  let tint = 0;
-  for (const letter of name) tint = (tint * 31 + letter.codePointAt(0)) % 6;
-  avatar.dataset.tint = String(tint);
-  avatar.setAttribute('aria-hidden', 'true');
+const cupLogo = 'brand-icon.png';
+const jpegSource = jpeg => 'data:image/jpeg;base64,' + jpeg;
+function avatarSource(profile, steamSource) {
+  if (profile?.avatarLogo) return cupLogo;
+  if (profile?.avatarJpeg) return jpegSource(profile.avatarJpeg);
+  return steamSource || cupLogo;
+}
+function playerAvatar(source) {
+  const avatar = document.createElement('img');
+  avatar.className = 'avatar';
+  avatar.alt = '';
+  avatar.onerror = () => { avatar.onerror = null; avatar.src = cupLogo; };
+  avatar.src = source;
   return avatar;
 }
 
-let displayedAvatarKey = '';
+let displayedAvatarKey;
 function renderAccountAvatar(profile) {
-  const name = profile?.name || '玩家';
-  const key = profile ? profile.avatarJpeg || 'name:' + name : '';
-  if (displayedAvatarKey === key) return;
-  displayedAvatarKey = key;
+  const source = profile && avatarSource(profile, steam?.avatarSrc);
+  if (displayedAvatarKey === source) return;
+  displayedAvatarKey = source;
   const holder = byId('account-avatar');
-  holder.replaceChildren(...(profile ? [playerAvatar(name, profile.avatarJpeg)] : []));
+  holder.replaceChildren(...(source ? [playerAvatar(source)] : []));
   holder.hidden = !profile;
   setVisible('guest-icon', !profile);
 }
@@ -167,7 +170,8 @@ function seatCard(player, self) {
   const name = String(player.name || '玩家');
   seat.className = 'seat';
   seat.classList.toggle('seat-self', self);
-  seat.append(playerAvatar(name, player.avatarJpeg));
+  const currentSeat = self && steam?.ok && room.selectedSteamId === steam.steamId;
+  seat.append(playerAvatar(currentSeat ? avatarSource(room.profile, steam.avatarSrc) : avatarSource(player)));
   const identity = textElement('div', '', 'seat-name');
   const displayName = textElement('strong', name);
   displayName.title = name;
@@ -359,8 +363,11 @@ async function updateSteam() {
   try { result = await desktop.inspectSteam(); }
   catch { result = { ok: false, reason: 'steam_detection_failed' }; }
   if (epoch !== viewEpoch || request !== steamCheck) return;
+  const avatarChanged = steam?.avatarSrc !== result.avatarSrc;
   steam = result;
   render();
+  if (avatarChanged && avatarMode === 'steam' && byId('profile-dialog').open) void drawProfileAvatar();
+  void syncSteamAvatar();
   return result;
 }
 byId('steam-avatar').onerror = () => {
@@ -376,7 +383,17 @@ async function refresh() {
     if (!inRoom) {
       const result = await desktop.roomRequest('account');
       if (epoch !== viewEpoch) return;
-      if (result.body.success) account = result.body;
+      if (result.body.success) {
+        const changed = account?.identityId !== result.body.identityId;
+        account = result.body;
+        if (changed || !steam) void updateSteam();
+        if (changed || !bindings) {
+          const reply = await desktop.roomRequest('bindings');
+          if (epoch !== viewEpoch || account?.identityId !== result.body.identityId) return;
+          bindings = reply.body.success ? reply.body : undefined;
+        }
+        void syncSteamAvatar();
+      }
       else if (result.status === 401) account = undefined;
       render();
       return;
@@ -407,6 +424,7 @@ async function refresh() {
     if (previousRoom?.playerId && !room.playerId) void desktop.openRoomPage('close-player');
     if (previousRoom?.hosting && !room.hosting) void desktop.openRoomPage('close-host');
     bindings = bindingReply.body.success ? bindingReply.body : undefined;
+    void syncSteamAvatar();
     server = serverReply.body.success ? serverReply.body : undefined;
     if (bindingFlow && room && !busy) await finishBinding();
     if (pendingJoin && Date.now() - requestedConnectionAt > 25_000) {
@@ -492,7 +510,6 @@ function leaveRoomView(closeWindows = true) {
   inRoom = false;
   byId('entry-message').textContent = '';
   room = undefined;
-  steam = undefined;
   bindings = undefined;
   server = undefined;
   resumeSeats = false;
@@ -649,55 +666,117 @@ byId('history').onclick = async () => {
     }
   } catch { historyMessage('战绩读取失败，请重试。'); }
 };
-const preview = byId('profile-preview').getContext('2d');
 const profileMessage = value => { byId('profile-message').textContent = value; };
 byId('profile-cancel').onclick = () => byId('profile-dialog').close();
-function drawProfileAvatar(base64) {
-  preview.clearRect(0, 0, 128, 128);
-  if (!base64) {
-    const initial = [...byId('profile-name').value.trim()][0] || '草';
-    preview.fillStyle = '#282826';
-    preview.fillRect(0, 0, 128, 128);
-    preview.fillStyle = '#b3b0a9';
-    preview.font = '700 64px "KaiTi", serif';
-    preview.textAlign = 'center';
-    preview.textBaseline = 'middle';
-    preview.fillText(initial, 64, 64);
-    return;
+function drawSquare(canvas, image) {
+  const ctx = canvas.getContext('2d');
+  const side = Math.min(image.width, image.height);
+  ctx.fillStyle = '#262626';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, (image.width - side) / 2, (image.height - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
+}
+async function loadImage(source) {
+  const image = new Image();
+  image.src = source;
+  await image.decode();
+  return image;
+}
+async function syncSteamAvatar() {
+  const identityId = account?.identityId;
+  const active = steam;
+  if (!identityId || !active?.ok || !bindings?.steamIds?.includes(active.steamId)) return;
+  const source = active.avatarSrc;
+  if (steamSyncBusy) { steamSyncPending = true; return; }
+  if (Date.now() < retrySteamUploadAt ||
+      (lastSteamUpload?.id === identityId && lastSteamUpload.steamId === active.steamId && lastSteamUpload.source === source)) return;
+  steamSyncBusy = true;
+  try {
+    let jpeg = null;
+    if (source) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 128;
+      drawSquare(canvas, await loadImage(source));
+      jpeg = canvas.toDataURL('image/jpeg', .74).split(',')[1];
+    }
+    if (account?.identityId !== identityId || steam?.steamId !== active.steamId || steam.avatarSrc !== source) return;
+    const result = await desktop.roomRequest('steamAvatar', { steamId: active.steamId, jpeg });
+    if (result.body.success) lastSteamUpload = { id: identityId, steamId: active.steamId, source };
+    else retrySteamUploadAt = Date.now() + 30_000;
+  } catch { retrySteamUploadAt = Date.now() + 30_000; }
+  finally {
+    steamSyncBusy = false;
+    if (steamSyncPending) {
+      steamSyncPending = false;
+      void syncSteamAvatar();
+    }
   }
-  const saved = new Image();
-  saved.onload = () => { if (uploadAvatar === undefined) preview.drawImage(saved, 0, 0, 128, 128); };
-  saved.src = 'data:image/jpeg;base64,' + base64;
+}
+async function drawProfileAvatar() {
+  const revision = ++previewRevision;
+  const saved = room?.profile ?? account;
+  const source = avatarMode === 'custom' ? jpegSource(uploadAvatar || saved?.avatarJpeg)
+    : avatarMode === 'steam' && steam?.avatarSrc ? steam.avatarSrc : cupLogo;
+  byId('profile-steam').setAttribute('aria-pressed', String(avatarMode === 'steam'));
+  byId('profile-logo').setAttribute('aria-pressed', String(avatarMode === 'logo'));
+  byId('profile-image').parentElement.classList.toggle('selected', avatarMode === 'custom');
+  const image = await loadImage(source).catch(() => loadImage(cupLogo));
+  if (revision === previewRevision) drawSquare(byId('profile-preview'), image);
 }
 byId('profile').onclick = () => {
-  byId('profile-name').value = room?.profile?.name || account?.name || '';
+  const profile = room?.profile ?? account;
+  byId('profile-name').value = profile?.name || '';
   byId('profile-image').value = '';
   profileMessage('');
+  uploadRevision++;
   uploadAvatar = undefined;
-  drawProfileAvatar((room?.profile ?? account)?.avatarJpeg);
+  avatarEdited = false;
+  avatarMode = profile?.avatarLogo ? 'logo' : profile?.avatarJpeg ? 'custom' : 'steam';
   byId('profile-dialog').showModal();
+  void drawProfileAvatar();
 };
+function choosePreset(mode) {
+  uploadRevision++;
+  avatarMode = mode;
+  avatarEdited = true;
+  uploadAvatar = undefined;
+  byId('profile-image').value = '';
+  byId('profile-save').disabled = false;
+  profileMessage(mode === 'steam' && !steam?.avatarSrc ? '暂时读不到 Steam 头像，先显示草台杯 Logo。' : '');
+  void drawProfileAvatar();
+}
+byId('profile-steam').onclick = () => choosePreset('steam');
+byId('profile-logo').onclick = () => choosePreset('logo');
+byId('profile-dialog').addEventListener('close', () => {
+  uploadRevision++;
+  previewRevision++;
+  byId('profile-save').disabled = false;
+});
 byId('profile-image').onchange = async event => {
-  const image = event.target.files?.[0];
-  if (!image) return;
-  if (image.size > 12 * 1024 * 1024) return profileMessage('请选一张 12 MB 以内的图片。');
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const revision = ++uploadRevision;
+  if (file.size > 12 * 1024 * 1024) { byId('profile-save').disabled = false; return profileMessage('请选一张 12 MB 以内的图片。'); }
+  byId('profile-save').disabled = true;
+  let bitmap;
   try {
-    const bitmap = await createImageBitmap(image);
-    const size = Math.min(bitmap.width, bitmap.height);
-    preview.fillStyle = '#182431';
-    preview.fillRect(0, 0, 128, 128);
-    preview.drawImage(bitmap, (bitmap.width - size) / 2, (bitmap.height - size) / 2, size, size, 0, 0, 128, 128);
-    bitmap.close();
-    uploadAvatar = byId('profile-preview').toDataURL('image/jpeg', .74).split(',')[1];
-    profileMessage('已裁成正方形，保存后在房间显示。');
-  } catch { profileMessage('无法读取这张图片。'); }
+    bitmap = await createImageBitmap(file);
+    if (revision !== uploadRevision) return;
+    const canvas = byId('profile-preview');
+    previewRevision++;
+    drawSquare(canvas, bitmap);
+    uploadAvatar = canvas.toDataURL('image/jpeg', .74).split(',')[1];
+    avatarMode = 'custom';
+    avatarEdited = true;
+    await drawProfileAvatar();
+    if (revision === uploadRevision) profileMessage('已裁成正方形，保存后使用这张图片。');
+  } catch { if (revision === uploadRevision) profileMessage('无法读取这张图片。'); }
+  finally { bitmap?.close(); if (revision === uploadRevision) byId('profile-save').disabled = false; }
 };
-byId('profile-clear').onclick = () => { uploadAvatar = null; drawProfileAvatar(); profileMessage('保存后移除头像。'); };
 byId('profile-save').onclick = async () => {
   if (busy) return;
   busy = true;
   try {
-    const result = await desktop.roomRequest('profile', { name: byId('profile-name').value, avatarJpeg: uploadAvatar });
+    const result = await desktop.roomRequest('profile', { name: byId('profile-name').value, avatarJpeg: uploadAvatar, avatarMode: avatarEdited ? avatarMode : undefined });
     if (!result.body.success) {
       profileMessage(result.body.error === 'display_name_invalid' ? '请输入 1 到 32 个有效字符作为昵称。' : '保存失败，请重试。');
       return;
@@ -767,8 +846,9 @@ byId('onboarding-action').onclick = async () => {
   } catch { feedback('无法打开 Steam 授权页。'); }
   finally { busy = false; await refresh(); }
 };
-window.addEventListener('focus', () => { if (inRoom) void updateSteam(); void refresh(); void refreshBulletin(); });
+window.addEventListener('focus', () => { if (account) void updateSteam(); void refresh(); void refreshBulletin(); });
 void refreshBulletin();
 setInterval(refreshBulletin, 30_000);
+setInterval(() => { if (account && !document.hidden) void updateSteam(); }, 30_000);
 void refresh();
 setInterval(() => { if (inRoom) void refresh(); }, 2500);

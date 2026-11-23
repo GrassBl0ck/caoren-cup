@@ -64,9 +64,7 @@
           <h2 id="onboarding-title"></h2>
           <div id="steam-account" hidden>
             <img id="steam-avatar" width="48" height="48" alt="" hidden>
-            <span id="steam-avatar-placeholder" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
-            </span>
+            <img id="steam-avatar-placeholder" src="brand-icon.png" width="48" height="48" alt="">
             <strong id="steam-name"></strong>
           </div>
           <p id="onboarding-text"></p>
@@ -109,8 +107,9 @@
       <div class="avatar-editor">
         <canvas id="profile-preview" width="128" height="128" aria-label="头像预览"></canvas>
         <div class="avatar-actions">
-          <label class="choose-avatar">选择头像<input id="profile-image" type="file" accept="image/png,image/jpeg,image/webp"></label>
-          <button id="profile-clear" type="button">清除头像</button>
+          <button id="profile-steam" type="button" aria-pressed="false">Steam 头像（默认）</button>
+          <button id="profile-logo" type="button" aria-pressed="false">草台杯 Logo</button>
+          <label class="choose-avatar">上传图片<input id="profile-image" type="file" accept="image/png,image/jpeg,image/webp"></label>
         </div>
       </div>
       <label class="profile-field">游戏昵称<input id="profile-name" maxlength="64" autocomplete="nickname"></label>

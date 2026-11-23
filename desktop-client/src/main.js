@@ -14,7 +14,7 @@ const { inspectWindowsSteam, launchWorldwide, waitForCs2Window } = require('./wi
 const { steamProfile } = require('./steam-avatar');
 
 const PLACEHOLDER_URL = 'https://your-caoren-command-center.example.com';
-const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/2.4.0';
+const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/2.4.1';
 const commandCenterUrl = normalizeCommandCenterUrl(process.env.CAOREN_COMMAND_CENTER_URL || COMMAND_CENTER_URL);
 const roomPage = path.join(__dirname, 'room.html');
 const roomPageUrl = pathToFileURL(roomPage).href;
@@ -24,6 +24,7 @@ const roomEndpoints = new Map([
   ['visit', ['/api/player-center/desktop-room/visit', 'POST']],
   ['room', ['/api/player-center/desktop-room', 'GET']],
   ['join', ['/api/player-center/desktop-room/join', 'POST']],
+  ['steamAvatar', ['/api/player-center/desktop-room/steam-avatar', 'POST']],
   ['profile', ['/api/player-center/desktop-room/profile', 'POST']],
   ['action', ['/api/player-center/desktop-room/action', 'POST']],
   ['bindings', ['/api/player-center/steam-binding', 'GET']],

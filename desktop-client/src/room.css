@@ -78,7 +78,6 @@ button.caution { color: #edbd7c; }
 .guide-link.is-new { color: var(--accent); background: #2c201b; border-color: #79533e; }
 #guest-icon { display: grid; }
 #account-avatar .avatar { width: 32px; height: 32px; border-radius: 50%; font-size: 22px; }
-#account-avatar .stamp::after { border-radius: inherit; inset: 2px; }
 #account-toggle:has(#account-avatar:not([hidden])) { padding: 4px; }
 .scene h1 { max-width: none; }
 #room-menu, #account-menu {
@@ -189,22 +188,6 @@ h1 {
 .team-waiting, .tasks { grid-column: 1 / -1; }
 .seat { padding: 16px 0; display: flex; align-items: center; gap: 11px; min-width: 0; border-top: 1px solid var(--line); }
 .avatar { display: block; width: 49px; height: 49px; flex: none; object-fit: cover; }
-.stamp {
-  display: grid;
-  place-items: center;
-  position: relative;
-  overflow: hidden;
-  background: var(--sheet);
-  color: var(--glyph);
-  font: 900 35px/1 "STKaiti", "KaiTi", "FangSong", "SimSun", serif;
-}
-.stamp::after { content: ""; position: absolute; inset: 4px; border: 1px solid currentColor; opacity: .28; }
-.stamp[data-tint="0"] { --sheet: #b86645; --glyph: #251b18; }
-.stamp[data-tint="1"] { --sheet: #31504f; --glyph: #c7cbad; }
-.stamp[data-tint="2"] { --sheet: #b4a179; --glyph: #31291d; }
-.stamp[data-tint="3"] { --sheet: #514b52; --glyph: #e1d4bf; }
-.stamp[data-tint="4"] { --sheet: #9b9c95; --glyph: #313332; }
-.stamp[data-tint="5"] { --sheet: #74463f; --glyph: #edc4a3; }
 .seat-name { min-width: 0; overflow-wrap: anywhere; }
 .seat-name strong { font-size: 16px; }
 .seat-indicator { margin-left: 6px; font-size: 11px; color: var(--muted); }
@@ -228,8 +211,6 @@ aside { padding-left: clamp(18px, 3vw, 36px); border-left: 1px solid var(--line)
 #steam-avatar, #steam-avatar-placeholder {
   flex: none; width: 48px; height: 48px; border-radius: 4px; background: var(--field); object-fit: cover;
 }
-#steam-avatar-placeholder { display: grid; place-items: center; color: var(--muted); }
-#steam-avatar-placeholder svg { width: 26px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 #steam-name { font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; min-width: 0; }
 .callout button { margin-top: 10px; }
 #onboarding-text:empty, #feedback:empty { display: none; }
@@ -255,7 +236,7 @@ dialog::backdrop { background: #080909bf; }
 .choose-avatar { position: relative; padding: 8px 14px; border: 1px solid var(--edge); border-radius: var(--radius); background: var(--field); cursor: pointer; }
 .choose-avatar:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .choose-avatar input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
-#profile-clear { padding-inline: 4px; border-color: transparent; background: transparent; color: var(--muted); }
+.avatar-actions button[aria-pressed="true"], .choose-avatar.selected { border-color: var(--accent); color: var(--accent); }
 .profile-field { display: grid; gap: 6px; margin-top: 16px; }
 .profile-field input { width: 100%; border: 1px solid var(--edge); border-radius: var(--radius); padding: 9px 11px; background: var(--canvas); color: inherit; }
 #profile-message:not(:empty) { margin-top: 10px; }
