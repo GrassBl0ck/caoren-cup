@@ -25,6 +25,7 @@ import { registerUpdateAnnouncementRoutes } from './routes/update-announcement-r
 import { registerPluginRoutes } from './plugin-api';
 import { PluginStateBroadcastScheduler } from './plugin-broadcast-scheduler';
 import { registerSocketHandlers } from './socket-handlers';
+import { syncRoomPresence } from './desktop-formal-room';
 import { registerGameCodeLogin, v1333ConsumeGameLoginTicket } from './v1333-game-login';
 import {
     injectFlowBroadcast,
@@ -76,6 +77,13 @@ registerBoardPages(app, {
     sessions: playerCenterSessionStore,
     pagesDirectory: path.resolve(__dirname, '..', 'pages'),
 });
+// Keep external thumbnail storage reachable at the same URLs as the desktop image bundle.
+if (process.env.WEAPONPAINTS_IMAGE_ROOT) {
+    for (const pack of ['base', 'stickers']) {
+        app.use('/weaponpaints/' + pack + '/images', express.static(
+            path.resolve(process.env.WEAPONPAINTS_IMAGE_ROOT, pack, 'images'), { index: false, redirect: false }));
+    }
+}
 app.use(express.static('public', {
     setHeaders: (res, filePath) => {
         const normalizedFilePath = filePath.replace(/\\/g, '/');
@@ -98,6 +106,15 @@ app.use(express.static('public', {
         }
     }
 }));
+// Older catalogs and the desktop cache use the original PNG paths. In web
+// distribution packages the same images are stored with a WebP suffix.
+app.get(/^\/weaponpaints\/(base|stickers)\/images\/([\w-]+\.(?:png|jpe?g|webp))$/i, (req, res, next) => {
+    const images = process.env.WEAPONPAINTS_IMAGE_ROOT || path.resolve('public', 'weaponpaints');
+    const root = path.resolve(images, req.params[0], 'images');
+    res.sendFile(req.params[1] + '.webp', { root, maxAge: '1d' }, err => {
+        if (err && !res.headersSent) next();
+    });
+});
 const restoredSessionSnapshot = restoreSessionSnapshot();
 loadTaskPresets();
 
@@ -136,8 +153,10 @@ const broadcastUpdateAnnouncements = (announcements: PublicUpdateAnnouncement[])
 let scoreboardCleanupSessionId = '';
 const gameInactivityTracker = new GameInactivityTracker();
 
+const hasMatchSocket = (playerId: string) => !!io.sockets.adapter.rooms.get(playerId)?.size;
 const broadcastState = () => {
     const session = getSession();
+    syncRoomPresence(session, hasMatchSocket);
     gameInactivityTracker.observe(session);
     for (const socket of io.sockets.sockets.values()) {
         const viewerId = socket.data?.playerId || null;
@@ -196,6 +215,7 @@ registerIdentityAuthRoutes(app, {
     playerCenterMatchSocketTickets,
     onPlayerCenterSessionsRevoked: invalidatePlayerCenterSockets,
     desktopRoomActions: {
+        hasMatchSocket,
         publish: broadcastState,
         start: (host) => advancePhase(GamePhase.Lobby, GamePhase.CaptainSelection, host.name, host.playerId),
         changeMode: (modeId) => {
@@ -374,6 +394,7 @@ registerPluginRoutes(app, {
 registerWeaponPaintsHttpRoutes(app);
 
 const socketHandlers = registerSocketHandlers(io, {
+    hasMatchSocket,
     broadcastState,
     notifyMessage,
     persistSessionNow: saveSessionSnapshotNow,

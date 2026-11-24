@@ -34,6 +34,7 @@ export const bindPlayerCenterSocketIdentity = async (input: {
         delete input.socketData.playerCenterSessionId;
         return 'invalid';
     }
+    if (session.playerOnly) input.socketData.playerOnly = true;
     input.socketData.identityId = session.identityId;
     input.socketData.playerCenterSessionId = session.sessionId;
     return 'authenticated';

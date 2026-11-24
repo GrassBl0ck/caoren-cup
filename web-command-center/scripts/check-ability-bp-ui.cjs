@@ -244,7 +244,7 @@ for (const [fn, eventName] of [
   ['chooseAbilityDraft', 'ABILITY_PICK_UPDATE'],
   ['confirmAbilityDraftChoice', 'ABILITY_PICK_CONFIRM'],
 ]) {
-  assert.match(lobbyJs, new RegExp(`function ${fn}\\b[\\s\\S]{0,1400}ws\\.emit\\('${eventName}'`), `${fn} must emit ${eventName}`);
+  assert.match(lobbyJs, new RegExp(`function ${fn}\\b[\\s\\S]{0,1400}emitTurnAction\\('${eventName}'`), `${fn} must emit ${eventName}`);
 }
 for (const token of ['AbilityBan', 'AbilityDraft', 'abilityCatalog', 'renderAbilityBan', 'renderAbilityDraft']) {
   assert.ok(lobbyJs.includes(token), `lobby app missing ${token}`);

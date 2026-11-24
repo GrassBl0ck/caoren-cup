@@ -207,7 +207,9 @@ test('bootstrap ticket creates an HttpOnly browser session and current identity 
         joined: false,
     });
     assert.equal(JSON.stringify(current.body).match(/"(?:steamId|identityId|password|token|membership|players|score)"\s*:/i), null);
-    assert.equal(Object.keys(runtime.sessionStore.snapshot().sessions).length, 1);
+    const sessions = Object.values(runtime.sessionStore.snapshot().sessions);
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0].playerOnly, true);
 });
 
 test('HTTPS through a trusted local proxy creates a Secure session and logout rejects its replay', async (t) => {

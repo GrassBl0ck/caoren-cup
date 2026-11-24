@@ -4,6 +4,26 @@ import type { LoginAccountRecord } from './identity/identity-types';
 import { randomUUID } from 'node:crypto';
 import { GamePhase, type GameSession, type Player } from './types';
 
+// Room pages poll over HTTP; phase pages also have a match socket for the same seat.
+const roomHeartbeats = new WeakMap<Player, number>();
+const roomHeartbeatTtl = 15_000;
+
+export function markRoomPresent(...seats: Array<Player | undefined>): void {
+    const now = Date.now();
+    for (const seat of seats) {
+        if (seat) roomHeartbeats.set(seat, now);
+    }
+}
+
+export function syncRoomPresence(room: GameSession, hasMatchSocket?: (playerId: string) => boolean, now = Date.now()): void {
+    for (const seat of Object.values(room.players)) {
+        const seen = roomHeartbeats.get(seat);
+        if (seen !== undefined && seat.identityId) {
+            seat.isOnline = now - seen <= roomHeartbeatTtl || hasMatchSocket?.(seat.playerId) === true;
+        }
+    }
+}
+
 export const roomParticipants = (session: GameSession): Player[] =>
     Object.values(session.players).filter(player => player.role === 'Player');
 

@@ -1,5 +1,7 @@
 (function () {
   'use strict';
+  if (window.caorenDesktop) document.getElementById('browser-room-link')?.remove();
+  var webLogin = /^\/login\/?$/i.test(window.location.pathname || '');
   var challenges = Object.create(null);
   var mailAvailable = false;
   var busy = new WeakSet();
@@ -27,6 +29,7 @@
     if (target) { target.textContent = text ? '[草台杯] ' + text : ''; target.dataset.error = String(!!error); }
   }
   async function request(url, body, method) {
+    if (webLogin && (url === '/api/account-auth/register' || url === '/api/player-center/session')) url += '?view=player';
     var response = await fetch(url, {
       method: method || (body === undefined ? 'GET' : 'POST'), credentials: 'same-origin', cache: 'no-store',
       headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
@@ -61,7 +64,8 @@
     if (byId('steam-status')) byId('steam-status').textContent = profile.hasSteamBinding ? '已绑定：' + (profile.steamNickname || 'CS 游戏身份') : '尚未绑定。参加 CS 比赛前请绑定游戏身份。';
     if (byId('bind-steam-form')) byId('bind-steam-form').hidden = !!profile.hasSteamBinding;
     var next = new URLSearchParams(window.location.search).get('next');
-    if (next === 'cs' || next === 'profile') window.location.replace('/' + next);
+    if (webLogin && !['room', 'phase', 'skins', 'profile'].includes(next)) next = 'room';
+    if (['cs', 'profile', 'room', 'phase', 'skins'].includes(next)) window.location.replace('/' + next);
   }
   async function refresh() {
     try { setSignedIn(await request('/api/player-center/me')); lastSessionFailureStatus = undefined; return true; }
@@ -71,7 +75,7 @@
       document.body.classList.remove('signed-in');
       if (byId('account-auth')) byId('account-auth').hidden = false;
       if (byId('profile-link')) byId('profile-link').hidden = true;
-      if (document.body.dataset.page === 'profile' && error.status === 401) window.location.replace('/?next=profile');
+      if (document.body.dataset.page === 'profile' && error.status === 401) window.location.replace(window.caorenDesktop ? '/?next=profile' : '/login?next=profile');
       byId('board-picker').hidden = true;
       byId('logout').hidden = true;
       return false;

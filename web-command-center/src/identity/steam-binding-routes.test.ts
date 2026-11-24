@@ -50,7 +50,7 @@ test('Steam binding requires the expected identity, a verified assertion and the
                 'x-forwarded-proto': 'https',
                 'content-type': 'application/json', 'x-test-session': sessionId,
             },
-            body: body ? JSON.stringify(body) : undefined,
+            redirect: 'manual', body: body ? JSON.stringify(body) : undefined,
         },
     );
 
@@ -74,4 +74,14 @@ test('Steam binding requires the expected identity, a verified assertion and the
     assert.equal((await call(`${prefix}/complete`, { flowId })).status, 200);
     assert.equal((await call(`${prefix}/complete`, { flowId })).status, 409);
     assert.deepEqual((await (await call(prefix)).json()).steamIds, [primary, steamId]);
+    const web = await (await call(prefix + '/start', { mode: 'browser' })).json();
+    const target = new URL(new URL(web.authUrl).searchParams.get('openid.return_to')!);
+    target.searchParams.set('openid.return_to', target.href);
+    target.searchParams.set('openid.claimed_id', 'https://steamcommunity.com/openid/id/' + steamId);
+    const webCallback = target.pathname + target.search;
+    assert.equal((await call(webCallback, undefined, 'different-session')).status, 403);
+    const verified = await call(webCallback);
+    assert.equal(verified.status, 303);
+    assert.equal(verified.headers.get('location'), '/room');
+    assert.equal((await call(prefix + '/complete', { flowId: web.flowId })).status, 200);
 });

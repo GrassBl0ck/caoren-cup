@@ -19,25 +19,35 @@ export function registerBoardPages(app: express.Express, options: {
         res.download(installer, '草台杯客户端-安装程序.msi');
     });
 
+    const isDesktopView = (req: express.Request) => /(?:^|\s)CaorenCupDesktopClient\/\d+\.\d+\.\d+(?:\s|$)/.test(req.get('User-Agent') || '');
     // The shipped client uses the same page URLs. This marker selects the UI only.
     const home = ['/', '/index.html'];
     const features = ['cs', 'profile', 'admin', 'rules', 'mc'].flatMap(name => ['/' + name, '/' + name + '.html']);
     app.get([...home, ...features], async (req, res, next) => {
         res.vary('User-Agent');
         res.set('Cache-Control', 'private, no-store');
-        const desktop = /(?:^|\s)CaorenCupDesktopClient\/\d+\.\d+\.\d+(?:\s|$)/.test(req.get('User-Agent') || '');
+        const desktop = isDesktopView(req);
         const page = req.path.toLowerCase().replace(/\/+$/, '') || '/';
         if (home.includes(page)) {
             if (desktop) return res.sendFile(path.join(options.pagesDirectory, 'login.html'), { cacheControl: false });
             try {
-                const [html, file] = await Promise.all([readFile(path.join(publicDirectory, 'index.html'), 'utf8'), stat(installer)]);
-                if (!file.isFile()) throw new Error('Installer unavailable');
+                const [html, file] = await Promise.all([
+                    readFile(path.join(publicDirectory, 'index.html'), 'utf8'),
+                    stat(installer).catch(() => null),
+                ]);
+                if (!file?.isFile()) {
+                    const fallback = html.replace(' · {{installerSize}}', '')
+                        .replace('href="/downloads/caotai-cup-setup.msi" download', 'aria-disabled="true"')
+                        .replace('下载 Windows 客户端（推荐）', '客户端安装包暂不可用');
+                    return res.type('html').send(fallback);
+                }
                 return res.type('html').send(html.replace('{{installerSize}}', (file.size / 1048576).toFixed(1) + ' MiB'));
             } catch {
                 return res.status(503).type('text').send('草台杯安装包暂时无法下载，请稍后重试。');
             }
         }
-        if (!desktop || page === '/mc' || page === '/mc.html') return res.redirect(303, '/');
+        if (/^\/mc(?:\.html)?$/.test(page) || (!desktop && /^\/admin(?:\.html)?$/.test(page))) return res.redirect(303, '/');
+        if (!desktop && /^\/cs(?:\.html)?$/.test(page)) return res.redirect(303, '/room');
         if (page === '/rules' || page === '/rules.html') {
             return res.sendFile(path.join(publicDirectory, 'rules.html'), { cacheControl: false });
         }
@@ -58,12 +68,19 @@ export function registerBoardPages(app: express.Express, options: {
         }
         return true;
     }
-    for (const board of ['cs', 'profile'] as const) {
+    app.get('/login', (_req, res) => {
+        res.setHeader('Cache-Control', 'private, no-store');
+        return res.sendFile(path.join(options.pagesDirectory, 'login.html'), { cacheControl: false });
+    });
+    for (const board of ['cs', 'profile', 'room', 'phase', 'skins'] as const) {
         app.get([`/${board}`, `/${board}/`, `/${board}.html`], async (req, res) => {
             res.setHeader('Cache-Control', 'no-store');
             try {
-                if (!await authenticated(req)) return res.redirect(303, `/?next=${board}`);
-                return res.sendFile(path.resolve(options.pagesDirectory, `${board}.html`));
+                if (!await authenticated(req)) {
+                    const entry = isDesktopView(req) ? '/' : '/login';
+                    return res.redirect(303, entry + '?next=' + board);
+                }
+                return res.sendFile(path.resolve(options.pagesDirectory, (board === 'phase' || board === 'skins' ? 'cs' : board) + '.html'));
             } catch {
                 return res.status(503).type('text').send('[草台杯]暂时无法读取登录状态，请稍后重试。');
             }

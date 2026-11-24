@@ -6,7 +6,7 @@ import { isVerifiedSteamIdentity } from './identity-types';
 import { steamOpenIdUrl, verifySteamOpenIdAssertion } from './steam-openid';
 
 type CenterSession = { identityId: string; sessionId: string };
-type BindingFlow = CenterSession & { steamId: string; expiresAt: number; verified: boolean };
+type BindingFlow = CenterSession & { steamId?: string; browser: boolean; expiresAt: number; verified: boolean };
 
 interface BindingDependencies {
     service: LobbyIdentityService;
@@ -65,15 +65,16 @@ export function registerSteamBindingRoutes(app: Express, dependencies: BindingDe
         const session = await dependencies.authenticate(req, res);
         if (!session) return;
         const steamId: unknown = req.body?.steamId;
-        if (typeof steamId !== 'string' || !STEAM_ID.test(steamId)) return error(res, 400, 'steam_id_invalid');
+        const browser = req.body?.mode === 'browser' && steamId === undefined;
+        if (!browser && (typeof steamId !== 'string' || !STEAM_ID.test(steamId))) return error(res, 400, 'steam_id_invalid');
         const identity = dependencies.service.getIdentity(session.identityId);
-        if (identity && isVerifiedSteamIdentity(identity, steamId)) return res.json({ success: true, alreadyBound: true });
+        if (identity && typeof steamId === 'string' && isVerifiedSteamIdentity(identity, steamId)) return res.json({ success: true, alreadyBound: true });
         const now = Date.now();
         expireFlows(now);
         for (const [id, flow] of flows) if (flow.identityId === session.identityId) flows.delete(id);
         const flowId = randomBytes(24).toString('base64url');
         const expiresAt = now + 5 * 60_000;
-        flows.set(flowId, { identityId: session.identityId, sessionId: session.sessionId, steamId, expiresAt, verified: false });
+        flows.set(flowId, { identityId: session.identityId, sessionId: session.sessionId, browser, steamId: typeof steamId === 'string' ? steamId : undefined, expiresAt, verified: false });
         return res.json({ success: true, flowId, expiresAt, authUrl: steamOpenIdUrl(callbackUrl(flowId), origin!) });
     });
 
@@ -86,9 +87,16 @@ export function registerSteamBindingRoutes(app: Express, dependencies: BindingDe
         const flowId = ids[0];
         const flow = ids.length === 1 ? flows.get(flowId) : undefined;
         if (!flow || flow.verified) return res.status(409).type('text').send('这次 Steam 绑定已经结束，请返回草台杯。');
+        if (flow.browser) {
+            const session = await dependencies.authenticate(req, res);
+            if (!session) return;
+            if (session.identityId !== flow.identityId || session.sessionId !== flow.sessionId) {
+                return res.status(403).type('text').send('请使用发起绑定的草台杯账号和浏览器重试。');
+            }
+        }
         query.delete('flow');
         const claimedSteamId = query.get('openid.claimed_id');
-        if (claimedSteamId !== `https://steamcommunity.com/openid/id/${flow.steamId}` &&
+        if (!flow.browser && claimedSteamId !== `https://steamcommunity.com/openid/id/${flow.steamId}` &&
             claimedSteamId !== `http://steamcommunity.com/openid/id/${flow.steamId}`) {
             return res.status(400).type('text').send('授权的 Steam 账号与客户端检测的账号不同，请切到正确的账号重试。');
         }
@@ -99,10 +107,12 @@ export function registerSteamBindingRoutes(app: Express, dependencies: BindingDe
             redirect: 'error',
             dispatcher: proxy,
         }) : undefined);
-        if (flows.get(flowId) !== flow || flow.expiresAt <= Date.now() || steamId !== flow.steamId) {
+        if (flows.get(flowId) !== flow || flow.expiresAt <= Date.now() || !steamId || (!flow.browser && steamId !== flow.steamId)) {
             return res.status(400).type('text').send('Steam 校验失败，请返回草台杯后重试。');
         }
+        flow.steamId = steamId;
         flow.verified = true;
+        if (flow.browser) return res.redirect(303, '/room');
         return res.type('text').send('Steam 校验通过。请回到草台杯客户端完成绑定。');
     });
 
@@ -117,7 +127,7 @@ export function registerSteamBindingRoutes(app: Express, dependencies: BindingDe
         if (!flow || flow.identityId !== session.identityId || flow.sessionId !== session.sessionId) {
             return error(res, 409, 'steam_binding_expired');
         }
-        if (!flow.verified) return res.status(202).json({ success: false, pending: true });
+        if (!flow.verified || !flow.steamId) return res.status(202).json({ success: false, pending: true });
         flows.delete(flowId);
         try {
             await dependencies.service.linkVerifiedSteamIdentity(session.identityId, flow.steamId);

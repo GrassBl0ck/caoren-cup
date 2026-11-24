@@ -17,6 +17,7 @@ import {
 import { clearAllFlowTimers } from './game-timers';
 import { createInitialSession, setSession } from './session-manager';
 import { registerSocketHandlers } from './socket-handlers';
+import { markRoomPresent, syncRoomPresence } from './desktop-formal-room';
 import { GamePhase, PlayerRole, RosterTeam } from './types';
 
 class FakeSocket {
@@ -215,14 +216,14 @@ test('Ban 在线名单排除缺失记录和明确离线玩家，兼容未设置 
     assert.deepEqual([...onlinePlayerIds], ['a1', 'a2']);
 });
 
-test('未确认玩家断线后重新评估 Ban 并立即触发提前结算', (t) => {
+test('关闭阶段页时仍在房间的玩家保留 Ban 机会，全部连接过期后重新评估', (t) => {
     t.after(clearAllFlowTimers);
     const session = createInitialSession();
     session.phase = GamePhase.AbilityBan;
     session.matchOptions.abilityModeEnabled = true;
     session.players = {
         a1: { playerId: 'a1', name: 'A1', role: 'Player', rosterTeam: 'A', isOnline: true } as never,
-        b1: { playerId: 'b1', name: 'B1', role: 'Player', rosterTeam: 'B', isOnline: true } as never,
+        b1: { playerId: 'b1', identityId: 'b-account', name: 'B1', role: 'Player', rosterTeam: 'B', isOnline: true } as never,
     };
     session.playerOrder = ['a1', 'b1'];
     session.teams.A.players = ['a1'];
@@ -244,6 +245,14 @@ test('未确认玩家断线后重新评估 Ban 并立即触发提前结算', (t)
     socket.data.playerId = 'b1';
 
     assert.equal(shouldFinishAbilityBanEarly(session.abilityBanState, new Set(['a1', 'b1'])), false);
+    markRoomPresent(session.players.b1);
+    socket.trigger('disconnect');
+    assert.equal(session.players.b1.isOnline, true);
+    assert.equal(session.phase, GamePhase.AbilityBan);
+    syncRoomPresence(session, id => id === 'b1', Date.now() + 16_000);
+    assert.equal(session.players.b1.isOnline, true);
+    const expired = Date.now() + 16_000;
+    t.mock.method(Date, 'now', () => expired);
     socket.trigger('disconnect');
     assert.equal(session.players.b1.isOnline, false);
     assert.equal(session.phase, GamePhase.AbilityDraft);

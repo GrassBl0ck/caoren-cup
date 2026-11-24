@@ -1,7 +1,7 @@
 import { gameAvatars, validateAvatarJpeg } from '../game-avatars';
 import { randomUUID } from 'node:crypto';
 import type { Express, Request, RequestHandler, Response } from 'express';
-import { canStartDesktopRoom, ForceRoomReady, desktopRoomAdmins } from '../desktop-formal-room';
+import { canStartDesktopRoom, ForceRoomReady, desktopRoomAdmins, markRoomPresent, syncRoomPresence } from '../desktop-formal-room';
 import { formalServerLifecycle } from '../formal-server-lifecycle';
 import { GAME_MODE_MANIFESTS } from '../game-mode';
 import { canConfirmUndercoverReady, enqueueMatchRuntimeCommand } from '../match-runtime-orchestrator';
@@ -13,35 +13,24 @@ import { isVerifiedSteamIdentity, type LobbyMembershipRecord } from './identity-
 
 interface DesktopRoomDependencies {
     service: LobbyIdentityService;
-    authenticate: (req: Request, res: Response) => Promise<{ identityId: string } | undefined>;
+    authenticate: (req: Request, res: Response) => Promise<{ identityId: string; playerOnly?: true } | undefined>;
     sameOrigin: RequestHandler;
     getSession: () => GameSession;
     onPlayerJoined: (membership: LobbyMembershipRecord) => void | Promise<void>;
     issuePlayerSocketTicket: (identityId: string, membership: LobbyMembershipRecord) => object;
+    hasMatchSocket?: (playerId: string) => boolean;
     publish: () => void;
     start: (host: Player) => boolean;
     changeMode: (modeId: GameModeId) => void;
 }
 
 const prefix = '/api/player-center/desktop-room';
-const presenceWindowMs = 15_000;
+const playerPrefix = '/api/player-center/room';
 const canAuthenticateSteam = (steamId: unknown): steamId is string =>
     typeof steamId === 'string' && /^7656119\d{10}$/.test(steamId);
 
 export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependencies): void {
     const force = new ForceRoomReady();
-    const desktopPresence = new Map<string, number>();
-    let presenceSession: GameSession | undefined;
-    function markPresent(room: GameSession, seats: (Player | undefined)[]): void {
-        if (presenceSession !== room) {
-            desktopPresence.clear();
-            presenceSession = room;
-        }
-        const now = Date.now();
-        for (const seat of seats) {
-            if (seat) desktopPresence.set(seat.playerId, now);
-        }
-    }
     const fail = (res: Response, status: number, error: string) => res.status(status).json({ success: false, error });
     const findSeat = (room: GameSession, identityId: string, admin: boolean) =>
         Object.values(room.players).find(player => player.identityId === identityId && (player.role === 'Admin') === admin);
@@ -53,7 +42,7 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
         if (!identity) return fail(res, 401, 'account_unavailable');
         res.setHeader('Cache-Control', 'no-store');
         return res.json({ success: true, identityId: account.identityId, name: identity.displayName,
-            canHost: desktopRoomAdmins.allows(account.identityId, dep.service),
+            canHost: !account.playerOnly && desktopRoomAdmins.allows(account.identityId, dep.service),
             avatarLogo: identity.avatarLogo, avatarJpeg: identity.avatarJpeg, guidePending: identity.desktopRoomGuide === 'pending' });
     });
 
@@ -64,14 +53,15 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
         return res.json({ success: true, guidePending: status === 'pending' });
     });
 
-    app.get(prefix, async (req, res) => {
+    app.get([prefix, playerPrefix], async (req, res) => {
         const account = await dep.authenticate(req, res);
         if (!account) return;
         const room = dep.getSession();
         const player = findSeat(room, account.identityId, false);
-        const authorized = desktopRoomAdmins.allows(account.identityId, dep.service);
+        const authorized = !account.playerOnly && req.path === prefix && desktopRoomAdmins.allows(account.identityId, dep.service);
         const admin = authorized ? findSeat(room, account.identityId, true) : undefined;
-        markPresent(room, [player, admin]);
+        markRoomPresent(player, admin);
+        syncRoomPresence(room, dep.hasMatchSocket);
         const publicState = sanitizeForPublic(room, player?.playerId);
         const state = {
             sessionId: room.sessionId,
@@ -90,15 +80,12 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
         };
         const ids = Object.values(room.players).flatMap(seat => seat.identityId ? [seat.identityId] : []);
         const profiles = dep.service.desktopRoomProfiles(ids);
-        const presenceCutoff = Date.now() - presenceWindowMs;
         for (const seat of Object.values(room.players)) {
             const view = state.players[seat.playerId];
             if (!seat.identityId || !view) continue;
             const identity = profiles[seat.identityId];
             view.avatarLogo = identity?.avatarLogo;
             view.avatarJpeg = identity?.avatarLogo ? undefined : identity?.avatarJpeg ?? (seat.steamId && identity?.steamAvatarJpegs?.[seat.steamId]);
-            const lastSeen = desktopPresence.get(seat.playerId);
-            if (lastSeen !== undefined) view.isOnline = lastSeen >= presenceCutoff;
         }
         const identity = dep.service.getIdentity(account.identityId);
         return res.json({
@@ -133,15 +120,16 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
         }
     });
 
-    app.post(`${prefix}/profile`, dep.sameOrigin, async (req, res) => {
+    app.post([prefix + '/profile', playerPrefix + '/profile'], dep.sameOrigin, async (req, res) => {
         const account = await dep.authenticate(req, res);
         if (!account) return;
         try {
             if (req.body?.avatarJpeg != null) validateAvatarJpeg(req.body.avatarJpeg);
-            const identity = await dep.service.updateDesktopProfile(account.identityId, req.body?.name, req.body?.avatarJpeg, req.body?.avatarMode);
+            const previousRoom = dep.getSession();
+            const identity = await dep.service.updateDesktopProfile(account.identityId, req.body?.name, req.body?.avatarJpeg, req.body?.avatarMode, previousRoom.phase === GamePhase.Lobby ? previousRoom.sessionId : undefined);
             await gameAvatars.sync(identity);
             const room = dep.getSession();
-            if (room.phase === GamePhase.Lobby) {
+            if (room === previousRoom && room.phase === GamePhase.Lobby) {
                 for (const seat of Object.values(room.players)) {
                     if (seat.identityId === account.identityId) seat.name = identity.displayName;
                 }
@@ -150,11 +138,11 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
             return res.json({ success: true, name: identity.displayName });
         } catch (error) {
             const reason = error instanceof Error ? error.message : '';
-            return fail(res, 400, ['display_name_invalid', 'avatar_invalid'].includes(reason) ? reason : 'profile_unavailable');
+            return fail(res, 400, ['display_name_invalid', 'avatar_invalid', 'nickname_in_use'].includes(reason) ? reason : 'profile_unavailable');
         }
     });
 
-    app.post(`${prefix}/join`, dep.sameOrigin, async (req, res) => {
+    app.post([prefix + '/join', playerPrefix + '/join'], dep.sameOrigin, async (req, res) => {
         const account = await dep.authenticate(req, res);
         if (!account) return;
         const room = dep.getSession();
@@ -165,6 +153,7 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
             return fail(res, 409, 'game_binding_required');
         }
         if (req.body?.as === 'admin') {
+            if (account.playerOnly || req.path === playerPrefix + '/join') return fail(res, 403, 'player_only');
             if (!desktopRoomAdmins.allows(account.identityId, dep.service)) return fail(res, 403, 'admin_required');
             const previous = findSeat(room, account.identityId, true);
             if (previous) {
@@ -177,7 +166,7 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
                 role: 'Admin', isReady: false, isOnline: true,
             };
             room.playerOrder.push(playerId);
-            markPresent(room, [room.players[playerId]]);
+            markRoomPresent(room.players[playerId]);
             if (room.phase === GamePhase.Lobby) room.desktopFormalRoom = true;
             dep.publish();
             return res.json({ success: true });
@@ -190,19 +179,24 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
         catch { return fail(res, 503, 'avatar_sync_unavailable'); }
         const joined = await dep.service.joinPlayerCenterMatch(account.identityId, room.sessionId, false, steamId);
         if (!joined.ok) return fail(res, 409, joined.reason);
-        if (dep.getSession() !== room) return fail(res, 409, 'room_changed');
+        const replaced = dep.getSession() !== room;
+        if (replaced || (room.phase !== GamePhase.Lobby && !findSeat(room, account.identityId, false))) {
+            if (joined.created) await dep.service.leaveMembership(joined.membership.membershipId);
+            return fail(res, 409, replaced ? 'room_changed' : 'match_not_waiting');
+        }
         if (room.phase === GamePhase.Lobby && desktopRoomAdmins.configured()) room.desktopFormalRoom = true;
         await dep.onPlayerJoined(joined.membership);
-        markPresent(room, [findSeat(room, account.identityId, false)]);
+        markRoomPresent(findSeat(room, account.identityId, false));
         return res.json({ success: true, ...dep.issuePlayerSocketTicket(account.identityId, joined.membership) });
     });
 
-    app.post(`${prefix}/action`, dep.sameOrigin, async (req, res) => {
+    app.post([prefix + '/action', playerPrefix + '/action'], dep.sameOrigin, async (req, res) => {
         const account = await dep.authenticate(req, res);
         if (!account) return;
         const room = dep.getSession();
         if (req.body?.sessionId !== room.sessionId) return fail(res, 409, 'room_changed');
         const action: unknown = req.body?.action;
+        if (req.path === playerPrefix + '/action' && req.body?.phase !== room.phase) return fail(res, 409, 'room_phase_locked');
         if (!room.desktopFormalRoom && action !== 'ready') return fail(res, 409, 'room_phase_locked');
         const steamId: unknown = req.body?.steamId;
         const identity = dep.service.getIdentity(account.identityId);
@@ -233,6 +227,7 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
             dep.publish();
             return res.json({ success: true, pending: true });
         }
+        if (account.playerOnly || req.path === playerPrefix + '/action') return fail(res, 403, 'player_only');
         const admin = desktopRoomAdmins.allows(account.identityId, dep.service) ? findSeat(room, account.identityId, true) : undefined;
         if (!admin || admin.steamId !== steamId) return fail(res, 403, 'admin_required');
         if (action === 'open-server') {

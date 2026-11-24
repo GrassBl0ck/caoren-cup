@@ -107,7 +107,7 @@ export class LobbyIdentityService {
                 if (selectedSteamId !== undefined && selectedSteamId !== active.trustedSteamId) {
                     return { ok: false as const, reason: 'match_steam_locked' as const };
                 }
-                return { ok: true as const, membership: active };
+                return { ok: true as const, membership: active, created: false };
             }
 
             const nickname = selectedSteamId === undefined ? identity.steamNickname || identity.displayName : identity.displayName;
@@ -132,7 +132,7 @@ export class LobbyIdentityService {
                 updatedAt: now,
             };
             data.memberships[membershipId] = membership;
-            return { ok: true as const, membership };
+            return { ok: true as const, membership, created: true };
         });
     }
 
@@ -291,7 +291,7 @@ export class LobbyIdentityService {
         });
     }
 
-    async updateDesktopProfile(identityId: string, nameRaw: unknown, avatarRaw?: unknown, mode?: unknown) {
+    async updateDesktopProfile(identityId: string, nameRaw: unknown, avatarRaw?: unknown, mode?: unknown, lobbySessionId?: string) {
         const name = typeof nameRaw === 'string' ? nameRaw.trim().normalize('NFC') : '';
         if (!name || [...name].length > 32 || Buffer.byteLength(name, 'utf8') > 127 || /[\p{Cc}\p{Cf}]/u.test(name)) {
             throw new Error('display_name_invalid');
@@ -303,6 +303,12 @@ export class LobbyIdentityService {
         return this.store.mutate(data => {
             const identity = data.identities[identityId];
             if (!identity || !data.accounts[identityId]?.enabled) throw new Error('account_unavailable');
+            if (lobbySessionId) {
+                const active = Object.values(data.memberships).filter(m => m.sessionId === lobbySessionId && !m.leftAt && !m.blockedAt);
+                const member = active.find(m => m.identityId === identityId);
+                if (member && active.some(m => m.identityId !== identityId && m.nickname === name)) throw new Error('nickname_in_use');
+                if (member) { member.nickname = name; member.updatedAt = this.now(); }
+            }
             identity.displayName = name;
             identity.customDisplayName = true;
             if (avatarRaw !== undefined || mode !== undefined) {

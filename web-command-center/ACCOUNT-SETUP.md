@@ -36,3 +36,9 @@
 2026-10-31 经用户授权，只读确认当前 MC 服务器的 `online-mode=true`、`enforce-secure-profile=true`；没有写入配置、重启或读取玩家数据。此核对不代表新网站已部署，上线时仍需复核实际环境。
 
 本地修改不自动覆盖服务器、修改 DNS/邮箱设置、推送 GitHub 或发布版本。后端仍需通过现有反向代理提供 HTTPS。
+
+## 网页参赛与客户端主持
+
+官网推荐 Windows 客户端，网页玩家从「使用网页版参赛」或直接访问 `/room` 进入同一个正式房间。已绑定多个 Steam 账号时，网页玩家在入场前选择本场账号。首次可在同一浏览器完成 Steam 官网验证，或按账户资料页指引使用游戏码。主持人通过客户端管理名单和开赛。网页显示「已进服」的依据为比赛服回报。
+
+构建正式网页包时，给 `scripts/package-caoren-web.ps1` 同时传入 `-SkinImageRoot`（含原始清单的图库目录）和 `-ClientImageBundle`（含 `index.json`、`images.pack` 的客户端图库目录），即可随包提供按需加载的压缩缩略图。沿用外置图库时，将 `WEAPONPAINTS_IMAGE_ROOT` 设为包含 `base` 和 `stickers` 的图库目录，两个子目录各自包含 `manifest.json` 和 `images`。网页从该目录提供缩略图，客户端继续优先读取本地图库。换肤配置与现有数据库共用。

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
+import { playerTurnKey } from './player-utils';
 import { getAbilityCatalog } from './ability-catalog';
 import { confirmAbilityBan, confirmAbilityChoice, updateAbilityChoice } from './ability-draft-service';
 import * as flow from './game-flow-manager';
@@ -87,6 +88,18 @@ const createAbilityConfigSocketContext = (options: {
     socket.data.playerId = actorId;
     return { session, socket, actorId, getBroadcastCount: () => broadcastCount };
 };
+
+test('a vote from a previous map turn cannot affect the next turn on the same seat', async () => {
+    const { session, socket, actorId } = createAbilityConfigSocketContext({ phase: GamePhase.MapBan, actorRole: 'Player' });
+    session.players[actorId].rosterTeam = 'A';
+    session.mapVote = { team: 'A', votes: {}, timeoutAt: 100 };
+    const oldTurn = playerTurnKey(session);
+    session.mapVote.timeoutAt = 200;
+    await socket.trigger(WsEvents.VOTE, { playerId: actorId, map: 'Mirage', playerTurn: oldTurn });
+    assert.deepEqual(session.mapVote.votes, {});
+    await socket.trigger(WsEvents.VOTE, { playerId: actorId, map: 'Mirage', playerTurn: playerTurnKey(session) });
+    assert.equal(session.mapVote.votes[actorId], 'Mirage');
+});
 
 const validAbilityConfigPayload = {
     abilityModeEnabled: true,

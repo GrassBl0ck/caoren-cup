@@ -40,7 +40,7 @@ test('public downloads and existing desktop pages share URLs without sharing pre
             assert.match(response.headers.get('cache-control') || '', /no-store/);
         }
     }
-    for (const name of ['mc', 'cs', 'admin', 'profile', 'rules']) {
+    for (const name of ['mc', 'admin']) {
         for (const suffix of ['', '/', '.html', '.html/?next=cs']) {
             const response = await get('/' + name + suffix, { Cookie: 'caoren_player_center=fixture' });
             assert.equal(response.status, 303);
@@ -54,6 +54,16 @@ test('public downloads and existing desktop pages share URLs without sharing pre
         assert.match(await (await get('/' + name, { ...desktop, Cookie: 'caoren_player_center=fixture' })).text(),
             new RegExp('data-page="' + name + '"'));
     }
+    const signedIn = { Cookie: 'caoren_player_center=fixture' };
+    for (const page of ['room', 'phase', 'skins', 'profile']) {
+        assert.equal((await get('/' + page)).headers.get('location'), '/login?next=' + page);
+        const response = await get('/' + page, signedIn);
+        assert.equal(response.status, 200);
+        assert.match(await response.text(), page === 'room' ? /id="steam"/ : page === 'profile' ? /id="account-settings"/ : /id="player-center-home"/);
+    }
+    assert.equal((await get('/cs.html', signedIn)).headers.get('location'), '/room');
+    assert.match(await (await get('/login?next=room')).text(), /id="login-form"/);
+    assert.match(await (await get('/rules')).text(), /id="rules-join"/);
     const admin = await (await get('/admin.html', desktop)).text();
     assert.match(admin, /<body\b[^>]*data-page="admin"/);
     assert.match(admin, /id="admin-login-password"/);
@@ -66,4 +76,8 @@ test('public downloads and existing desktop pages share URLs without sharing pre
     assert.equal(part.status, 206);
     assert.equal((await part.arrayBuffer()).byteLength, 16);
     assert.match(download.headers.get('content-disposition') || '', /attachment/);
+    await rm(installerPath);
+    const fallback = await (await get('/')).text();
+    assert.match(fallback, /客户端安装包暂不可用/);
+    assert.match(fallback, /href="\/room"/);
 });
