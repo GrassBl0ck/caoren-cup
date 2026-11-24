@@ -2,7 +2,7 @@
 
 草台杯是一个面向自定义比赛和朋友间娱乐对局的社区项目，包含 **Counter-Strike 2（CS）** 与 **Minecraft Java（MC）** 两个板块。
 
-CS 提供赛事组织、身份玩法、娱乐模式和服务器工具；MC 提供坐垫战争等自研玩法。官网提供 Windows 客户端下载。CS 正式房间现开放竞技和异能，MC 服务器内容独立安装。
+CS 提供赛事组织、身份玩法、娱乐模式和服务器工具；MC 提供坐垫战争等自研玩法。官网推荐 Windows 客户端，也提供浏览器参赛入口。两端共用比赛名单和进度，主持人在客户端开赛。CS 正式房间现开放竞技和异能，MC 服务器内容独立安装。
 
 [下载 Windows 客户端](https://caorencup.icu/) · [v2.4.1 完整发行与安装说明](https://github.com/GrassBl0ck/caoren-cup/releases/tag/v2.4.1)
 

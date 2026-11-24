@@ -79,7 +79,7 @@ test('desktop participants and hosts must use verified account identities and oc
         authenticate: async (req, res) => {
             const identity = req.headers['x-test-view'] === 'host' ? hostAccount.identity
                 : req.headers['x-test-view'] === 'player' ? playerAccount.identity : undefined;
-            if (identity) return { identityId: identity.identityId };
+            if (identity) return { identityId: identity.identityId, playerOnly: req.header('x-test-player-only') === '1' ? true : undefined };
             res.status(401).end();
         },
         sameOrigin: (_req, _res, next) => next(),
@@ -95,10 +95,10 @@ test('desktop participants and hosts must use verified account identities and oc
     await once(server, 'listening');
     const address = server.address();
     assert.ok(address && typeof address !== 'string');
-    const request = (viewer: string, route = '', body?: object) => fetch(
-        `http://127.0.0.1:${address.port}/api/player-center/desktop-room${route}`, {
+    const request = (viewer: string, route = '', body?: object, channel = 'desktop-room', playerOnly = false) => fetch(
+        `http://127.0.0.1:${address.port}/api/player-center/${channel}${route}`, {
             method: body ? 'POST' : 'GET',
-            headers: { 'content-type': 'application/json', 'x-test-view': viewer },
+            headers: { 'content-type': 'application/json', 'x-test-view': viewer, 'x-test-player-only': playerOnly ? '1' : '0' },
             body: body ? JSON.stringify({ sessionId: room.sessionId, ...body }) : undefined,
         },
     );
@@ -107,10 +107,27 @@ test('desktop participants and hosts must use verified account identities and oc
     assert.equal((await (await request('player')).json()).state.sessionId, room.sessionId);
     assert.equal((await request('player', '/join', { as: 'admin', steamId: player })).status, 403);
     assert.equal((await request('host', '/join', { as: 'admin', steamId: player })).status, 409);
+    // Simulate the host starting while a new player's membership is being saved.
+    const join = service.joinPlayerCenterMatch.bind(service);
+    let lateMembership = '';
+    const racingJoin = t.mock.method(service, 'joinPlayerCenterMatch', async (...args: Parameters<typeof join>) => {
+        const result = await join(...args);
+        if (result.ok) lateMembership = result.membership.membershipId;
+        room.phase = GamePhase.CaptainSelection;
+        return result;
+    });
+    assert.equal((await request('player', '/join', { as: 'player', steamId: player }, 'room')).status, 409);
+    assert.ok(service.getMembership(lateMembership)?.leftAt);
+    assert.equal(Object.keys(room.players).length, 0);
+    racingJoin.mock.restore();
+    room.phase = GamePhase.Lobby;
     const configured = process.env.CAOREN_ROOM_ADMIN_IDENTITY_IDS;
     delete process.env.CAOREN_ROOM_ADMIN_IDENTITY_IDS;
     try {
-        assert.equal((await request('player', '/join', { as: 'player', steamId: player })).status, 200);
+        const simultaneous = await Promise.all(['room', 'desktop-room'].map(channel =>
+            request('player', '/join', { as: 'player', steamId: player }, channel)));
+        assert.deepEqual(simultaneous.map(response => response.status), [200, 200]);
+        assert.equal(Object.keys(room.players).length, 1);
         assert.ok(!room.desktopFormalRoom);
         assert.equal((await request('player', '/action', { action: 'ready', steamId: player, ready: true })).status, 200);
         assert.equal((await request('player', '/action', { action: 'ready', steamId: player, ready: false })).status, 200);
@@ -124,6 +141,26 @@ test('desktop participants and hosts must use verified account identities and oc
     assert.equal((await request('host', '/join', { as: 'player', steamId: alternate })).status, 200);
     assert.equal((await request('host', '/join', { as: 'player', steamId: primary })).status, 409);
     assert.equal((await request('player', '/join', { as: 'player', steamId: player })).status, 200);
+    const before = await (await request('player')).json();
+    assert.equal((await request('player', '/join', { as: 'player', steamId: player }, 'room')).status, 200);
+    const webView = await (await request('player', '', undefined, 'room')).json();
+    assert.equal(webView.playerId, before.playerId);
+    assert.deepEqual(Object.keys(webView.state.players).sort(), Object.keys(before.state.players).sort());
+    const webReady = { action: 'ready', ready: true, steamId: player, phase: GamePhase.Lobby };
+    assert.equal((await request('player', '/action', webReady, 'room')).status, 200);
+    assert.equal((await (await request('player')).json()).state.players[before.playerId].lobbyReady, 'self');
+    assert.equal((await request('player', '/action', { ...webReady, phase: GamePhase.Scoreboard }, 'room')).status, 409);
+    assert.equal((await request('host', '/join', { as: 'admin', steamId: alternate }, 'room')).status, 403);
+    assert.equal((await request('host', '/action', { ...webReady, action: 'start', steamId: alternate }, 'room')).status, 403);
+    assert.equal((await request('player', '/action', { ...webReady, ready: false }, 'room')).status, 200);
+    const browserHost = await (await request('host', '', undefined, 'desktop-room', true)).json();
+    assert.equal(browserHost.canHost, false);
+    assert.equal(browserHost.hosting, false);
+    assert.equal((await request('host', '/join', { as: 'admin', steamId: alternate }, 'desktop-room', true)).status, 403);
+    assert.equal((await request('host', '/action', { action: 'start', steamId: alternate }, 'desktop-room', true)).status, 403);
+    assert.equal((await request('player', '/profile', { name: 'Web Player' }, 'room')).status, 200);
+    await request('player', '/join', { as: 'player', steamId: player });
+    assert.equal(room.players[before.playerId].name, 'Web Player');
     const hostView = await (await request('host')).json();
     const seats = Object.values(hostView.state.players) as Array<{ role: string }>;
     assert.equal(hostView.hosting, true);

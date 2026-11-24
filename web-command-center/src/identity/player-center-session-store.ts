@@ -15,6 +15,7 @@ export interface PlayerCenterSessionRecord {
     idleExpiresAt: number;
     absoluteExpiresAt: number;
     currentDeviceTokenId?: string;
+    playerOnly?: true;
 }
 
 interface PlayerCenterSessionStoreData {
@@ -47,6 +48,7 @@ const parseData = (text: string): PlayerCenterSessionStoreData => {
             typeof value.lastUsedAt !== 'number' || !Number.isFinite(value.lastUsedAt) ||
             typeof value.idleExpiresAt !== 'number' || !Number.isFinite(value.idleExpiresAt) ||
             typeof value.absoluteExpiresAt !== 'number' || !Number.isFinite(value.absoluteExpiresAt) ||
+            (value.playerOnly !== undefined && value.playerOnly !== true) ||
             (value.currentDeviceTokenId !== undefined &&
                 (typeof value.currentDeviceTokenId !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(value.currentDeviceTokenId))) ||
             value.lastUsedAt < value.createdAt || value.idleExpiresAt < value.lastUsedAt ||
@@ -122,7 +124,7 @@ export class PlayerCenterSessionStore {
         return clone(this.data);
     }
 
-    async create(identityId: string, accountUpdatedAt: number, currentDeviceTokenId?: string) {
+    async create(identityId: string, accountUpdatedAt: number, currentDeviceTokenId?: string, playerOnly = false) {
         const createdAt = this.now();
         const sessionId = this.randomBytes(16).toString('base64url');
         const secret = this.randomBytes(32).toString('base64url');
@@ -137,6 +139,7 @@ export class PlayerCenterSessionStore {
             idleExpiresAt: createdAt + PLAYER_CENTER_IDLE_TTL_MS,
             absoluteExpiresAt: createdAt + PLAYER_CENTER_ABSOLUTE_TTL_MS,
             currentDeviceTokenId,
+            ...(playerOnly && { playerOnly: true as const }),
         };
         await this.mutate((data) => {
             if (data.sessions[sessionId]) throw new Error('player-center session id collision');

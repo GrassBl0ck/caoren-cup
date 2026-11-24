@@ -3495,8 +3495,13 @@ if (window._caorenModifiersEnabled !== true) {
             duelSetRounds,
             duelSetUtilityMode,
         });
-        function doRoll() { ws.emit('ROLL', { playerId: myPlayerId, value: Math.floor(Math.random() * 100) + 1 }); }
-        function pick(pickedId) { ws.emit('DRAFT_PICK', { playerId: myPlayerId, pickedId }); }
+        function emitTurnAction(event, payload) {
+            const turn = window._currentGameState?.playerTurn;
+            if (!ws.connected || !turn) return showLobbyNotice('正在同步比赛状态，请稍后重试。');
+            ws.emit(event, { ...payload, playerTurn: turn });
+        }
+        function doRoll() { emitTurnAction('ROLL', { playerId: myPlayerId, value: Math.floor(Math.random() * 100) + 1 }); }
+        function pick(pickedId) { emitTurnAction('DRAFT_PICK', { playerId: myPlayerId, pickedId }); }
         function rerandomCaptain(team) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'RERANDOM_CAPTAIN', payload: { team } }); }
         function setCaptain(team) { const select = document.getElementById('cap' + team + '-select'); if (select && select.value) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'SET_CAPTAIN', payload: { team, playerId: select.value } }); }
         function playAdminAudioCue() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'PLAY_AUDIO_CUE', payload: { cue: 'adminPrompt' } }); }
@@ -3506,9 +3511,9 @@ if (window._caorenModifiersEnabled !== true) {
         function adminUnassignTeam(playerId) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'UNASSIGN_ROSTER_TEAM', payload: { playerId } }); }
         function adminStartCaptainDraft() { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'START_CAPTAIN_DRAFT' }); }
         async function kickPlayer(playerId, name) { if (await caorenConfirm('玩家“' + name + '”会被移出当前房间。', { title: '确认踢出玩家', tone: 'danger', confirmText: '踢出玩家' })) ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'KICK_PLAYER', payload: { playerId } }); }
-        function voteMap(map) { ws.emit('VOTE', { playerId: myPlayerId, map }); }
+        function voteMap(map) { emitTurnAction('VOTE', { playerId: myPlayerId, map }); }
         function adminBanMap(map) { ws.emit('ADMIN_ACTION', { playerId: myPlayerId, action: 'ADMIN_BAN_MAP', payload: { map } }); }
-        function selectSide(side) { ws.emit('SIDE_PICK', { playerId: myPlayerId, side }); }
+        function selectSide(side) { emitTurnAction('SIDE_PICK', { playerId: myPlayerId, side }); }
         function toggleAbilityBanChoice(abilityId) {
             const state = window._currentGameState;
             const banState = state?.abilityBanState;
@@ -3518,11 +3523,11 @@ if (window._caorenModifiersEnabled !== true) {
             const index = selectedAbilityIds.indexOf(abilityId);
             if (index >= 0) selectedAbilityIds.splice(index, 1);
             else if (selectedAbilityIds.length < Number(banState.banCountPerTeam || 0)) selectedAbilityIds.push(abilityId);
-            ws.emit('ABILITY_BAN_UPDATE', { playerId: myPlayerId, selectedAbilityIds });
+            emitTurnAction('ABILITY_BAN_UPDATE', { playerId: myPlayerId, selectedAbilityIds });
         }
-        function confirmAbilityBanChoice() { ws.emit('ABILITY_BAN_CONFIRM', { playerId: myPlayerId }); }
-        function chooseAbilityDraft(abilityId) { ws.emit('ABILITY_PICK_UPDATE', { playerId: myPlayerId, abilityId }); }
-        function confirmAbilityDraftChoice() { ws.emit('ABILITY_PICK_CONFIRM', { playerId: myPlayerId }); }
+        function confirmAbilityBanChoice() { emitTurnAction('ABILITY_BAN_CONFIRM', { playerId: myPlayerId }); }
+        function chooseAbilityDraft(abilityId) { emitTurnAction('ABILITY_PICK_UPDATE', { playerId: myPlayerId, abilityId }); }
+        function confirmAbilityDraftChoice() { emitTurnAction('ABILITY_PICK_CONFIRM', { playerId: myPlayerId }); }
         async function submitRoomBinding(event) {
             event.preventDefault();
             const form = event.currentTarget;

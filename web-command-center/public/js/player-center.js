@@ -5,7 +5,10 @@
   function socket() { return window.__caorenCupLobbySocket || window.__caorenCupSocket || window.socket; }
   var current = {}, profile = {}, refreshing = false, ticketInFlight = false, operationInFlight = false;
   var hostView = !!window.caorenDesktop?.inspectSteam && /(?:^\?|&)desktopHost=1(?:&|$)/.test(window.location.search);
-  var accountTool = !!window.caorenDesktop && /(?:^\?|&)desktopView=(?:skins|updates)(?:&|$)/.test(window.location.search);
+  var browserPage = (window.location.pathname || '').toLowerCase().replace(/(?:\.html)?\/?$/, '');
+  var webMatch = browserPage === '/phase';
+  var webSkins = browserPage === '/skins';
+  var accountTool = webSkins || !!window.caorenDesktop && /(?:^\?|&)desktopView=(?:skins|updates)(?:&|$)/.test(window.location.search);
   var previousPublicStatus, resumeRequested = false, logoutInFlight = false, refreshPending = false;
   var reasons = {
     game_binding_required: '参加比赛前，请在个人资料中绑定 CS 游戏身份。',
@@ -50,8 +53,9 @@
     refreshing = true;
     try {
       var result = await request('/api/player-center/me');
-      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); return; }
+      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace(webMatch || webSkins ? '/login?next=' + browserPage.slice(1) : '/?next=cs'); return; }
       if (!result.ok) { message('参赛状态读取失败，请检查网络后重试。'); return; }
+      if (webMatch && !result.data.joined) { window.location.replace('/room'); return; }
       render(result.data);
       if (resumeRequested && (result.data.joined || hostView)) await requestTicket();
       resumeRequested = false;
@@ -70,7 +74,7 @@
       var result = hostView
         ? await request('/api/player-center/desktop-room/host-ticket', { steamId: liveSteam.steamId })
         : await request('/api/player-center/match/socket-ticket', {});
-      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); return; }
+      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace(webMatch || webSkins ? '/login?next=' + browserPage.slice(1) : '/?next=cs'); return; }
       if (!result.ok) { message('比赛连接恢复失败，请点击“重新进入比赛”重试。'); return; }
       // Tickets are single-use and short-lived. Never queue them across a disconnect.
       if (ws.connected) ws.emit('PLAYER_CENTER_MATCH_LOGIN', { ticket: result.data.socketTicket });
@@ -82,7 +86,7 @@
     var leaving = current.joined === true;
     try {
       var result = await request('/api/player-center/match/' + (leaving ? 'leave' : 'join'), {});
-      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); return; }
+      if (result.status === 401) { sessionActive(false); if (!logoutInFlight) window.location.replace(webMatch || webSkins ? '/login?next=' + browserPage.slice(1) : '/?next=cs'); return; }
       if (!result.ok) { await refreshSession(false); message(reasons[result.data.error] || '操作未完成，请稍后重试。'); return; }
       render(Object.assign({ profile: profile }, result.data));
       if (!leaving) {
@@ -96,6 +100,29 @@
   function boot() {
     var home = byId('player-center-home');
     if (!home) return;
+    if (webMatch || webSkins) {
+      var back = document.createElement('a');
+      back.href = '/room'; back.className = 'header-text-link'; back.textContent = '返回候场房间';
+      document.querySelector('.site-header-actions').prepend(back);
+      byId('player-center-join-btn').hidden = true;
+      byId('v1333-connect-server-btn').closest('aside').hidden = true;
+      var connectButton = byId('v1333-lobby-connect-server-btn');
+      var connectionLink = document.createElement('a');
+      connectionLink.id = 'web-game-connection';
+      connectionLink.href = '/room#connection';
+      connectionLink.className = 'header-text-link';
+      connectionLink.textContent = '进入 CS2';
+      connectionLink.hidden = true;
+      connectButton.replaceWith(connectionLink);
+      if (webSkins) {
+        var launcher = byId('weaponpaints-open-btn');
+        var observer = new MutationObserver(function () {
+          if (!launcher.hidden) { observer.disconnect(); launcher.click(); }
+        });
+        if (launcher.hidden) observer.observe(launcher, { attributes: true, attributeFilter: ['hidden'] });
+        else launcher.click();
+      }
+    }
     var retry = document.createElement('button'); retry.type = 'button'; retry.id = 'player-center-resume-btn'; retry.textContent = '重新进入比赛';
     retry.addEventListener('click', function () { refreshSession(true); }); home.appendChild(retry);
     byId('player-center-join-btn')?.addEventListener('click', joinOrLeave);
@@ -114,13 +141,15 @@
     });
     var ws = socket();
     if (ws?.on) {
-      ws.on('PLAYER_CENTER_SESSION_INVALID', function () { sessionActive(false); if (!logoutInFlight) window.location.replace('/?next=cs'); });
+      ws.on('PLAYER_CENTER_SESSION_INVALID', function () { sessionActive(false); if (!logoutInFlight) window.location.replace(webMatch || webSkins ? '/login?next=' + browserPage.slice(1) : '/?next=cs'); });
       ws.on('PLAYER_CENTER_MATCH_ENDED', function () { refreshSession(false); });
       ws.on('LOGIN_RESPONSE', function (data) {
         if (!data.success && (current.joined || hostView) && !data.resetClient) message('比赛连接失败：' + (data.message || '票据已过期') + '。请点击“重新进入比赛”重试。');
         if (!data.success && (data.resetClient || data.message === '你已退出游戏')) refreshSession(false);
       });
       ws.on('GAME_STATE', function (state) {
+        var connection = byId('web-game-connection');
+        if (connection) connection.hidden = !['PreGameSetup', 'LiveGame', 'MidGameQA'].includes(state.phase);
         var status = state.matchStatus || (state.phase === 'Lobby' ? 'waiting' : state.phase === 'Scoreboard' ? 'ended' : state.phase ? 'started' : undefined);
         if (status && status !== previousPublicStatus) { previousPublicStatus = status; refreshSession(false); }
       });

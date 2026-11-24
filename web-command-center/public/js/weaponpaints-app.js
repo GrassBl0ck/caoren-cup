@@ -1,6 +1,7 @@
 (function () {
     'use strict';
 
+    const webSkinPage = /^\/skins(?:\.html)?\/?$/i.test(window.location?.pathname || '');
     const caorenConfirm = window.caorenConfirm;
     const WEAPONPAINTS_ACTION = 'WEAPONPAINTS_ACTION';
     const WEAPONPAINTS_STATUS = 'WEAPONPAINTS_STATUS';
@@ -780,6 +781,11 @@
     async function loadTarget() {
         if (state.status?.isAdmin && !state.targetSteamId) throw new Error('请选择一名已验证玩家。');
         state.loadout = await action({ action: 'load' });
+        const account = el('weaponpaints-account');
+        if (webSkinPage && account) {
+            account.textContent = '换肤使用的 Steam 账号：' + state.loadout.steamId;
+            account.hidden = false;
+        }
         if (state.selectedWeapon) state.selectedWeapon = weaponFromLoadout(state.selectedWeapon.weaponDefIndex);
         renderEditor();
     }
@@ -840,6 +846,8 @@
         state.status = null;
         state.targetSteamId = '';
         state.loadout = null;
+        const account = el('weaponpaints-account');
+        if (account) { account.textContent = ''; account.hidden = true; }
         state.items = [];
         state.groups = [];
         state.offset = 0;
@@ -962,11 +970,15 @@
             window.addEventListener(entryApi.PLAYER_CENTER_EVENT, (event) => entryController()?.handleEvent(event));
             window.addEventListener(entryApi.ADMIN_EVENT, (event) => entryController()?.handleEvent(event));
         }
+        if (webSkinPage) window.addEventListener('beforeunload', event => {
+            if (state.open && hasUnsavedDraft()) { event.preventDefault(); event.returnValue = ''; }
+        });
         el('weaponpaints-open-btn')?.addEventListener('click', openPanel);
         el('weaponpaints-close-btn')?.addEventListener('click', () => guardUnsavedChange(async () => {
             clearDraftSelection();
             el('weaponpaints-panel').hidden = true;
             state.open = false;
+            if (webSkinPage) { window.location.assign('/room'); return; }
             setPromoVisibility(true);
         }));
         el('weaponpaints-target')?.addEventListener('change', async (event) => {

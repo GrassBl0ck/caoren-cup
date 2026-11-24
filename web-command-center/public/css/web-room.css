@@ -1,0 +1,182 @@
+:root {
+  color-scheme: dark;
+  font: 16px/1.55 "Microsoft YaHei UI",system-ui,sans-serif;
+  background: #121416;
+  color: #f6f2eb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+}
+
+header, main {
+  width: min(100% - 36px,1000px);
+  margin: auto;
+}
+
+header, nav, .hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+header {
+  padding: 22px 0;
+  border-bottom: 1px solid #44484b;
+}
+
+header img {
+  display: block;
+  object-fit: contain;
+}
+
+nav {
+  gap: 18px;
+}
+
+a {
+  color: inherit;
+}
+
+nav a {
+  text-decoration: none;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+.hero {
+  padding: 40px 0 24px;
+  border-bottom: 2px solid #ed854a;
+}
+
+.hero p {
+  margin: 0;
+  color: #ffae7d;
+}
+
+h1 {
+  font-size: clamp(28px,5vw,52px);
+  line-height: 1.12;
+  margin: 8px 0;
+}
+
+h2 {
+  font-size: 19px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: clamp(20px,6vw,80px);
+  padding: 12px 0 24px;
+}
+
+section p, li span {
+  color: #c3c2bf;
+}
+
+input, button, .action, select {
+  font: inherit;
+  border-radius: 5px;
+  padding: 8px 14px;
+}
+
+button, .action {
+  cursor: pointer;
+  display: inline-block;
+  margin: 4px 4px 4px 0;
+}
+
+input, button, select {
+  background: #23272b;
+  color: #f6f2eb;
+  border: 1px solid #5d6469;
+}
+
+.action {
+  border: 1px solid #f39761;
+  background: #ff914c;
+  color: #21180f;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+label {
+  display: block;
+}
+
+select {
+  margin: 5px 0;
+  width: 100%;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #363a3c;
+  padding: 8px 0;
+}
+
+details {
+  padding: 18px 0;
+  border-top: 1px solid #48494c;
+}
+
+summary {
+  cursor: pointer;
+}
+
+code {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+a:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible {
+  outline: 3px solid #ffc394;
+  outline-offset: 3px;
+}
+
+#edit-profile {
+  max-width: 26rem;
+  padding: 12px 0;
+}
+
+#edit-profile input {
+  max-width: 100%;
+  margin: 4px 0 12px;
+}
+
+#nickname {
+  width: 100%;
+}
+
+@media (max-width: 660px) {
+  .columns { grid-template-columns: 1fr; gap: 8px; }
+  .hero { padding-top: 24px; }
+  nav { gap: 10px; }
+  header { gap: 12px; }
+}

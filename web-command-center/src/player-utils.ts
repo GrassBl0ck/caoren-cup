@@ -224,6 +224,14 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
     return s;
 };
 
+// Identifies the turn the player saw, including consecutive picks by the same team.
+export function playerTurnKey(room: GameSession): string {
+    return JSON.stringify([room.sessionId, room.matchId, room.phase, room.timerEndAt,
+        room.draftIndex, room.mapVote?.team, room.mapVote?.timeoutAt, room.mapVote?.banCount,
+        room.sideVote?.timeoutAt, room.abilityBanState?.timeoutAt,
+        room.abilityDraftState?.currentBatchIndex, room.abilityDraftState?.timeoutAt]);
+}
+
 export const sanitizeGameStateForViewer = (session: GameSession, viewerId?: string | null): any => {
     const viewer = viewerId ? session.players[viewerId] : undefined;
     if (!viewer) {
@@ -232,6 +240,7 @@ export const sanitizeGameStateForViewer = (session: GameSession, viewerId?: stri
         };
     }
     const state = sanitizeForPublic(session, viewerId);
+    state.playerTurn = playerTurnKey(session);
     if (viewer?.role === 'Admin') {
         state.flowUndoStatus = getFlowUndoStatus(session, viewer);
     }

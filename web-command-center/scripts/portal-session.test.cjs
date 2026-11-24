@@ -113,7 +113,7 @@ test('profile supports password changes without a username editor', async () => 
  assert.equal(p.elements.has('change-login-name-form'),false);
 });
 test('expired profile session redirects to the shared email login', async () => {
- const p=await page({profilePage:true});assert.deepEqual(p.redirects,['/?next=profile']);
+ const p=await page({profilePage:true});assert.deepEqual(p.redirects,['/login?next=profile']);
 });
 
 test('registration submits only email, verification challenge and password', async () => {

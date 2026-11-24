@@ -35,8 +35,11 @@ test('player-center session persists only a token hash and survives restart', as
     assert.equal(created.session.idleExpiresAt, now.value + PLAYER_CENTER_IDLE_TTL_MS);
     assert.equal(created.session.absoluteExpiresAt, now.value + PLAYER_CENTER_ABSOLUTE_TTL_MS);
 
+    const browser = await store.create('identity-b', 1234, undefined, true);
     const reloaded = new PlayerCenterSessionStore(file, { now: () => now.value });
     await reloaded.load();
+    assert.equal((await reloaded.use(browser.rawToken))?.playerOnly, true);
+    assert.equal((await reloaded.use(created.rawToken))?.playerOnly, undefined);
     assert.equal((await reloaded.use(created.rawToken))?.identityId, 'identity-a');
 });
 

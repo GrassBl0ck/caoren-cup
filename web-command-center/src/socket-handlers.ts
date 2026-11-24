@@ -1,5 +1,6 @@
 ﻿// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
+import { syncRoomPresence } from './desktop-formal-room';
 import { v4 as uuidv4 } from 'uuid';
 import { AbilityId, RuleResult, CellStatus, GamePhase, GameSession, LiveGameData, Player, PlayerRole, RosterTeam, TaskCell, WsEvents } from './types';
 import { getSession, resetSessionWithAdmins, terminateAndClear } from './session-manager';
@@ -7,6 +8,8 @@ import {
     findPlayerById,
     generateBindCode,
     getGamePlayers,
+    playerTurnKey,
+    sanitizeGameStateForViewer,
 } from './player-utils';
 import { calculateScores } from './scoring';
 import {
@@ -201,6 +204,7 @@ const appendTaskActionLog = (player: Player, cell: TaskCell, cellId: string, act
 };
 
 export function registerSocketHandlers(io: SocketIOServer, deps: {
+    hasMatchSocket?: (playerId: string) => boolean;
     broadcastState: () => void;
     notifyMessage: (msg: string) => void;
     persistSessionNow?: () => void;
@@ -296,7 +300,15 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
                 message: result.message || '异能 BP 操作失败，请刷新页面后重试。',
             });
         };
+        const currentTurn = (data: { playerTurn?: unknown }): boolean => {
+            // Installed clients with an older cached page still rely on the per-action checks.
+            if (data?.playerTurn === undefined || data.playerTurn === playerTurnKey(getSession())) return true;
+            socket.emit(WsEvents.NOTIFICATION, { message: '比赛阶段已更新，请按当前画面重新操作。' });
+            socket.emit(WsEvents.GAME_STATE, sanitizeGameStateForViewer(getSession(), socket.data.playerId));
+            return false;
+        };
         const authorizeAbilityAction = (event: AbilitySocketAction, payload: unknown): boolean => {
+            if (!currentTurn(payload as { playerTurn?: unknown })) return false;
             const session = getSession();
             const authenticatedPlayerId = String(socket.data.playerId || '');
             const actor = authenticatedPlayerId
@@ -320,6 +332,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const session = getSession();
             const state = session.abilityBanState;
             if (session.phase !== GamePhase.AbilityBan || !state) return false;
+            syncRoomPresence(session, deps.hasMatchSocket);
             const onlinePlayerIds = getOnlineAbilityBanPlayerIds(state, session.players);
             if (!shouldFinishAbilityBanEarly(state, onlinePlayerIds)) return false;
             return finishAbilityBan('confirmed');
@@ -331,7 +344,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const identityId = String(socket.data.identityId || '');
             if (ticket?.desktopHost) {
                 const host = session.players[ticket.membershipId];
-                if (!identityId || ticket.identityId !== identityId || ticket.sessionId !== session.sessionId ||
+                if (socket.data.playerOnly || !identityId || ticket.identityId !== identityId || ticket.sessionId !== session.sessionId ||
                     host?.role !== 'Admin' || host.identityId !== identityId || !session.desktopFormalRoom ||
                     !lobbyIdentityService.getLoginAccount(identityId)?.enabled || !desktopRoomAdmins.allows(identityId, lobbyIdentityService)) {
                     socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '房间管理员权限失效，请回到客户端重新进入。' });
@@ -407,7 +420,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             const session = getSession();
             const rawName = String(data?.name || '').trim();
             const extraParam = String(data?.extraParam || '').trim();
-            if (session.desktopFormalRoom || !ADMIN_PASSWORD || extraParam !== ADMIN_PASSWORD) {
+            if (socket.data.playerOnly || session.desktopFormalRoom || !ADMIN_PASSWORD || extraParam !== ADMIN_PASSWORD) {
                 socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员密码错误。' });
                 return;
             }
@@ -1078,9 +1091,9 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             }
         });
 
-        socket.on('ROLL', (data: { playerId: string; value: number }) => {
+        socket.on('ROLL', (data: { playerTurn?: unknown; playerId: string; value: number }) => {
             const session = getSession();
-            if (!isAuthenticatedActor(data.playerId)) return;
+            if (!isAuthenticatedActor(data.playerId) || !currentTurn(data)) return;
             const player = findPlayerById(session, data.playerId);
             if (!player || session.phase !== GamePhase.Roll) return;
             const isCapA = session.captains.A === data.playerId;
@@ -1099,9 +1112,9 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             }
         });
 
-        socket.on(WsEvents.DRAFT_PICK, (data: { playerId: string; pickedId: string }) => {
+        socket.on(WsEvents.DRAFT_PICK, (data: { playerTurn?: unknown; playerId: string; pickedId: string }) => {
             const session = getSession();
-            if (!isAuthenticatedActor(data.playerId)) return;
+            if (!isAuthenticatedActor(data.playerId) || !currentTurn(data)) return;
             const drafter = findPlayerById(session, data.playerId);
             if (!drafter || session.phase !== GamePhase.PlayerDraft) return;
             if (!session.draftCaptainsActive) {
@@ -1133,9 +1146,9 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             }
         });
 
-        socket.on(WsEvents.VOTE, (data: { playerId: string; map: string }) => {
+        socket.on(WsEvents.VOTE, (data: { playerTurn?: unknown; playerId: string; map: string }) => {
             const session = getSession();
-            if (!isAuthenticatedActor(data.playerId)) return;
+            if (!isAuthenticatedActor(data.playerId) || !currentTurn(data)) return;
             if (session.phase !== GamePhase.MapBan || !session.mapVote) return;
             const player = findPlayerById(session, data.playerId);
             if (!player || player.role === 'Spectator' || player.role === 'Admin') return;
@@ -1145,9 +1158,9 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             broadcastState();
         });
 
-        socket.on(WsEvents.SIDE_PICK, (data: { playerId: string; side: 'CT' | 'T' }) => {
+        socket.on(WsEvents.SIDE_PICK, (data: { playerTurn?: unknown; playerId: string; side: 'CT' | 'T' }) => {
             const session = getSession();
-            if (!isAuthenticatedActor(data.playerId)) return;
+            if (!isAuthenticatedActor(data.playerId) || !currentTurn(data)) return;
             if (session.phase !== GamePhase.SidePick || !session.sideVote) return;
             const player = findPlayerById(session, data.playerId);
             if (!player || player.role === 'Spectator' || player.role === 'Admin') return;

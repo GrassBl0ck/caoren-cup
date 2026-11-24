@@ -29,6 +29,10 @@ import { registerDesktopRoomRoutes } from './desktop-room-routes';
 
 const PLAYER_CENTER_COOKIE = 'caoren_player_center';
 
+// This chooses the session's interface. Hosting also requires a configured admin account and verified Steam identity.
+const usesPlayerView = (req: express.Request) =>
+    req.query.view === 'player' || !/\b(?:CaorenCupDesktopClient|Electron)\/\d/.test(req.get('User-Agent') || '');
+
 const defaultAccountLoginGuard = new AccountLoginGuard();
 
 export interface IdentityAuthRouteDependencies {
@@ -50,6 +54,7 @@ export interface IdentityAuthRouteDependencies {
     onPlayerCenterMatchLeft?: (identityId: string, membershipId: string) => void | Promise<void>;
     consumeGameLoginTicket?: (code: unknown) => { steamId: string; name: string } | undefined;
     desktopRoomActions?: {
+        hasMatchSocket?: (playerId: string) => boolean;
         publish: () => void;
         start: (host: import('../types').Player) => boolean;
         changeMode: (modeId: import('../types').GameModeId) => void;
@@ -295,7 +300,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             const created = await service.registerVerifiedEmailAccount({
                 email, password: req.body.password,
             });
-            const issued = await centerSessions.create(created.identity.identityId, created.account.updatedAt);
+            const issued = await centerSessions.create(created.identity.identityId, created.account.updatedAt, undefined, usesPlayerView(req));
             setPlayerCenterCookie(req, res, issued.rawToken, issued.session.absoluteExpiresAt - Date.now());
             return res.status(201).json({ success: true, profile: playerCenterProfile(created.identity.identityId) });
         } catch (error) { return emailFailure(res, error); }
@@ -411,7 +416,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             return res.status(401).json({ success: false, error: 'session_bootstrap_invalid' });
         }
         try {
-            const created = await centerSessions.create(ticket.identityId, account.updatedAt, ticket.currentDeviceTokenId);
+            const created = await centerSessions.create(ticket.identityId, account.updatedAt, ticket.currentDeviceTokenId, usesPlayerView(req));
             setPlayerCenterCookie(req, res, created.rawToken, created.session.absoluteExpiresAt - Date.now());
             return res.json({
                 success: true,
@@ -495,7 +500,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         const steamId: unknown = req.body?.steamId;
         const room = getActiveSession();
         const host = Object.values(room.players).find(player => player.role === 'Admin' && player.identityId === centerSession.identityId);
-        if (!room.desktopFormalRoom || !host || !identity || typeof steamId !== 'string' ||
+        if (centerSession.playerOnly || !room.desktopFormalRoom || !host || !identity || typeof steamId !== 'string' ||
             host.steamId !== steamId || !desktopRoomAdmins.allows(centerSession.identityId, service) ||
             !isVerifiedSteamIdentity(identity, steamId)) {
             return res.status(403).json({ success: false, error: 'admin_required' });

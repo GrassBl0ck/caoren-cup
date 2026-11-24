@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>参赛房间 · 草台杯</title>
+  <link rel="icon" href="/assets/brand-icon.png"><link rel="stylesheet" href="/css/web-room.css">
+  <script defer src="/js/web-room.js"></script>
+</head>
+<body>
+  <header><a href="/"><img src="/assets/brand.png" width="106" height="34" alt="草台杯首页"></a>
+    <nav><a href="/rules">赛前指引</a><a href="/skins">换肤中心</a><a href="/profile">账户资料</a></nav>
+  </header>
+  <main>
+    <section class="hero"><div><p id="mode">本场比赛</p><h1 id="stage">候场房间</h1></div><a class="action" href="/phase" id="phase-link" hidden>进入比赛阶段 →</a></section>
+    <div class="columns">
+      <section><h2>参赛名单 <span id="count"></span></h2><ul id="roster"></ul></section>
+      <section><h2>本场 Steam 账号</h2>
+        <label for="steam">参赛账号</label><select id="steam" disabled></select>
+        <p>请核对电脑上登录的 Steam 账号。网页版无法自动检查当前账号和 CS2 区服。</p>
+        <button id="bind" hidden>通过 Steam 验证新账号</button>
+        <button id="join" class="action" hidden>加入比赛</button><button id="ready" class="action" hidden>准备</button>
+        <div id="connection" hidden>
+          <h2>进入 CS2</h2><p>请先使用本场账号启动国际服 CS2。</p>
+          <a class="action" id="connect" hidden>通过 Steam 进服</a>
+          <button id="copy" hidden>复制连接指令</button><code id="command" hidden></code>
+          <p id="connected" role="status"></p><button id="game-ready" hidden>进服确认</button>
+        </div>
+        <p id="feedback" role="status"></p><p id="sync" role="status"></p>
+      </section>
+    </div>
+    <details id="profile-editor"><summary>昵称与头像</summary>
+      <form id="edit-profile">
+        <label for="nickname">参赛昵称</label><input id="nickname" required maxlength="64" autocomplete="nickname">
+        <label for="avatar-mode">头像</label><select id="avatar-mode">
+          <option value="">保留当前头像</option><option value="steam">Steam 头像</option>
+          <option value="logo">草台杯 Logo</option><option value="custom">上传图片</option>
+        </select>
+        <input id="avatar-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+        <button class="action" type="submit">保存资料</button><p id="profile-result" role="status"></p>
+      </form>
+    </details>
+    <details id="history"><summary>我的比赛记录与 Demo</summary><p id="history-status" role="status"></p><ul id="matches"></ul><div id="archive"></div></details>
+  </main>
+</body>
+</html>

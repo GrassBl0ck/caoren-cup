@@ -17,6 +17,7 @@
     a:focus-visible { outline: 3px solid white; outline-offset: 5px; }
     .details { color: #bdc0c2; font-size: .875rem; margin: 14px 0 0; }
     .notice { margin: 24px 0 0; color: #c7cace; font-size: .9375rem; line-height: 1.8; text-align: left; }
+    .notice a { color: #ffae7d; text-underline-offset: .2em; }
     footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; padding: 20px; }
     footer a { color: #adb0b3; font-size: .75rem; text-decoration: none; }
     footer a:hover { text-decoration: underline; }
@@ -25,10 +26,10 @@
 <body>
   <main>
     <h1><img src="/assets/brand.png" alt="草台杯"></h1>
-    <a class="download" href="/downloads/caotai-cup-setup.msi" download>下载 Windows 客户端</a>
+    <a class="download" href="/downloads/caotai-cup-setup.msi" download>下载 Windows 客户端（推荐）</a>
     <p class="details">v2.4.1 · Windows x64 · MSI · {{installerSize}}</p>
-    <p class="notice">因架构调整，草台杯（原草人杯）将不再提供网页端服务，请通过上面的按钮下载客户端以继续参与游戏，感谢理解。</p>
-    <p class="notice">当前正式房间开放竞技和异能。RUSH、单挑等其他模式暂未开放。</p>
+    <p class="notice"><a href="/room">使用网页版参赛 →</a></p>
+    <p class="notice">客户端可自动核对 Steam 账号、启动国际服 CS2。主持比赛请使用客户端。</p>
   </main>
   <footer>
     <a href="https://beian.miit.gov.cn/" rel="noreferrer">冀ICP备2026043660号-1</a>
