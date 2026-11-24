@@ -142,6 +142,8 @@ public sealed partial class CaorenCupInGameMenuPlugin
         var signature = System.Text.Json.JsonSerializer.Serialize(data);
         if (onlyIfChanged && menu.Signature == signature) return;
         menu.Displayed = data; menu.Signature = signature;
+        _personalSurface.SetClass(player, "dialog", "WideMenu", menu.Page is RandomMenuPage.Offers or RandomMenuPage.Owned);
+        _personalSurface.SetClass(player, "dialog", "CompactDetail", menu.Page == RandomMenuPage.Detail);
         void Text(string key, string value) => _personalSurface.SetVariable(player, key, value);
         void Hide(string panel, bool hide) => _personalSurface.SetClass(player, panel, "Hidden", hide);
         void Selected(string panel, bool selected) => _personalSurface.SetClass(player, panel, "CaorenTabSelected", selected);
@@ -186,6 +188,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
                 Hide("random_buy_" + i + "_host", card is null);
                 if (card is null) continue;
                 Text("random_card_name" + i, RandomMenuPresentation.CardTitle(card));
+                PersonalPaint(player).Glyph(_personalSurface, player, "card_glyph_" + i, card.Key, card.Quality);
                 SetRandomIcons(player, "random_card_" + i, card.Category, card.Scope);
                 Hide("random_lock_" + i + "_host", !offers || !data.CanLock);
                 Text("random_lock_label" + i, data.LockedKey == card.Key ? "已锁定 · " + card.Name : "锁定 · " + card.Name);
@@ -220,6 +223,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
             Text("random_detail_title", RandomMenuPresentation.CardTitle(card));
             foreach (var quality in RandomMenuPresentation.QualityCodes)
                 _personalSurface.SetClass(player, "random_detail_panel", "RandomQuality" + quality, card.Quality == quality);
+            PersonalPaint(player).Glyph(_personalSurface, player, "detail_glyph", card.Key, card.Quality);
             SetRandomIcons(player, "random_detail", card.Category, card.Scope);
             var skill = data.Skills.FirstOrDefault(skill => skill.Key == card.Key);
             Hide("random_skill_host", skill is null);

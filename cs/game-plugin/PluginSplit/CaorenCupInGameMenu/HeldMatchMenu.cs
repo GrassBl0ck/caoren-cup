@@ -41,6 +41,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
             var steamId = player.SteamID.ToString();
             if (_heldMatchViews.ContainsKey(steamId) || IsVoteDraftAwaitingInput(steamId)) return;
 
+            ForgetCombat(player);
             ClosePlayerMenu(player);
             CloseVotePage(player);
             ClosePersonalMenu(player);

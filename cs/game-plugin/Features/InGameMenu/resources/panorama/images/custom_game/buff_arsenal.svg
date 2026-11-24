@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g fill="#fff" fill-rule="evenodd">
+    <g transform="translate(4 -2) scale(0.83)">
+    <path d="M10 18 15 7 20 18V49H10ZM25 13 30 2 35 13V49H25ZM40 18 45 7 50 18V49H40ZM8 52H52V58H8Z"/>
+    </g>
+    <path d="M4 46H58L54 59H9Z"/>
+  </g>
+</svg>

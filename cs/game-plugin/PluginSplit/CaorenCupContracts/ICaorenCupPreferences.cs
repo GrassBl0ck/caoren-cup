@@ -5,6 +5,8 @@ namespace CaorenCup.Contracts;
 public sealed record CaorenCupPreference(int Transparency = 10, int Volume = 100,
     bool MouseEffectEnabled = false, string MouseEffectColor = "blue")
 {
+    public CombatHudLayout? HudLayout { get; init; }
+
     public CaorenCupPreference Clamp() => this with
     {
         Transparency = Math.Clamp(Transparency, 0, 100), Volume = Math.Clamp(Volume, 0, 100)

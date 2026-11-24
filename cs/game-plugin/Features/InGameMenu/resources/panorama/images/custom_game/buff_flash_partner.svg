@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g fill="#fff" fill-rule="evenodd">
+    <g transform="translate(-5 0) scale(0.84)">
+    <path d="M36 3 12 35H28L23 61 54 24H36Z"/>
+    </g>
+    <g transform="translate(23 11) scale(0.78)">
+    <path d="M36 3 12 35H28L23 61 54 24H36Z"/>
+    </g>
+  </g>
+</svg>

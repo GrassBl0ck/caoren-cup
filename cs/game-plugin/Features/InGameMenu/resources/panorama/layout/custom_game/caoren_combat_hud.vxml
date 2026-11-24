@@ -1,0 +1,399 @@
+<root>
+    <styles>
+        <include src="s2r://panorama/styles/csgostyles.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_buff_icons.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_hud_positions.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_combat_hud.vcss_c" />
+    </styles>
+    <Panel class="HudRoot" hittest="false">
+      <Panel id="dialog" class="HudRoot HudPart" hittest="false">
+        <Panel id="buffs" class="MoveBar BuffBar" hittest="false">
+            <Button id="buff_0" class="HudPart HudSlot Passive">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="buff_0_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:buff_0_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:buff_0_hint}" hittest="false"/>
+            </Button>
+            <Button id="buff_1" class="HudPart HudSlot Passive">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="buff_1_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:buff_1_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:buff_1_hint}" hittest="false"/>
+            </Button>
+            <Button id="buff_2" class="HudPart HudSlot Passive">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="buff_2_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:buff_2_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:buff_2_hint}" hittest="false"/>
+            </Button>
+            <Button id="buff_3" class="HudPart HudSlot Passive">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="buff_3_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:buff_3_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:buff_3_hint}" hittest="false"/>
+            </Button>
+            <Button id="buff_4" class="HudPart HudSlot Passive">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="buff_4_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:buff_4_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:buff_4_hint}" hittest="false"/>
+            </Button>
+            <Button id="buff_5" class="HudPart HudSlot Passive">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="buff_5_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:buff_5_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:buff_5_hint}" hittest="false"/>
+            </Button>
+            <Button id="hud_more" class="HudPart More"><Label text="{s:hud_more_count}" hittest="false"/></Button>
+        </Panel>
+        <Panel id="skills" class="MoveBar SkillBar" hittest="false">
+            <Button id="skill_0" class="HudPart HudSlot Skill">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="skill_0_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:skill_0_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:skill_0_hint}" hittest="false"/>
+            </Button>
+            <Button id="skill_1" class="HudPart HudSlot Skill">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="skill_1_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:skill_1_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:skill_1_hint}" hittest="false"/>
+            </Button>
+            <Button id="skill_2" class="HudPart HudSlot Skill">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="skill_2_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:skill_2_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:skill_2_hint}" hittest="false"/>
+            </Button>
+        </Panel>
+        <Panel id="intel" class="MoveBar IntelBar" hittest="false">
+            <Button id="intel_item" class="HudPart HudSlot Intel">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="intel_item_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:intel_item_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:intel_item_hint}" hittest="false"/>
+            </Button>
+        </Panel>
+        <Panel id="collection" class="HudPart InspectWindow" hittest="true">
+            <Panel class="WindowHead"><Label text="已拥有的被动 BUFF"/><Button id="hud_less"><Label text="收起"/></Button></Panel>
+            <Panel class="CollectionGrid" hittest="false">
+            <Button id="all_0" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_0_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_0_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_0_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_1" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_1_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_1_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_1_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_2" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_2_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_2_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_2_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_3" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_3_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_3_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_3_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_4" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_4_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_4_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_4_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_5" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_5_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_5_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_5_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_6" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_6_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_6_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_6_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_7" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_7_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_7_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_7_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_8" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_8_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_8_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_8_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_9" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_9_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_9_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_9_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_10" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_10_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_10_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_10_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_11" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_11_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_11_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_11_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_12" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_12_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_12_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_12_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_13" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_13_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_13_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_13_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_14" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_14_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_14_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_14_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_15" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_15_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_15_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_15_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_16" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_16_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_16_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_16_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_17" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_17_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_17_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_17_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_18" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_18_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_18_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_18_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_19" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_19_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_19_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_19_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_20" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_20_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_20_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_20_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_21" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_21_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_21_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_21_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_22" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_22_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_22_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_22_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_23" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_23_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_23_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_23_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_24" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_24_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_24_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_24_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_25" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_25_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_25_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_25_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_26" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_26_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_26_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_26_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_27" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_27_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_27_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_27_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_28" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_28_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_28_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_28_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_29" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_29_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_29_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_29_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_30" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_30_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_30_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_30_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_31" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_31_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_31_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_31_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_32" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_32_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_32_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_32_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_33" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_33_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_33_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_33_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_34" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_34_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_34_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_34_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_35" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_35_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_35_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_35_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_36" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_36_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_36_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_36_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_37" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_37_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_37_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_37_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_38" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_38_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_38_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_38_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_39" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_39_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_39_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_39_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_40" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_40_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_40_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_40_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_41" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_41_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_41_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_41_hint}" hittest="false"/>
+            </Button>
+            <Button id="all_42" class="HudPart HudSlot CollectionItem">
+                <Panel class="SlotLine" hittest="false">
+                    <Panel id="all_42_icon" class="BuffGlyph" hittest="false"/>
+                    <Label class="SlotLabel" text="{s:all_42_label}" hittest="false"/>
+                </Panel>
+                <Label class="HoverDescription" text="{s:all_42_hint}" hittest="false"/>
+            </Button>
+            </Panel>
+        </Panel>
+        <Panel id="detail" class="HudPart InspectWindow" hittest="true">
+            <Panel class="WindowHead"><Label text="{s:hud_title}"/><Button id="hud_back"><Label text="返回"/></Button></Panel>
+            <Label class="DetailText" text="{s:hud_description}" hittest="false"/>
+        </Panel>
+      </Panel>
+    </Panel>
+</root>

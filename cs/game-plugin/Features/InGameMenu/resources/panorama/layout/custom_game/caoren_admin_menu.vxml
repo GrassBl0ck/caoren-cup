@@ -4,6 +4,7 @@
         <include src="s2r://panorama/styles/mainmenu.vcss_c" />
         <include src="s2r://panorama/styles/settings/settings.vcss_c" />
         <include src="s2r://panorama/styles/custom_game/caoren_admin_menu.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_compact_menus.vcss_c" />
     </styles>
     <Panel class="CaorenAdminRoot" hittest="false">
         <Panel id="dialog" class="CaorenSettings UserAlpha10 Hidden" hittest="true">

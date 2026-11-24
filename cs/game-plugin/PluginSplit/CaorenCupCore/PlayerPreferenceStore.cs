@@ -6,7 +6,7 @@ using CaorenCup.Contracts;
 namespace CaorenCup.Core;
 
 /// <summary>损坏或不可读的文件只读保护；内存变更可生效，禁止用默认值覆盖原文件。</summary>
-public sealed class PlayerPreferenceStore : ICaorenCupPreferences
+public sealed class PlayerPreferenceStore : ICaorenCupPreferences, ICombatHudPreferences
 {
     private sealed record LegacyImportMarker(string Fingerprint, int Records);
     private readonly string _path;
@@ -34,6 +34,13 @@ public sealed class PlayerPreferenceStore : ICaorenCupPreferences
         var old = Get(steamId);
         _values[steamId] = (old with { Transparency = transparency ?? old.Transparency, Volume = volume ?? old.Volume }).Clamp();
         Save(_values);
+    }
+    public void SetHudLayout(string steamId, CombatHudLayout layout)
+    {
+        var updated = Get(steamId) with { HudLayout = layout.Clamp() };
+        var next = new Dictionary<string, CaorenCupPreference>(_values) { [steamId] = updated };
+        Save(next);
+        _values[steamId] = updated;
     }
     public void ImportLegacy(IReadOnlyDictionary<string, CaorenCupPreference> values)
     {

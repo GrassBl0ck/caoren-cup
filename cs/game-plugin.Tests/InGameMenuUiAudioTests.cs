@@ -154,6 +154,15 @@ public sealed class InGameMenuUiAudioTests
                 var buttonClasses = ((string?)button.Attribute("class") ?? "").Split(' ');
                 Assert.DoesNotContain("PopupButton", buttonClasses);
                 Assert.DoesNotContain("content-navbar__tabs__btn", buttonClasses);
+                // A position picker is one spatial control. Its cells highlight the target under the cursor;
+                // opening a tooltip over every cell would cover its neighbouring targets.
+                if (name == "caoren_player_menu" && buttonClasses.Contains("EditCell"))
+                {
+                    Assert.Matches(@"^cell_(?:[0-9]|1[0-6])_(?:[0-9]|10)$", (string)button.Attribute("id")!);
+                    Assert.Equal("CellRow", (string?)button.Parent?.Attribute("class"));
+                    Assert.Contains(button.Ancestors(), panel => (string?)panel.Attribute("id") == "hud_editor");
+                    continue;
+                }
                 var host = button.Parent!;
                 Assert.Equal((string?)button.Attribute("id") + "_host", (string?)host.Attribute("id"));
                 var hint = Assert.Single(host.Elements("Panel"), panel => ((string?)panel.Attribute("class"))?.StartsWith("CaorenHoverHint") == true);

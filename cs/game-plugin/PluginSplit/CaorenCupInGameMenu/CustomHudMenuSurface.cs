@@ -93,6 +93,8 @@ public sealed class CustomHudMenuSurface : IMenuHudSurface
         "guide_prev" or "guide_next" or "guide_detail_prev" or "guide_detail_next" or
         "vote_create" or "vote_cancel" or "vote_start" or "vote_discard" or "vote_cancel_confirm" or "vote_back" or "vote_exit"
         || id.StartsWith("settings_", StringComparison.Ordinal)
+        || id is "hud_edit_open" or "hud_save" or "hud_up" or "hud_down" or "hud_left" or "hud_right"
+        || id.StartsWith("select_", StringComparison.Ordinal) || id.StartsWith("hud_bind_", StringComparison.Ordinal)
         || id is "random_offers" or "random_owned" or "random_overview" or "random_toggle" or "random_prev" or "random_next" or "random_reroll" or "random_exchange"
         || Enumerable.Range(0, 3).Any(index => id == "random_buy_" + index || id == "random_detail_" + index)
         || Enumerable.Range(0, 8).Any(index => id == "player_cmd_" + index || id == "guide_item_" + index)

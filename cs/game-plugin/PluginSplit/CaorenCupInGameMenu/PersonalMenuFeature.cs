@@ -5,7 +5,7 @@ namespace CaorenCup.Features.InGameMenu;
 
 public sealed partial class CaorenCupInGameMenuPlugin
 {
-    private enum PersonalView { Commands, Detail, Stats, Settings, Guide, Random }
+    private enum PersonalView { Commands, Detail, Stats, Settings, Guide, Random, HudEditor }
     private IMenuHudSurface _personalSurface = null!;
     private MenuPreferences _preferences = null!;
     private readonly Dictionary<(IMenuHudSurface Surface, string SteamId, string Panel), int> _menuSoundVolumes = new();
@@ -45,6 +45,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
     private void OpenPersonalMenu(CCSPlayerController player, bool preservePage = false)
     {
         var sid = player.SteamID.ToString();
+        ForgetCombat(player);
         if (!preservePage) { _personalPages.Remove(sid); _personalDetails.Remove(sid); _personalStatsPages.Remove(sid); }
         ClosePlayerMenu(player); CloseVotePage(player);
         _personalSurface.EnsureEntity();
@@ -57,10 +58,13 @@ public sealed partial class CaorenCupInGameMenuPlugin
     private void SetPersonalView(CCSPlayerController player, PersonalView view)
     {
         var sid = player.SteamID.ToString(); _personalViews[sid] = view;
+        if (view != PersonalView.HudEditor) _editorStates.Remove(sid);
+        _personalSurface.SetClass(player, "dialog", "WideMenu", view == PersonalView.Random);
+        _personalSurface.SetClass(player, "dialog", "CompactDetail", view == PersonalView.Detail);
         _personalSurface.SetClass(player, "player_back", "Hidden", view == PersonalView.Commands);
         foreach (var pair in new[] { (PersonalView.Commands, "player_commands"),
             (PersonalView.Detail, "player_detail"), (PersonalView.Stats, "player_stats"),
-            (PersonalView.Settings, "player_settings"), (PersonalView.Guide, "player_open_guide"), (PersonalView.Random, "player_random") })
+            (PersonalView.Settings, "player_settings"), (PersonalView.Guide, "player_open_guide"), (PersonalView.Random, "player_random"), (PersonalView.HudEditor, "hud_editor") })
             _personalSurface.SetClass(player, pair.Item2, "Hidden", view != pair.Item1);
         _personalSurface.SetClass(player, "player_commands_open", "CaorenTabSelected", view is PersonalView.Commands or PersonalView.Detail);
         _personalSurface.SetClass(player, "player_stats_open", "CaorenTabSelected", view == PersonalView.Stats);
@@ -68,7 +72,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         _personalSurface.SetClass(player, "player_guide_open", "CaorenTabSelected", view == PersonalView.Guide);
         _personalSurface.SetClass(player, "player_random_open", "CaorenTabSelected", view == PersonalView.Random);
         _personalSurface.SetClass(player, "player_random_open", "Hidden", !RandomMenuAvailable);
-        _personalSurface.SetVariable(player, "player_section", view switch { PersonalView.Commands => "玩家指令", PersonalView.Detail => "指令详情", PersonalView.Stats => "趣味数据", PersonalView.Settings => "个人设置", PersonalView.Random => "随机乱斗", _ => "打开指引" });
+        _personalSurface.SetVariable(player, "player_section", view switch { PersonalView.Commands => "玩家指令", PersonalView.Detail => "指令详情", PersonalView.Stats => "趣味数据", PersonalView.Settings => "个人设置", PersonalView.HudEditor => "HUD 位置", PersonalView.Random => "随机乱斗", _ => "打开指引" });
         RenderPersonalView(player);
     }
     private void HandlePersonalClick(CCSPlayerController player, string id)
@@ -83,6 +87,14 @@ public sealed partial class CaorenCupInGameMenuPlugin
         if (id == "player_settings_open") { SetPersonalView(player, PersonalView.Settings); return; }
         if (id == "player_guide_open") { SetPersonalView(player, PersonalView.Guide); return; }
         if (id == "player_vote_open") { OpenVotePage(player, false, true); return; }
+        if (view == PersonalView.HudEditor) { HandleEditorClick(player, id); return; }
+        if (view == PersonalView.Settings && id == "hud_edit_open") { OpenHudEditor(player); return; }
+        if (view == PersonalView.Settings && id.StartsWith("hud_bind_", StringComparison.Ordinal))
+        {
+            var key = id[9..];
+            if (key is "f8" or "mouse4" or "mouse5") PrintCombatBinding(player, key);
+            return;
+        }
         if (view == PersonalView.Settings && HandlePreferenceClick(player, id, _personalSurface)) return;
         if (view == PersonalView.Stats && (id is "player_stats_prev" or "player_stats_next"))
         {
@@ -114,6 +126,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
     private void RenderPersonalView(CCSPlayerController player)
     {
         var sid = player.SteamID.ToString(); var view = _personalViews.GetValueOrDefault(sid);
+        if (view == PersonalView.HudEditor) { RenderHudEditor(player); return; }
         if (view == PersonalView.Random) { RenderRandomMenu(player); return; }
         if (view == PersonalView.Stats) { RenderPersonalStats(player); return; }
         if (view == PersonalView.Settings) { RenderPersonalSettings(player, _personalSurface); return; }
@@ -146,6 +159,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
     private bool HandlePersonalBack(CCSPlayerController player)
     {
         var sid = player.SteamID.ToString(); if (!_personalViews.TryGetValue(sid, out var view)) return false;
+        if (view == PersonalView.HudEditor) { SetPersonalView(player, PersonalView.Settings); return true; }
         if (view == PersonalView.Random && HandleRandomBack(player)) return true;
         if (view == PersonalView.Commands) ClosePersonalMenu(player);
         else SetPersonalView(player, PersonalView.Commands);
@@ -154,12 +168,13 @@ public sealed partial class CaorenCupInGameMenuPlugin
     private void ClosePersonalMenu(CCSPlayerController player, bool preservePage = false)
     {
         var sid = player.SteamID.ToString();
+        _editorStates.Remove(sid);
         _personalViews.Remove(sid);
         _randomMenus.Remove(sid);
         if (!preservePage) { _personalPages.Remove(sid); _personalDetails.Remove(sid); _personalStatsPages.Remove(sid); }
         if (_personalSurface == null) return;
         _personalSurface.SetClass(player, "dialog", "Hidden", true); _personalSurface.ReleaseInput(player);
-        if (_personalViews.Count == 0) { _personalSurface.RemoveEntity(); ClearHelpRenderCache(_personalSurface); }
+        if (_personalViews.Count == 0) { _personalSurface.RemoveEntity(); _cardPaint.Clear(); ClearHelpRenderCache(_personalSurface); }
     }
     private void ReturnFromVotePage(CCSPlayerController player)
     {

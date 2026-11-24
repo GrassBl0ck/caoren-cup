@@ -14,7 +14,7 @@ namespace CaorenCup.Features.InGameMenu;
 /// CS2 风格管理员菜单、普通玩家投票页与左侧通知。
 /// 管理入口 /crcmenu_admin（root），玩家入口 /crcmenu，公共返回/退出命令仅操作自己的界面。
 /// </summary>
-public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostActions
+public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostActions, ICombatHudRenderer
 {
     private const float ChatRelayTimeoutSeconds = 60f;
 
@@ -59,6 +59,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         _commandHelp = CommandHelpCatalog.Load();
         new AdminMenuCatalog(this, _navigator).RegisterMinimalAdminPage();
         RegisterHeldMatchMenu();
+        RegisterCombatHud();
 
         AddCommand("css_crcmenu_admin", "打开管理员游戏内菜单", OnMenuCommand);
         AddCommand("css_ca", "打开管理员游戏内菜单", OnMenuCommand);
@@ -116,6 +117,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
 
     private void OpenMenu(CCSPlayerController player)
     {
+        ForgetCombat(player);
         ClosePersonalMenu(player);
         CloseVotePage(player);
         var steamId = player.SteamID.ToString();
@@ -141,6 +143,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
     private void OnHudClicked(CCSPlayerController player, CCSCustomHudLayout layout, string buttonId)
     {
         if (!player.IsValid) return;
+        if (HandleCombatClick(player, layout, buttonId)) return;
         if (HandleHeldMatchClick(player, layout, buttonId)) return;
         if (CustomHudMenuSurface.IsBusinessButton(buttonId) &&
             ((_personalSurface.IsOurLayout(layout) && _personalViews.ContainsKey(player.SteamID.ToString()))
@@ -224,6 +227,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
 
     private void CloseAllMenus(VoteEndReason reason = VoteEndReason.MapChanged)
     {
+        ClearCombatHud();
         ResetVoting(reason);
         CloseAllHeldMatchMenus();
         _navigator.CloseAll();
@@ -237,6 +241,10 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         var steamId = @event.Xuid != 0 ? @event.Xuid.ToString()
             : player?.IsValid == true ? player.SteamID.ToString() : string.Empty;
         if (steamId.Length == 0) return HookResult.Continue;
+        if (player is { IsValid: true }) ForgetCombat(player);
+        if (ulong.TryParse(steamId, out var departed)) _combatViews.Remove(departed);
+        _editorStates.Remove(steamId);
+        _cardPaint.Remove(steamId);
         _randomMenus.Remove(steamId);
         CloseHeldMatchMenu(steamId, player);
         TrackDisconnectedPlayer(steamId);

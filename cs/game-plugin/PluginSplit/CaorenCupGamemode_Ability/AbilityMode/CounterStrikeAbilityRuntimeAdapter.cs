@@ -27,7 +27,7 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     private readonly Dictionary<string, Vector3> _lastDecoyLandingBySeat = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _baselineMaxHealthBySteamId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PlayerButtons> _previousButtonsBySteamId = new(StringComparer.Ordinal);
-    private readonly AbilityHudSurface _abilityHudSurface = new();
+    private readonly AbilityHudSurface _standaloneHud = new();
     private Timer? _hudTimer;
     private float _roundStartedAt;
     private int _roundSequence;
@@ -575,7 +575,6 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
         }
 
         var visible = Controller.Hud.ToggleVisibility(seat.SeatId);
-        if (!visible) _abilityHudSurface.Hide(realPlayer!);
         CaorenCupChat.PrintToChat(realPlayer!, visible ? "异能屏幕 HUD 已开启。" : "异能屏幕 HUD 已关闭。");
     }
 
@@ -664,7 +663,33 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
     {
         _hudTimer?.Kill();
         _hudTimer = null;
-        _abilityHudSurface.RemoveEntity();
+        _standaloneHud.RemoveEntity();
+    }
+
+    public CombatAbilityView? ReadHud(CCSPlayerController player)
+    {
+        if (!IsRunning() || !TryRealPlayer(player, out var realPlayer)) return null;
+        var seat = FindSeat(realPlayer!);
+        if (seat is null || !Controller.Hud.IsVisible(seat.SeatId)) return null;
+        var view = BuildHudSnapshot(seat);
+        var status = view.IsReady && !realPlayer!.PawnIsAlive ? "等待复活" : view.ActiveStatus;
+        return new(view.RoleName, view.ChargeLabel, status,
+            view.CooldownLabel == "技能计时/CD：无" ? "" : view.CooldownLabel,
+            view.CModelPreview, view.Prompt, view.ExtraDetails)
+        {
+            Effect = seat.Definition.ActiveDescription,
+            ChargeRule = seat.Definition.ChargeRule
+        };
+    }
+
+    private AbilityHudSnapshot BuildHudSnapshot(AbilitySeatState seat)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var role = _roles.GetPlayer(seat.SeatId);
+        var intel = role is not null && seat.AbilityId == "commander"
+            ? _roles.Commander.BuildHud(role, _roles.Players, now).Text : string.Empty;
+        return Controller.Hud.BuildSnapshot(seat, now, _roles.ActiveHandlers.ContainsKey(seat.AbilityId),
+            seat.Definition.CModelPreview, roleDetailsHtml: intel);
     }
 
     private void RefreshHud()
@@ -683,28 +708,21 @@ public sealed class CounterStrikeAbilityRuntimeAdapter
         }
         _roles.Tick();
         Controller.ScheduleCurrent();
+        var standalone = !CaorenCupModuleRegistry.Snapshot().Any(m => m.Owner is ICombatHudRenderer);
+        if (!standalone && _standaloneHud.IsAlive) _standaloneHud.RemoveEntity();
         foreach (var player in Utilities.GetPlayers())
         {
             if (!TryRealPlayer(player, out var realPlayer)) continue;
             var seat = FindSeat(realPlayer!);
-            if (seat is null) continue;
-            var rolePlayer = _roles.GetPlayer(seat.SeatId);
-            var roleDetails = rolePlayer is not null && seat.AbilityId == "commander"
-                ? _roles.Commander.BuildHud(rolePlayer, _roles.Players, DateTimeOffset.UtcNow).Text
-                : string.Empty;
-            if (Controller.Hud.IsVisible(seat.SeatId))
+            if (seat is null)
             {
-                var view = Controller.Hud.BuildSnapshot(
-                    seat,
-                    DateTimeOffset.UtcNow,
-                    _roles.ActiveHandlers.ContainsKey(seat.AbilityId),
-                    seat.Definition.CModelPreview,
-                    roleDetails);
-                _abilityHudSurface.Render(realPlayer!, view);
+                if (standalone) _standaloneHud.Hide(realPlayer!);
+                continue;
             }
-            else
+            if (standalone)
             {
-                _abilityHudSurface.Hide(realPlayer!);
+                if (Controller.Hud.IsVisible(seat.SeatId)) _standaloneHud.Render(realPlayer!, BuildHudSnapshot(seat));
+                else _standaloneHud.Hide(realPlayer!);
             }
             ApplyMovement(realPlayer!, seat);
         }

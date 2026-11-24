@@ -15,7 +15,33 @@ public sealed record AbilityDefinition(
     int FixedCost = 0,
     int MinimumCharge = 0,
     bool AllowsEmptyCast = false,
-    Func<int, string>? CModelPreview = null);
+    Func<int, string>? CModelPreview = null)
+{
+    public string ChargeRule => ReleaseModel switch
+    {
+        AbilityReleaseModel.A => $"充满 {ChargeCap} 点时可用，发动后消耗全部充能。",
+        AbilityReleaseModel.B => $"每次发动消耗 {FixedCost} 点充能。",
+        _ => $"至少 {MinimumCharge} 点可用，发动后消耗当前全部充能。"
+    };
+
+    public string ActiveDescription => Id switch
+    {
+        "medic" => "充满后恢复全部存活队友的生命。",
+        "berserker" => "消耗全部充能，在本回合获得无限弹药和射速提升。",
+        "assassin" => "充满后获得 短时间完全隐身。",
+        "tank" => "消耗充能暂时移除自身惩罚并强化正面减伤。",
+        "istaru" => "充满后将全体玩家回溯到 之前的状态。",
+        "capitalist" => "消耗全部充能，按当前充能比例掠夺敌方金钱。",
+        "balance" => "充满后将所有存活敌人的基础生命调为自身当前生命。",
+        "glass_cannon" => "消耗充能进入死亡爆炸准备状态。",
+        "utility_specialist" => "充满后在持续时间内返还成功投出的道具。",
+        "commander" => "消耗充能显示所有存活敌人的姓名与距离。",
+        "sky_courier" => "充满后准备传送至自己诱饵弹的落点。",
+        "snow_golem" => "消耗全部充能，暂时恢复枪械伤害并保留击飞。",
+        "witch" => "充满后对附近中毒敌人造成真实伤害并加深中毒。",
+        _ => Name
+    };
+}
 
 public sealed class AbilityDefinitionCatalog
 {

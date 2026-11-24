@@ -5,6 +5,9 @@
         <include src="s2r://panorama/styles/settings/settings.vcss_c" />
         <include src="s2r://panorama/styles/custom_game/caoren_admin_menu.vcss_c" />
         <include src="s2r://panorama/styles/custom_game/caoren_player_menu.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_buff_icons.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_hud_positions.vcss_c" />
+        <include src="s2r://panorama/styles/custom_game/caoren_compact_menus.vcss_c" />
     </styles>
     <Panel class="CaorenAdminRoot" hittest="false">
         <Panel id="dialog" class="CaorenSettings UserAlpha10 Hidden" hittest="true">
@@ -594,9 +597,344 @@
                                 </Panel>
                             </Panel>
                         </Panel>
+                        <Panel id="hud_editor" class="CaorenMenuSection Hidden">
+                            <Label text="HUD 位置" class="SettingsSectionTitleLabel"/>
+                            <Panel class="EditorTools">
+                                <Panel id="select_Buffs_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="select_Buffs" class="EditorAction">
+                                        <Label text="BUFF 栏"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="移动被动 BUFF 栏"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel id="select_Skills_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="select_Skills" class="EditorAction">
+                                        <Label text="主动技能"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="移动主动技能栏"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel id="select_Intel_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="select_Intel" class="EditorAction">
+                                        <Label text="职业情报"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="移动职业专属信息栏"/>
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                            <Label class="CaorenGuidePage" text="选择一栏，点预览区域定位，再用方向按钮微调。"/>
+                            <Panel class="EditorScene">
+                                <Panel class="CellGrid">
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_0" class="EditCell"/>
+                                        <Button id="cell_1_0" class="EditCell"/>
+                                        <Button id="cell_2_0" class="EditCell"/>
+                                        <Button id="cell_3_0" class="EditCell"/>
+                                        <Button id="cell_4_0" class="EditCell"/>
+                                        <Button id="cell_5_0" class="EditCell"/>
+                                        <Button id="cell_6_0" class="EditCell"/>
+                                        <Button id="cell_7_0" class="EditCell"/>
+                                        <Button id="cell_8_0" class="EditCell"/>
+                                        <Button id="cell_9_0" class="EditCell"/>
+                                        <Button id="cell_10_0" class="EditCell"/>
+                                        <Button id="cell_11_0" class="EditCell"/>
+                                        <Button id="cell_12_0" class="EditCell"/>
+                                        <Button id="cell_13_0" class="EditCell"/>
+                                        <Button id="cell_14_0" class="EditCell"/>
+                                        <Button id="cell_15_0" class="EditCell"/>
+                                        <Button id="cell_16_0" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_1" class="EditCell"/>
+                                        <Button id="cell_1_1" class="EditCell"/>
+                                        <Button id="cell_2_1" class="EditCell"/>
+                                        <Button id="cell_3_1" class="EditCell"/>
+                                        <Button id="cell_4_1" class="EditCell"/>
+                                        <Button id="cell_5_1" class="EditCell"/>
+                                        <Button id="cell_6_1" class="EditCell"/>
+                                        <Button id="cell_7_1" class="EditCell"/>
+                                        <Button id="cell_8_1" class="EditCell"/>
+                                        <Button id="cell_9_1" class="EditCell"/>
+                                        <Button id="cell_10_1" class="EditCell"/>
+                                        <Button id="cell_11_1" class="EditCell"/>
+                                        <Button id="cell_12_1" class="EditCell"/>
+                                        <Button id="cell_13_1" class="EditCell"/>
+                                        <Button id="cell_14_1" class="EditCell"/>
+                                        <Button id="cell_15_1" class="EditCell"/>
+                                        <Button id="cell_16_1" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_2" class="EditCell"/>
+                                        <Button id="cell_1_2" class="EditCell"/>
+                                        <Button id="cell_2_2" class="EditCell"/>
+                                        <Button id="cell_3_2" class="EditCell"/>
+                                        <Button id="cell_4_2" class="EditCell"/>
+                                        <Button id="cell_5_2" class="EditCell"/>
+                                        <Button id="cell_6_2" class="EditCell"/>
+                                        <Button id="cell_7_2" class="EditCell"/>
+                                        <Button id="cell_8_2" class="EditCell"/>
+                                        <Button id="cell_9_2" class="EditCell"/>
+                                        <Button id="cell_10_2" class="EditCell"/>
+                                        <Button id="cell_11_2" class="EditCell"/>
+                                        <Button id="cell_12_2" class="EditCell"/>
+                                        <Button id="cell_13_2" class="EditCell"/>
+                                        <Button id="cell_14_2" class="EditCell"/>
+                                        <Button id="cell_15_2" class="EditCell"/>
+                                        <Button id="cell_16_2" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_3" class="EditCell"/>
+                                        <Button id="cell_1_3" class="EditCell"/>
+                                        <Button id="cell_2_3" class="EditCell"/>
+                                        <Button id="cell_3_3" class="EditCell"/>
+                                        <Button id="cell_4_3" class="EditCell"/>
+                                        <Button id="cell_5_3" class="EditCell"/>
+                                        <Button id="cell_6_3" class="EditCell"/>
+                                        <Button id="cell_7_3" class="EditCell"/>
+                                        <Button id="cell_8_3" class="EditCell"/>
+                                        <Button id="cell_9_3" class="EditCell"/>
+                                        <Button id="cell_10_3" class="EditCell"/>
+                                        <Button id="cell_11_3" class="EditCell"/>
+                                        <Button id="cell_12_3" class="EditCell"/>
+                                        <Button id="cell_13_3" class="EditCell"/>
+                                        <Button id="cell_14_3" class="EditCell"/>
+                                        <Button id="cell_15_3" class="EditCell"/>
+                                        <Button id="cell_16_3" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_4" class="EditCell"/>
+                                        <Button id="cell_1_4" class="EditCell"/>
+                                        <Button id="cell_2_4" class="EditCell"/>
+                                        <Button id="cell_3_4" class="EditCell"/>
+                                        <Button id="cell_4_4" class="EditCell"/>
+                                        <Button id="cell_5_4" class="EditCell"/>
+                                        <Button id="cell_6_4" class="EditCell"/>
+                                        <Button id="cell_7_4" class="EditCell"/>
+                                        <Button id="cell_8_4" class="EditCell"/>
+                                        <Button id="cell_9_4" class="EditCell"/>
+                                        <Button id="cell_10_4" class="EditCell"/>
+                                        <Button id="cell_11_4" class="EditCell"/>
+                                        <Button id="cell_12_4" class="EditCell"/>
+                                        <Button id="cell_13_4" class="EditCell"/>
+                                        <Button id="cell_14_4" class="EditCell"/>
+                                        <Button id="cell_15_4" class="EditCell"/>
+                                        <Button id="cell_16_4" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_5" class="EditCell"/>
+                                        <Button id="cell_1_5" class="EditCell"/>
+                                        <Button id="cell_2_5" class="EditCell"/>
+                                        <Button id="cell_3_5" class="EditCell"/>
+                                        <Button id="cell_4_5" class="EditCell"/>
+                                        <Button id="cell_5_5" class="EditCell"/>
+                                        <Button id="cell_6_5" class="EditCell"/>
+                                        <Button id="cell_7_5" class="EditCell"/>
+                                        <Button id="cell_8_5" class="EditCell"/>
+                                        <Button id="cell_9_5" class="EditCell"/>
+                                        <Button id="cell_10_5" class="EditCell"/>
+                                        <Button id="cell_11_5" class="EditCell"/>
+                                        <Button id="cell_12_5" class="EditCell"/>
+                                        <Button id="cell_13_5" class="EditCell"/>
+                                        <Button id="cell_14_5" class="EditCell"/>
+                                        <Button id="cell_15_5" class="EditCell"/>
+                                        <Button id="cell_16_5" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_6" class="EditCell"/>
+                                        <Button id="cell_1_6" class="EditCell"/>
+                                        <Button id="cell_2_6" class="EditCell"/>
+                                        <Button id="cell_3_6" class="EditCell"/>
+                                        <Button id="cell_4_6" class="EditCell"/>
+                                        <Button id="cell_5_6" class="EditCell"/>
+                                        <Button id="cell_6_6" class="EditCell"/>
+                                        <Button id="cell_7_6" class="EditCell"/>
+                                        <Button id="cell_8_6" class="EditCell"/>
+                                        <Button id="cell_9_6" class="EditCell"/>
+                                        <Button id="cell_10_6" class="EditCell"/>
+                                        <Button id="cell_11_6" class="EditCell"/>
+                                        <Button id="cell_12_6" class="EditCell"/>
+                                        <Button id="cell_13_6" class="EditCell"/>
+                                        <Button id="cell_14_6" class="EditCell"/>
+                                        <Button id="cell_15_6" class="EditCell"/>
+                                        <Button id="cell_16_6" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_7" class="EditCell"/>
+                                        <Button id="cell_1_7" class="EditCell"/>
+                                        <Button id="cell_2_7" class="EditCell"/>
+                                        <Button id="cell_3_7" class="EditCell"/>
+                                        <Button id="cell_4_7" class="EditCell"/>
+                                        <Button id="cell_5_7" class="EditCell"/>
+                                        <Button id="cell_6_7" class="EditCell"/>
+                                        <Button id="cell_7_7" class="EditCell"/>
+                                        <Button id="cell_8_7" class="EditCell"/>
+                                        <Button id="cell_9_7" class="EditCell"/>
+                                        <Button id="cell_10_7" class="EditCell"/>
+                                        <Button id="cell_11_7" class="EditCell"/>
+                                        <Button id="cell_12_7" class="EditCell"/>
+                                        <Button id="cell_13_7" class="EditCell"/>
+                                        <Button id="cell_14_7" class="EditCell"/>
+                                        <Button id="cell_15_7" class="EditCell"/>
+                                        <Button id="cell_16_7" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_8" class="EditCell"/>
+                                        <Button id="cell_1_8" class="EditCell"/>
+                                        <Button id="cell_2_8" class="EditCell"/>
+                                        <Button id="cell_3_8" class="EditCell"/>
+                                        <Button id="cell_4_8" class="EditCell"/>
+                                        <Button id="cell_5_8" class="EditCell"/>
+                                        <Button id="cell_6_8" class="EditCell"/>
+                                        <Button id="cell_7_8" class="EditCell"/>
+                                        <Button id="cell_8_8" class="EditCell"/>
+                                        <Button id="cell_9_8" class="EditCell"/>
+                                        <Button id="cell_10_8" class="EditCell"/>
+                                        <Button id="cell_11_8" class="EditCell"/>
+                                        <Button id="cell_12_8" class="EditCell"/>
+                                        <Button id="cell_13_8" class="EditCell"/>
+                                        <Button id="cell_14_8" class="EditCell"/>
+                                        <Button id="cell_15_8" class="EditCell"/>
+                                        <Button id="cell_16_8" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_9" class="EditCell"/>
+                                        <Button id="cell_1_9" class="EditCell"/>
+                                        <Button id="cell_2_9" class="EditCell"/>
+                                        <Button id="cell_3_9" class="EditCell"/>
+                                        <Button id="cell_4_9" class="EditCell"/>
+                                        <Button id="cell_5_9" class="EditCell"/>
+                                        <Button id="cell_6_9" class="EditCell"/>
+                                        <Button id="cell_7_9" class="EditCell"/>
+                                        <Button id="cell_8_9" class="EditCell"/>
+                                        <Button id="cell_9_9" class="EditCell"/>
+                                        <Button id="cell_10_9" class="EditCell"/>
+                                        <Button id="cell_11_9" class="EditCell"/>
+                                        <Button id="cell_12_9" class="EditCell"/>
+                                        <Button id="cell_13_9" class="EditCell"/>
+                                        <Button id="cell_14_9" class="EditCell"/>
+                                        <Button id="cell_15_9" class="EditCell"/>
+                                        <Button id="cell_16_9" class="EditCell"/>
+                                    </Panel>
+                                    <Panel class="CellRow">
+                                        <Button id="cell_0_10" class="EditCell"/>
+                                        <Button id="cell_1_10" class="EditCell"/>
+                                        <Button id="cell_2_10" class="EditCell"/>
+                                        <Button id="cell_3_10" class="EditCell"/>
+                                        <Button id="cell_4_10" class="EditCell"/>
+                                        <Button id="cell_5_10" class="EditCell"/>
+                                        <Button id="cell_6_10" class="EditCell"/>
+                                        <Button id="cell_7_10" class="EditCell"/>
+                                        <Button id="cell_8_10" class="EditCell"/>
+                                        <Button id="cell_9_10" class="EditCell"/>
+                                        <Button id="cell_10_10" class="EditCell"/>
+                                        <Button id="cell_11_10" class="EditCell"/>
+                                        <Button id="cell_12_10" class="EditCell"/>
+                                        <Button id="cell_13_10" class="EditCell"/>
+                                        <Button id="cell_14_10" class="EditCell"/>
+                                        <Button id="cell_15_10" class="EditCell"/>
+                                        <Button id="cell_16_10" class="EditCell"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel class="SampleArea" hittest="false">
+                                    <Panel id="edit_Buffs" class="SampleBar" hittest="false">
+                                        <Panel class="BuffGlyph Icon_reload_aftercare Glyph_D" hittest="false"/>
+                                        <Label text="Lv.2" hittest="false"/>
+                                    </Panel>
+                                    <Panel id="edit_Skills" class="SampleBar SampleSkill" hittest="false">
+                                        <Label text="指挥官 · 技能可用" hittest="false"/>
+                                    </Panel>
+                                    <Panel id="edit_Intel" class="SampleBar SampleIntel" hittest="false">
+                                        <Label text="最近敌人距离" hittest="false"/>
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                            <Panel class="EditorTools">
+                                <Panel id="hud_left_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_left" class="EditorAction">
+                                        <Label text="←"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="向左微调"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel id="hud_up_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_up" class="EditorAction">
+                                        <Label text="↑"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="向上微调"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel id="hud_down_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_down" class="EditorAction">
+                                        <Label text="↓"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="向下微调"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel id="hud_right_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_right" class="EditorAction">
+                                        <Label text="→"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="向右微调"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel id="hud_save_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_save" class="EditorAction">
+                                        <Label text="保存布局"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="下次进服沿用这次位置"/>
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
                         <Panel id="player_settings" class="CaorenMenuSection Hidden">
-                            <Label text="个人设置" class="SettingsSectionTitleLabel" />
-                            <Label text="仅影响自己的菜单；两个入口共用并自动保存。" class="CaorenGuidePage" />
+                            <Label text="个人设置" class="SettingsSectionTitleLabel"/>
+                            <Panel class="EditorTools">
+                                <Panel id="hud_edit_open_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_edit_open" class="EditorAction">
+                                        <Label text="HUD 位置"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="调整三栏在画面上的位置"/>
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                            <Label text="按住查看 HUD · 选键查看绑键指引" class="CaorenGuidePage"/>
+                            <Panel class="EditorTools">
+                                <Panel id="hud_bind_f8_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_bind_f8" class="EditorAction">
+                                        <Label text="F8"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="在控制台查看此键的绑定步骤"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel id="hud_bind_mouse4_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_bind_mouse4" class="EditorAction">
+                                        <Label text="MOUSE4"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="在控制台查看此键的绑定步骤"/>
+                                    </Panel>
+                                </Panel>
+                                <Panel id="hud_bind_mouse5_host" class="CaorenButtonHost EditorHost">
+                                    <Button id="hud_bind_mouse5" class="EditorAction">
+                                        <Label text="MOUSE5"/>
+                                    </Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                        <Label class="CaorenHoverHintText" text="在控制台查看此键的绑定步骤"/>
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                            <Label text="其他键：/crchud_bind 键名" class="CaorenGuidePage"/>
+                            <Label text="菜单外观与声音" class="CaorenGuidePage"/>
                             <Panel class="CaorenPreferencesRow">
                                 <Panel class="CaorenPreferenceDescription">
                                     <Label text="背景透明度" class="CaorenSettingName" />
@@ -695,6 +1033,7 @@
                                         <Panel class="CaorenRandomCardCorners" hittest="false">
                                             <Panel class="CaorenRandomIcons" hittest="false"><Panel id="random_card_0_attack" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_attack.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="进攻" hittest="false" /></Panel></Panel><Panel id="random_card_0_defense" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_defense.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="防御" hittest="false" /></Panel></Panel><Panel id="random_card_0_mobility" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_mobility.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="机动" hittest="false" /></Panel></Panel><Panel id="random_card_0_tactics" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_tactics.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="战术" hittest="false" /></Panel></Panel><Panel id="random_card_0_supply" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_supply.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="补给" hittest="false" /></Panel></Panel><Panel id="random_card_0_personal" class="CaorenRandomIconHost CaorenRandomScopeHost" hittest="false"><Image class="CaorenRandomIcon CaorenRandomScopeIcon" src="s2r://panorama/images/custom_game/random_personal.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="个人" hittest="false" /></Panel></Panel><Panel id="random_card_0_team" class="CaorenRandomIconHost CaorenRandomScopeHost Hidden" hittest="false"><Image class="CaorenRandomIcon CaorenRandomScopeIcon" src="s2r://panorama/images/custom_game/random_team.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="团队" hittest="false" /></Panel></Panel></Panel>
                                         </Panel>
+                                        <Panel id="card_glyph_0" class="BuffGlyph CardGlyph" hittest="false"/>
                                         <Label text="{s:random_card_name0}" class="CaorenRandomCardName" hittest="false" />
                                         <Panel class="CaorenRandomCardDescriptionScroll">
                                             <Label text="{s:random_card_description0}" class="CaorenRandomCardDescription" hittest="false" />
@@ -708,6 +1047,7 @@
                                         <Panel class="CaorenRandomCardCorners" hittest="false">
                                             <Panel class="CaorenRandomIcons" hittest="false"><Panel id="random_card_1_attack" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_attack.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="进攻" hittest="false" /></Panel></Panel><Panel id="random_card_1_defense" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_defense.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="防御" hittest="false" /></Panel></Panel><Panel id="random_card_1_mobility" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_mobility.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="机动" hittest="false" /></Panel></Panel><Panel id="random_card_1_tactics" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_tactics.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="战术" hittest="false" /></Panel></Panel><Panel id="random_card_1_supply" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_supply.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="补给" hittest="false" /></Panel></Panel><Panel id="random_card_1_personal" class="CaorenRandomIconHost CaorenRandomScopeHost" hittest="false"><Image class="CaorenRandomIcon CaorenRandomScopeIcon" src="s2r://panorama/images/custom_game/random_personal.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="个人" hittest="false" /></Panel></Panel><Panel id="random_card_1_team" class="CaorenRandomIconHost CaorenRandomScopeHost Hidden" hittest="false"><Image class="CaorenRandomIcon CaorenRandomScopeIcon" src="s2r://panorama/images/custom_game/random_team.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="团队" hittest="false" /></Panel></Panel></Panel>
                                         </Panel>
+                                        <Panel id="card_glyph_1" class="BuffGlyph CardGlyph" hittest="false"/>
                                         <Label text="{s:random_card_name1}" class="CaorenRandomCardName" hittest="false" />
                                         <Panel class="CaorenRandomCardDescriptionScroll">
                                             <Label text="{s:random_card_description1}" class="CaorenRandomCardDescription" hittest="false" />
@@ -721,6 +1061,7 @@
                                         <Panel class="CaorenRandomCardCorners" hittest="false">
                                             <Panel class="CaorenRandomIcons" hittest="false"><Panel id="random_card_2_attack" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_attack.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="进攻" hittest="false" /></Panel></Panel><Panel id="random_card_2_defense" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_defense.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="防御" hittest="false" /></Panel></Panel><Panel id="random_card_2_mobility" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_mobility.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="机动" hittest="false" /></Panel></Panel><Panel id="random_card_2_tactics" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_tactics.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="战术" hittest="false" /></Panel></Panel><Panel id="random_card_2_supply" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_supply.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="补给" hittest="false" /></Panel></Panel><Panel id="random_card_2_personal" class="CaorenRandomIconHost CaorenRandomScopeHost" hittest="false"><Image class="CaorenRandomIcon CaorenRandomScopeIcon" src="s2r://panorama/images/custom_game/random_personal.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="个人" hittest="false" /></Panel></Panel><Panel id="random_card_2_team" class="CaorenRandomIconHost CaorenRandomScopeHost Hidden" hittest="false"><Image class="CaorenRandomIcon CaorenRandomScopeIcon" src="s2r://panorama/images/custom_game/random_team.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="团队" hittest="false" /></Panel></Panel></Panel>
                                         </Panel>
+                                        <Panel id="card_glyph_2" class="BuffGlyph CardGlyph" hittest="false"/>
                                         <Label text="{s:random_card_name2}" class="CaorenRandomCardName" hittest="false" />
                                         <Panel class="CaorenRandomCardDescriptionScroll">
                                             <Label text="{s:random_card_description2}" class="CaorenRandomCardDescription" hittest="false" />
@@ -750,6 +1091,7 @@
                                 </Panel>
                             </Panel>
                             <Panel id="random_detail_panel" class="CaorenRandomDetail Hidden">
+                                <Panel id="detail_glyph" class="BuffGlyph CardGlyph" hittest="false"/>
                                 <Label text="{s:random_detail_title}" class="CaorenRandomName" />
                                 <Panel class="CaorenRandomDetailIcons"><Panel class="CaorenRandomIcons"><Panel id="random_detail_attack" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_attack.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="进攻" hittest="false" /></Panel></Panel><Panel id="random_detail_defense" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_defense.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="防御" hittest="false" /></Panel></Panel><Panel id="random_detail_mobility" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_mobility.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="机动" hittest="false" /></Panel></Panel><Panel id="random_detail_tactics" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_tactics.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="战术" hittest="false" /></Panel></Panel><Panel id="random_detail_supply" class="CaorenRandomIconHost Hidden" hittest="false"><Image class="CaorenRandomIcon" src="s2r://panorama/images/custom_game/random_supply.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="补给" hittest="false" /></Panel></Panel><Panel id="random_detail_personal" class="CaorenRandomIconHost CaorenRandomScopeHost" hittest="false"><Image class="CaorenRandomIcon CaorenRandomScopeIcon" src="s2r://panorama/images/custom_game/random_personal.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="个人" hittest="false" /></Panel></Panel><Panel id="random_detail_team" class="CaorenRandomIconHost CaorenRandomScopeHost Hidden" hittest="false"><Image class="CaorenRandomIcon CaorenRandomScopeIcon" src="s2r://panorama/images/custom_game/random_team.vsvg" hittest="true" /><Panel class="CaorenRandomIconHint" hittest="false"><Label class="CaorenRandomIconHintText" text="团队" hittest="false" /></Panel></Panel></Panel></Panel>
                                 <Label text="{s:random_detail_description}" class="CaorenRandomDescription" />

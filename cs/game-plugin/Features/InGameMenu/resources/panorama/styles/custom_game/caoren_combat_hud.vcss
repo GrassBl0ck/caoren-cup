@@ -1,0 +1,24 @@
+.HudRoot { width: 100%; height: 100%; }
+.HudPart, .NoIcon, .HoverDescription { visibility: collapse; }
+.HudPart.HudVisible { visibility: visible; }
+.MoveBar { width: 34%; height: 16%; flow-children: down; }
+.BuffBar { flow-children: right; }
+.SkillBar .HudSlot { horizontal-align: center; }
+.IntelBar .HudSlot { horizontal-align: right; }
+.HudSlot { flow-children: down; background-color: #00000000; padding: 1px 2px; }
+.SlotLine { flow-children: right; }
+.Passive .SlotLine, .CollectionItem .SlotLine { flow-children: none; width: 47px; height: 42px; }
+.SlotLabel, .HoverDescription, .More Label { color: #ffffff; font-size: 17px; text-shadow: 1px 1px 3px 3 #141414; }
+.Passive .SlotLabel, .CollectionItem .SlotLabel { horizontal-align: right; vertical-align: bottom; font-size: 14px; }
+.Skill .BuffGlyph { width: 23px; height: 23px; margin-right: 5px; }
+.Skill .SlotLabel, .Intel .SlotLabel { white-space: normal; vertical-align: center; }
+.Inspecting .HudSlot:hover .HoverDescription { visibility: visible; }
+.HoverDescription { width: 164px; max-height: 92px; white-space: normal; font-size: 15px; }
+.More { padding: 5px 2px; vertical-align: top; }
+.InspectWindow { horizontal-align: center; vertical-align: center; width: 620px; max-height: 76%; padding: 16px; background-color: #19232bf5; flow-children: down; }
+.WindowHead { width: 100%; flow-children: right; margin-bottom: 10px; }
+.WindowHead > Label { width: fill-parent-flow(1); color: #eaf4fc; font-size: 23px; }
+.WindowHead Button { padding: 4px 10px; background-color: #344552; }
+.WindowHead Button Label, .DetailText { color: #eaf4fc; font-size: 17px; white-space: normal; }
+.CollectionGrid { width: 100%; flow-children: right-wrap; overflow: squish scroll; }
+.DetailText { width: 100%; height: fit-children; }

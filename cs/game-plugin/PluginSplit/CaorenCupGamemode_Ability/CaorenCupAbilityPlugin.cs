@@ -10,7 +10,7 @@ using System.Text.Json;
 
 namespace CaorenCup.Gamemodes.Ability;
 
-public sealed partial class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi
+public sealed partial class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbilityApi, ICombatAbilityHud
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -84,6 +84,8 @@ public sealed partial class CaorenCupAbilityPlugin : BasePlugin, ICaorenCupAbili
         if (_provider is not null) CaorenCupGameModeRegistry.Unregister(_provider);
         CaorenCupModuleRegistry.Unregister(this);
     }
+
+    public CombatAbilityView? GetHud(CCSPlayerController player) => _adapter.ReadHud(player);
 
     public bool IsRuntimeRunning => _adapter.Controller.Runtime.State is not null;
 

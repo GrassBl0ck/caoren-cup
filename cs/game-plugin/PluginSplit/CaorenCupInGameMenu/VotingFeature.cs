@@ -296,6 +296,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
             Chat(player.SteamID.ToString(), "正在填写草稿，请先完成，或输入 cancel／/crcmenu_back 取消创建。");
             return;
         }
+        ForgetCombat(player);
         ClosePersonalMenu(player, fromPersonal);
         ClosePlayerMenu(player);
         var sid = player.SteamID.ToString();

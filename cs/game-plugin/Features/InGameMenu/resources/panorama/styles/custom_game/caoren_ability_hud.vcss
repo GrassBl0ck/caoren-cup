@@ -21,10 +21,7 @@
     vertical-align: bottom;
     margin-bottom: 28px;
     flow-children: down;
-    background-color: #0d151ee6;
-    border: 1px solid #82d8ff55;
-    border-radius: 6px;
-    box-shadow: 0px 4px 16px #000000a0;
+    background-color: #00000000;
 }
 
 .AbilityHudPanel.Hidden
@@ -128,13 +125,12 @@
 /* 状态着色：可用时高亮描边，已用为暖色，未启用为灰。 */
 .AbilityHudPanel.HudReady
 {
-    border-color: #82d8ffcc;
-    box-shadow: 0px 0px 14px #82d8ff45;
+    wash-color: #ffffff;
 }
 
 .AbilityHudPanel.HudUsed
 {
-    border-color: #ffc77680;
+    wash-color: #ffffff;
 }
 
 .AbilityHudPanel.HudUsed .AbilityHudStatus
@@ -144,7 +140,7 @@
 
 .AbilityHudPanel.HudDisabled
 {
-    border-color: #ffffff30;
+    wash-color: #cccccc;
 }
 
 .AbilityHudPanel.HudDisabled .AbilityHudStatus
