@@ -4,7 +4,7 @@
 
 ## 1. 配置 CS 桥接
 
-在服务端停服后，打开以下目录，复制示例配置为 `caoren_config.json`。
+首次搭服时先停服，从 CS 包的 `examples/web-bridge/caoren_config.example.json` 复制到以下目录并命名为 `caoren_config.json`。升级已有配置时只补充缺少的字段。
 
 ```text
 cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/CaorenCupWebBridge/CaorenCupPlugin/
@@ -14,6 +14,7 @@ cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/CaorenCupWebBridge/Cao
 
 ```json
 {
+  "PublicWebsiteUrl": "https://cup.example.org",
   "CommandCenterBaseUrl": "http://127.0.0.1:3000",
   "PluginToken": "REPLACE_BRIDGE_TOKEN",
   "HeartbeatSeconds": 30,
@@ -49,7 +50,7 @@ cs2/game/csgo/addons/counterstrikesharp/plugins/CaorenCup/CaorenCupWebBridge/Cao
 
 ## 4. MC 与网站
 
-配置网站 `MC_SERVER_ADDRESS` 和 `MC_SERVER_VERSION` 后重启网页，检查 `/mc` 页面展示的地址和说明，再用正版 Java 客户端连接该地址。当前网站提供 MC 介绍与入服指引，MC 账号验证由游戏服务端承担。MC 玩法启停与自动战绩等能力按各玩法已有实现核对。
+配置网站 `MC_SERVER_ADDRESS` 和 `MC_SERVER_VERSION` 后重启网页，登录后检查 `/api/mc/info` 返回的地址和版本，再用正版 Java 客户端连接该地址。当前网站提供 MC 介绍与入服指引，MC 账号验证由游戏服务端承担。MC 玩法启停与自动战绩等能力按各玩法已有实现核对。
 
 ## 5. 联通故障顺序
 

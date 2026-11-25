@@ -51,7 +51,7 @@ public sealed class RandomMenuTests
         Assert.Equal(icon, RandomMenuPresentation.CategoryIcon(category));
 
     [Fact]
-    public void Player_layout_has_three_column_cards_and_four_footer_groups()
+    public void Player_layout_keeps_collection_tabs_outside_the_three_card_actions()
     {
         var root = FindResourceRoot();
         var document = XDocument.Load(Path.Combine(root, "layout", "custom_game", "caoren_player_menu.vxml"));
@@ -75,11 +75,14 @@ public sealed class RandomMenuTests
             Assert.DoesNotContain(card.Descendants("Label"), e => ((string?)e.Attribute("text"))?.Contains("random_card_meta") == true || ((string?)e.Attribute("text"))?.Contains("random_card_level") == true);
         }
         var footer = ById("random_footer");
-        Assert.Equal(4, footer.Elements("Panel").Count());
-        foreach (var id in new[] { "random_owned", "random_reroll", "random_exchange", "random_toggle" })
+        Assert.Equal(3, footer.Elements("Panel").Count());
+        foreach (var id in new[] { "random_reroll", "random_exchange", "random_toggle" })
             Assert.Contains(footer, ById(id).Ancestors());
-        Assert.Contains("Hidden", (string?)ById("random_collection_nav").Attribute("class") ?? "");
-        Assert.Equal("返回三选一", (string?)ById("random_offers").Element("Label")?.Attribute("text"));
+        var nav = ById("random_collection_nav");
+        Assert.DoesNotContain("Hidden", (string?)nav.Attribute("class") ?? "");
+        foreach (var id in new[] { "random_offers", "random_owned", "random_overview" })
+            Assert.Contains(nav, ById(id).Ancestors());
+        Assert.Equal("强化三选一", (string?)ById("random_offers").Element("Label")?.Attribute("text"));
         var style = File.ReadAllText(Path.Combine(root, "styles", "custom_game", "caoren_player_menu.vcss"));
         Assert.Contains(".CaorenRandomList { width: 100%; height: 520px; flow-children: right; }", style);
         Assert.Contains("overflow: squish scroll", style);

@@ -4,7 +4,7 @@ const { connectGameServer } = require('../src/game-connect');
 const { readPersonaName, steamIdFromAccountId } = require('../src/windows-steam');
 
 test('game connection waits for the OS launch request and surfaces failure', async () => {
-  const url = 'steam://connect/play.caorencup.icu:27015';
+  const url = 'steam://connect/play.cup.example.org:27015';
   const opened = [];
   assert.deepEqual(await connectGameServer({ openExternal: async value => opened.push(value) }, url), { ok: true });
   assert.deepEqual(opened, [url]);
@@ -14,7 +14,7 @@ test('game connection waits for the OS launch request and surfaces failure', asy
 
 test('an absent or non-game connection address produces no launch', async () => {
   let launches = 0;
-  for (const url of [undefined, '', 'https://caorencup.icu/', 'steam://']) {
+  for (const url of [undefined, '', 'https://cup.example.org/', 'steam://']) {
     assert.deepEqual(await connectGameServer({ openExternal: async () => launches++ }, url),
       { ok: false, reason: 'game_connect_url_invalid' });
   }
@@ -22,7 +22,7 @@ test('an absent or non-game connection address produces no launch', async () => 
 });
 
 test('cold start uses the worldwide launch route and a running game receives the connect link', async () => {
-  const url = 'steam://connect/play.caorencup.icu:27015';
+  const url = 'steam://connect/play.cup.example.org:27015';
   const calls = [];
   const shell = { openExternal: async value => calls.push(['existing', value]) };
   const steamExe = 'D:/Steam/steam.exe';

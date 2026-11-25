@@ -68,16 +68,17 @@ public sealed partial class CaorenCupInGameMenuPlugin
             _personalSurface.SetClass(player, pair.Item2, "Hidden", view != pair.Item1);
         _personalSurface.SetClass(player, "player_commands_open", "CaorenTabSelected", view is PersonalView.Commands or PersonalView.Detail);
         _personalSurface.SetClass(player, "player_stats_open", "CaorenTabSelected", view == PersonalView.Stats);
-        _personalSurface.SetClass(player, "player_settings_open", "CaorenTabSelected", view == PersonalView.Settings);
+        _personalSurface.SetClass(player, "player_settings_open", "CaorenTabSelected", view is PersonalView.Settings or PersonalView.HudEditor);
         _personalSurface.SetClass(player, "player_guide_open", "CaorenTabSelected", view == PersonalView.Guide);
         _personalSurface.SetClass(player, "player_random_open", "CaorenTabSelected", view == PersonalView.Random);
         _personalSurface.SetClass(player, "player_random_open", "Hidden", !RandomMenuAvailable);
-        _personalSurface.SetVariable(player, "player_section", view switch { PersonalView.Commands => "玩家指令", PersonalView.Detail => "指令详情", PersonalView.Stats => "趣味数据", PersonalView.Settings => "个人设置", PersonalView.HudEditor => "HUD 位置", PersonalView.Random => "随机乱斗", _ => "打开指引" });
+        RenderPlayerNavigation(player);
         RenderPersonalView(player);
     }
     private void HandlePersonalClick(CCSPlayerController player, string id)
     {
         var sid = player.SteamID.ToString(); if (!_personalViews.TryGetValue(sid, out var view)) return;
+        if (HandlePlayerTrailClick(player, id)) return;
         if (id == "player_exit") { ExitOwnMenus(player); return; }
         if (id == "player_back") { HandlePersonalBack(player); return; }
         if (id == "player_random_open") { OpenRandomMenu(player); return; }
@@ -170,6 +171,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         var sid = player.SteamID.ToString();
         _editorStates.Remove(sid);
         _personalViews.Remove(sid);
+        _playerTrails.Remove(sid);
         _randomMenus.Remove(sid);
         if (!preservePage) { _personalPages.Remove(sid); _personalDetails.Remove(sid); _personalStatsPages.Remove(sid); }
         if (_personalSurface == null) return;

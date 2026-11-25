@@ -7,6 +7,7 @@
   <title>草台杯 CS</title>
   <link rel="stylesheet" href="room.css">
   <script defer src="room.js"></script>
+  <script defer src="room-keybinds.js"></script>
 </head>
 <body class="at-home">
   <nav class="bar" aria-label="客户端">
@@ -24,6 +25,7 @@
     <div id="account-menu" popover aria-label="账户">
       <button id="account" type="button">登录或注册</button>
       <button id="profile" type="button" hidden>昵称与头像</button>
+      <button id="keybinds-open" type="button">游戏键位</button>
       <button id="skins" type="button" hidden>换肤中心</button>
     </div>
     <div id="room-menu" popover>
@@ -96,6 +98,20 @@
       </section>
     </div>
   </main>
+  <dialog id="keybinds-dialog" aria-labelledby="keybinds-title">
+    <header class="sheet-heading"><h2 id="keybinds-title">游戏键位</h2></header>
+    <div class="sheet-content">
+      <p id="keybinds-account"></p>
+      <p>从草台杯客户端下次启动 CS2 时生效。</p>
+      <div id="keybinds-list"></div>
+      <p id="keybinds-status" role="status" aria-live="polite"></p>
+    </div>
+    <div class="dialog-actions">
+      <button id="keybinds-cancel" type="button" hidden>取消选择</button>
+      <button id="keybinds-save" type="button" class="primary" hidden>保存</button>
+      <button id="keybinds-close" type="button">关闭</button>
+    </div>
+  </dialog>
   <dialog id="force-dialog" aria-labelledby="force-title">
     <header class="sheet-heading"><h2 id="force-title">确认强制准备</h2></header>
     <div class="sheet-content"><p>将以下玩家标记为已准备</p><ul id="force-players"></ul></div>

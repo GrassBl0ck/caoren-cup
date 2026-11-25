@@ -143,6 +143,10 @@ public sealed partial class CaorenCupInGameMenuPlugin
 
         switch (buttonId)
         {
+            case "quick_home": SetHeldMatchPage(view, HeldMatchPage.Home); break;
+            case "quick_modes": SetHeldMatchPage(view, HeldMatchPage.Modes); break;
+            case "quick_restore": SetHeldMatchPage(view, HeldMatchPage.Restore); break;
+            case "quick_announcements": SetHeldMatchPage(view, HeldMatchPage.Announcements); break;
             case "quick_back":
                 SetHeldMatchPage(view, view.Page == HeldMatchPage.Confirm ? view.ConfirmationSource : HeldMatchPage.Home);
                 break;
@@ -237,13 +241,10 @@ public sealed partial class CaorenCupInGameMenuPlugin
                 var currentRound = match?.Stamp.CurrentRound;
                 allRows =
                 [
-                    Navigate("更改模式", HeldMatchPage.Modes, match?.AvailableModes.Count > 0),
                     Act("开始游戏", MatchAdminAction.Start, match?.CanStart == true),
                     Act(isPaused ? "继续游戏" : "暂停游戏", isPaused ? MatchAdminAction.Resume : MatchAdminAction.Pause, match?.CanPause == true),
                     Act("重打本回合", MatchAdminAction.RestoreRound, currentRound is { } round && match!.RestorableRounds.Contains(round), currentRound),
-                    Navigate("回溯", HeldMatchPage.Restore, match?.RestorableRounds.Any(round => round < currentRound) == true),
                     Confirm("停止游戏", MatchAdminAction.Stop, match?.CanStop == true),
-                    Navigate("预设公告", HeldMatchPage.Announcements, _presetAnnouncements.Length > 0),
                 ];
                 break;
         }
@@ -251,8 +252,23 @@ public sealed partial class CaorenCupInGameMenuPlugin
         view.PageCount = Math.Max(1, (allRows.Count + HeldMatchRows - 1) / HeldMatchRows);
         view.PageIndex = Math.Clamp(view.PageIndex, 0, view.PageCount - 1);
         view.Rows = allRows.Skip(view.PageIndex * HeldMatchRows).Take(HeldMatchRows).ToArray();
-        _heldMatchSurface.SetVariable(player, "quick_title", title);
-        _heldMatchSurface.SetVariable(player, "quick_status", match?.Status ?? "比赛控制暂不可用");
+        var section = view.Page == HeldMatchPage.Confirm ? view.ConfirmationSource : view.Page;
+        var heading = section switch { HeldMatchPage.Modes => "更改模式", HeldMatchPage.Restore => "回溯",
+            HeldMatchPage.Announcements => "预设公告", _ => "比赛管理" };
+        var path = section == HeldMatchPage.Home ? heading : "比赛管理 / " + heading;
+        _heldMatchSurface.SetVariable(player, "quick_title", view.Page == HeldMatchPage.Confirm ? path + " / " + title : path);
+        foreach (var (id, page) in new[] { ("quick_home", HeldMatchPage.Home), ("quick_modes", HeldMatchPage.Modes),
+                     ("quick_restore", HeldMatchPage.Restore), ("quick_announcements", HeldMatchPage.Announcements) })
+            _heldMatchSurface.SetClass(player, id, "SelectedTab", section == page);
+        string status = match?.Status ?? "比赛控制暂不可用";
+        if (allRows.Count == 0) status = view.Page switch
+        {
+            HeldMatchPage.Modes => "当前没有可切换的模式",
+            HeldMatchPage.Restore => "当前没有可回溯的更早回合",
+            HeldMatchPage.Announcements => "尚无预设公告",
+            _ => status
+        };
+        _heldMatchSurface.SetVariable(player, "quick_status", status);
         _heldMatchSurface.SetVariable(player, "quick_page", view.PageCount > 1 ? $"{view.PageIndex + 1}/{view.PageCount}" : string.Empty);
         _heldMatchSurface.SetClass(player, "quick_back", "Hidden", view.Page == HeldMatchPage.Home);
         _heldMatchSurface.SetClass(player, "quick_previous", "Hidden", view.PageIndex == 0);

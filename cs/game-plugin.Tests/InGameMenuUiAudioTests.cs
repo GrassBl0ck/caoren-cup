@@ -237,6 +237,28 @@ public sealed class InGameMenuUiAudioTests
         var command = CaorenAudioPolicy.ClientPlayCommand("sounds/ui/panorama/submenu_select_01.vsnd_c", CaorenAudioPolicy.Volume(personal, 0.3f));
         Assert.Equal($"playvol \"sounds/ui/panorama/submenu_select_01.vsnd_c\" {expected}", command);
     }
+    [Fact]
+    public void Sibling_navigation_is_outside_page_content_on_admin_player_and_vote_layouts()
+    {
+        var layouts = Path.Combine(FindRepository(), "game-plugin", "Features", "InGameMenu", "resources", "panorama", "layout", "custom_game");
+        XDocument Layout(string name) => XDocument.Load(Path.Combine(layouts, $"caoren_{name}.vxml"));
+        static XElement ById(XDocument doc, string id) => doc.Descendants().Single(e => (string?)e.Attribute("id") == id);
+        var admin = Layout("admin_menu");
+        foreach (var id in new[] { "admin_categories", "equipment_operations", "trail_up_0" })
+            Assert.DoesNotContain(ById(admin, id).Ancestors(), e => ((string?)e.Attribute("class"))?.Contains("CaorenMenuSection") == true);
+        var categories = ById(admin, "admin_categories");
+        foreach (var id in new[] { "shortcut_equipment", "shortcut_cap", "shortcut_match", "admin_broadcast_open",
+                     "admin_vote_open", "admin_audio_open", "admin_ability_open", "admin_random_open" })
+            Assert.Contains(categories, ById(admin, id).Ancestors());
+        var player = Layout("player_menu");
+        var vote = Layout("vote");
+        foreach (var id in new[] { "player_commands_open", "player_stats_open", "player_random_open", "player_settings_open", "player_guide_open" })
+        {
+            Assert.DoesNotContain(ById(player, id).Ancestors(), e => ((string?)e.Attribute("class"))?.Contains("CaorenMenuSection") == true);
+            Assert.Contains(ById(vote, "vote_player_tabs"), ById(vote, id).Ancestors());
+        }
+    }
+
     private static string FindRepository()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory != null; directory = directory.Parent)

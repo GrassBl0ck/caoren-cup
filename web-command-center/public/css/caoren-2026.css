@@ -1,7 +1,7 @@
 /* ============================================================
    草人杯 2026 视觉翻新 · Caoren Cup match-desk theme
    Loaded after app.css; defines tokens + shell + component skin.
-   Palette: ink / bone paper / signal saffron. Flat surfaces only.
+   Uses the player palette from client-theme.css.
    ============================================================ */
 
 /* ---------- 0. Typeface (self-hosted, SIL OFL 1.1) ---------- */
@@ -37,64 +37,36 @@
     font-display: swap;
 }
 
-/* ---------- 1. Tokens ---------- */
-:root {
-    /* new system */
-    --cc-ink: #101413;
-    --cc-ink-2: #2b3230;
-    --cc-muted: #59615e;
-    --cc-faint: #79827f;
-    --cc-paper: #e9ece4;
-    --cc-sheet: #ffffff;
-    --cc-subtle: #f5f6f1;
-    --cc-line: #dce0d8;
-    --cc-line-strong: #c3cac1;
-    --cc-signal: #e9b923;
-    --cc-signal-ink: #2b2200;
-    --cc-focus: #101413;
-    --cc-signal-soft: #fbf2d2;
-    --cc-success: #1f6b45;
-    --cc-success-soft: #e7f2ea;
-    --cc-warning: #7a5209;
-    --cc-warning-soft: #faf1d8;
-    --cc-danger: #a32a1f;
-    --cc-danger-soft: #fbeae7;
-    --cc-radius: 4px;
-    --cc-radius-lg: 6px;
-    --cc-font: "IBM Plex Sans", "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
-    --cc-display: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-    --cc-ease: cubic-bezier(.2, .65, .25, 1);
-    --cc-shadow-float: 0 18px 44px rgba(9, 13, 11, .16);
-
-    /* map onto the legacy token names used across app.css */
+/* Shared components also consume these older app.css variable names. */
+:root, body[data-theme] {
     --bg: var(--cc-paper);
     --panel: var(--cc-sheet);
     --panel-soft: var(--cc-subtle);
     --border: var(--cc-line);
-    --text: var(--cc-ink-2);
+    --text: var(--cc-ink);
     --muted: var(--cc-muted);
-    --primary: var(--cc-ink);
-    --primary-soft: #eef0e9;
+    --primary: var(--cc-signal);
+    --primary-soft: var(--cc-signal-soft);
     --danger: var(--cc-danger);
     --warning: var(--cc-warning);
     --success: var(--cc-success);
-    --task-incomplete-bg: #f2f3ee;
+    --task-incomplete-bg: var(--cc-subtle);
     --task-progress-bg: var(--cc-warning-soft);
     --task-complete-bg: var(--cc-success-soft);
-    --task-abandoned-bg: #e8eae4;
-    --task-hint-ring: var(--cc-ink);
+    --task-abandoned-bg: var(--cc-hover);
+    --task-hint-ring: var(--cc-focus);
     --shadow: none;
 
     --surface: var(--cc-sheet);
     --surface-muted: var(--cc-subtle);
     --surface-raised: var(--cc-sheet);
-    --surface-hover: #f0f2ec;
+    --surface-hover: var(--cc-hover);
     --text-strong: var(--cc-ink);
     --text-default: var(--cc-ink-2);
     --text-muted: var(--cc-muted);
     --border-subtle: var(--cc-line);
     --border-strong: var(--cc-line-strong);
-    --focus-ring: rgba(233, 185, 35, .55);
+    --focus-ring: var(--cc-focus);
     --success-surface: var(--cc-success-soft);
     --success-text: var(--cc-success);
     --warning-surface: var(--cc-warning-soft);
@@ -103,60 +75,6 @@
     --danger-text: var(--cc-danger);
     --control-height: 44px;
     --workspace-radius: var(--cc-radius);
-}
-
-body[data-theme="dark"] {
-    --cc-ink: #f2f3ed;
-    --cc-ink-2: #c9cec7;
-    --cc-muted: #a2aaa4;
-    --cc-faint: #8b938d;
-    --cc-paper: #0a0c0b;
-    --cc-sheet: #131716;
-    --cc-subtle: #191d1b;
-    --cc-line: #282d2a;
-    --cc-line-strong: #3a403c;
-    --cc-signal: #f1c634;
-    --cc-signal-ink: #1c1700;
-    --cc-focus: #f1c634;
-    --cc-signal-soft: #2a2410;
-    --cc-success: #74d6a2;
-    --cc-success-soft: #12241b;
-    --cc-warning: #f0c24a;
-    --cc-warning-soft: #2a2110;
-    --cc-danger: #ff8a80;
-    --cc-danger-soft: #2a1512;
-    --cc-shadow-float: 0 20px 50px rgba(0, 0, 0, .55);
-
-    --bg: var(--cc-paper);
-    --panel: var(--cc-sheet);
-    --panel-soft: var(--cc-subtle);
-    --border: var(--cc-line);
-    --text: var(--cc-ink-2);
-    --muted: var(--cc-muted);
-    --primary: var(--cc-signal);
-    --primary-soft: var(--cc-signal-soft);
-    --task-incomplete-bg: #171b19;
-    --task-progress-bg: #241f0e;
-    --task-complete-bg: #12241b;
-    --task-abandoned-bg: #1b201d;
-    --task-hint-ring: var(--cc-signal);
-
-    --surface: var(--cc-sheet);
-    --surface-muted: var(--cc-subtle);
-    --surface-raised: #191d1b;
-    --surface-hover: #1f2422;
-    --text-strong: var(--cc-ink);
-    --text-default: var(--cc-ink-2);
-    --text-muted: var(--cc-muted);
-    --border-subtle: var(--cc-line);
-    --border-strong: var(--cc-line-strong);
-    --focus-ring: rgba(241, 198, 52, .5);
-    --success-surface: var(--cc-success-soft);
-    --success-text: var(--cc-success);
-    --warning-surface: var(--cc-warning-soft);
-    --warning-text: var(--cc-warning);
-    --danger-surface: var(--cc-danger-soft);
-    --danger-text: var(--cc-danger);
 }
 
 /* ---------- 2. Base ---------- */
@@ -348,7 +266,7 @@ a {
     margin: 0 0 0;
     padding: 44px 56px 92px;
     background: #0b0e0d;
-    color: #f2f3ed;
+    color: var(--cc-ink);
     border-radius: 0;
     overflow: hidden;
 }
@@ -372,7 +290,7 @@ a {
 
 .lobby-hero h1 {
     margin: 0;
-    color: #f7f8f2;
+    color: var(--cc-ink);
     font-size: clamp(38px, 4.1vw, 58px);
     font-weight: 900;
     line-height: 1.02;
@@ -758,27 +676,23 @@ button:disabled,
 button[disabled] {
     border-color: var(--cc-line);
     background: var(--cc-subtle);
-    color: #66706c;
+    color: var(--cc-faint);
     cursor: not-allowed;
     opacity: 1;
 }
 
 .primary-btn,
 body[data-theme="dark"] .primary-btn {
-    border-color: var(--cc-ink);
-    background: var(--cc-ink);
-    color: var(--cc-sheet);
+    border-color: var(--cc-signal);
+    background: var(--cc-signal);
+    color: var(--cc-signal-ink);
     font-weight: 700;
-}
-
-body[data-theme="dark"] .primary-btn {
-    color: #101413;
 }
 
 .primary-btn:hover,
 body[data-theme="dark"] .primary-btn:hover {
-    border-color: var(--cc-ink);
-    background: var(--cc-signal);
+    border-color: var(--cc-signal-hover);
+    background: var(--cc-signal-hover);
     color: var(--cc-signal-ink);
 }
 
@@ -804,8 +718,8 @@ body[data-theme="dark"] .secondary-btn {
 .danger-btn,
 body[data-theme="dark"] .danger-btn {
     border-color: var(--cc-danger);
-    background: var(--cc-danger);
-    color: #fff;
+    background: var(--cc-danger-soft);
+    color: var(--cc-danger);
 }
 
 .danger-btn:hover {
@@ -1060,16 +974,16 @@ body[data-theme="dark"] .danger-btn {
 #v1333-connect-server-btn {
     width: 100%;
     min-height: 48px;
-    border-color: var(--cc-ink);
-    background: var(--cc-ink);
-    color: var(--cc-sheet);
+    border-color: var(--cc-signal);
+    background: var(--cc-signal);
+    color: var(--cc-signal-ink);
     font-size: 14px;
     font-weight: 700;
 }
 
 #v1333-connect-server-btn:hover {
-    border-color: var(--cc-ink);
-    background: var(--cc-signal);
+    border-color: var(--cc-signal-hover);
+    background: var(--cc-signal-hover);
     color: var(--cc-signal-ink);
 }
 
@@ -1380,9 +1294,9 @@ body[data-theme="dark"] .danger-btn {
 }
 
 #advance-phase-btn {
-    border-color: var(--cc-ink);
-    background: var(--cc-ink);
-    color: var(--cc-sheet);
+    border-color: var(--cc-signal);
+    background: var(--cc-signal);
+    color: var(--cc-signal-ink);
 }
 
 #advance-phase-btn:hover {
@@ -1801,13 +1715,13 @@ body[data-theme="dark"] .task-grid {
 }
 
 body[data-theme="dark"] .task-cell {
-    background: #191d1b !important;
+    background: var(--cc-subtle) !important;
     border-color: var(--cc-line) !important;
     color: var(--cc-ink-2) !important;
 }
 
 body[data-theme="dark"] .task-cell:hover {
-    background: #202522 !important;
+    background: var(--cc-hover) !important;
 }
 
 /* map BP */
@@ -1970,8 +1884,8 @@ body[data-theme="dark"] .admin-danger-zone {
 
 .caoren-dialog-confirm.is-danger {
     border-color: var(--cc-danger);
-    background: var(--cc-danger);
-    color: #fff;
+    background: var(--cc-danger-soft);
+    color: var(--cc-danger);
 }
 
 /* update announcements */
@@ -2019,9 +1933,9 @@ body[data-theme="dark"] .admin-danger-zone {
 }
 
 .weaponpaints-categories button.active {
-    border-color: var(--cc-ink);
-    background: var(--cc-ink);
-    color: var(--cc-sheet);
+    border-color: var(--cc-signal);
+    background: var(--cc-signal);
+    color: var(--cc-signal-ink);
 }
 
 .weaponpaints-promo {
@@ -2144,8 +2058,8 @@ body.rules-page-body[data-theme="dark"] {
 }
 
 .rules-site-nav a.is-active {
-    background: var(--cc-ink);
-    color: var(--cc-sheet);
+    background: var(--cc-signal);
+    color: var(--cc-signal-ink);
 }
 
 .rules-main {
@@ -2200,10 +2114,10 @@ body.rules-page-body[data-theme="dark"] {
     min-height: 46px;
     width: fit-content;
     padding: 10px 18px;
-    border: 1px solid var(--cc-ink);
+    border: 1px solid var(--cc-signal);
     border-radius: var(--cc-radius);
-    background: var(--cc-ink);
-    color: var(--cc-sheet);
+    background: var(--cc-signal);
+    color: var(--cc-signal-ink);
     font-size: 14px;
     font-weight: 700;
     text-decoration: none;
@@ -2212,8 +2126,8 @@ body.rules-page-body[data-theme="dark"] {
 }
 
 .rules-download-link:hover {
-    border-color: var(--cc-signal);
-    background: var(--cc-signal);
+    border-color: var(--cc-signal-hover);
+    background: var(--cc-signal-hover);
     color: var(--cc-signal-ink);
 }
 
@@ -2993,25 +2907,25 @@ body:has(#lobby-area[style*="display: none"]) .cc-audio-panel {
 }
 
 .cc-audio-panel {
-    background: #0e1211 !important;
-    color: #f2f3ed !important;
-    border: 1px solid #2c322f !important;
+    background: var(--cc-sheet) !important;
+    color: var(--cc-ink) !important;
+    border: 1px solid var(--cc-line) !important;
     border-radius: 4px !important;
     box-shadow: none !important;
     font-family: var(--cc-font) !important;
 }
 
 .cc-audio-panel .cc-audio-status {
-    color: #a2aaa4 !important;
+    color: var(--cc-muted) !important;
 }
 
 .cc-audio-panel .cc-audio-title span {
-    color: #a2aaa4;
+    color: var(--cc-muted);
 }
 
 .cc-audio-panel button {
-    background: #f2f3ed !important;
-    border: 1px solid #f2f3ed !important;
+    background: var(--cc-ink) !important;
+    border: 1px solid var(--cc-ink) !important;
     border-radius: 3px !important;
     color: #101413 !important;
     font-weight: 700;
@@ -3065,7 +2979,7 @@ body[data-theme="dark"] button {
 body[data-theme="dark"] button:disabled {
     background-color: var(--cc-subtle);
     border-color: var(--cc-line);
-    color: #97a09a;
+    color: var(--cc-faint);
 }
 
 body[data-theme="dark"] .header-text-link,
@@ -3090,7 +3004,7 @@ body[data-theme="dark"] .caoren-mod-status {
 
 body[data-theme="dark"] .brand-mark {
     background: var(--cc-signal);
-    color: #1c1700;
+    color: var(--cc-signal-ink);
 }
 
 body[data-theme="dark"] .brand-text strong {
@@ -3098,7 +3012,7 @@ body[data-theme="dark"] .brand-text strong {
 }
 
 body[data-theme="dark"] .lobby-hero h1 {
-    color: #f7f8f2 !important;
+    color: var(--cc-ink) !important;
 }
 
 body[data-theme="dark"] #my-identity {
@@ -3153,8 +3067,8 @@ body[data-theme="dark"] .rules-download-link {
 }
 
 body[data-theme="dark"] .rules-download-link:hover {
-    background: #f7d46a;
-    border-color: #f7d46a;
+    background: var(--cc-signal-hover);
+    border-color: var(--cc-signal-hover);
     color: var(--cc-signal-ink);
 }
 
@@ -3228,7 +3142,7 @@ body[data-theme="dark"] .identity-toolbar {
 }
 
 body[data-theme="dark"] .lobby-hero {
-    background: #080a09;
+    background: var(--cc-sheet);
 }
 
 body[data-theme="dark"] .map-mosaic {
@@ -3250,4 +3164,17 @@ body[data-theme="dark"] .rules-site-nav a.is-active {
 
 body[data-theme="dark"] .rules-brand strong {
     color: var(--cc-ink);
+}
+
+/* Standalone browser views keep their navigation and share desktop surfaces. */
+html:not([data-caoren-window]) .site-header,
+html:not([data-caoren-window]) .rules-site-header { min-height: 55px; padding-block: 10px; }
+html:not([data-caoren-window]) .rules-hero { padding: 20px; background: var(--cc-sheet); border-radius: var(--cc-radius); }
+html:not([data-caoren-window]) .rules-hero h1 { font-size: clamp(28px, 4vw, 34px); }
+body.web-skins:has(#weaponpaints-panel:not([hidden])) :is(#login-area, #lobby-area) { display: none !important; }
+body.web-skins #weaponpaints-panel { margin-block: 16px; }
+
+@media (max-width: 700px) {
+    html:not([data-caoren-window]) .site-header { flex-wrap: wrap; gap: 8px; }
+    html:not([data-caoren-window]) .site-header-actions { max-width: 100%; flex-wrap: wrap; justify-content: flex-start; }
 }

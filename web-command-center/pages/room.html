@@ -5,13 +5,15 @@
   <title>参赛房间 · 草台杯</title>
   <link rel="icon" href="/assets/brand-icon.png"><link rel="stylesheet" href="/css/web-room.css">
   <script defer src="/js/web-room.js"></script>
+  <link rel="stylesheet" href="/css/client-theme.css">
+  <script src="/js/client-theme.js"></script>
 </head>
 <body>
   <header><a href="/"><img src="/assets/brand.png" width="106" height="34" alt="草台杯首页"></a>
-    <nav><a href="/rules">赛前指引</a><a href="/skins">换肤中心</a><a href="/profile">账户资料</a></nav>
+    <nav><a href="/rules">赛前指引</a><a href="/skins">换肤中心</a><a href="/profile">账户资料</a><button id="theme-toggle" type="button" hidden>浅色模式</button></nav>
   </header>
   <main>
-    <section class="hero"><div><p id="mode">本场比赛</p><h1 id="stage">候场房间</h1></div><a class="action" href="/phase" id="phase-link" hidden>进入比赛阶段 →</a></section>
+    <section class="hero"><img class="room-art" src="/assets/room-banner.jpg" alt=""><div><p id="mode">本场比赛</p><h1 id="stage">候场房间</h1></div><a class="action" href="/phase" id="phase-link" hidden>进入比赛阶段 →</a></section>
     <div class="columns">
       <section><h2>参赛名单 <span id="count"></span></h2><ul id="roster"></ul></section>
       <section><h2>本场 Steam 账号</h2>

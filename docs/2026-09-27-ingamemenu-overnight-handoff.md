@@ -166,7 +166,7 @@ ZIP：`CaorenCupInGameMenu-overnight-final-20260927.zip`，只含菜单 DLL、de
 - 最终服务器日志：`/var/log/cs2/ingamemenu-overnight-final-20260927.log`。
 - 首次夜间覆盖前备份：`/var/backups/caoren-ingamemenu-overnight-20260927`（要退回夜间开发前，用这份）。
 - 最终补齐前备份：`/var/backups/caoren-ingamemenu-overnight-final-20260927`（这是第一版夜间 DLL，资源已是新版）。
-- 最终部署/核验输出在本地 `server-123.206.213.166/deploy-server-final-20260927-042454.log`、`verify-server-final-20260927-042841.log`。
+- 最终部署/核验输出在本地 `server-历史部署主机/deploy-server-final-20260927-042454.log`、`verify-server-final-20260927-042841.log`。
 
 本机正常关机安排：使用 `shutdown.exe /s /t 0`，不使用 `/f`。隐藏助手会稍等以便本对话完成回复，然后发出关机请求；如有应用阻止正常关机，会保留其正常确认流程。无法在关机后从本会话反向验证电源状态。
 

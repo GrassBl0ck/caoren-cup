@@ -59,9 +59,14 @@ async function inspectWindowsSteam() {
   }
 }
 
-function launchWorldwide(steamExe) {
+function launchWorldwide(steamExe, keyFile) {
+  const args = ['-applaunch', '730', '-worldwide'];
+  if (keyFile) {
+    if (!/^caorencup_keys_\d{17}\.cfg$/.test(keyFile)) throw Error('无效的键位配置名。');
+    args.push('+exec', keyFile);
+  }
   return new Promise((resolve, reject) => {
-    const child = spawn(steamExe, ['-applaunch', '730', '-worldwide'], {
+    const child = spawn(steamExe, args, {
       detached: true, stdio: 'ignore', windowsHide: true,
     });
     child.once('error', reject);

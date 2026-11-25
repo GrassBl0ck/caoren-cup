@@ -28,6 +28,14 @@
                                     <Label class="CaorenHoverHintText" text="查看玩家指令" />
                                 </Panel>
                             </Panel>
+                            <Panel id="player_stats_open_host" class="CaorenButtonHost CaorenNavHost">
+                                <Button class="CaorenNavTab CaorenMenuButton" id="player_stats_open">
+                                    <Label text="趣味数据" />
+                                </Button>
+                                <Panel class="CaorenHoverHint HintBelow" hittest="false">
+                                    <Label class="CaorenHoverHintText" text="查看当前地图趣味数据" />
+                                </Panel>
+                            </Panel>
                             <Panel id="player_vote_open_host" class="CaorenButtonHost CaorenNavHost">
                                 <Button class="CaorenNavTab CaorenTabSelected CaorenMenuButton" id="player_vote_open">
                                     <Label text="投票" />
@@ -36,6 +44,9 @@
                                     <Label class="CaorenHoverHintText" text="打开当前投票" />
                                 </Panel>
                             </Panel>
+                            <Panel id="player_random_open_host" class="CaorenButtonHost CaorenNavHost Hidden">
+                            <Button class="CaorenNavTab CaorenMenuButton" id="player_random_open"><Label text="随机乱斗" /></Button><Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="查看强化与概览" /></Panel>
+                        </Panel>
                             <Panel id="player_settings_open_host" class="CaorenButtonHost CaorenNavHost">
                                 <Button class="CaorenNavTab CaorenMenuButton" id="player_settings_open">
                                     <Label text="个人设置" />

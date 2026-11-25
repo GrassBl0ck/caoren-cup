@@ -27,7 +27,10 @@ async function main() {
     config: {
       directories: { output: path.join(projectDir, 'dist/installer') },
       electronDist: path.join(projectDir, 'node_modules/electron/dist'),
-      extraFiles: [{ from: gallery, to: 'image-bundle', filter: ['images.pack', 'index.json'] }],
+      extraFiles: [
+        { from: gallery, to: 'image-bundle', filter: ['images.pack', 'index.json'] },
+        { from: path.join(projectDir, 'SERVER-SETUP.md'), to: 'SERVER-SETUP.md' },
+      ],
       msi: {
         artifactName: '草台杯客户端-安装程序-v${version}.${ext}',
         oneClick: false,

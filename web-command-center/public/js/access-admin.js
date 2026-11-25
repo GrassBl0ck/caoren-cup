@@ -27,11 +27,10 @@
       var response = await fetch('/api/public/server-status', { credentials: 'same-origin' });
       latestServerStatus = await response.json();
       if (!response.ok || !latestServerStatus.success) throw new Error('status_unavailable');
-      if (byId('server-connect-command')) byId('server-connect-command').textContent = connectCommand();
       if (status) status.textContent = latestServerStatus.pluginReady ? '服务器在线' : '服务器暂未就绪';
       if (dot) dot.classList.toggle('is-online', latestServerStatus.pluginReady === true);
       buttons.forEach(function (button) {
-        if (button) button.disabled = !latestServerStatus.joinAllowed;
+        if (button) button.disabled = !latestServerStatus.joinAllowed || !connectCommand();
       });
     } catch (_error) {
       latestServerStatus = null;
@@ -41,16 +40,19 @@
         if (button) button.disabled = true;
       });
     }
+    var command = connectCommand();
+    if (byId('server-connect-command')) byId('server-connect-command').textContent = command || '暂无可用服务器地址';
+    if (byId('copy-server-command')) byId('copy-server-command').disabled = !command;
   }
 
   function connectMessage(text) { if (byId('server-connect-message')) byId('server-connect-message').textContent = text; }
   function connectCommand() {
     var url = latestServerStatus?.connectUrl || '';
-    var match = /^steam:\/\/connect\/([a-zA-Z0-9.:-]+)\/?$/.exec(url);
-    return 'connect ' + (match ? match[1] : 'play.caorencup.icu');
+    var match = /^steam:\/\/connect\/([a-zA-Z0-9.:\[\]_-]+)\/?$/.exec(url);
+    return match ? 'connect ' + match[1] : '';
   }
   async function connectServer() {
-    if (!latestServerStatus?.joinAllowed || !/^steam:\/\/connect\/[a-zA-Z0-9.:-]+\/?$/.test(latestServerStatus.connectUrl || '')) return connectMessage('连接地址暂不可用，可在 CS2 控制台输入下方连接命令。');
+    if (!latestServerStatus?.joinAllowed || !/^steam:\/\/connect\/[a-zA-Z0-9.:\[\]_-]+\/?$/.test(latestServerStatus.connectUrl || '')) return connectMessage('连接地址暂不可用，请联系服主。');
     try {
       if (window.caorenDesktop?.connectGameServer) {
         var result = await window.caorenDesktop.connectGameServer(latestServerStatus.connectUrl);
@@ -109,7 +111,9 @@
   function boot() {
     if (document.body.dataset.page === 'admin' && byId('admin-login-entry')) byId('admin-login-entry').open = true;
     byId('copy-server-command')?.addEventListener('click', async function () {
-      try { await navigator.clipboard.writeText(connectCommand()); connectMessage('连接命令已复制，请粘贴到 CS2 控制台。'); }
+      var command = connectCommand();
+      if (!command) return connectMessage('暂无可复制的服务器地址。');
+      try { await navigator.clipboard.writeText(command); connectMessage('连接命令已复制，请粘贴到 CS2 控制台。'); }
       catch (_) { connectMessage('请手动复制：' + connectCommand()); }
     });
     [byId('v1333-connect-server-btn'), byId('v1333-lobby-connect-server-btn')].forEach(function (button) {

@@ -318,7 +318,13 @@ public sealed partial class CaorenCupPlugin : BasePlugin, ICaorenCupHostedMatchA
 
         var steamId = player!.SteamID.ToString();
         CancelRegistration(steamId);
-        ReplyToPlayer(player, "[草人杯] 请前往 https://caorencup.icu/，用邮箱验证码注册并设置密码；登录后使用 /ccbind 的一次性码绑定 CS 游戏身份。请勿在游戏聊天中输入密码。");
+        if (!Uri.TryCreate(_config.PublicWebsiteUrl, UriKind.Absolute, out var website) ||
+            website.Scheme != Uri.UriSchemeHttps || website.UserInfo.Length != 0)
+        {
+            ReplyToPlayer(player, "[草台杯] 服主尚未配置公开注册网站，请向服主索取地址。");
+            return;
+        }
+        ReplyToPlayer(player, $"[草台杯] 请前往 {website.GetLeftPart(UriPartial.Authority)}/，用邮箱验证码注册。登录后使用 /ccbind 获取绑定码。");
     }
 
     private HookResult OnRegistrationChat(EventPlayerChat @event, GameEventInfo info)
@@ -2492,6 +2498,7 @@ public sealed class CaorenConfig
 {
     public bool CaorenMatchRuntimeEnabled { get; set; } = false;
     public string CommandCenterBaseUrl { get; set; } = "http://127.0.0.1:3000";
+    public string PublicWebsiteUrl { get; set; } = "";
     public string PluginToken { get; set; } = "CHANGE_ME_PLUGIN_TOKEN";
     public float HeartbeatSeconds { get; set; } = 3;
     public bool EnableDebugLog { get; set; } = false;

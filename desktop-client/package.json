@@ -1,6 +1,6 @@
 {
   "name": "caoren-cup-desktop-client",
-  "version": "2.4.1",
+  "version": "2.5.3",
   "private": true,
   "description": "Caotai Cup player-center Windows desktop client.",
   "main": "src/main.js",

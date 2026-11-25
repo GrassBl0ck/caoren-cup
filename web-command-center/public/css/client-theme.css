@@ -1,0 +1,69 @@
+/* Shared by CS browser entry points. Dark tokens match desktop-client/src/popup.css. */
+:root {
+  color-scheme: dark;
+  background-color: var(--cc-paper);
+  --cc-paper: #111212;
+  --cc-sheet: #1b1b1a;
+  --cc-subtle: #252524;
+  --cc-hover: #343433;
+  --cc-ink: #f3f0e9;
+  --cc-ink-2: #dedbd5;
+  --cc-muted: #b3b0a9;
+  --cc-faint: #aaa7a1;
+  --cc-line: #393938;
+  --cc-line-strong: #535350;
+  --cc-signal: #ff743a;
+  --cc-signal-ink: #20130d;
+  --cc-signal-hover: #ff8e5c;
+  --cc-signal-soft: #38281f;
+  --cc-focus: #ff743a;
+  --cc-success: #adc7a8;
+  --cc-success-soft: #242e23;
+  --cc-warning: #edbd7c;
+  --cc-warning-soft: #342c20;
+  --cc-danger: #ffaaa1;
+  --cc-danger-soft: #372523;
+  --cc-radius: 2px;
+  --cc-radius-lg: 3px;
+  --cc-font: "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  --cc-display: var(--cc-font);
+  --cc-shadow-float: none;
+  --cc-ease: cubic-bezier(.2, .65, .25, 1);
+}
+
+:root[data-cup-theme="light"] {
+  color-scheme: light;
+  --cc-paper: #f5f4f1;
+  --cc-sheet: #ffffff;
+  --cc-subtle: #eeedea;
+  --cc-hover: #e3e1dc;
+  --cc-ink: #242422;
+  --cc-ink-2: #3d3b37;
+  --cc-muted: #595751;
+  --cc-faint: #67645e;
+  --cc-line: #d2cfc8;
+  --cc-line-strong: #827f77;
+  --cc-signal-soft: #ffe5d8;
+  --cc-focus: #a63a09;
+  --cc-success: #365f37;
+  --cc-success-soft: #e3eee2;
+  --cc-warning: #79510e;
+  --cc-warning-soft: #f8edd6;
+  --cc-danger: #a33124;
+  --cc-danger-soft: #fbe6e2;
+}
+
+#theme-toggle {
+  font: 600 13px/1.4 var(--cc-font);
+  padding: 7px 12px;
+  color: var(--cc-ink-2);
+  background: var(--cc-sheet);
+  border: 1px solid var(--cc-line-strong);
+  border-radius: var(--cc-radius);
+  cursor: pointer;
+}
+
+#theme-toggle:hover { background: var(--cc-hover); color: var(--cc-ink); }
+#theme-toggle[hidden] { display: none; }
+:focus-visible { outline: 2px solid var(--cc-focus); outline-offset: 3px; }
+::selection { background: var(--cc-signal); color: var(--cc-signal-ink); }

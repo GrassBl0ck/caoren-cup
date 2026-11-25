@@ -6,14 +6,18 @@
   function message(text) { target.textContent = '[草人杯] ' + text; }
   fetch('/api/mc/info', { credentials: 'same-origin', cache: 'no-store' }).then(async function (response) {
     if (response.status === 401) { window.location.replace('/?next=mc'); return; }
-    if (!response.ok) throw new Error('暂时无法读取入服信息，请稍后重试。');
     var data = await response.json();
+    if (data.error === 'mc_address_unconfigured') throw new Error('服主尚未配置 MC 服务器地址。');
+    if (!response.ok) throw new Error('暂时无法读取入服信息，请稍后重试。');
     if (!data.success) throw new Error('暂时无法读取入服信息。');
     address = data.serverAddress;
     document.getElementById('mc-version').textContent = 'Java ' + data.version;
     document.getElementById('mc-address').textContent = address;
     button.disabled = !address;
-  }).catch(function (error) { message(error.message || '连接失败，请稍后重试。'); });
+  }).catch(function (error) {
+    document.getElementById('mc-address').textContent = '暂无可用地址';
+    message(error.message || '连接失败，请稍后重试。');
+  });
   button.addEventListener('click', async function () {
     try { await navigator.clipboard.writeText(address); message('地址已复制，请在 Minecraft 多人游戏中添加服务器。'); }
     catch (_) { message('无法自动复制，请手动选中上面的服务器地址复制。'); }

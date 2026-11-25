@@ -78,3 +78,7 @@
 {
     margin-right: 8px;
 }
+
+.QuickTabs { width: 100%; flow-children: right; margin-bottom: 8px; }
+.QuickTabs .QuickNav { margin-right: 4px; }
+.QuickNav.SelectedTab { background-color: #315465; }

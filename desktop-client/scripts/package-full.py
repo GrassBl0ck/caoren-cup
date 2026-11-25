@@ -11,6 +11,7 @@ def build_archive(executable: Path, gallery: Path, archive: Path) -> None:
     try:
         with ZipFile(temporary, "w", compression=ZIP_DEFLATED, compresslevel=1) as bundle:
             bundle.write(executable, executable.name)
+            bundle.write(Path(__file__).resolve().parents[1] / "SERVER-SETUP.md", "SERVER-SETUP.md")
             for name in ("index.json", "images.pack"):
                 bundle.write(gallery / name, f"image-bundle/{name}")
         temporary.replace(archive)

@@ -6,6 +6,8 @@
     <title>草台杯 - 赛前指引</title><link rel="icon" type="image/png" href="/assets/brand-icon.png">
     <link rel="stylesheet" href="/css/app.css?v=1.9.7-psb1">
     <link rel="stylesheet" href="/css/caoren-2026.css?v=20261019-visual1">
+    <link rel="stylesheet" href="/css/client-theme.css">
+    <script src="/js/client-theme.js"></script>
 </head>
 <body class="rules-page-body">
     <div class="rules-page-shell">
@@ -15,7 +17,7 @@
                 <a class="is-active" aria-current="page" href="/rules.html">赛前指引</a>
                 <a href="/downloads/caoren-cup-full-rules.pdf" download>完整规则 PDF</a>
             </nav>
-            <button id="theme-toggle" class="theme-toggle" type="button">深色模式</button>
+            <button id="theme-toggle" class="theme-toggle" type="button" hidden>浅色模式</button>
         </header>
 
         <main class="rules-main">
@@ -108,7 +110,7 @@
                             <p>如果你已连接 CS2，但还没加入本场比赛，游戏内可能提示你先打开草台杯客户端。回到房间点击「加入比赛」。</p>
                         </div>
                         <ul class="rules-list">
-                            <li>开服后可在房间点击「进入 CS2」，或在控制台输入 <code>connect play.caorencup.icu</code>。</li>
+                            <li>开服后可在房间点击「进入 CS2」，或复制本场连接命令并粘贴到游戏控制台。</li>
                             <li>建议输入 <code>snd_toolvolume 0.3</code>，推荐范围为 0.3 至 0.5，用于降低自定义音效音量。</li>
                             <li>管理员参赛时，在首页选「玩家身份」，进入房间后点击「加入比赛」。</li>
                             <li>若弹出创意工坊地图下载请求，请选择允许或下载。</li>
@@ -164,25 +166,5 @@
     </footer>
     </div>
 
-    <script>
-    (function () {
-        var saved = localStorage.getItem('caoren-theme');
-        var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var theme = saved === 'dark' || saved === 'light' ? saved : (systemDark ? 'dark' : 'light');
-        var button = document.getElementById('theme-toggle');
-
-        function applyTheme(value, persist) {
-            document.body.dataset.theme = value;
-            if (persist) localStorage.setItem('caoren-theme', value);
-            button.textContent = value === 'dark' ? '浅色模式' : '深色模式';
-            button.setAttribute('aria-label', value === 'dark' ? '切换到浅色模式' : '切换到深色模式');
-        }
-
-        button.addEventListener('click', function () {
-            applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark', true);
-        });
-        applyTheme(theme, false);
-    })();
-    </script>
 </body>
 </html>

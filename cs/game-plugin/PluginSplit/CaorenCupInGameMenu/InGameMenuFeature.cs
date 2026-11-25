@@ -19,7 +19,7 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
     private const float ChatRelayTimeoutSeconds = 60f;
 
     public override string ModuleName => "CaorenCup In Game Menu";
-    public override string ModuleVersion => "2.3.0";
+    public override string ModuleVersion => "2.5.2";
     public override string ModuleAuthor => "Graslock + AI";
 
     private IMenuHudSurface _surface = null!;
@@ -166,13 +166,15 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
             CaorenCupChat.PrintToChat(player, "无权限使用管理员菜单。");
             return;
         }
+        if (_navigator.HasSession(steamId) && HandleAdminTrailClick(player, buttonId)) return;
+        if (_navigator.HasSession(steamId) && HandleShortcutClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleAdminVotingClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleAdminAudioClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleAdminAbilityClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleAdminRandomClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleCommandHelpClick(player, buttonId)) return;
         if (_navigator.HasSession(steamId) && HandleAdminSettingsClick(player, buttonId)) return;
-        if (_adminVoteViews.GetValueOrDefault(steamId) != AdminVoteView.Home) return;
+        if (_adminVoteViews.GetValueOrDefault(steamId) != AdminVoteView.Broadcast) return;
         var action = _navigator.HandleClick(steamId, buttonId, isRoot);
 
         if (action == MenuClickAction.None && !_navigator.HasSession(steamId))
@@ -202,8 +204,6 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         _surface.SetVariable(player, "title", render.Title);
         _surface.SetVariable(player, "status", render.Status);
         _surface.SetVariable(player, "btn0", render.SlotTitles[0]);
-        _surface.SetVariable(player, "navsection", "快捷指令");
-        _surface.SetVariable(player, "subsection", "广播");
     }
 
 
@@ -215,6 +215,8 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         _adminVoteViews.Remove(player.SteamID.ToString());
         _abilityMenuStates.Remove(player.SteamID.ToString());
         _randomAdminMenus.Remove(player.SteamID.ToString());
+        _shortcuts.Remove(player.SteamID.ToString());
+        _adminTrails.Remove(player.SteamID.ToString());
         ForgetCommandHelp(player.SteamID.ToString());
         _surface.SetClass(player, "dialog", "Hidden", true);
         _surface.ReleaseInput(player);
@@ -232,6 +234,9 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         CloseAllHeldMatchMenus();
         _navigator.CloseAll();
         _surface.RemoveEntity();
+        _shortcuts.Clear();
+        _adminTrails.Clear();
+        _playerTrails.Clear();
         CancelAllChatRelays();
     }
 
@@ -249,6 +254,9 @@ public sealed partial class CaorenCupInGameMenuPlugin : BasePlugin, IMenuHostAct
         CloseHeldMatchMenu(steamId, player);
         TrackDisconnectedPlayer(steamId);
         OnVotingPlayerDisconnected(steamId);
+        _shortcuts.Remove(steamId);
+        _adminTrails.Remove(steamId);
+        _playerTrails.Remove(steamId);
         _navigator.Close(steamId);
         if (player?.IsValid == true)
         {

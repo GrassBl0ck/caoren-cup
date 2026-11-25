@@ -262,3 +262,10 @@ dialog::backdrop { background: #080909bf; }
   .ratio strong { font-size: 38px; }
 }
 
+
+#keybinds-dialog { width: min(540px, 92vw); max-height: 90vh; overflow-y: auto; }
+#keybinds-list h3 { margin: 16px 0 4px; font-size: 14px; color: var(--muted); }
+.keybind-row { display: grid; grid-template-columns: 1fr minmax(90px, auto) 58px; align-items: center; gap: 8px; min-height: 46px; border-bottom: 1px solid var(--line); }
+.keybind-row button { padding: 4px 8px; }
+.keybind-row .listening { border-color: var(--accent); }
+#keybinds-status { color: var(--ink, #f3f0e9); white-space: pre-line; overflow-wrap: anywhere; }

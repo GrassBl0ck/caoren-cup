@@ -54,6 +54,7 @@ function render() {
   byId('join').disabled = busy || !choice;
   byId('ready').hidden = !self || !lobby;
   byId('ready').disabled = busy;
+  byId('ready').setAttribute('aria-pressed', String(!!self?.lobbyReady));
   byId('ready').textContent = self?.lobbyReady ? '取消准备' : '准备';
   byId('phase-link').hidden = !self || lobby;
   byId('stage').textContent = phases[state.phase] || '本场比赛';
@@ -63,6 +64,7 @@ function render() {
   byId('count').textContent = '· ' + players.length + ' 人';
   byId('roster').replaceChildren(...players.map(p => {
     const item = element('li', p.name + (p.playerId === room.playerId ? '（我）' : ''));
+    if (lobby && p.lobbyReady) item.classList.add('is-ready');
     item.append(element('span', lobby ? (p.lobbyReady ? '已准备' : '未准备') : (p.rosterTeam ? p.rosterTeam + ' 队' : '待分队')));
     return item;
   }));

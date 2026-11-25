@@ -43,7 +43,10 @@
     <link rel="stylesheet" href="/css/weaponpaints.css?v=1.9.2-skinpromo1">
     <link rel="stylesheet" href="/css/caoren-2026.css?v=20261019-visual1">
     <script defer src="/js/caoren-motion.js?v=map-image-de-prefix-2"></script>
-<style>body[data-page="cs"] .admin-entry-block{display:none}body[data-page="admin"] #player-center-home,body[data-page="admin"] #player-center-entry-error{display:none!important}body[data-page="admin"] .lobby-desk{display:block}body[data-page="admin"] .desk-rail{max-width:620px;margin:24px auto}body[data-page="admin"] .desk-rail .rail-block:not(.admin-entry-block){display:none}</style></head>
+<style>body[data-page="cs"] .admin-entry-block{display:none}body[data-page="admin"] #player-center-home,body[data-page="admin"] #player-center-entry-error{display:none!important}body[data-page="admin"] .lobby-desk{display:block}body[data-page="admin"] .desk-rail{max-width:620px;margin:24px auto}body[data-page="admin"] .desk-rail .rail-block:not(.admin-entry-block){display:none}</style>
+    <link rel="stylesheet" href="/css/client-theme.css">
+    <script src="/js/client-theme.js"></script>
+</head>
 <body class="caoren-modifiers-disabled" data-page="cs">
     <div class="page-shell">
     <header class="site-header">
@@ -56,7 +59,7 @@
                 更新公告
                 <span id="update-announcement-unread-dot" class="update-announcement-unread-dot" hidden aria-label="有未读更新"></span>
             </button>
-            <button id="theme-toggle" class="theme-toggle" type="button" onclick="toggleTheme()">深色模式</button>
+            <button id="theme-toggle" class="theme-toggle" type="button" hidden>浅色模式</button>
         </div>
     </header>
     <div id="login-area">
@@ -99,7 +102,7 @@
                         </div>
                         <button id="v1333-connect-server-btn" class="primary-btn" type="button" disabled>连接至草台杯服务器</button>
                     </div>
-                    <p class="rail-note">通过 Steam 启动 CS2。若没有响应，可在游戏控制台手动连接。</p><code id="server-connect-command">connect play.caorencup.icu</code><button id="copy-server-command" type="button">复制连接命令</button><p id="server-connect-message" role="status"></p>
+                    <p class="rail-note">通过 Steam 启动 CS2。若没有响应，可在游戏控制台手动连接。</p><code id="server-connect-command">正在读取服务器地址……</code><button disabled id="copy-server-command" type="button">复制连接命令</button><p id="server-connect-message" role="status"></p>
                 </div>
                 <div class="rail-block admin-entry-block">
                     <h3>管理员管理台</h3>

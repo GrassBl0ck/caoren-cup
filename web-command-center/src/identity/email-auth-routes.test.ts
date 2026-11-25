@@ -96,7 +96,14 @@ test('desktop email registration opens CS while MC stays retired and joining req
     assert.equal((await f.service.authenticatePlayerCenterDeviceToken(desktop.data.deviceToken)).ok, true);
     assert.equal((await f.request('/cs', undefined, created.cookie)).status, 200);
     assert.equal((await f.request('/mc', undefined, created.cookie)).headers.get('location'), '/');
-    assert.equal((await f.request('/api/mc/info', undefined, created.cookie)).data.premiumOnly, true);
+    const oldAddress = process.env.MC_SERVER_ADDRESS;
+    try {
+        process.env.MC_SERVER_ADDRESS = 'mc.example.org:25565';
+        assert.equal((await f.request('/api/mc/info', undefined, created.cookie)).data.premiumOnly, true);
+    } finally {
+        if (oldAddress === undefined) delete process.env.MC_SERVER_ADDRESS;
+        else process.env.MC_SERVER_ADDRESS = oldAddress;
+    }
     assert.notEqual((await f.request('/pages/cs.html')).status, 200);
     assert.notEqual((await f.request('/cs%2ehtml')).status, 200);
     const denied = await f.request('/api/player-center/match/join', {}, created.cookie);

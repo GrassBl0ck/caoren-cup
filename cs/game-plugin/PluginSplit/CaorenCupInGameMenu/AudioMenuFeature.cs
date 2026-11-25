@@ -10,7 +10,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
     private double _nextAudioRefresh;
     private bool HandleAdminAudioClick(CCSPlayerController player, string id)
     {
-        if (id == "admin_audio_open") { SetAdminVoteView(player, AdminVoteView.Audio); return true; }
+        if (id == "admin_audio_open") { if (IsQuickView(_adminVoteViews.GetValueOrDefault(player.SteamID.ToString()))) SetAdminVoteView(player, AdminVoteView.Audio); return true; }
         if (_adminVoteViews.GetValueOrDefault(player.SteamID.ToString()) != AdminVoteView.Audio) return false;
         if (!IsVoteAdministrator(player)) return true;
         var service = CaorenCupAudioAccess.TryGet();

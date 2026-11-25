@@ -37,19 +37,90 @@
                         </Panel>
                     </Panel>
                 </Panel>
-                <Panel class="content-navbar__tabs content-navbar__tabs--dark CaorenSecondaryNav">
-                    <Panel class="content-navbar__tabs__center-container">
-                        <Panel class="content-navbar__tabs__btn CaorenTabSelected">
-                            <Label text="{s:subsection}" />
-                        </Panel>
+                <Panel id="admin_categories" class="MenuCategories">
+                    <Panel id="shortcut_equipment_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="shortcut_equipment" class="CaorenMenuButton CategoryTab"><Label text="玩家与装备" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开玩家与装备" /></Panel>
                     </Panel>
+                    <Panel id="shortcut_cap_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="shortcut_cap" class="CaorenMenuButton CategoryTab"><Label text="血量上下限" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开血量上下限" /></Panel>
+                    </Panel>
+                    <Panel id="shortcut_match_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="shortcut_match" class="CaorenMenuButton CategoryTab"><Label text="比赛与规则" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开比赛与规则" /></Panel>
+                    </Panel>
+                    <Panel id="admin_broadcast_open_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="admin_broadcast_open" class="CaorenMenuButton CategoryTab"><Label text="广播" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开广播" /></Panel>
+                    </Panel>
+                    <Panel id="admin_vote_open_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="admin_vote_open" class="CaorenMenuButton CategoryTab"><Label text="投票" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开投票" /></Panel>
+                    </Panel>
+                    <Panel id="admin_audio_open_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="admin_audio_open" class="CaorenMenuButton CategoryTab"><Label text="音频" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开音频" /></Panel>
+                    </Panel>
+                    <Panel id="admin_ability_open_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="admin_ability_open" class="CaorenMenuButton CategoryTab"><Label text="异能" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开异能" /></Panel>
+                    </Panel>
+                    <Panel id="admin_random_open_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="admin_random_open" class="CaorenMenuButton CategoryTab"><Label text="随机乱斗" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开随机乱斗" /></Panel>
+                    </Panel>
+                </Panel>
+                <Panel id="equipment_operations" class="MenuCategories EquipmentOperations Hidden">
+                    <Panel id="shortcut_give_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="shortcut_give" class="CaorenMenuButton CategoryTab"><Label text="立即发放物品" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开立即发放物品" /></Panel>
+                    </Panel>
+                    <Panel id="shortcut_health_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="shortcut_health" class="CaorenMenuButton CategoryTab"><Label text="修改当前血量" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开修改当前血量" /></Panel>
+                    </Panel>
+                    <Panel id="shortcut_loadout_host" class="CaorenButtonHost CategoryTabHost">
+                        <Button id="shortcut_loadout" class="CaorenMenuButton CategoryTab"><Label text="设置出生装备" /></Button>
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="打开设置出生装备" /></Panel>
+                    </Panel>
+                </Panel>
+                <Panel class="MenuTrail">
+                    <Panel id="trail_up_0_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_0" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label0}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label0}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_1_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_1" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label1}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label1}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_2_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_2" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label2}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label2}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_3_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_3" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label3}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label3}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_4_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_4" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label4}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label4}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_5_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_5" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label5}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label5}" /></Panel>
+                    </Panel>
+                    <Label text="{s:trail_current}" class="TrailCurrent" />
                 </Panel>
                 <Panel class="SettingsMenuTab Active CaorenSettingsPage">
                     <Panel class="SettingsBackground CaorenSettingsContent">
-                        <Panel id="admin_home" class="CaorenMenuSection">
-                            <Panel class="SettingsSectionTitleContianer CaorenSectionHeader">
-                                <Label class="SettingsSectionTitleLabel" text="广播" />
-                            </Panel>
+                        <Panel id="admin_home" class="CaorenMenuSection Hidden">
                             <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
                                 <Panel class="CaorenSettingDescription">
                                     <Label class="CaorenSettingName" text="全服广播" />
@@ -62,49 +133,6 @@
                                     <Panel class="CaorenHoverHint" hittest="false">
                                         <Label class="CaorenHoverHintText" text="向全服发送广播" />
                                     </Panel>
-                                </Panel>
-                            </Panel>
-                            <Panel class="content-navbar__seperator CaorenRowSeparator" />
-                            <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
-                                <Panel class="CaorenSettingDescription">
-                                    <Label class="CaorenSettingName" text="投票系统" />
-                                    <Label class="CaorenSettingScope" text="影响范围：全服 · 管理员专属" />
-                                </Panel>
-                                <Panel id="admin_vote_open_host" class="CaorenButtonHost CaorenActionHost">
-                                    <Button id="admin_vote_open" class="CaorenSettingAction CaorenMenuButton">
-                                        <Label class="" text="管理投票" />
-                                    </Button>
-                                    <Panel class="CaorenHoverHint" hittest="false">
-                                        <Label class="CaorenHoverHintText" text="管理全服投票" />
-                                    </Panel>
-                                </Panel>
-                            </Panel>
-<Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
-<Panel class="CaorenSettingDescription"><Label class="CaorenSettingName" text="音乐与音频广播" />
-<Label class="CaorenSettingScope" text="影响范围：全服 · 管理员控制" /></Panel><Panel id="admin_audio_open_host" class="CaorenButtonHost CaorenActionHost">
-<Button id="admin_audio_open" class="CaorenMenuButton"><Label text="管理音频" /></Button>
-<Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="管理音乐和音频广播" /></Panel>
-</Panel></Panel>
-                            <Panel class="content-navbar__seperator CaorenRowSeparator" />
-                            <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
-                                <Panel class="CaorenSettingDescription">
-                                    <Label class="CaorenSettingName" text="异能模式" />
-                                    <Label class="CaorenSettingScope" text="影响范围：全服 · 管理员专属" />
-                                </Panel>
-                                <Panel id="admin_ability_open_host" class="CaorenButtonHost CaorenActionHost">
-                                    <Button id="admin_ability_open" class="CaorenMenuButton"><Label text="管理异能" /></Button>
-                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="为在线玩家分配异能职业" /></Panel>
-                                </Panel>
-                            </Panel>
-                            <Panel class="content-navbar__seperator CaorenRowSeparator" />
-                            <Panel class="SettingsMenuDropdownContainer CaorenSettingsRow">
-                                <Panel class="CaorenSettingDescription">
-                                    <Label class="CaorenSettingName" text="随机乱斗" />
-                                    <Label class="CaorenSettingScope" text="查看所有玩家的强化券与已选 BUFF" />
-                                </Panel>
-                                <Panel id="admin_random_open_host" class="CaorenButtonHost CaorenActionHost">
-                                    <Button id="admin_random_open" class="CaorenMenuButton"><Label text="查看玩家" /></Button>
-                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="只读查看本局随机乱斗状态" /></Panel>
                                 </Panel>
                             </Panel>
                         </Panel>
@@ -237,6 +265,106 @@
                                 <Panel id="ability_back_host" class="CaorenButtonHost CaorenAudioButton">
                                     <Button id="ability_back" class="CaorenMenuButton"><Label text="{s:ability_back_label}" /></Button>
                                     <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="回到上一级" /></Panel>
+                                </Panel>
+                            </Panel>
+                        </Panel>
+                        <Panel id="admin_shortcuts" class="CaorenMenuSection Hidden">
+                            <Label id="shortcut_summary" class="CaorenRandomAdminSummary" text="{s:shortcut_detail}" />
+                            <Label class="CaorenSettingScope" text="{s:shortcut_page}" />
+                            <Panel id="shortcut_row_0_host" class="CaorenButtonHost CaorenRandomAdminRow">
+                                <Button id="shortcut_row_0" class="CaorenMenuButton"><Label text="{s:shortcut_label0}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:shortcut_hint0}" /></Panel>
+                            </Panel>
+                            <Panel id="shortcut_row_1_host" class="CaorenButtonHost CaorenRandomAdminRow">
+                                <Button id="shortcut_row_1" class="CaorenMenuButton"><Label text="{s:shortcut_label1}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:shortcut_hint1}" /></Panel>
+                            </Panel>
+                            <Panel id="shortcut_row_2_host" class="CaorenButtonHost CaorenRandomAdminRow">
+                                <Button id="shortcut_row_2" class="CaorenMenuButton"><Label text="{s:shortcut_label2}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:shortcut_hint2}" /></Panel>
+                            </Panel>
+                            <Panel id="shortcut_row_3_host" class="CaorenButtonHost CaorenRandomAdminRow">
+                                <Button id="shortcut_row_3" class="CaorenMenuButton"><Label text="{s:shortcut_label3}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:shortcut_hint3}" /></Panel>
+                            </Panel>
+                            <Panel id="shortcut_row_4_host" class="CaorenButtonHost CaorenRandomAdminRow">
+                                <Button id="shortcut_row_4" class="CaorenMenuButton"><Label text="{s:shortcut_label4}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:shortcut_hint4}" /></Panel>
+                            </Panel>
+                            <Panel id="shortcut_row_5_host" class="CaorenButtonHost CaorenRandomAdminRow">
+                                <Button id="shortcut_row_5" class="CaorenMenuButton"><Label text="{s:shortcut_label5}" /></Button>
+                                <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="{s:shortcut_hint5}" /></Panel>
+                            </Panel>
+                            <Panel id="shortcut_keypad" class="CaorenMenuSection Hidden">
+                                <Panel class="CaorenAudioControls">
+                                    <Panel id="shortcut_key_1_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_1" class="CaorenMenuButton"><Label text="1" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 1" /></Panel>
+                                    </Panel>
+                                    <Panel id="shortcut_key_2_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_2" class="CaorenMenuButton"><Label text="2" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 2" /></Panel>
+                                    </Panel>
+                                    <Panel id="shortcut_key_3_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_3" class="CaorenMenuButton"><Label text="3" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 3" /></Panel>
+                                    </Panel>
+                                </Panel>
+                                <Panel class="CaorenAudioControls">
+                                    <Panel id="shortcut_key_4_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_4" class="CaorenMenuButton"><Label text="4" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 4" /></Panel>
+                                    </Panel>
+                                    <Panel id="shortcut_key_5_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_5" class="CaorenMenuButton"><Label text="5" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 5" /></Panel>
+                                    </Panel>
+                                    <Panel id="shortcut_key_6_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_6" class="CaorenMenuButton"><Label text="6" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 6" /></Panel>
+                                    </Panel>
+                                </Panel>
+                                <Panel class="CaorenAudioControls">
+                                    <Panel id="shortcut_key_7_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_7" class="CaorenMenuButton"><Label text="7" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 7" /></Panel>
+                                    </Panel>
+                                    <Panel id="shortcut_key_8_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_8" class="CaorenMenuButton"><Label text="8" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 8" /></Panel>
+                                    </Panel>
+                                    <Panel id="shortcut_key_9_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_9" class="CaorenMenuButton"><Label text="9" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 9" /></Panel>
+                                    </Panel>
+                                </Panel>
+                                <Panel class="CaorenAudioControls">
+                                    <Panel id="shortcut_key_erase_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_erase" class="CaorenMenuButton"><Label text="退格" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="删除最后一位" /></Panel>
+                                    </Panel>
+                                    <Panel id="shortcut_key_0_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_0" class="CaorenMenuButton"><Label text="0" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="输入 0" /></Panel>
+                                    </Panel>
+                                    <Panel id="shortcut_key_apply_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                        <Button id="shortcut_key_apply" class="CaorenMenuButton"><Label text="确定" /></Button>
+                                        <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="确认当前数值" /></Panel>
+                                    </Panel>
+                                </Panel>
+                            </Panel>
+                            <Panel class="CaorenAudioControls">
+                                <Panel id="shortcut_prev_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                    <Button id="shortcut_prev" class="CaorenMenuButton"><Label text="上一页" /></Button>
+                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="上一页" /></Panel>
+                                </Panel>
+                                <Panel id="shortcut_next_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                    <Button id="shortcut_next" class="CaorenMenuButton"><Label text="下一页" /></Button>
+                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="下一页" /></Panel>
+                                </Panel>
+                                <Panel id="shortcut_refresh_host" class="CaorenButtonHost CaorenRandomAdminNav">
+                                    <Button id="shortcut_refresh" class="CaorenMenuButton"><Label text="刷新" /></Button>
+                                    <Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="刷新" /></Panel>
                                 </Panel>
                             </Panel>
                         </Panel>

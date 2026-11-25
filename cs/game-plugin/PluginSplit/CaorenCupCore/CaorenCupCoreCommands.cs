@@ -162,12 +162,7 @@ public sealed partial class CaorenCupCorePlugin
 
     private void OnCommandRules(CCSPlayerController? player, CommandInfo info)
     {
-        var rules = CaorenCupModuleRegistry.Snapshot()
-            .Select(module => module.PublicConfig())
-            .Where(rule => !string.IsNullOrEmpty(rule))
-            .ToList();
-        if (Config.HpCap.Enabled)
-            rules.Add($"全局血量保护: 模块回血最高到 {Config.HpCap.Max} HP，模块扣血最低到 {Config.HpCap.Min} HP");
+        var rules = CaorenCupModuleRegistry.CurrentRules(Config.HpCap);
         if (rules.Count == 0)
         {
             Reply(player, " [草人杯] 当前服务器运行默认竞技规则，未开启特殊修改。");
@@ -228,7 +223,7 @@ public sealed partial class CaorenCupCorePlugin
         }
 
         string arg = info.GetArg(1).ToLowerInvariant();
-        if (arg is "0" or "off" or "disable")
+        if ((arg == "0" && info.ArgCount == 2) || arg is "off" or "disable")
         {
             Config.HpCap.Enabled = false;
             SaveConfig();

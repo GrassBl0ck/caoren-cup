@@ -18,6 +18,7 @@ const errors = {
   game_binding_required: '请先绑定当前 Steam 账号。',
   match_steam_locked: '请切回加入本场时使用的 Steam 账号。',
   cs2_perfect_world_running: '当前开着国服 CS2，请退出游戏后再点连接。',
+  cs2_launch_changed: 'CS2 已经启动，请再点一次连接。新键位将在下次启动时加载。',
   cs2_start_timeout: 'CS2 启动还没完成。游戏打开后可以重试。',
   steam_launch_failed: '无法打开 CS2。请重试，或复制连接指令。',
   room_not_ready: '当前不能开始。请检查参赛者准备状态和模式要求。',
@@ -484,7 +485,7 @@ async function connect() {
     if (matchId !== room?.state.matchId) return;
     if (result.ok) {
       requestedConnectionAt = Date.now();
-      if (pendingJoin) feedback('已发出连接请求，等待游戏服确认入服。');
+      if (pendingJoin || result.keyNotice) feedback(['已发出连接请求，等待游戏服确认入服。', result.keyNotice].filter(Boolean).join(' '));
       return;
     }
     pendingJoin = false;

@@ -13,7 +13,7 @@ for (const text of [
   '绑定 CS 游戏身份',
   'SteamID64',
   '本场确认',
-  'connect play.caorencup.icu',
+  '从本场房间复制连接命令',
   'QQ：3465434029',
   '不平衡竞技',
   '卧底模式',

@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld('caorenDesktop', Object.freeze({
   }),
   clearRejectedDeviceCredential: () => ipcRenderer.invoke('caoren:player-center:clear-rejected-device'),
   connectGameServer: (connectUrl, expectedSteamId) => ipcRenderer.invoke('caoren:game:connect', { connectUrl, expectedSteamId }),
+  ...(process.isMainFrame && location.protocol === 'file:' ? {
+    keybinds: (operation, request) => ipcRenderer.invoke('caoren:keybinds', operation, request),
+  } : {}),
   inspectSteam: () => ipcRenderer.invoke('caoren:steam:status'),
   roomRequest: (operation, payload) => ipcRenderer.invoke('caoren:room:request', operation, payload),
   openSteamAuthorization: (url) => ipcRenderer.invoke('caoren:room:steam-authorization', url),

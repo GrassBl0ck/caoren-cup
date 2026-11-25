@@ -11,7 +11,7 @@ namespace CaorenCup.Features.InGameMenu;
 
 public sealed partial class CaorenCupInGameMenuPlugin
 {
-    private enum AdminVoteView { Home, Management, Preview, CancelConfirmation, HelpList, HelpDetail, Settings, Audio, Ability, Random }
+    private enum AdminVoteView { Home, Broadcast, Management, Preview, CancelConfirmation, HelpList, HelpDetail, Settings, Audio, Ability, Random, Shortcuts }
     private sealed record VotePageSession(Guid? VoteId, bool ResultOnly);
     private readonly VoteSystem _votes = new();
     private IMenuHudSurface _voteSurface = null!;
@@ -43,6 +43,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         RegisterListener<Listeners.OnTick>(RefreshAudioMenus);
         RegisterListener<Listeners.OnTick>(RefreshAbilityMenus);
         RegisterListener<Listeners.OnTick>(RefreshAdminRandomMenus);
+        AddTimer(1f, RefreshShortcutMatches, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
         RegisterListener<Listeners.OnMapEnd>(() => CloseAllMenus(VoteEndReason.MapChanged));
     }
 
@@ -98,8 +99,11 @@ public sealed partial class CaorenCupInGameMenuPlugin
             case "admin_exit": ExitOwnMenus(player); return true;
             case "admin_back": GoMenuBack(player); return true;
             case "admin_home_tab": SetAdminVoteView(player, AdminVoteView.Home); return true;
+            case "admin_broadcast_open":
+                if (IsQuickView(view)) SetAdminVoteView(player, AdminVoteView.Broadcast);
+                return true;
             case "admin_vote_open":
-                if (view == AdminVoteView.Home) SetAdminVoteView(player, AdminVoteView.Management);
+                if (IsQuickView(view)) SetAdminVoteView(player, AdminVoteView.Management);
                 return true;
             case "vote_create":
                 if (view == AdminVoteView.Management) BeginVoteDraft(player);
@@ -133,7 +137,9 @@ public sealed partial class CaorenCupInGameMenuPlugin
         var sid = player.SteamID.ToString();
         if (!_navigator.HasSession(sid) || !IsVoteAdministrator(player)) return;
         _adminVoteViews[sid] = view;
-        _surface.SetClass(player, "admin_home", "Hidden", view != AdminVoteView.Home);
+        if (view != AdminVoteView.Shortcuts) _shortcuts.Remove(sid);
+        _surface.SetClass(player, "admin_shortcuts", "Hidden", view != AdminVoteView.Shortcuts);
+        _surface.SetClass(player, "admin_home", "Hidden", view != AdminVoteView.Broadcast);
         _surface.SetClass(player, "admin_vote_management", "Hidden", view != AdminVoteView.Management);
         _surface.SetClass(player, "admin_vote_preview", "Hidden", view != AdminVoteView.Preview);
         _surface.SetClass(player, "admin_vote_cancel", "Hidden", view != AdminVoteView.CancelConfirmation);
@@ -143,8 +149,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         _surface.SetClass(player, "admin_audio", "Hidden", view != AdminVoteView.Audio);
         _surface.SetClass(player, "admin_ability", "Hidden", view != AdminVoteView.Ability);
         _surface.SetClass(player, "admin_random", "Hidden", view != AdminVoteView.Random);
-        _surface.SetVariable(player, "navsection", view is AdminVoteView.HelpList or AdminVoteView.HelpDetail ? "指令帮助" : view is AdminVoteView.Home or AdminVoteView.Ability ? "快捷指令" : view == AdminVoteView.Settings ? "个人设置" : "投票");
-        _surface.SetVariable(player, "subsection", view switch { AdminVoteView.Home => "广播", AdminVoteView.Preview => "确认发起", AdminVoteView.CancelConfirmation => "确认取消", AdminVoteView.HelpList => "全部指令", AdminVoteView.HelpDetail => "指令详情", AdminVoteView.Settings => "外观与声音", AdminVoteView.Audio => "音乐与广播", AdminVoteView.Ability => "异能职业分配", _ => "管理" });
+        RenderAdminNavigation(player);
         _surface.SetClass(player, "admin_home_tab", "CaorenTabSelected", view is not (AdminVoteView.HelpList or AdminVoteView.HelpDetail or AdminVoteView.Settings));
         _surface.SetClass(player, "admin_help_open_tab", "CaorenTabSelected", view is AdminVoteView.HelpList or AdminVoteView.HelpDetail);
         _surface.SetClass(player, "admin_settings_open", "CaorenTabSelected", view == AdminVoteView.Settings);
@@ -156,8 +161,6 @@ public sealed partial class CaorenCupInGameMenuPlugin
         if (view == AdminVoteView.Ability) RenderAbilityMenu(player);
         if (view == AdminVoteView.Random)
         {
-            _surface.SetVariable(player, "navsection", "快捷指令");
-            _surface.SetVariable(player, "subsection", "随机乱斗状态");
             RenderAdminRandomMenu(player);
         }
     }
@@ -305,6 +308,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         if (!_voteSurface.IsAlive) { Chat(sid, "投票界面不可用，可用 /crcvote A（B/C/D）提交投票。"); return; }
         _votePages[sid] = new VotePageSession(resultOnly ? null : _votes.Active?.Id, resultOnly);
         _voteSurface.SetClass(player, "vote_player_tabs", "Hidden", !fromPersonal);
+        _voteSurface.SetClass(player, "player_random_open", "Hidden", !RandomMenuAvailable);
         _voteSurface.SetClass(player, "vote_back", "Hidden", !fromPersonal);
         _voteSurface.SetClass(player, "vote_standalone_header", "Hidden", fromPersonal);
         RenderVotePage(player);
@@ -347,7 +351,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         if (!_votePages.TryGetValue(sid, out var session)) return;
         if (buttonId == "vote_exit") { ExitOwnMenus(player); return; }
         if (buttonId == "vote_back") { ReturnFromVotePage(player); return; }
-        if (_voteFromPersonalMenu.Contains(sid) && buttonId is ("player_commands_open" or "player_stats_open" or "player_settings_open" or "player_guide_open"))
+        if (_voteFromPersonalMenu.Contains(sid) && buttonId is ("player_commands_open" or "player_stats_open" or "player_settings_open" or "player_random_open" or "player_guide_open"))
         {
             ReturnFromVotePage(player);
             HandlePersonalClick(player, buttonId);
@@ -503,6 +507,10 @@ public sealed partial class CaorenCupInGameMenuPlugin
             case AdminVoteView.HelpList: SetAdminVoteView(player, AdminVoteView.Home); break;
             case AdminVoteView.Settings: SetAdminVoteView(player, AdminVoteView.Home); break;
             case AdminVoteView.Audio: SetAdminVoteView(player, AdminVoteView.Home); break;
+            case AdminVoteView.Shortcuts:
+                if (_shortcuts.TryGetValue(sid, out var shortcuts) && shortcuts.Back()) RenderShortcuts(player, shortcuts);
+                else SetAdminVoteView(player, AdminVoteView.Home);
+                break;
             case AdminVoteView.Random: BackAdminRandom(player); break;
             case AdminVoteView.Ability:
                 if (_abilityMenuStates.TryGetValue(sid, out var abilityState) && abilityState.Mode == AbilityMenuMode.Roles)
@@ -514,6 +522,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
                 break;
             case AdminVoteView.Preview:
             case AdminVoteView.CancelConfirmation: SetAdminVoteView(player, AdminVoteView.Management); break;
+            case AdminVoteView.Broadcast:
             case AdminVoteView.Management: SetAdminVoteView(player, AdminVoteView.Home); break;
             default: ClosePlayerMenu(player); break;
         }

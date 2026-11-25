@@ -1,8 +1,7 @@
 :root {
-  color-scheme: dark;
-  font: 16px/1.55 "Microsoft YaHei UI",system-ui,sans-serif;
-  background: #121416;
-  color: #f6f2eb;
+  font: 16px/1.55 var(--cc-font);
+  background: var(--cc-paper);
+  color: var(--cc-ink);
 }
 
 * {
@@ -31,8 +30,9 @@ header, nav, .hero {
 }
 
 header {
-  padding: 22px 0;
-  border-bottom: 1px solid #44484b;
+  min-height: 55px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--cc-line);
 }
 
 header img {
@@ -57,13 +57,34 @@ nav a:hover {
 }
 
 .hero {
-  padding: 40px 0 24px;
-  border-bottom: 2px solid #ed854a;
+  position: relative;
+  isolation: isolate;
+  min-height: clamp(160px, 18.6vw, 232px);
+  margin-top: 24px;
+  padding: clamp(18px, 3vw, 32px);
+  background: var(--cc-sheet);
+  border-bottom: 2px solid var(--cc-signal);
 }
 
+.room-art {
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 0 auto;
+  width: 71%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 27%;
+  filter: grayscale(1) contrast(1.17);
+  opacity: .7;
+  mask-image: linear-gradient(90deg, transparent, black 34%);
+}
+:root[data-cup-theme="light"] .room-art { opacity: .36; }
+@media (max-width: 660px) {
+  .room-art { width: 55%; mask-image: linear-gradient(90deg, transparent, black); }
+}
 .hero p {
   margin: 0;
-  color: #ffae7d;
+  color: var(--cc-focus);
 }
 
 h1 {
@@ -84,12 +105,12 @@ h2 {
 }
 
 section p, li span {
-  color: #c3c2bf;
+  color: var(--cc-muted);
 }
 
 input, button, .action, select {
   font: inherit;
-  border-radius: 5px;
+  border-radius: var(--cc-radius);
   padding: 8px 14px;
 }
 
@@ -100,18 +121,24 @@ button, .action {
 }
 
 input, button, select {
-  background: #23272b;
-  color: #f6f2eb;
-  border: 1px solid #5d6469;
+  background: var(--cc-subtle);
+  color: var(--cc-ink);
+  border: 1px solid var(--cc-line-strong);
 }
 
 .action {
-  border: 1px solid #f39761;
-  background: #ff914c;
-  color: #21180f;
+  border: 1px solid var(--cc-signal);
+  background: var(--cc-signal);
+  color: var(--cc-signal-ink);
   text-decoration: none;
   font-weight: 700;
 }
+
+button:enabled:hover { background: var(--cc-hover); }
+.action:is(a, :enabled):hover { background: var(--cc-signal-hover); }
+#ready[aria-pressed="true"] { background: var(--cc-subtle); color: var(--cc-ink); border-color: var(--cc-line-strong); }
+#ready[aria-pressed="true"]:enabled:hover { background: var(--cc-hover); }
+#roster .is-ready span { color: var(--cc-success); }
 
 button:disabled {
   opacity: .55;
@@ -137,13 +164,13 @@ li {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid #363a3c;
+  border-bottom: 1px solid var(--cc-line);
   padding: 8px 0;
 }
 
 details {
   padding: 18px 0;
-  border-top: 1px solid #48494c;
+  border-top: 1px solid var(--cc-line);
 }
 
 summary {
@@ -156,7 +183,7 @@ code {
 }
 
 a:focus-visible, button:focus-visible, summary:focus-visible, select:focus-visible {
-  outline: 3px solid #ffc394;
+  outline: 2px solid var(--cc-focus);
   outline-offset: 3px;
 }
 

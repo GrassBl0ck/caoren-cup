@@ -15,7 +15,7 @@ Assert-WebReleaseBoundary $repoRoot $Version
 Copy-DeploymentGuide -RepoRoot $repoRoot -Version $Version -ValidateOnly
 $dataRoot = Resolve-ReleasePath $repoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
 if (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'skin-rarities.json'))) { throw 'Missing webpage item data' }
-$webEntries = @('src/server.ts', 'public/index.html', 'pages/room.html', 'pages/login.html', 'public/js/web-room.js', 'public/css/web-room.css', 'pages/cs.html', 'pages/mc.html', 'pages/profile.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', '.env.example', 'ACCOUNT-SETUP.md')
+$webEntries = @('src/server.ts', 'public/index.html', 'pages/room.html', 'pages/login.html', 'public/js/web-room.js', 'public/css/web-room.css', 'public/css/client-theme.css', 'public/assets/room-banner.jpg', 'public/js/client-theme.js', 'pages/cs.html', 'pages/mc.html', 'pages/profile.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', '.env.example', 'ACCOUNT-SETUP.md')
 foreach ($entry in $webEntries) {
     if (-not (Test-Path -LiteralPath (Resolve-ReleasePath $repoRoot ('web-command-center/' + $entry)) -PathType Leaf)) { throw "Missing unified portal entry: $entry" }
 }
@@ -29,7 +29,7 @@ if (Test-Path -LiteralPath (Resolve-ReleasePath $repoRoot $zipRelative)) { throw
 $stage = Resolve-ReleasePath $repoRoot ('release-build/web-package-' + [Guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $stage
 Copy-ReleaseWebTree $repoRoot $stage $Version
-$required = @('package.json', 'package-lock.json', 'tsconfig.json', 'pages/room.html', 'pages/login.html', 'public/js/web-room.js', 'public/css/web-room.css', 'pages/cs.html', 'pages/mc.html', 'pages/profile.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', 'src/server.ts', 'public/index.html', 'weaponpaints-data/skin-rarities.json')
+$required = @('package.json', 'package-lock.json', 'tsconfig.json', 'pages/room.html', 'pages/login.html', 'public/js/web-room.js', 'public/css/web-room.css', 'public/css/client-theme.css', 'public/assets/room-banner.jpg', 'public/js/client-theme.js', 'pages/cs.html', 'pages/mc.html', 'pages/profile.html', 'public/js/portal.js', 'public/js/mc-board.js', 'public/css/portal.css', 'src/server.ts', 'public/index.html', 'weaponpaints-data/skin-rarities.json')
 # Ship the same approved WebP thumbnails as the Windows installer. Preserve original
 # catalog URLs so installed clients can still satisfy requests from their own bundle.
 if ($SkinImageRoot) {

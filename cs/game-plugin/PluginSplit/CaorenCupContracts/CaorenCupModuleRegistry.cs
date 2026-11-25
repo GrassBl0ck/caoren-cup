@@ -49,6 +49,15 @@ public static class CaorenCupModuleRegistry
             return Modules.Values.ToArray();
     }
 
+    public static IReadOnlyList<string> CurrentRules(HpCapSettings limits)
+    {
+        var rules = Snapshot().Select(module => module.PublicConfig())
+            .OfType<string>().Where(rule => rule.Length > 0).ToList();
+        if (limits.Enabled)
+            rules.Add($"全局血量保护: 模块回血最高到 {limits.Max} HP，模块扣血最低到 {limits.Min} HP");
+        return rules;
+    }
+
     public static CaorenCupModuleDescriptor? Find(string key)
     {
         if (string.IsNullOrWhiteSpace(key)) return null;

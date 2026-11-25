@@ -19,9 +19,9 @@ if (packageJson.build?.win?.signAndEditExecutable !== false) {
   throw new Error('desktop-client disables executable signing/editing to avoid Windows symlink permission failures.');
 }
 
-const clientConfig = require('../src/client-config');
-if (new URL(clientConfig.COMMAND_CENTER_URL).protocol !== 'https:') {
-  throw new Error('the packaged client must use the HTTPS website by default.');
+const { readServerOrigin } = require('../src/client-config');
+if (readServerOrigin(join(__dirname, '..', 'src'), undefined) !== null) {
+  throw new Error('the public build must start without a default server.');
 }
 const lock = JSON.parse(readFileSync(join(__dirname, '..', 'package-lock.json'), 'utf8'));
 if (lock.version !== packageJson.version || lock.packages[''].version !== packageJson.version) {

@@ -8,6 +8,7 @@
   var browserPage = (window.location.pathname || '').toLowerCase().replace(/(?:\.html)?\/?$/, '');
   var webMatch = browserPage === '/phase';
   var webSkins = browserPage === '/skins';
+  if (webSkins) document.body.classList.add('web-skins');
   var accountTool = webSkins || !!window.caorenDesktop && /(?:^\?|&)desktopView=(?:skins|updates)(?:&|$)/.test(window.location.search);
   var previousPublicStatus, resumeRequested = false, logoutInFlight = false, refreshPending = false;
   var reasons = {
@@ -103,7 +104,14 @@
     if (webMatch || webSkins) {
       var back = document.createElement('a');
       back.href = '/room'; back.className = 'header-text-link'; back.textContent = '返回候场房间';
-      document.querySelector('.site-header-actions').prepend(back);
+      var actions = document.querySelector('.site-header-actions');
+      actions.prepend(back);
+      if (webMatch) {
+        var skins = byId('weaponpaints-open-btn');
+        skins.className = 'header-text-link';
+        skins.textContent = '换肤中心';
+        actions.insertBefore(skins, back.nextSibling);
+      }
       byId('player-center-join-btn').hidden = true;
       byId('v1333-connect-server-btn').closest('aside').hidden = true;
       var connectButton = byId('v1333-lobby-connect-server-btn');

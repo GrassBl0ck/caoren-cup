@@ -112,6 +112,11 @@ if ('CaorenCupGamemode_RUSH' -in @($plugins.name)) {
     }
 }
 $licenses = Resolve-ReleasePath $stage 'licenses'
+if ('CaorenCupPlugin' -in @($plugins.name)) {
+    $bridgeExample = Resolve-ReleasePath $stage 'examples/web-bridge/caoren_config.example.json'
+    $null = New-Item -ItemType Directory -Path (Split-Path -Parent $bridgeExample) -Force
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'cs/web-bridge/CaorenCupPlugin/caoren_config.example.json') -Destination $bridgeExample
+}
 $null = New-Item -ItemType Directory -Path $licenses -Force
 Copy-Item -LiteralPath (Resolve-ReleasePath $repoRoot 'LICENSE') -Destination (Join-Path $licenses 'CaorenCup-MIT.txt')
 Copy-DeploymentGuide -RepoRoot $repoRoot -Stage $stage -Version $Version

@@ -51,7 +51,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         var view = _adminVoteViews.GetValueOrDefault(sid);
         if (buttonId == "admin_ability_open")
         {
-            if (view == AdminVoteView.Home)
+            if (IsQuickView(view))
             {
                 ResetAbilityMenuState(GetAbilityMenuState(sid));
                 SetAdminVoteView(player, AdminVoteView.Ability);
@@ -162,6 +162,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         var sid = player.SteamID.ToString();
         var state = GetAbilityMenuState(sid);
         var ability = CaorenCupAbilityAccess.TryGet();
+        RenderAdminNavigation(player);
 
         _surface.SetVariable(player, "ability_state", ability is null
             ? "CaorenCupGamemode_Ability 未加载,无法分配职业"

@@ -7,6 +7,23 @@
   --portal-lime:#c3ef86;
   --portal-line:#ffffff20
 }
+/* Account pages also run in standalone browsers, without the desktop window stylesheet. */
+body[data-page="portal"], body[data-page="profile"] {
+  --portal-bg:var(--cc-paper);
+  --portal-paper:var(--cc-sheet);
+  --portal-ink:var(--cc-ink);
+  --portal-muted:var(--cc-muted);
+  --portal-line:var(--cc-line);
+  --portal-lime:var(--cc-signal);
+  --portal-field:var(--cc-subtle);
+  --portal-label:var(--cc-ink-2);
+  --portal-placeholder:var(--cc-faint);
+  --portal-button-ink:var(--cc-signal-ink);
+  --portal-button-hover:var(--cc-signal-hover);
+  --portal-backdrop:none;
+  font-family:var(--cc-font);
+  accent-color:var(--portal-lime)
+}
 * {
   box-sizing:border-box
 }
@@ -21,7 +38,7 @@ body::before {
   position:fixed;
   inset:0;
   pointer-events:none;
-  background:radial-gradient(ellipse at 8% 0%,#73974418,transparent 50%)
+  background:var(--portal-backdrop,radial-gradient(ellipse at 8% 0%,#73974418,transparent 50%))
 }
 a {
   color:inherit;
@@ -194,12 +211,12 @@ label {
   display:grid;
   gap:6px;
   font-size:12px;
-  color:#dce3dc
+  color:var(--portal-label,#dce3dc)
 }
 input {
   min-width:0;
   width:100%;
-  background:#101713;
+  background:var(--portal-field,#101713);
   color:var(--portal-ink);
   padding:11px 13px;
   border:1px solid #ffffff25;
@@ -211,7 +228,7 @@ input:focus {
   outline:1px solid var(--portal-lime)
 }
 input::placeholder {
-  color:#7c8a80;
+  color:var(--portal-placeholder,#7c8a80);
   font-size:12px
 }
 .checkbox-label {
@@ -231,10 +248,10 @@ input::placeholder {
 }
 .primary-button {
   background:var(--portal-lime);
-  color:#20301a
+  color:var(--portal-button-ink,#20301a)
 }
 .primary-button:hover {
-  background:#d3ffa0
+  background:var(--portal-button-hover,#d3ffa0)
 }
 .primary-button span {
   float:right;
@@ -527,7 +544,7 @@ body.signed-in .portal-intro {
 .server-address {
   display:block;
   padding:14px;
-  background:#101713;
+  background:var(--portal-field,#101713);
   border:1px solid var(--portal-line);
   border-radius:6px;
   overflow-wrap:anywhere;
@@ -637,3 +654,31 @@ a:hover {
 body[data-page="profile"] main { display:block; max-width:980px; margin:auto; }
 body[data-page="profile"] .account-settings h2 { padding:20px 24px; }
 @media(max-width:640px) { .portal-header { flex-wrap:wrap; padding:16px 0; gap:12px; } .portal-header .board-navigation { gap:10px; } }
+
+/* Account windows use the same compact controls as the desktop popups. */
+body:is([data-page="portal"], [data-page="profile"]) {
+  .portal-header { min-height: 55px; padding-block: 10px; }
+  .account-card, .account-settings, .board-card {
+    background: var(--cc-sheet); border-radius: var(--cc-radius-lg); box-shadow: none;
+  }
+  #account-auth { width: min(100%, 490px); margin-inline: auto; grid-column: 1 / -1; }
+  .auth-tabs button[aria-pressed="true"] { color: var(--cc-ink); border-bottom-color: var(--cc-signal); }
+  .secondary-button, .code-row > button, #logout {
+    color: var(--cc-ink); background: var(--cc-subtle); border: 1px solid var(--cc-line-strong);
+  }
+  input, button:not([data-auth-tab]), .board-navigation a[href="/profile"] { border-radius: var(--cc-radius); }
+  input:not(:focus) { border-color: var(--cc-line-strong); }
+  input:focus { outline: 2px solid var(--cc-focus); border-color: var(--cc-focus); }
+  .account-card input { background: var(--cc-sheet); }
+  .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  h1 span, .form-message, .card-link, .board-navigation a[href="/profile"] { color: var(--cc-focus); }
+  .form-message[data-error="true"] { color: var(--cc-danger); }
+  .service-note { background: var(--cc-warning-soft); color: var(--cc-warning); }
+  .form-message:empty { display: none; }
+  .board-card:hover { border-color: var(--cc-focus); }
+  .portal-footer { color: var(--cc-muted); }
+}
+
+@media (max-width: 800px) {
+  body[data-page="profile"] .settings-grid { grid-template-columns: minmax(0, 1fr); }
+}

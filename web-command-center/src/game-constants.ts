@@ -5,13 +5,15 @@
 
 const v1333NormalizeConnectUrl = (raw: unknown): string => {
     const value = String(raw || '').trim();
-    if (!value) return '';
-    if (/^steam:\/\//i.test(value)) return value;
-    if (/^connect\s+/i.test(value)) return `steam://connect/${value.replace(/^connect\s+/i, '').trim()}`;
-    if (/^[a-z0-9.-]+:\d+(?:\/.*)?$/i.test(value) || /^\d{1,3}(?:\.\d{1,3}){3}:\d+(?:\/.*)?$/.test(value)) {
-        return `steam://connect/${value}`;
+    const address = value.replace(/^steam:\/\/connect\/|^connect\s+/i, '').replace(/\/$/, '');
+    if (!/^(?:[a-z0-9][a-z0-9._-]*|\[[a-f0-9:]+\])(?::\d+)?$/i.test(address)) return '';
+    try {
+        const target = new URL('http://' + address);
+        if (target.port === '0') return '';
+        return 'steam://connect/' + address;
+    } catch {
+        return '';
     }
-    return value;
 };
 
 const v1333NumberEnv = (raw: unknown, fallback: number, min: number): number => {
@@ -24,8 +26,8 @@ const v1333NumberEnv = (raw: unknown, fallback: number, min: number): number => 
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CHANGE_ME_ADMIN_PASSWORD';
 export const PLUGIN_TOKEN = process.env.PLUGIN_TOKEN || 'CHANGE_ME_PLUGIN_TOKEN';
 
-// ±¾µØ¿ª·¢×¨ÓÃ£ºÖÃ CAOREN_DEV_PLAYER_LOGIN=1 ºó£¬µÇÂ¼ÃûÒÔ P: ¿ªÍ·²¢ÊäÈë¹ÜÀíÔ±ÃÜÂë£¬
-// ½«ÒÔÆÕÍ¨Íæ¼Ò£¨Player£©Éí·Ý½øÈë·¿¼ä£¬ÓÃÓÚÎÞ CS2 ·þÎñÆ÷Ê±²âÊÔÍæ¼Ò²à½»»¥¡£Éú²ú»·¾³²»µÃÉèÖÃ´Ë±äÁ¿¡£
+// æœ¬åœ°å¼€å‘ä¸“ç”¨ï¼šç½® CAOREN_DEV_PLAYER_LOGIN=1 åŽï¼Œç™»å½•åä»¥ P: å¼€å¤´å¹¶è¾“å…¥ç®¡ç†å‘˜å¯†ç ï¼Œ
+// å°†ä»¥æ™®é€šçŽ©å®¶ï¼ˆPlayerï¼‰èº«ä»½è¿›å…¥æˆ¿é—´ï¼Œç”¨äºŽæ—  CS2 æœåŠ¡å™¨æ—¶æµ‹è¯•çŽ©å®¶ä¾§äº¤äº’ã€‚ç”Ÿäº§çŽ¯å¢ƒä¸å¾—è®¾ç½®æ­¤å˜é‡ã€‚
 export const DEV_PLAYER_LOGIN_ENABLED = process.env.CAOREN_DEV_PLAYER_LOGIN === '1';
 
 export const DRAFT_PICK_SECONDS = Number(process.env.DRAFT_PICK_SECONDS || 15);

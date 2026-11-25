@@ -897,7 +897,7 @@
         renderHealth(null);
         notice('');
         setPromoVisibility(false);
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!webSkinPage) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         try {
             state.status = await emit(WEAPONPAINTS_STATUS);
             renderHealth(state.status.health);

@@ -5,6 +5,12 @@
     </styles>
     <Panel class="QuickMatchRoot" hittest="false">
         <Panel id="dialog" class="QuickMatchPanel Hidden" hittest="true">
+            <Panel class="QuickTabs">
+                <Button id="quick_home" class="QuickNav"><Label text="比赛管理" /></Button>
+                <Button id="quick_modes" class="QuickNav"><Label text="更改模式" /></Button>
+                <Button id="quick_restore" class="QuickNav"><Label text="回溯" /></Button>
+                <Button id="quick_announcements" class="QuickNav"><Label text="预设公告" /></Button>
+            </Panel>
             <Label class="QuickTitle" text="{s:quick_title}" />
             <Label class="QuickStatus" text="{s:quick_status}" />
             <Button id="quick_item_0" class="QuickAction Hidden"><Label text="{s:quick_label_0}" /></Button>

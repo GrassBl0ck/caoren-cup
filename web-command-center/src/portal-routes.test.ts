@@ -55,6 +55,18 @@ test('public downloads and existing desktop pages share URLs without sharing pre
             new RegExp('data-page="' + name + '"'));
     }
     const signedIn = { Cookie: 'caoren_player_center=fixture' };
+    const originalAddress = process.env.MC_SERVER_ADDRESS;
+    try {
+        delete process.env.MC_SERVER_ADDRESS;
+        const unconfigured = await get('/api/mc/info', signedIn);
+        assert.equal(unconfigured.status, 503);
+        assert.equal((await unconfigured.json()).error, 'mc_address_unconfigured');
+        process.env.MC_SERVER_ADDRESS = 'mc.example.org:25572';
+        assert.equal((await (await get('/api/mc/info', signedIn)).json()).serverAddress, 'mc.example.org:25572');
+    } finally {
+        if (originalAddress === undefined) delete process.env.MC_SERVER_ADDRESS;
+        else process.env.MC_SERVER_ADDRESS = originalAddress;
+    }
     for (const page of ['room', 'phase', 'skins', 'profile']) {
         assert.equal((await get('/' + page)).headers.get('location'), '/login?next=' + page);
         const response = await get('/' + page, signedIn);

@@ -86,12 +86,15 @@ public sealed class CustomHudMenuSurface : IMenuHudSurface
 
     internal static bool IsBusinessButton(string id) => id is
         "admin_home_tab" or "admin_help_open_tab" or "admin_settings_open" or "admin_back" or "admin_exit" or "admin_vote_open" or "menu_btn_0" or
-        "admin_ability_open" or "ability_prev" or "ability_next" or "ability_clear" or "ability_back" or
+        "shortcut_give" or "shortcut_health" or "shortcut_loadout" or
+        "shortcut_equipment" or "shortcut_cap" or "shortcut_match" or "shortcut_prev" or "shortcut_next" or "shortcut_refresh" or
+        "admin_broadcast_open" or "admin_ability_open" or "ability_prev" or "ability_next" or "ability_clear" or "ability_back" or
         "admin_random_open" or "admin_random_prev" or "admin_random_next" or "admin_random_back" or "admin_random_refresh" or
         "player_commands_open" or "player_vote_open" or "player_stats_open" or "player_settings_open" or "player_guide_open" or "player_random_open" or "player_back" or "player_exit" or
         "player_cmd_prev" or "player_cmd_next" or "player_detail_prev" or "player_detail_next" or "player_stats_prev" or "player_stats_next" or
         "guide_prev" or "guide_next" or "guide_detail_prev" or "guide_detail_next" or
         "vote_create" or "vote_cancel" or "vote_start" or "vote_discard" or "vote_cancel_confirm" or "vote_back" or "vote_exit"
+        || id.StartsWith("trail_up_", StringComparison.Ordinal)
         || id.StartsWith("settings_", StringComparison.Ordinal)
         || id is "hud_edit_open" or "hud_save" or "hud_up" or "hud_down" or "hud_left" or "hud_right"
         || id.StartsWith("select_", StringComparison.Ordinal) || id.StartsWith("hud_bind_", StringComparison.Ordinal)
@@ -99,6 +102,7 @@ public sealed class CustomHudMenuSurface : IMenuHudSurface
         || Enumerable.Range(0, 3).Any(index => id == "random_buy_" + index || id == "random_detail_" + index)
         || Enumerable.Range(0, 8).Any(index => id == "player_cmd_" + index || id == "guide_item_" + index)
         || Enumerable.Range(0, 6).Any(index => id == "ability_row_" + index)
+        || id.StartsWith("shortcut_row_", StringComparison.Ordinal) || id.StartsWith("shortcut_key_", StringComparison.Ordinal)
         || Enumerable.Range(0, 6).Any(index => id == "admin_random_row_" + index)
         || Enumerable.Range(0, 4).Any(index => id == "vote_option_" + index);
 

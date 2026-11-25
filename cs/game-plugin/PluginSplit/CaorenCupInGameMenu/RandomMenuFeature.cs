@@ -60,7 +60,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         {
             case "random_offers": menu.Page = RandomMenuPage.Offers; menu.ListPage = 0; break;
             case "random_owned": menu.Page = RandomMenuPage.Owned; menu.ListPage = 0; break;
-            case "random_overview": menu.Page = menu.Page == RandomMenuPage.Overview ? RandomMenuPage.Owned : RandomMenuPage.Overview; break;
+            case "random_overview": menu.Page = RandomMenuPage.Overview; break;
             case "random_toggle": menu.Detailed = !menu.Detailed; menu.DescriptionPage = 0; break;
             case "random_prev":
                 if (menu.Page == RandomMenuPage.Detail) menu.DescriptionPage = Math.Max(0, menu.DescriptionPage - 1);
@@ -152,9 +152,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         Selected("random_offers", menu.Page == RandomMenuPage.Offers || menu.Page == RandomMenuPage.Detail && menu.DetailFrom == RandomMenuPage.Offers);
         Selected("random_owned", menu.Page == RandomMenuPage.Owned || menu.Page == RandomMenuPage.Detail && menu.DetailFrom == RandomMenuPage.Owned);
         Selected("random_overview", menu.Page == RandomMenuPage.Overview);
-        Hide("random_collection_nav", menu.Page == RandomMenuPage.Offers);
-        Hide("random_overview", menu.Page == RandomMenuPage.Detail);
-        Text("random_overview_label", menu.Page == RandomMenuPage.Overview ? "查看已拥有" : "查看概览");
+        RenderPlayerNavigation(player);
         Hide("random_list", menu.Page is not (RandomMenuPage.Offers or RandomMenuPage.Owned));
         Hide("random_overview_panel", menu.Page != RandomMenuPage.Overview);
         Hide("random_detail_panel", menu.Page != RandomMenuPage.Detail);

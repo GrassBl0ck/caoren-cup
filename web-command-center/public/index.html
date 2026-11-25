@@ -6,32 +6,35 @@
   <title>草台杯客户端下载</title>
   <link rel="icon" href="/assets/brand-icon.png">
   <style>
-    :root { color-scheme: dark; font-family: "Microsoft YaHei UI", system-ui, sans-serif; background: #121416; color: #f6f2eb; }
+    :root { font-family: var(--cc-font); background: var(--cc-paper); color: var(--cc-ink); }
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; min-height: 100svh; display: grid; grid-template-rows: 1fr auto; }
     main { align-self: center; justify-self: center; padding: 36px 20px; width: min(100%, 400px); text-align: center; }
     h1 { margin: 0 0 42px; }
     h1 img { display: block; width: min(100%, 260px); height: auto; margin: auto; }
-    .download { display: inline-block; border-radius: 5px; padding: 16px 32px; background: #ff793e; color: #201209; text-decoration: none; font-weight: 750; }
-    .download:hover { background: #ff9766; }
-    a:focus-visible { outline: 3px solid white; outline-offset: 5px; }
-    .details { color: #bdc0c2; font-size: .875rem; margin: 14px 0 0; }
-    .notice { margin: 24px 0 0; color: #c7cace; font-size: .9375rem; line-height: 1.8; text-align: left; }
-    .notice a { color: #ffae7d; text-underline-offset: .2em; }
-    footer { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; padding: 20px; }
-    footer a { color: #adb0b3; font-size: .75rem; text-decoration: none; }
+    .download { display: inline-block; border-radius: var(--cc-radius); padding: 16px 32px; background: var(--cc-signal); color: var(--cc-signal-ink); text-decoration: none; font-weight: 750; }
+    .download:hover { background: var(--cc-signal-hover); }
+    a:focus-visible { outline: 2px solid var(--cc-focus); outline-offset: 5px; }
+    .details { color: var(--cc-muted); font-size: .875rem; margin: 14px 0 0; }
+    .notice { margin: 24px 0 0; color: var(--cc-ink-2); font-size: .9375rem; line-height: 1.8; text-align: left; }
+    .notice a { color: var(--cc-focus); text-underline-offset: .2em; }
+    footer { display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 8px 20px; padding: 20px; }
+    footer a { color: var(--cc-muted); font-size: .75rem; text-decoration: none; }
     footer a:hover { text-decoration: underline; }
   </style>
+  <link rel="stylesheet" href="/css/client-theme.css">
+  <script src="/js/client-theme.js"></script>
 </head>
 <body>
   <main>
     <h1><img src="/assets/brand.png" alt="草台杯"></h1>
     <a class="download" href="/downloads/caotai-cup-setup.msi" download>下载 Windows 客户端（推荐）</a>
-    <p class="details">客户端 v2.4.1 · Windows x64 · MSI · {{installerSize}}</p>
+    <p class="details">客户端 v2.5.2 · Windows x64 · MSI · {{installerSize}}</p>
     <p class="notice"><a href="/room">使用网页版参赛 →</a></p>
     <p class="notice">客户端可自动核对 Steam 账号、启动国际服 CS2。主持比赛请使用客户端。</p>
   </main>
   <footer>
+    <button id="theme-toggle" type="button" hidden>浅色模式</button>
     <a href="https://beian.miit.gov.cn/" rel="noreferrer">冀ICP备2026043660号-1</a>
     <a href="https://beian.mps.gov.cn/#/query/webSearch?code=13102402000558" rel="noreferrer">冀公网安备13102402000558号</a>
   </footer>

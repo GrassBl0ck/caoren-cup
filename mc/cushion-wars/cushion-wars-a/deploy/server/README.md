@@ -1,6 +1,8 @@
 # 服务器端部署文件（源）
 
-这个目录里的东西是要上传到 `123.206.213.166:/opt/caoren-mc-26.3/` 的运维脚本与地图包，
+本文以 `mc.example.org` 代表你的服务器。运行命令或邀请玩家前，换成你自己的主机名、端口和运维账号。
+
+这个目录里的东西是要上传到 `mc.example.org:/opt/caoren-mc-26.3/` 的运维脚本与地图包，
 **不是**本地运行的东西。改动后按下面的对应关系部署。
 
 ## 文件对应关系
@@ -21,14 +23,14 @@ sed -i 's/\r$//' /tmp/mapctl   # 或 dos2unix
 ## 部署示例
 
 ```bash
-scp deploy/server/mapctl root@123.206.213.166:/tmp/mapctl
-ssh root@123.206.213.166 'sed -i "s/\r$//" /tmp/mapctl && install -m 755 /tmp/mapctl /opt/caoren-mc-26.3/mapctl'
+scp deploy/server/mapctl root@mc.example.org:/tmp/mapctl
+ssh root@mc.example.org 'sed -i "s/\r$//" /tmp/mapctl && install -m 755 /tmp/mapctl /opt/caoren-mc-26.3/mapctl'
 ```
 
 `cw-entry` 目录要连同属主一起交付：
 
 ```bash
-ssh root@123.206.213.166 'chown -R caoren-mc:caoren-mc /opt/caoren-mc-26.3/maps/cushion-wars/world/datapacks/cw-entry && chmod -R u+rwX,go+rX /opt/caoren-mc-26.3/maps/cushion-wars/world/datapacks/cw-entry'
+ssh root@mc.example.org 'chown -R caoren-mc:caoren-mc /opt/caoren-mc-26.3/maps/cushion-wars/world/datapacks/cw-entry && chmod -R u+rwX,go+rX /opt/caoren-mc-26.3/maps/cushion-wars/world/datapacks/cw-entry'
 ```
 
 ## 地图切换速查

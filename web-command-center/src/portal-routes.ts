@@ -98,8 +98,8 @@ export function registerBoardPages(app: express.Express, options: {
         res.setHeader('Cache-Control', 'no-store');
         try {
             if (!await authenticated(req)) return res.status(401).json({ success: false, error: 'player_center_session_invalid' });
-            // Defaults come from the 2026-10-31 local deployment record, not a live health check.
-            const serverAddress = process.env.MC_SERVER_ADDRESS || '123.206.213.166:25565';
+            const serverAddress = process.env.MC_SERVER_ADDRESS?.trim();
+            if (!serverAddress) return res.status(503).json({ success: false, error: 'mc_address_unconfigured' });
             const version = process.env.MC_SERVER_VERSION || '26.3';
             if (!/^[A-Za-z0-9.:[\]_-]{1,254}$/.test(serverAddress) || !/^\d+(?:\.\d+){1,3}$/.test(version)) {
                 return res.status(503).json({ success: false, error: 'mc_info_unavailable' });

@@ -5,17 +5,21 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { fileURLToPath, pathToFileURL } = require('node:url');
 const { createPopupManager, showNotice, noticePage } = require('./popup-windows');
-const { COMMAND_CENTER_URL } = require('./client-config');
+const { readServerOrigin } = require('./client-config');
+const { createHash } = require('node:crypto');
 const { DeviceCredentialStore } = require('./device-credentials');
 const { registerLoginPreferences } = require('./login-preferences');
 const { DesktopAuthClient } = require('./desktop-auth-client');
+const { GameKeybinds } = require('./game-keybinds');
 const { connectGameServer } = require('./game-connect');
 const { inspectWindowsSteam, launchWorldwide, waitForCs2Window } = require('./windows-steam');
 const { steamProfile } = require('./steam-avatar');
 
-const PLACEHOLDER_URL = 'https://your-caoren-command-center.example.com';
-const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/2.4.1';
-const commandCenterUrl = normalizeCommandCenterUrl(process.env.CAOREN_COMMAND_CENTER_URL || COMMAND_CENTER_URL);
+const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/2.5.3';
+const clientDir = app.isPackaged
+  ? process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'))
+  : path.resolve(__dirname, '..');
+const commandCenterUrl = readServerOrigin(clientDir, process.env.CAOREN_COMMAND_CENTER_URL);
 const roomPage = path.join(__dirname, 'room.html');
 const roomPageUrl = pathToFileURL(roomPage).href;
 const roomEndpoints = new Map([
@@ -43,19 +47,6 @@ let deviceCredentialStore = null;
 let desktopAuthClient = null;
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-
-function normalizeCommandCenterUrl(raw) {
-  const value = String(raw || '').trim();
-  if (!value || value === PLACEHOLDER_URL) return null;
-
-  try {
-    const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    return url.toString().replace(/\/$/, '');
-  } catch (_err) {
-    return null;
-  }
-}
 
 function isSameCommandCenterUrl(targetUrl) {
   if (!commandCenterUrl) return false;
@@ -102,6 +93,19 @@ function requireTrustedIpc(event) {
 }
 
 function registerDesktopIpc() {
+  const keybinds = new GameKeybinds(app.getPath('userData'));
+  ipcMain.handle('caoren:keybinds', async (event, operation, request) => {
+    if (!isLocalRoomEvent(event)) throw new Error('IPC_SOURCE_NOT_ALLOWED');
+    const steam = await inspectWindowsSteam();
+    if (!steam.ok) return { error: '请打开 Steam，登录要设置按键的账号。' };
+    try {
+      if (operation === 'list') return await keybinds.list(steam);
+      if (operation === 'review' || operation === 'save') return await keybinds.change(steam, request, operation === 'save');
+      return { error: '无效的键位操作。' };
+    } catch (e) {
+      return { error: /[\u3400-\u9fff]/.test(e.message) && !e.code ? e.message : '无法读写键位配置，请检查文件后重试。' };
+    }
+  });
   ipcMain.on('caoren:room:player-action', (event, action) => {
     if (!isLocalRoomEvent(event)) return;
     roleWindows.get('player')?.webContents.send('caoren:popup:player-action', action);
@@ -109,7 +113,7 @@ function registerDesktopIpc() {
   ipcMain.handle('caoren:game:connect', async (event, payload) => {
     requireTrustedIpc(event);
     return connectGameServer(shell, payload?.connectUrl, {
-      inspect: inspectWindowsSteam, launchWorldwide, waitForGame: waitForCs2Window,
+      inspect: inspectWindowsSteam, prepareKeys: state => keybinds.prepare(state), launchWorldwide, waitForGame: waitForCs2Window,
     }, isLocalRoomEvent(event) ? payload?.expectedSteamId : undefined);
   });
   ipcMain.handle('caoren:steam:status', async (event) => {
@@ -215,7 +219,7 @@ function createMissingConfigWindow() {
     }
   });
 
-  mainWindow.loadURL(noticePage('未配置服务器', '请在客户端配置中填写草台杯服务器地址。'));
+  mainWindow.loadURL(noticePage('未配置服务器', '请在程序旁新建 server.json，将 {"website":"https://cup.example.org"} 中的网址换成服主提供的地址，保存后重新启动。也可设置环境变量 CAOREN_COMMAND_CENTER_URL。'));
 
 }
 
@@ -387,7 +391,7 @@ app.whenReady().then(() => {
   deviceCredentialStore = new DeviceCredentialStore({
     fs,
     safeStorage,
-    filePath: path.join(app.getPath('userData'), 'device-credentials.dat'),
+    filePath: path.join(app.getPath('userData'), 'device-' + createHash('sha256').update(commandCenterUrl || '').digest('hex') + '.dat'),
   });
   desktopAuthClient = new DesktopAuthClient({
     baseUrl: commandCenterUrl || '',

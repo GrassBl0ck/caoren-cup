@@ -5,7 +5,7 @@
 - 工作树：`D:\OpenSourcework\02-worktrees\caoren-cup\feat-v1.12-ability`
 - 分支：`feat/v1.12-ability`
 - 基线提交：`6c00a62` `fix(ability): remove ability_hud_root id from ability hud layout`
-- 服务器：`123.206.213.166`（`/opt/cs2/...`），运维凭据取自本机密码文件，未写入本仓库
+- 服务器：`历史部署主机`（`/opt/cs2/...`），运维凭据取自本机密码文件，未写入本仓库
 
 ---
 

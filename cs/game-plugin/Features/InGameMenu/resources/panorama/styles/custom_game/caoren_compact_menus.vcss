@@ -48,3 +48,25 @@
 .SampleSkill, .SampleIntel { flow-children: none; }
 .SampleSkill Label { horizontal-align: center; }
 .SampleIntel Label { horizontal-align: right; }
+
+/* Categories remain available while the content underneath changes. */
+.MenuCategories { width: 100%; flow-children: right-wrap; padding: 2px 10px; background-color: #191c1ed9; }
+.CategoryTabHost { width: fit-children; height: 32px; margin-right: 3px; }
+.CategoryTab { width: fit-children; height: 100%; padding: 4px 9px; }
+.CategoryTab Label { color: #ced4d8; font-size: 16px; vertical-align: center; }
+.CategoryTab.CaorenTabSelected { background-color: #315465; }
+.CategoryTab.CaorenTabSelected Label { color: #a3e2ff; }
+.MenuTrail { width: 100%; flow-children: right-wrap; padding: 4px 14px; background-color: #141618cc; }
+.TrailLinkHost { width: fit-children; height: 30px; flow-children: right; }
+.TrailLink { width: fit-children; height: 100%; max-width: 150px; padding: 2px 4px; }
+.TrailLink Label { font-size: 16px; color: #98d6f5; vertical-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.TrailDivider { color: #8c959b; font-size: 16px; vertical-align: center; margin: 0px 4px; }
+.TrailCurrent { font-size: 18px; color: #f0f3f4; vertical-align: center; padding: 2px 4px; }
+
+.MenuCategories.EquipmentOperations { background-color: #252a2ddd; padding-left: 14px; }
+.CategoryTabHost, .TrailLinkHost { horizontal-align: left; margin: 0px 3px 0px 0px; }
+.CategoryTabHost .CaorenHoverHint, .TrailLinkHost .CaorenHoverHint { ignore-parent-flow: true; position: 0px 30px 0px; }
+
+.MenuCategories.Directory .CategoryTabHost { width: 24%; height: 46px; margin: 2px; }
+.MenuCategories.Directory .CategoryTab { width: 100%; background-color: #ffffff0d; }
+.MenuCategories.Directory .CategoryTab:hover { background-color: #ffffff22; }

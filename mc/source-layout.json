@@ -15,8 +15,8 @@
   },
   "integrationChanges": {
     "cushion-wars-a/deploy/server/README.md": {
-      "sha256": "b733944730962ab2de36198c593c1afb686c53a903df2bf256f86ba1ff322c5b",
-      "reason": "2026-11-12 owner requested generic map switching examples, no bundled third-party play map."
+      "sha256": "6998ec50aa4b4d61a899d6f57bea695dbafce7056f6146f31ee6d58ded92cdab",
+      "reason": "v2.5.3 uses a reserved example host in public deployment and playtest documents."
     },
     "cushion-wars-a/deploy/server/cw-maps-menu/pack.mcmeta": {
       "sha256": "6396224815ccc64e807be505f100cc64fc9b3113d9e03778efd16058e6221841",
@@ -49,6 +49,30 @@
     "cushion-wars-a/plugin/README.md": {
       "sha256": "76c898a62df91eeef4b52ff9f75ce2cce1f33ce9cbdd95f276c63b374753c5dc",
       "reason": "2026-11-12: Correct obsolete probe-only/data-pack-map documentation after owner-approved archival."
+    },
+    "cushion-wars-a/docs/07-分杯服部署记录.md": {
+      "sha256": "4b54a1b22ac9107dac36d38d0b50e5ff5ac54575d22e5b9cca839efe9b07a123",
+      "reason": "v2.5.3 uses a reserved example host in public deployment and playtest documents."
+    },
+    "cushion-wars-a/docs/08-人数缩放数值表.md": {
+      "sha256": "1de1a098d6e46cb677b27cf8603f3baadd0e9dec61ef17bfcf9330bab968f449",
+      "reason": "v2.5.3 uses a reserved example host in public deployment and playtest documents."
+    },
+    "cushion-wars-a/docs/12-拉人测试流程.md": {
+      "sha256": "05783b0065d44dc67d3b30aaddee6d678c92b3af66cdb9ebce9d61bd2b12f4fa",
+      "reason": "v2.5.3 uses a reserved example host in public deployment and playtest documents."
+    },
+    "cushion-wars-a/docs/15-Linux隔离验收方案.md": {
+      "sha256": "6bf795d69ae55e34063c5428f7535e06370bda621cac9c745165b7aa86d3f232",
+      "reason": "v2.5.3 uses a reserved example host in public deployment and playtest documents."
+    },
+    "cushion-wars-a/docs/16-第二轮试玩修订与上线方案.md": {
+      "sha256": "db68242d4458581be495beb908a9325099766808d00825efd3d4689b7c1d0e6b",
+      "reason": "v2.5.3 uses a reserved example host in public deployment and playtest documents."
+    },
+    "cushion-wars-a/docs/17-第二轮高原上线记录.md": {
+      "sha256": "ee38ba326bb7fb3d833659d7e26849c3b8e2c070dc867f0bd38b2f42fe6bde40",
+      "reason": "v2.5.3 uses a reserved example host in public deployment and playtest documents."
     }
   },
   "excludedPrefixes": {

@@ -138,26 +138,6 @@ document.addEventListener('caoren:terminate-confirmed', () => {
         window.switchAdminView = switchAdminView;
         window.switchAdminTab = switchAdminTab;
 
-        function applyTheme(theme, persist = true) {
-            const value = theme === 'dark' ? 'dark' : 'light';
-            document.body.dataset.theme = value;
-            if (persist) { try { localStorage.setItem('caoren-theme', value); } catch (_) {} }
-            const btn = document.getElementById('theme-toggle');
-            if (btn) {
-                btn.textContent = value === 'dark' ? '浅色模式' : '深色模式';
-                btn.setAttribute('aria-label', value === 'dark' ? '切换到浅色模式' : '切换到深色模式');
-            }
-        }
-
-        function toggleTheme() {
-            applyTheme(document.body.dataset.theme === 'dark' ? 'light' : 'dark');
-        }
-
-        let savedTheme; try { savedTheme = localStorage.getItem('caoren-theme'); } catch (_) {}
-        const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        applyTheme(savedTheme || systemTheme, false);
-
-
         function showLobbyNotice(message, tone = 'info') {
             const notice = document.getElementById('lobby-notification-display');
             if (!notice || !message) return false;

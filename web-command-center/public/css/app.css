@@ -3340,18 +3340,18 @@ body[data-theme="dark"] button {
 }
 
 body[data-theme="dark"] button:hover {
-    background-color: #2b3a55;
+    background-color: var(--cc-hover);
 }
 
 body[data-theme="dark"] button:disabled {
     background-color: #1a2435;
-    border-color: #334155;
+    border-color: var(--cc-line);
     color: #7f8ea3;
 }
 
 body[data-theme="dark"] .theme-toggle {
-    background: #1b2940;
-    border-color: #40516b;
+    background: var(--cc-subtle);
+    border-color: var(--cc-line-strong);
 }
 
 body[data-theme="dark"] #timer-display,
@@ -3373,21 +3373,21 @@ body[data-theme="dark"] .cc-table {
 
 body[data-theme="dark"] .cc-table th,
 body[data-theme="dark"] .scoreboard-table th {
-    background: #1f2b40 !important;
+    background: var(--cc-subtle) !important;
     border-color: var(--border) !important;
-    color: #dbeafe !important;
+    color: var(--cc-ink-2) !important;
 }
 
 body[data-theme="dark"] .cc-table td,
 body[data-theme="dark"] .scoreboard-table td {
-    background: #172033 !important;
+    background: var(--cc-sheet) !important;
     border-color: var(--border) !important;
     color: var(--text) !important;
 }
 
 body[data-theme="dark"] .cc-table tr:nth-child(even) td,
 body[data-theme="dark"] .scoreboard-table tr:nth-child(even) td {
-    background: #1b263a !important;
+    background: var(--cc-paper) !important;
 }
 
 body[data-theme="dark"] .cc-table tr.role-undercover td {
@@ -3411,25 +3411,25 @@ body[data-theme="dark"] .cc-table tr.side-mismatch td {
 }
 
 body[data-theme="dark"] #extra-info table {
-    background: #111827 !important;
-    border-color: #334155 !important;
+    background: var(--cc-paper) !important;
+    border-color: var(--cc-line) !important;
     color: var(--text) !important;
 }
 
 body[data-theme="dark"] #extra-info table th {
-    background: #1f2b40 !important;
-    border-color: #40516b !important;
-    color: #dbeafe !important;
+    background: var(--cc-subtle) !important;
+    border-color: var(--cc-line-strong) !important;
+    color: var(--cc-ink-2) !important;
 }
 
 body[data-theme="dark"] #extra-info table td {
-    background: #172033 !important;
-    border-color: #334155 !important;
+    background: var(--cc-sheet) !important;
+    border-color: var(--cc-line) !important;
     color: var(--text) !important;
 }
 
 body[data-theme="dark"] #extra-info table tr:nth-child(even) td {
-    background: #1b263a !important;
+    background: var(--cc-paper) !important;
 }
 
 body[data-theme="dark"] #extra-info [style*="color:#6b7280"],
@@ -3445,7 +3445,7 @@ body[data-theme="dark"] .tag-red,
 body[data-theme="dark"] .tag-purple {
     background: rgba(96, 165, 250, 0.12);
     border-color: rgba(148, 163, 184, 0.34);
-    color: #dbeafe;
+    color: var(--cc-ink-2);
 }
 
 body[data-theme="dark"] code {
@@ -3475,7 +3475,7 @@ body[data-theme="dark"] #template-config-btn:hover {
 body[data-theme="dark"] #match-options-status {
     background: rgba(37, 99, 235, 0.2);
     border-color: rgba(96, 165, 250, 0.62);
-    color: #dbeafe;
+    color: var(--cc-ink-2);
     font-weight: 800;
 }
 
@@ -3490,13 +3490,13 @@ body[data-theme="dark"] .draft-team-panel,
 body[data-theme="dark"] .sidepick-final-map-wrap,
 body[data-theme="dark"] .sidepick-map-hero-body,
 body[data-theme="dark"] .sidepick-final-map-empty {
-    background: #172033 !important;
-    border-color: #334155 !important;
+    background: var(--cc-sheet) !important;
+    border-color: var(--cc-line) !important;
     color: var(--text) !important;
 }
 
 body[data-theme="dark"] .map-bp-header {
-    background: rgba(23, 32, 51, 0.96) !important;
+    background: var(--cc-sheet) !important;
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.26);
 }
 
@@ -3522,7 +3522,7 @@ body[data-theme="dark"] .side-thumb-spec {
 }
 
 body[data-theme="dark"] .map-bp-turn {
-    background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), rgba(23, 32, 51, 0.96)) !important;
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), var(--cc-sheet)) !important;
     border-color: rgba(251, 191, 36, 0.42) !important;
     color: var(--text) !important;
 }
@@ -3533,7 +3533,7 @@ body[data-theme="dark"] .map-bp-turn b {
 
 body[data-theme="dark"] .map-bp-summary,
 body[data-theme="dark"] .map-admin-ban-row {
-    border-color: #334155 !important;
+    border-color: var(--cc-line) !important;
 }
 
 body[data-theme="dark"] .map-card {
@@ -3541,13 +3541,13 @@ body[data-theme="dark"] .map-card {
 }
 
 body[data-theme="dark"] .map-card.waiting {
-    background: #202b3d !important;
+    background: var(--cc-subtle) !important;
     opacity: .62;
 }
 
 body[data-theme="dark"] .bp-action-banner {
-    background: #202b3d !important;
-    border-color: #40516b !important;
+    background: var(--cc-subtle) !important;
+    border-color: var(--cc-line-strong) !important;
 }
 
 body[data-theme="dark"] .bp-action-banner strong,
@@ -3570,16 +3570,16 @@ body[data-theme="dark"] .bp-action-banner.admin {
 body[data-theme="dark"] .bp-action-banner.admin strong { color: #e9d5ff !important; }
 
 body[data-theme="dark"] .map-card-image {
-    border-color: #334155 !important;
+    border-color: var(--cc-line) !important;
 }
 
 body[data-theme="dark"] .map-card-slug,
 body[data-theme="dark"] .map-vote-list li,
 body[data-theme="dark"] .map-voter-pill,
 body[data-theme="dark"] .map-card-vote-count {
-    background: #223149 !important;
-    border-color: #40516b !important;
-    color: #cbd5e1 !important;
+    background: var(--cc-subtle) !important;
+    border-color: var(--cc-line-strong) !important;
+    color: var(--cc-muted) !important;
 }
 
 body[data-theme="dark"] .map-voter-pill.me {
@@ -3596,9 +3596,9 @@ body[data-theme="dark"] .map-card-status.available {
 
 body[data-theme="dark"] .map-card-status.waiting,
 body[data-theme="dark"] .map-card-status.banned {
-    background: #26344b !important;
-    border-color: #40516b !important;
-    color: #cbd5e1 !important;
+    background: var(--cc-subtle) !important;
+    border-color: var(--cc-line-strong) !important;
+    color: var(--cc-muted) !important;
 }
 
 body[data-theme="dark"] .map-card-status.selected {
@@ -3609,13 +3609,12 @@ body[data-theme="dark"] .map-card-status.selected {
 
 body[data-theme="dark"] .map-thumb-spec,
 body[data-theme="dark"] .side-thumb-spec {
-    background: #111827 !important;
-    border-color: #334155 !important;
+    background: var(--cc-paper) !important;
+    border-color: var(--cc-line) !important;
 }
 
 body[data-theme="dark"] .sidepick-final-map-wrap {
-    background: radial-gradient(circle at top, rgba(96, 165, 250, 0.12), transparent 46%),
-        linear-gradient(180deg, #172033, #111827) !important;
+    background: var(--cc-sheet) !important;
 }
 
 

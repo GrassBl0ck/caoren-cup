@@ -35,7 +35,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         var sid = player.SteamID.ToString();
         if (button == "admin_random_open")
         {
-            if (IsVoteAdministrator(player) && _adminVoteViews.GetValueOrDefault(sid) == AdminVoteView.Home)
+            if (IsVoteAdministrator(player) && IsQuickView(_adminVoteViews.GetValueOrDefault(sid)))
             {
                 _randomAdminMenus[sid] = new();
                 SetAdminVoteView(player, AdminVoteView.Random);
@@ -111,6 +111,7 @@ public sealed partial class CaorenCupInGameMenuPlugin
         if ((state.Page != RandomAdminPage.Players && target is null) || view is null)
         { state.Page = RandomAdminPage.Players; state.Index = 0; preserveSlots = false; }
         var buff = view?.Catalog.FirstOrDefault(entry => entry.Key == state.Buff);
+        RenderAdminNavigation(player);
         if (target is not null) state.Revision = target.Revision;
         if (state.Page is RandomAdminPage.Detail or RandomAdminPage.Actions or RandomAdminPage.Levels && buff is null)
         { state.Page = RandomAdminPage.Buffs; state.Index = 0; preserveSlots = false; }

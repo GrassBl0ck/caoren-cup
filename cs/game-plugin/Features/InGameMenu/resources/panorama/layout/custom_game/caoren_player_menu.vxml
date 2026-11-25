@@ -59,8 +59,38 @@
                         </Panel>
                     </Panel>
                 </Panel>
-                <Panel class="content-navbar__tabs content-navbar__tabs--dark CaorenSecondaryNav">
-                    <Label text="{s:player_section}" class="CaorenPlayerSection" />
+                <Panel class="MenuTrail">
+                    <Panel id="trail_up_0_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_0" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label0}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label0}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_1_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_1" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label1}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label1}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_2_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_2" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label2}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label2}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_3_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_3" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label3}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label3}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_4_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_4" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label4}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label4}" /></Panel>
+                    </Panel>
+                    <Panel id="trail_up_5_host" class="CaorenButtonHost TrailLinkHost Hidden">
+                        <Button id="trail_up_5" class="CaorenMenuButton TrailLink"><Label text="{s:trail_label5}" /></Button>
+                        <Label text="/" class="TrailDivider" hittest="false" />
+                        <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="{s:trail_label5}" /></Panel>
+                    </Panel>
+                    <Label text="{s:trail_current}" class="TrailCurrent" />
                 </Panel>
                 <Panel class="SettingsMenuTab Active CaorenSettingsPage">
                     <Panel class="SettingsBackground CaorenSettingsContent">
@@ -1021,9 +1051,19 @@
                         <Panel id="player_random" class="CaorenMenuSection Hidden">
                             <Panel class="CaorenRandomHeader"><Label text="[草人杯] 随机乱斗" class="SettingsSectionTitleLabel" /><Label text="{s:random_balance}" class="CaorenRandomBalance" /></Panel>
                             <Label text="{s:random_status}" class="CaorenRandomStatus" />
-                            <Panel id="random_collection_nav" class="CaorenRandomCollectionNav Hidden">
-                                <Panel id="random_offers_host" class="CaorenButtonHost CaorenRandomActionHost"><Button id="random_offers" class="CaorenMenuButton CaorenRandomAction"><Label text="返回三选一" /></Button><Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="返回三选一选牌" /></Panel></Panel>
-                                <Panel id="random_overview_host" class="CaorenButtonHost CaorenRandomActionHost"><Button id="random_overview" class="CaorenMenuButton CaorenRandomAction"><Label text="{s:random_overview_label}" /></Button><Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="切换已拥有与概览" /></Panel></Panel>
+                            <Panel id="random_collection_nav" class="MenuCategories">
+                                <Panel id="random_offers_host" class="CaorenButtonHost CategoryTabHost">
+                                    <Button id="random_offers" class="CaorenMenuButton CategoryTab"><Label text="强化三选一" /></Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="查看强化三选一" /></Panel>
+                                </Panel>
+                                <Panel id="random_owned_host" class="CaorenButtonHost CategoryTabHost">
+                                    <Button id="random_owned" class="CaorenMenuButton CategoryTab"><Label text="已拥有" /></Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="查看已拥有" /></Panel>
+                                </Panel>
+                                <Panel id="random_overview_host" class="CaorenButtonHost CategoryTabHost">
+                                    <Button id="random_overview" class="CaorenMenuButton CategoryTab"><Label text="概览" /></Button>
+                                    <Panel class="CaorenHoverHint HintBelow" hittest="false"><Label class="CaorenHoverHintText" text="查看概览" /></Panel>
+                                </Panel>
                             </Panel>
                             <Label text="{s:random_description_mode}" class="CaorenRandomDescriptionMode" />
                             <Label id="random_empty" text="{s:random_empty}" class="CaorenGuidePage Hidden" />
@@ -1110,9 +1150,6 @@
                                 <Panel id="random_skill_host" class="CaorenButtonHost Hidden"><Button id="random_skill" class="CaorenMenuButton CaorenRandomAction"><Label text="{s:random_skill_label}" /></Button><Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="发动当前主动技能，由服务端检查阶段和剩余次数" /></Panel></Panel>
                             </Panel>
                             <Panel id="random_footer" class="CaorenRandomFooter">
-                                <Panel id="random_collection_group" class="CaorenRandomFooterGroup">
-                                    <Panel id="random_owned_host" class="CaorenButtonHost CaorenRandomActionHost"><Button id="random_owned" class="CaorenMenuButton CaorenRandomAction"><Label text="已拥有与概览" /></Button><Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="查看已有BUFF与数量" /></Panel></Panel>
-                                </Panel>
                                 <Panel id="random_reroll_group" class="CaorenRandomFooterGroup">
                                     <Panel id="random_reroll_host" class="CaorenButtonHost CaorenRandomActionHost"><Button id="random_reroll" class="CaorenMenuButton CaorenRandomAction"><Label text="重抽 · 1 券" /></Button><Panel class="CaorenHoverHint" hittest="false"><Label class="CaorenHoverHintText" text="全组换新，不可撤回" /></Panel></Panel>
                                     <Panel id="random_reroll_unavailable" class="CaorenRandomUnavailable" hittest="false"><Label text="重抽不可用" /></Panel>
