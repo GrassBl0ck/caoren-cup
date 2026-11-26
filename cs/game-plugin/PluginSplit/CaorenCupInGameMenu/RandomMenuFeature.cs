@@ -1,4 +1,5 @@
 using CaorenCup.Contracts;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 
@@ -26,7 +27,46 @@ public sealed partial class CaorenCupInGameMenuPlugin
     {
         AddCommand("css_randombuffs", "打开随机乱斗强化菜单", OnRandomMenuCommand);
         RegisterListener<Listeners.OnTick>(RefreshRandomMenus);
+        RegisterEventHandler<EventRoundStart>(OnRandomMenuRoundStart);
+        RegisterEventHandler<EventRoundFreezeEnd>(OnRandomMenuFreezeEnd);
         RegisterEventHandler<EventPlayerDeath>(OnRandomMenuPlayerDeath);
+    }
+
+    private HookResult OnRandomMenuRoundStart(EventRoundStart ev, GameEventInfo info)
+    {
+        // 等随机乱斗处理完本回合的发券和抽牌，避免依赖两个插件的事件顺序。
+        if (_enabled && RandomMenuAvailable)
+            Server.NextFrame(OpenRoundRandomMenus);
+        return HookResult.Continue;
+    }
+
+    private void OpenRoundRandomMenus()
+    {
+        if (!_enabled || CaorenCupRandomAccess.TryGet() is not { IsRunning: true } api) return;
+        var rules = Utilities.FindAllEntitiesByDesignerName<CCSGameRulesProxy>("cs_gamerules").FirstOrDefault()?.GameRules;
+        if (rules is not { WarmupPeriod: false, FreezePeriod: true }) return;
+
+        var round = rules.TotalRoundsPlayed + 1;
+        foreach (var player in VoteHumans())
+        {
+            var sid = player.SteamID.ToString();
+            if (IsVoteDraftAwaitingInput(sid) || _votePages.ContainsKey(sid) || _navigator.HasSession(sid)) continue;
+            if (api.GetView(player) is not { CanLock: true, Offers.Count: > 0 } view || view.Round != round) continue;
+
+            if (!_personalViews.ContainsKey(sid)) OpenPersonalMenu(player);
+            _randomMenus.Remove(sid);
+            OpenRandomMenu(player);
+        }
+    }
+
+    private HookResult OnRandomMenuFreezeEnd(EventRoundFreezeEnd ev, GameEventInfo info)
+    {
+        foreach (var player in VoteHumans())
+        {
+            if (_personalViews.TryGetValue(player.SteamID.ToString(), out var view) && view == PersonalView.Random)
+                ClosePersonalMenu(player);
+        }
+        return HookResult.Continue;
     }
 
     private void OnRandomMenuCommand(CCSPlayerController? player, CommandInfo info)
