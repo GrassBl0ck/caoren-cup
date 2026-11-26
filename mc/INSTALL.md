@@ -1,6 +1,6 @@
 # 草人杯 MC 服务器内容包 2.2.3
 
-首次安装或升级到 v2.5.3，请先按[服主地址配置](../docs/deployment/11-server-addresses.md)填写本站网址和游戏地址。
+首次安装或升级时，请先按[服主地址配置](../docs/deployment/11-server-addresses.md)填写本站网址和游戏地址。
 
 从空机器开服请先阅读[完整部署指南](../docs/deployment/README.md)，再按本文件选择玩法。发行包中也附有完整指南，Windows 服务端路线未验证。
 

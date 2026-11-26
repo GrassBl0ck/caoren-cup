@@ -1,6 +1,6 @@
 # 草人杯版本包安装说明
 
-首次安装或升级到 v2.5.3，请先按[服主地址配置](deployment/11-server-addresses.md)填写本站网址和游戏地址。
+首次安装或升级时，请先按[服主地址配置](deployment/11-server-addresses.md)填写本站网址和游戏地址。
 
 首次安装请按[完整部署指南](deployment/README.md)选择系统和组件。发行包根目录 `INSTALL.md` 的此链接由打包器指向随包的 `guide/docs/deployment/README.md`。Windows 服务端路线未验证，Linux 新环境及玩法验收范围见指南。
 

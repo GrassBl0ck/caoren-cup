@@ -1,6 +1,6 @@
 # 草人杯完整部署指南
 
-首次安装或升级到 v2.5.3，请先按[服主地址配置](11-server-addresses.md)填写本站网址和游戏地址。
+首次安装或升级时，请先按[服主地址配置](11-server-addresses.md)填写本站网址和游戏地址。
 
 本指南面向第一次开服的读者。操作电脑使用 Windows，服务器可以是自己的 Windows 电脑，也可以是远程 Linux 或 Windows 服务器。Ubuntu 24.04 x86_64 为 Linux 命令主线。
 

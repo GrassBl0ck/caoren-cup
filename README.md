@@ -4,7 +4,7 @@
 
 CS 提供赛事组织、身份玩法、娱乐模式和服务器工具；MC 提供坐垫战争等自研玩法。官网推荐 Windows 客户端，也提供浏览器参赛入口。两端共用比赛名单和进度，主持人在客户端开赛。CS 正式房间现开放竞技和异能，MC 服务器内容独立安装。
 
-[下载 Windows 客户端](https://github.com/GrassBl0ck/caoren-cup/releases/download/v2.5.3/CaotaiCupClient-Setup-v2.5.3.msi) · [v2.5.3 完整发行与安装说明](https://github.com/GrassBl0ck/caoren-cup/releases/tag/v2.5.3)
+[下载 Windows 客户端](https://github.com/GrassBl0ck/caoren-cup/releases/download/v2.6.0/CaotaiCupClient-Setup-v2.6.0.msi) · [v2.6.0 完整发行与安装说明](https://github.com/GrassBl0ck/caoren-cup/releases/tag/v2.6.0)
 
 [CS 板块](#草人杯-cs) · [MC 板块](#草人杯-mc) · [部署与下载](#部署与下载) · [致谢与仓库引用](#致谢与仓库引用)
 
