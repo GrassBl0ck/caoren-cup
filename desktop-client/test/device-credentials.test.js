@@ -10,6 +10,7 @@ const makeMemoryFs = () => {
     mkdirSync: () => {},
     readFileSync: (file) => files.get(file),
     writeFileSync: (file, value) => files.set(file, value),
+    renameSync: (from, to) => { files.set(to, files.get(from)); files.delete(from); },
     rmSync: (file) => files.delete(file),
   };
 };

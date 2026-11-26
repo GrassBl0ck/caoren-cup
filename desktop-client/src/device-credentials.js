@@ -1,4 +1,5 @@
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 
 class DeviceCredentialStore {
   constructor({ fs, safeStorage, filePath }) {
@@ -14,7 +15,13 @@ class DeviceCredentialStore {
     try {
       const encrypted = this.safeStorage.encryptString(JSON.stringify(credential));
       this.fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-      this.fs.writeFileSync(this.filePath, encrypted.toString('base64'), 'utf8');
+      const temp = this.filePath + '.' + randomUUID();
+      try {
+        this.fs.writeFileSync(temp, encrypted.toString('base64'), { mode: 0o600, flag: 'wx' });
+        this.fs.renameSync(temp, this.filePath);
+      } finally {
+        this.fs.rmSync(temp, { force: true });
+      }
       return { ok: true };
     } catch (_error) {
       return { ok: false, reason: 'credential_save_failed' };
@@ -33,7 +40,7 @@ class DeviceCredentialStore {
       }
       return {
         ok: true,
-        credential: { deviceToken: credential.deviceToken, deviceId: credential.deviceId },
+        credential: { deviceToken: credential.deviceToken, deviceId: credential.deviceId, ...(typeof credential.email === 'string' && { email: credential.email }) },
       };
     } catch (_error) {
       return { ok: false, reason: 'credential_corrupt' };

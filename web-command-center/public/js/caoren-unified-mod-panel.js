@@ -452,88 +452,17 @@
     return values;
   }
 
-  function readMaybeGlobal(name) {
-    try { return Function('try { return typeof ' + name + ' !== "undefined" ? ' + name + ' : undefined; } catch (_) { return undefined; }')(); }
-    catch (_) { return undefined; }
-  }
-
-  function normalizeSecret(value) {
-    if (value === undefined || value === null) return '';
-    if (typeof value === 'string') return value;
-    if (typeof value === 'object') {
-      for (const key of ['adminPassword', 'password', 'token', 'adminToken', 'value']) {
-        if (typeof value[key] === 'string' && value[key]) return value[key];
-      }
-    }
-    return String(value || '');
-  }
-
-  function getAdminPassword() {
-    const globalNames = ['adminPassword', 'caorenAdminPassword', 'currentAdminPassword', 'savedAdminPassword', 'adminToken', 'caorenAdminToken'];
-    for (const name of globalNames) {
-      const value = normalizeSecret(readMaybeGlobal(name));
-      if (value) return value;
-    }
-    const globalObjects = ['state', 'appState', 'adminState', 'window.caorenState', 'window.appState'];
-    for (const name of globalObjects) {
-      const obj = readMaybeGlobal(name);
-      const direct = normalizeSecret(obj);
-      if (direct && direct !== '[object Object]') return direct;
-      if (obj && typeof obj === 'object') {
-        for (const key of ['adminPassword', 'password', 'token', 'adminToken']) {
-          const nested = normalizeSecret(obj[key]);
-          if (nested) return nested;
-        }
-      }
-    }
-    const inputSelectors = ['input[type="password"]', 'input[name*="password" i]', 'input[id*="password" i]', 'input[placeholder*="密码"]', 'input[name*="token" i]', 'input[id*="token" i]'];
-    for (const selector of inputSelectors) {
-      const input = document.querySelector(selector);
-      if (input && input.value) return input.value;
-    }
-    for (const storage of [window.localStorage, window.sessionStorage]) {
-      if (!storage) continue;
-      for (let i = 0; i < storage.length; i += 1) {
-        const key = storage.key(i);
-        if (!key) continue;
-        const lower = key.toLowerCase();
-        if (lower.indexOf('admin') >= 0 || lower.indexOf('password') >= 0 || lower.indexOf('token') >= 0) {
-          const raw = storage.getItem(key);
-          const direct = normalizeSecret(raw);
-          if (direct && direct !== '[object Object]') return direct;
-          try {
-            const parsed = JSON.parse(raw);
-            const parsedValue = normalizeSecret(parsed);
-            if (parsedValue) return parsedValue;
-          } catch (_) {}
-        }
-      }
-    }
-    const cookieMatch = document.cookie.match(/(?:^|;\s*)(?:adminPassword|password|adminToken|caorenAdminToken)=([^;]+)/i);
-    if (cookieMatch) return decodeURIComponent(cookieMatch[1]);
-    return '';
-  }
-
   async function submitCommand(mod, values, action) {
     const moduleId = (mod && (mod.id || mod.command || mod.name)) || moduleIdentity(mod);
-    const adminPasswordValue = getAdminPassword();
     const payload = {
       moduleId: moduleId,
       module: moduleId,
       commandId: moduleId,
       action: action,
       params: values,
-      values: values,
-      adminPassword: adminPasswordValue,
-      password: adminPasswordValue,
-      token: adminPasswordValue,
-      adminToken: adminPasswordValue
+      values: values
     };
-    const res = await fetch('/api/admin/caoren-mod-command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const res = await window.postMatchAdmin('/api/admin/caoren-mod-command', payload);
     const text = await res.text();
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch (_) { data = { raw: text }; }

@@ -203,7 +203,7 @@ const advancePhaseSource = advancePhaseStart >= 0 && advancePhaseEnd > advancePh
 if (!/formalMatchStartBlocked/.test(advancePhaseSource)) {
   abilitySettingsBootContractFailures.push('前端必须阻止阶段 1 门禁状态下发起 ADVANCE_PHASE');
 }
-if (!/\/js\/lobby-app\.js\?v=2\.2\.4-ability1/.test(indexHtml)) {
+if (!/\/js\/lobby-app\.js\?v=2\.4\.1-security1/.test(indexHtml)) {
   abilitySettingsBootContractFailures.push('lobby-app.js 必须使用异能 BP 安全整合 cachebuster');
 }
 assert.deepEqual(

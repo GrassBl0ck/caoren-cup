@@ -666,7 +666,7 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
 
             if (data.action === 'PLAY_AUDIO_CUE') {
                 const cue = typeof data.payload?.cue === 'string' ? data.payload.cue : 'adminPrompt';
-                io.emit('AUDIO_CUE', { cue, source: 'admin', adminName: admin.name });
+                io.emit('AUDIO_CUE', { cue, source: 'admin' });
                 socket.emit(WsEvents.NOTIFICATION, { message: '已向所有网页玩家发送提示音。' });
             } else if (data.action === 'ABILITY_SYNC_RETRY') {
                 if (session.phase !== GamePhase.PreGameSetup

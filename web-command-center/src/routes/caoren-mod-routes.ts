@@ -1,4 +1,4 @@
-import type { Express } from 'express';
+import type { Request, Express } from 'express';
 
 import { GamePhase } from '../types';
 import { getCaorenModuleDefinitions, buildCaorenCommandFromRequest } from '../caoren-modules';
@@ -15,7 +15,7 @@ type MatchOptionsLike = {
 };
 
 interface RegisterCaorenModRoutesDeps {
-  adminPassword: string;
+  isMatchAdmin: (req: Request) => boolean;
   getPhase: () => GamePhase;
   ensureMatchOptions: () => MatchOptionsLike;
   enqueuePluginCommand: (
@@ -31,11 +31,11 @@ export const registerCaorenModRoutes = (
   app: Express,
   deps: RegisterCaorenModRoutesDeps
 ) => {
-  app.get('/api/caoren-modules', (_req, res) => {
+  app.get('/api/caoren-modules', (req, res) => {
     res.json({
       success: true,
       modules: getCaorenModuleDefinitions(),
-      queue: deps.getPluginCommandQueueSummary(),
+      queue: deps.isMatchAdmin(req) ? deps.getPluginCommandQueueSummary() : [],
       phase: deps.getPhase(),
       matchOptions: deps.ensureMatchOptions(),
       allowedPhases: Object.values(GamePhase),
@@ -43,12 +43,10 @@ export const registerCaorenModRoutes = (
   });
 
   app.post('/api/admin/caoren-mod-command', (req, res) => {
-    const adminPassword = String(req.body?.adminPassword || '');
-
-    if (!deps.adminPassword || adminPassword !== deps.adminPassword) {
+    if (!deps.isMatchAdmin(req)) {
       return res.status(401).json({
         success: false,
-        error: '\u7ba1\u7406\u5458\u5bc6\u7801\u9519\u8bef',
+        error: '管理员会话已失效',
       });
     }
 

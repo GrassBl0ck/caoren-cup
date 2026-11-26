@@ -198,6 +198,7 @@ test('bootstrap ticket creates an HttpOnly browser session and current identity 
             email: account.email,
             hasBackupPassword: true,
             emailVerified: true,
+            ageConfirmed: true,
             hasSteamBinding: true,
         },
         matchStatus: 'started',

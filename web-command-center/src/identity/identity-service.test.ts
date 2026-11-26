@@ -187,6 +187,8 @@ test('avatar preferences survive reload and export the selected image for each v
     assert.deepEqual(read(secondary), logo);
     await assert.rejects(service.rememberSteamAvatar(id, '76561198000000953', red), /game_binding_required/);
     assert.throws(() => validateAvatarJpeg(Buffer.from([255, 216, 255, 0, 255, 217]).toString('base64')), /avatar_invalid/);
+    await assert.rejects(service.rememberSteamAvatar(id, primary, red), /steam_avatar_disabled/);
+    await service.updateDesktopProfile(id, 'Steam', undefined, 'steam');
     await game.sync(await service.rememberSteamAvatar(id, primary, red));
     const steam = read(primary);
     assert.notDeepEqual(steam, logo);
@@ -199,14 +201,16 @@ test('avatar preferences survive reload and export the selected image for each v
     await game.sync(await service.updateDesktopProfile(id, 'Logo', undefined, 'logo'));
     assert.deepEqual(read(primary), logo);
     assert.equal((await service.updateDesktopProfile(id, 'Nickname only')).avatarLogo, true);
-    await game.sync(await service.rememberSteamAvatar(id, secondary, green));
+    await assert.rejects(service.rememberSteamAvatar(id, secondary, green), /steam_avatar_disabled/);
+    assert.equal(service.getIdentity(id)?.steamAvatarJpegs, undefined);
     assert.deepEqual(read(secondary), logo);
     await game.sync(await service.updateDesktopProfile(id, 'Custom', green));
     assert.deepEqual(read(primary), read(secondary));
     assert.notDeepEqual(read(primary), steam);
     assert.equal((await service.updateDesktopProfile(id, 'Legacy upload')).avatarJpeg, green);
     await game.sync(await service.updateDesktopProfile(id, 'Steam', undefined, 'steam'));
-    assert.deepEqual(read(primary), steam);
+    assert.deepEqual(read(primary), logo);
+    await game.sync(await service.rememberSteamAvatar(id, secondary, green));
     assert.notDeepEqual(read(secondary), steam);
     await game.sync(await service.rememberSteamAvatar(id, primary, null));
     assert.deepEqual(read(primary), logo);

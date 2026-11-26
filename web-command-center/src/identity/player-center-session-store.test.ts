@@ -69,11 +69,16 @@ test('idle expiry, logout, and malformed tokens cannot restore a player-center s
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     await store.load();
     const idle = await store.create('identity-a', 1);
+    assert.equal(store.isBoundSessionCurrent(idle.session.sessionId, 'identity-a', 1), true);
+    assert.equal(store.isBoundSessionCurrent(idle.session.sessionId, 'identity-b', 1), false);
+    assert.equal(store.isBoundSessionCurrent(idle.session.sessionId, 'identity-a', 2), false);
     now.value = idle.session.idleExpiresAt;
+    assert.equal(store.isBoundSessionCurrent(idle.session.sessionId, 'identity-a', 1), false);
     assert.equal(await store.use(idle.rawToken), undefined);
 
     const logout = await store.create('identity-a', 1);
     assert.equal(await store.revokeCurrent(logout.rawToken), true);
+    assert.equal(store.isBoundSessionCurrent(logout.session.sessionId, 'identity-a', 1), false);
     assert.equal(await store.use(logout.rawToken), undefined);
     assert.equal(await store.use('not-a-session-token'), undefined);
 });

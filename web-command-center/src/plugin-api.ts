@@ -38,7 +38,7 @@ import {
     resolveRosterTeamByInitialSide,
     synchronizeRandomModeRuntime,
 } from './game-flow-manager';
-import { ADMIN_PASSWORD, PLUGIN_TOKEN } from './game-constants';
+import { PLUGIN_TOKEN } from './game-constants';
 import { resolveDuelMapConfig } from './duel-config';
 import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer } from './identity/session-integration';
@@ -229,6 +229,7 @@ const requirePluginAuth = (req: any, res: any, next: any) => {
 };
 
 export function registerPluginRoutes(app: express.Express, deps: {
+    isMatchAdmin?: (req: express.Request) => boolean;
     broadcastState: () => void;
     requestStateBroadcast: () => void;
     flushStateBroadcast: () => void;
@@ -446,9 +447,8 @@ export function registerPluginRoutes(app: express.Express, deps: {
     });
 
     app.post('/api/admin/team-lock/sync', (req, res) => {
-        const adminPassword = String(req.body?.adminPassword || '');
-        if (!ADMIN_PASSWORD || adminPassword !== ADMIN_PASSWORD) {
-            return res.status(401).json({ success: false, error: '管理员密码错误' });
+        if (!deps.isMatchAdmin?.(req)) {
+            return res.status(401).json({ success: false, error: '管理员会话已失效' });
         }
 
         const session = getSession();
@@ -465,9 +465,8 @@ export function registerPluginRoutes(app: express.Express, deps: {
     });
 
     app.post('/api/admin/team-lock/clear', (req, res) => {
-        const adminPassword = String(req.body?.adminPassword || '');
-        if (!ADMIN_PASSWORD || adminPassword !== ADMIN_PASSWORD) {
-            return res.status(401).json({ success: false, error: '管理员密码错误' });
+        if (!deps.isMatchAdmin?.(req)) {
+            return res.status(401).json({ success: false, error: '管理员会话已失效' });
         }
 
         const session = getSession();

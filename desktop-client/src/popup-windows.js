@@ -47,7 +47,7 @@ function createPopupManager(origin, userAgentToken) {
     return name === '/index.html' ? '/' : name.replace(/\.html$/, '');
   }
   function supports(target) {
-    return target.origin === origin && ['/', '/cs', '/profile', '/rules'].includes(pageName(target));
+    return target.origin === origin && ['/', '/cs', '/profile', '/rules', '/privacy'].includes(pageName(target));
   }
   function returnsToRoom(target) {
     if (target.origin !== origin) return false;

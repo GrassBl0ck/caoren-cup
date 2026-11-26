@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('caorenDesktop', Object.freeze({
   ...(process.isMainFrame && location.protocol === 'file:' ? {
     keybinds: (operation, request) => ipcRenderer.invoke('caoren:keybinds', operation, request),
   } : {}),
-  inspectSteam: () => ipcRenderer.invoke('caoren:steam:status'),
+  inspectSteam: avatarSteamIds => ipcRenderer.invoke('caoren:steam:status', avatarSteamIds),
   roomRequest: (operation, payload) => ipcRenderer.invoke('caoren:room:request', operation, payload),
   openSteamAuthorization: (url) => ipcRenderer.invoke('caoren:room:steam-authorization', url),
   openRoomPage: (page, section) => ipcRenderer.invoke('caoren:room:open-page', page, section),
@@ -58,7 +58,7 @@ function setupLogin(form, oldOption, onSuccess) {
     return input;
   };
   const account = option('remember-account', '记住账号');
-  const secret = option('remember-password', '记住密码');
+  const secret = option('remember-device', '记住此设备');
   oldOption.replaceWith(row);
   const email = form.elements.namedItem('email');
   const password = form.elements.namedItem('password');
@@ -73,21 +73,21 @@ function setupLogin(form, oldOption, onSuccess) {
     network_error: '暂时无法连接草台杯，请稍后重试。',
   };
   function showError(text) { message.textContent = text; message.dataset.error = String(!!text); }
-  let saved = { email: '', hasPassword: false };
+  let saved = { email: '', hasDevice: false };
   const syncPassword = () => {
-    const available = saved.hasPassword && secret.checked && email.value.trim().toLowerCase() === saved.email;
+    const available = saved.hasDevice && secret.checked && email.value.trim().toLowerCase() === saved.email;
     password.required = !available;
-    password.placeholder = available ? '已记住密码' : '输入密码';
+    password.placeholder = available ? '此设备可以免密登录' : '输入密码';
   };
   email.addEventListener('input', syncPassword);
   async function change(event) {
     if (event.target === secret && secret.checked) account.checked = true;
     if (!account.checked) secret.checked = false;
-    if (saved.email && (!account.checked || (saved.hasPassword && !secret.checked))) {
+    if (saved.email && (!account.checked || (saved.hasDevice && !secret.checked))) {
       const keepEmail = account.checked;
       try {
         await ipcRenderer.invoke('caoren:login:forget', saved.email, keepEmail);
-        saved = { email: keepEmail ? saved.email : '', hasPassword: false };
+        saved = { email: keepEmail ? saved.email : '', hasDevice: false };
       } catch { showError('未能清除已记住的信息，请重试。'); }
     }
     syncPassword();
@@ -100,7 +100,7 @@ function setupLogin(form, oldOption, onSuccess) {
     saved = value;
     if (!email.value) email.value = value.email;
     account.checked = !!value.email;
-    secret.checked = value.hasPassword;
+    secret.checked = value.hasDevice;
     syncPassword();
   }).catch(() => showError(errors.read_failed)).finally(() => { submit.disabled = false; });
   form.addEventListener('submit', async event => {
@@ -109,7 +109,7 @@ function setupLogin(form, oldOption, onSuccess) {
     if (busy) return;
     busy = true;
     await ready;
-    const input = { email: email.value, password: password.value, rememberAccount: account.checked, rememberPassword: secret.checked };
+    const input = { email: email.value, password: password.value, rememberAccount: account.checked, rememberDevice: secret.checked };
     for (const field of [submit, account, secret, email, password]) field.disabled = true;
     try {
       showError('');

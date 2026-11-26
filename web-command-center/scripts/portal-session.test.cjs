@@ -116,10 +116,10 @@ test('expired profile session redirects to the shared email login', async () => 
  const p=await page({profilePage:true});assert.deepEqual(p.redirects,['/login?next=profile']);
 });
 
-test('registration submits only email, verification challenge and password', async () => {
+test('registration submits an explicit age declaration with the verified email and password', async () => {
  const p=await page();const form=p.elements.get('register-form');
- form.fields.email.value='new@example.com';await p.codeButtons.find(b=>b.dataset.sendCode==='register').handlers.click();
- await p.submitForm('register-form',{email:'new@example.com',code:'123456',password:'new-password',confirmPassword:'new-password'});
- assert.deepEqual(p.requests.find(r=>r.url==='/api/account-auth/register').body,{email:'new@example.com',code:'123456',password:'new-password',confirmPassword:'new-password',challengeId:'email-challenge'});
+ form.fields.age14.checked=true;form.fields.email.value='new@example.com';await p.codeButtons.find(b=>b.dataset.sendCode==='register').handlers.click();
+ await p.submitForm('register-form',{email:'new@example.com',age14:'on',code:'123456',password:'new-password',confirmPassword:'new-password'});
+ assert.deepEqual(p.requests.find(r=>r.url==='/api/account-auth/register').body,{email:'new@example.com',code:'123456',password:'new-password',confirmPassword:'new-password',age14:true,challengeId:'email-challenge'});
  assert.equal(p.elements.get('board-picker').hidden,false);
 });

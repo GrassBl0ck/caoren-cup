@@ -13,6 +13,7 @@ export interface IdentityRecord {
     desktopRoomGuide?: 'pending' | 'done';
     avatarJpeg?: string;
     avatarLogo?: true;
+    steamAvatarEnabled?: true;
     steamAvatarJpegs?: Record<string, string>;
     // 仅由可信 CS2 桥接或 Steam 官方身份验证写入。
     gameBoundAt?: number;
@@ -43,6 +44,7 @@ export interface LoginAccountRecord {
     password?: PasswordCredential;
     email?: string;
     emailVerifiedAt?: number;
+    age14ConfirmedAt?: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -93,6 +95,7 @@ export interface DeviceTokenRecord {
     rotateAfter: number;
     revokedAt?: number;
     rotatedFromTokenId?: string;
+    deviceForgottenAt?: number;
 }
 
 export interface IdentityStoreData {

@@ -1,3 +1,4 @@
+import { publicMatchStats } from './match-stat-fields';
 // player-utils.ts
 import { formalServerLifecycle } from './formal-server-lifecycle';
 import {
@@ -170,10 +171,61 @@ const sanitizeAbilityDraftState = (
     };
 };
 
+function publicLiveData(session: GameSession) {
+    const live = session.liveGameData;
+    if (!live) return;
+    const result: Record<string, unknown> = {};
+    for (const key of [
+        'scoreCT', 'scoreT', 'scoreA', 'scoreB', 'currentRound', 'lastScoredRound', 'pluginConnected',
+        'winnerTeam', 'matchFinished', 'winTarget', 'roundLimit', 'halftimeEnabled', 'halftimeRound',
+        'mapName', 'duelWaitingForPlayers', 'statsUnavailableReason',
+    ]) result[key] = live[key];
+    if (session.phase !== GamePhase.Scoreboard) return result;
+    result.demoSegments = live.demoSegments;
+    const seats = new Map(Object.values(session.players).filter(p => p.steamId).map(p => [p.steamId, p.playerId]));
+    for (const key of ['killMatrix', 'awpKillMatrix', 'openingKillMatrix'] as const) {
+        const matrix: Record<string, Record<string, number>> = {};
+        for (const [attacker, victims] of Object.entries(live[key] || {})) {
+            const attackerSeat = seats.get(attacker);
+            if (!attackerSeat) continue;
+            const row: Record<string, number> = {};
+            for (const [victim, count] of Object.entries(victims)) {
+                const victimSeat = seats.get(victim);
+                if (victimSeat && Number.isFinite(count)) row[victimSeat] = count;
+            }
+            matrix[attackerSeat] = row;
+        }
+        result[key] = matrix;
+    }
+    return result;
+}
+
 export const sanitizeForPublic = (session: GameSession, viewerId?: string | null): any => {
     const viewer = viewerId ? session.players[viewerId] : undefined;
-    const revealAllPostgame = session.phase === 'Scoreboard';
-    const s: any = { ...session };
+    const revealAllPostgame = !!viewer && session.phase === GamePhase.Scoreboard;
+    const s: Record<string, any> = {};
+    for (const key of [
+        'sessionId', 'matchId', 'phase', 'desktopFormalRoom', 'matchOptions', 'availableGameModes', 'gameModeRuntime',
+        'formalServer', 'abilitySyncState', 'playerOrder', 'teams', 'captains', 'rollValues', 'draftOrder',
+        'draftIndex', 'draftCaptainsActive', 'draftPickTimeoutAt', 'mapPool', 'bannedMaps', 'selectedMap', 'currentBanTeam',
+        'banSequence', 'mapVote', 'sidePickTeam', 'sideVote', 'selectedSide', 'undercoverCount', 'detectiveCount',
+        'rolesReleased', 'timerEndAt', 'timerPhase',
+    ]) s[key] = session[key];
+    if (session.matchRuntime) {
+        const runtime = session.matchRuntime;
+        s.matchRuntime = {
+            matchId: runtime.matchId, stage: runtime.stage, pauseState: runtime.pauseState,
+            scoreA: runtime.scoreA, scoreB: runtime.scoreB, runtimeEpoch: runtime.runtimeEpoch,
+            currentRoundKey: runtime.currentRoundKey, warmupEndsAtUnixMs: runtime.warmupEndsAtUnixMs,
+            readySeats: runtime.readySeats?.map(({ seatId, confirmed, connected, onExpectedSide }) =>
+                ({ seatId, confirmed, connected, onExpectedSide })),
+        };
+    }
+    if (viewer?.role === 'Admin') s.taskTemplate = session.taskTemplate;
+    s.accusations = Object.fromEntries(Object.entries(session.accusations || {}).map(([id, vote]) => [
+        id, viewer?.role === 'Admin' || id === viewerId || revealAllPostgame ? vote : { own: !!vote.own, enemy: !!vote.enemy },
+    ]));
+    s.liveGameData = publicLiveData(session);
     s.serverNow = Date.now();
     s.formalServerAvailable = formalServerLifecycle.isAvailableFor(session);
     s.abilityCatalog = getAbilityCatalog().map((ability) => ({
@@ -199,12 +251,11 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
             confirmationReason: viewer?.role === 'Admin' || p.playerId === viewerId ? p.confirmationReason : undefined,
             gameRole: revealRole ? p.gameRole : undefined,
             rosterTeam: p.rosterTeam, team: p.team, isReady: p.isReady, lobbyReady: p.lobbyReady, isOnline: p.isOnline,
-            undercoverTaskAckStage: p.undercoverTaskAckStage,
+            undercoverTaskAckStage: revealRole ? p.undercoverTaskAckStage : undefined,
             steamIdBound: !!p.steamId,
-            steamId: revealAllPostgame || viewer?.role === 'Admin' || p.playerId === viewerId ? p.steamId : undefined,
             finalScore: p.finalScore, scoreBreakdown: p.scoreBreakdown,
-            stats: p.stats,
-            sideStats: p.sideStats,
+            stats: publicMatchStats(p.stats),
+            sideStats: p.sideStats && { CT: publicMatchStats(p.sideStats.CT), T: publicMatchStats(p.sideStats.T) },
             detectiveQuestionCount: revealAllPostgame || viewer?.role === 'Admin' || p.playerId === viewerId ? p.detectiveQuestionCount : undefined,
             taskGrid: revealTaskGrid ? p.taskGrid : undefined,
             taskActionLog: revealTaskActionLog ? p.taskActionLog : undefined,
@@ -220,7 +271,6 @@ export const sanitizeForPublic = (session: GameSession, viewerId?: string | null
         }));
     }
     s.duelAdminOnline = Object.values(session.players).some(p => p.role === 'Admin' && p.isOnline);
-    delete s.rollTimeout;
     return s;
 };
 

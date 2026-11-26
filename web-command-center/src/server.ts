@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+import { AccountLoginGuard } from './identity/password-auth';
 import { isCurrentAbilitySyncConfirmed } from './ability-phase-one-policy';
 // server.ts
 import { createServer } from 'http';
@@ -12,7 +14,9 @@ import { getSession } from './session-manager';
 import { restoreSessionSnapshot, saveSessionSnapshotNow, scheduleSessionSnapshotSave } from './session-persistence';
 import { formalServerLifecycle } from './formal-server-lifecycle';
 import { loadTaskPresets } from './task-preset-store';
-import { findPlayerById, generateBindCode, sanitizeGameStateForViewer } from './player-utils';
+import { generateBindCode, sanitizeGameStateForViewer } from './player-utils';
+import { desktopRoomAdmins } from './desktop-formal-room';
+import { registerMatchAdminSessions } from './routes/match-admin-session';
 import { registerMatchOptionsRoutes } from './routes/match-options-routes';
 import { registerGameModeRoutes } from './routes/game-mode-routes';
 import { registerCaorenModRoutes } from './routes/caoren-mod-routes';
@@ -154,12 +158,28 @@ let scoreboardCleanupSessionId = '';
 const gameInactivityTracker = new GameInactivityTracker();
 
 const hasMatchSocket = (playerId: string) => !!io.sockets.adapter.rooms.get(playerId)?.size;
+const roomViewerId = (socket: import('socket.io').Socket, room: ReturnType<typeof getSession>) => {
+    const seat = room.players[socket.data.playerId];
+    if (!seat) return null;
+    if (seat.identityId) {
+        const account = lobbyIdentityService.getLoginAccount(seat.identityId);
+        if (socket.data.playerCenterSessionInvalid || socket.data.identityId !== seat.identityId || !account?.age14ConfirmedAt || !account.enabled ||
+            !playerCenterSessionStore.isBoundSessionCurrent(socket.data.playerCenterSessionId, seat.identityId, account.updatedAt)) return null;
+        if (seat.membershipId) {
+            const member = lobbyIdentityService.getMembership(seat.membershipId);
+            if (member?.sessionId !== room.sessionId || member.leftAt || member.blockedAt) return null;
+        }
+        if (seat.role === 'Admin' && !desktopRoomAdmins.allows(seat.identityId, lobbyIdentityService)) return null;
+    }
+    return seat.playerId;
+};
+
 const broadcastState = () => {
     const session = getSession();
     syncRoomPresence(session, hasMatchSocket);
     gameInactivityTracker.observe(session);
     for (const socket of io.sockets.sockets.values()) {
-        const viewerId = socket.data?.playerId || null;
+        const viewerId = roomViewerId(socket, session);
         socket.emit(WsEvents.GAME_STATE, sanitizeGameStateForViewer(session, viewerId));
     }
     scheduleSessionSnapshotSave();
@@ -175,7 +195,10 @@ const broadcastState = () => {
 const pluginStateBroadcastScheduler = new PluginStateBroadcastScheduler(broadcastState, 500);
 
 const notifyMessage = (msg: string) => {
-    io.emit(WsEvents.NOTIFICATION, { message: msg });
+    const room = getSession();
+    for (const socket of io.sockets.sockets.values()) {
+        if (roomViewerId(socket, room)) socket.emit(WsEvents.NOTIFICATION, { message: msg });
+    }
 };
 
 const clearSocketMatchPermission = (socket: any, message: string) => {
@@ -236,6 +259,28 @@ registerIdentityAuthRoutes(app, {
         if (!player.bindCode) player.bindCode = generateBindCode();
         broadcastState();
         saveSessionSnapshotNow();
+    },
+    onAccountErased: identityId => {
+        const room = getSession();
+        removeIdentityFromSession(room, identityId);
+        for (const seat of Object.values(room.players)) {
+            if (seat.identityId !== identityId) continue;
+            if (seat.role === 'Admin') {
+                delete room.players[seat.playerId];
+                room.playerOrder = room.playerOrder.filter(id => id !== seat.playerId);
+            } else {
+                // Preserve a locked draft slot and its match-local key while removing account details.
+                seat.name = '已注销玩家';
+                seat.isOnline = false;
+                delete seat.membershipId;
+                delete seat.identityId;
+                delete seat.steamId;
+                delete seat.bindCode;
+                delete seat.sessionCode;
+            }
+        }
+        saveSessionSnapshotNow();
+        broadcastState();
     },
     onPlayerCenterMatchLeft: (identityId) => {
         const removed = removeIdentityFromSession(getSession(), identityId);
@@ -332,10 +377,40 @@ const ensureMatchOptions = () => {
     return session.matchOptions;
 };
 
+// Both legacy login messages share a failure budget across reconnects.
+const legacyLoginGuard = new AccountLoginGuard();
+io.on('connection', socket => {
+    socket.use(([event, payload], next) => {
+        if (event !== 'LOGIN' && event !== 'GAME_CODE_LOGIN') {
+            if (socket.data.playerId && !roomViewerId(socket, getSession())) {
+                clearSocketMatchPermission(socket, '房间会话已失效，请重新进入。');
+            }
+            return next();
+        }
+        const remote = socket.handshake.address;
+        const forwarded = String(socket.handshake.headers['x-forwarded-for'] || '').split(',').at(-1)?.trim() || '';
+        const localProxy = process.env.TRUST_PROXY === 'loopback' && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remote);
+        const keys = [localProxy && isIP(forwarded) ? forwarded : remote];
+        if (legacyLoginGuard.check(keys).blocked) {
+            socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '尝试次数过多，请稍后登录。' });
+            return;
+        }
+        const supplied = event === 'LOGIN' ? payload?.extraParam : payload?.credential;
+        if (!ADMIN_PASSWORD || typeof supplied !== 'string' || supplied.trim() !== ADMIN_PASSWORD) legacyLoginGuard.recordFailure(keys);
+        else legacyLoginGuard.clear(keys);
+        next();
+    });
+});
+
+const isMatchAdmin = registerMatchAdminSessions(io, getSession, (identityId, centerSessionId) => {
+    const account = lobbyIdentityService.getLoginAccount(identityId);
+    return !!account?.enabled && playerCenterSessionStore.isBoundSessionCurrent(centerSessionId, identityId, account.updatedAt) &&
+        desktopRoomAdmins.allows(identityId, lobbyIdentityService);
+});
+
 registerMatchOptionsRoutes(app, {
-    adminPassword: ADMIN_PASSWORD,
+    isMatchAdmin,
     getPhase: () => getSession().phase,
-    getPlayerById: (playerId: string) => findPlayerById(getSession(), playerId),
     ensureMatchOptions,
     applyMatchOptions,
     notify: notifyMessage,
@@ -344,10 +419,9 @@ registerMatchOptionsRoutes(app, {
 
 registerGameModeRoutes(app, {
     isAbilitySyncConfirmed: () => isCurrentAbilitySyncConfirmed(getSession()),
-    adminPassword: ADMIN_PASSWORD,
+    isMatchAdmin,
     getPhase: () => getSession().phase,
     getAvailableGameModes: () => getSession().availableGameModes,
-    getPlayerById: (playerId: string) => findPlayerById(getSession(), playerId),
     ensureMatchOptions,
     applyMatchOptions,
     enqueuePluginCommand,
@@ -356,7 +430,7 @@ registerGameModeRoutes(app, {
 });
 
 registerCaorenModRoutes(app, {
-    adminPassword: ADMIN_PASSWORD,
+    isMatchAdmin,
     getPhase: () => getSession().phase,
     ensureMatchOptions,
     enqueuePluginCommand,
@@ -366,13 +440,13 @@ registerCaorenModRoutes(app, {
 });
 
 registerLobbyAnnouncementRoutes(app, {
-    adminPassword: ADMIN_PASSWORD,
+    isMatchAdmin,
     notify: notifyMessage,
     broadcastAnnouncement,
 });
 
 registerUpdateAnnouncementRoutes(app, {
-    adminPassword: ADMIN_PASSWORD,
+    isMatchAdmin,
     service: updateAnnouncementService,
     broadcastPublic: broadcastUpdateAnnouncements,
 });
@@ -385,6 +459,7 @@ registerUpdateAnnouncementAdminSocketHandlers({
 });
 
 registerPluginRoutes(app, {
+    isMatchAdmin,
     broadcastState,
     requestStateBroadcast: () => pluginStateBroadcastScheduler.request(),
     flushStateBroadcast: () => pluginStateBroadcastScheduler.flush(),

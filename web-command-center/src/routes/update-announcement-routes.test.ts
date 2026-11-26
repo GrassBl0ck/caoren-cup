@@ -44,7 +44,7 @@ const createFixture = async (name: string, unavailable = false): Promise<RouteFi
     app.use(express.json({ limit: '1mb' }));
     const broadcasts: PublicUpdateAnnouncement[][] = [];
     registerUpdateAnnouncementRoutes(app, {
-        adminPassword: 'admin-test-password',
+        isMatchAdmin: req => req.get('Authorization') === 'Bearer test-session',
         service,
         broadcastPublic: (announcements) => broadcasts.push(announcements),
     });
@@ -100,7 +100,7 @@ test('save route rejects malformed announcement fields with a JSON 400 response'
     for (const invalid of invalidAnnouncements) {
         const response = await fetch(`${fixture.baseUrl}/api/admin/update-announcements/save`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-session' },
             body: JSON.stringify({
                 adminPassword: 'admin-test-password',
                 announcement: invalid.value,
@@ -124,7 +124,7 @@ test('save route preserves omitted sections while editing an existing draft', as
     const post = async (announcement: Record<string, unknown>) => {
         const response = await fetch(`${fixture.baseUrl}/api/admin/update-announcements/save`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-session' },
             body: JSON.stringify({ adminPassword: 'admin-test-password', announcement }),
         });
         return { response, body: await response.json() as any };
@@ -173,7 +173,7 @@ test('save route rejects invalid optional fields without creating announcements'
     const post = async (route: string, body: Record<string, unknown>) => {
         const response = await fetch(fixture.baseUrl + route, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-session' },
             body: JSON.stringify({ adminPassword: 'admin-test-password', ...body }),
         });
         return { status: response.status, body: await response.json() as any };
@@ -221,7 +221,7 @@ test('malformed announcement JSON returns a safe generic JSON error', async (t) 
     const requestFragment = `{"adminPassword":"${fakePassword}","announcement":`;
     const response = await fetch(`${fixture.baseUrl}/api/admin/update-announcements/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-session' },
         body: requestFragment,
     });
     const responseText = await response.text();
@@ -256,7 +256,7 @@ test('oversized announcement JSON returns the same safe generic JSON error', asy
     });
     const response = await fetch(`${fixture.baseUrl}/api/admin/update-announcements/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-session' },
         body: requestBody,
     });
     const responseText = await response.text();
@@ -299,7 +299,7 @@ test('update announcement routes authenticate, mutate, sanitize and broadcast pu
     const post = async (route: string, body: Record<string, unknown>) => {
         const response = await fetch(available.baseUrl + route, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-session' },
             body: JSON.stringify({ adminPassword: 'admin-test-password', ...body }),
         });
         return { response, body: await response.json() as any };

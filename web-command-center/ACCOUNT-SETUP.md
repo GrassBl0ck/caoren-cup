@@ -17,7 +17,7 @@
 ## 玩家账户与 CS 身份
 
 - 玩家可用已验证的邮箱和密码登录。在客户端选择参赛 Steam 账号，通过 Steam 授权页面完成绑定。
-- 自建服务将 `STEAM_BINDING_ORIGIN` 设为玩家实际访问的 HTTPS 源地址。如需本机代理，可将 `STEAM_BINDING_PROXY_URL` 设为本机回环 HTTP 代理地址。客户端默认连接官网，自建实例通过环境变量 `CAOREN_COMMAND_CENTER_URL` 指定自己的 HTTPS 地址。
+- 自建服务将 `STEAM_BINDING_ORIGIN` 设为玩家实际访问的 HTTPS 源地址。如需本机代理，可将 `STEAM_BINDING_PROXY_URL` 设为本机回环 HTTP 代理地址。客户端通过程序旁的 `server.json` 或环境变量 `CAOREN_COMMAND_CENTER_URL` 指定本站 HTTPS 地址。
 - 将 `CAOREN_ROOM_ADMIN_CONFIG` 指向服务端私有 JSON 文件，格式为 `{"adminEmails":["host@example.com"]}`。填写已验证的管理员邮箱，修改后重启网页服务。管理员可选择玩家或主持身份。
 - 把同版 MSI 放入 `public/downloads/caotai-cup-setup.msi`，也可用 `CAOTAI_INSTALLER_PATH` 指向安装包。浏览器首页会显示实际文件大小。
 
@@ -42,3 +42,11 @@
 官网推荐 Windows 客户端，网页玩家从「使用网页版参赛」或直接访问 `/room` 进入同一个正式房间。已绑定多个 Steam 账号时，网页玩家在入场前选择本场账号。首次可在同一浏览器完成 Steam 官网验证，或按账户资料页指引使用游戏码。主持人通过客户端管理名单和开赛。网页显示「已进服」的依据为比赛服回报。
 
 构建正式网页包时，给 `scripts/package-caoren-web.ps1` 同时传入 `-SkinImageRoot`（含原始清单的图库目录）和 `-ClientImageBundle`（含 `index.json`、`images.pack` 的客户端图库目录），即可随包提供按需加载的压缩缩略图。沿用外置图库时，将 `WEAPONPAINTS_IMAGE_ROOT` 设为包含 `base` 和 `stickers` 的图库目录，两个子目录各自包含 `manifest.json` 和 `images`。网页从该目录提供缩略图，客户端继续优先读取本地图库。换肤配置与现有数据库共用。
+
+## 安全更新后的账号与归档
+
+注册和旧账号首次进房需要确认已满 14 周岁。玩家可在个人资料页撤销某台设备，或用当前密码确认注销。客服与隐私请求请联系所使用站点的维护者。
+
+恢复身份数据库前要保留最新的注销记录目录。目录名为身份数据库完整路径加上 `.erasures`，例如 `runtime/identity-store.json.erasures/`。里面只存随机账号编号的散列。恢复旧数据库和 `.previous` 文件时，使用最新注销记录目录，或先将各副本的记录取并集，再启动服务。把整个目录回退到历史快照会丢失那段时间的注销记录。
+
+录像、个人战绩和备份的服务器保留期为 180 天，管理员私有网盘的保留期为 3 年。本版本在服务器端拒绝列出或下载已归档满 180 天的比赛。网盘供应商、备份目录和权限尚待配置，自动上传和两端物理清理尚待接入。上线前应核对现有公开分享权限、语音录制配置和已有备份。不把密码、设备凭据、网盘令牌或真实备份放入公开仓库。

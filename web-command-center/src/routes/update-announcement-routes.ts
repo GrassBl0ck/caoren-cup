@@ -1,4 +1,4 @@
-import type { ErrorRequestHandler, Express, RequestHandler, Response } from 'express';
+import type { ErrorRequestHandler, Request, Express, RequestHandler, Response } from 'express';
 import { UpdateAnnouncementService } from '../update-announcements/update-announcement-service';
 import {
     runUpdateAnnouncementAdminOperation,
@@ -9,7 +9,7 @@ import {
 } from '../update-announcements/update-announcement-types';
 
 interface RegisterUpdateAnnouncementRoutesDeps {
-    adminPassword?: string;
+    isMatchAdmin: (req: Request) => boolean;
     service: UpdateAnnouncementService;
     broadcastPublic: (announcements: PublicUpdateAnnouncement[]) => void;
 }
@@ -30,11 +30,10 @@ export function registerUpdateAnnouncementRoutes(
     deps: RegisterUpdateAnnouncementRoutesDeps,
 ): void {
     const requireAdmin: RequestHandler = (req, res, next) => {
-        const adminPassword = String(req.body?.adminPassword || '');
-        if (!deps.adminPassword || adminPassword !== deps.adminPassword) {
+        if (!deps.isMatchAdmin(req)) {
             res.status(401).json({
                 success: false,
-                error: '管理员密码错误',
+                error: '管理员会话已失效',
             });
             return;
         }

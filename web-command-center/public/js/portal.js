@@ -18,6 +18,7 @@
     steam_identity_in_use: '这个 CS 游戏身份已经属于另一个草台杯账号，请登录原账号，不会自动合并账号。',
     steam_already_bound: '当前账号已绑定其他 CS 游戏身份。', game_code_invalid: '游戏码不正确或已过期，请在 CS2 重新输入 /ccbind。',
     game_code_invalid_or_expired: '游戏码不正确或已过期，请在 CS2 重新输入 /ccbind。',
+    age_confirmation_required: '草台杯仅向已满 14 周岁的玩家开放。',
     account_registration_on_web: '这个游戏身份尚无老账号，请先使用邮箱注册，再绑定 CS 游戏身份。',
     use_email_recovery: '这个账号已绑定邮箱，请使用邮箱验证码找回密码。',
     rate_limited: '操作过于频繁，请稍后重试。', origin_not_allowed: '请在草台杯客户端中重试。',
@@ -52,6 +53,7 @@
   }
   function setSignedIn(data) {
     document.body.classList.add('signed-in');
+    if (byId('age-confirmation')) byId('age-confirmation').hidden = data.profile?.ageConfirmed !== false;
     if (byId('account-auth')) byId('account-auth').hidden = true;
     if (byId('board-picker')) byId('board-picker').hidden = false;
     if (byId('logout')) byId('logout').hidden = false;
@@ -148,7 +150,8 @@
       try {
         if (!mailAvailable) throw new Error('邮箱服务暂未启用，请联系管理员。');
         var email = emailInput.value.trim().toLowerCase();
-        var data = await request('/api/account-email/code', { email: email, purpose: purpose });
+        if (purpose === 'register' && !form.elements.namedItem('age14').reportValidity()) return;
+        var data = await request('/api/account-email/code', { email: email, purpose: purpose, age14: form.elements.namedItem('age14')?.checked === true });
         challenges[purpose] = { email: email, challengeId: data.challengeId };
         message(target, '如该邮箱可用于本次操作，验证码邮件将送达。请检查收件箱和垃圾邮件。');
         var until = Date.now() + data.resendAfterSeconds * 1000;
@@ -160,9 +163,47 @@
       } catch (error) { message(target, error.message || '邮件发送失败，请重试。', true); button.disabled = false; }
     });
   });
+  byId('confirm-age')?.addEventListener('click', async function () {
+    this.disabled = true;
+    try {
+      await request('/api/player-center/account/age', { age14: true });
+      await refresh();
+      message('account-message', '已确认，可以返回房间。');
+    } catch (error) { this.disabled = false; message('account-message', error.message, true); }
+  });
+  async function refreshDevices() {
+    var list = byId('device-list');
+    if (!list) return;
+    var result = await request('/api/player-center/devices');
+    list.replaceChildren();
+    if (!result.devices.length) list.textContent = '尚无记住的设备。';
+    result.devices.forEach(function (device) {
+      var row = document.createElement('p'), button = document.createElement('button');
+      row.textContent = (device.current ? '本机' : '设备 ' + device.id.slice(-6)) + ' · 最近使用 ' +
+        new Date(device.lastUsedAt).toLocaleString('zh-CN') + ' ';
+      button.type = 'button'; button.textContent = '撤销此设备';
+      button.addEventListener('click', async function () {
+        button.disabled = true;
+        try {
+          var reply = await request('/api/player-center/devices/forget', { id: device.id });
+          if (reply.signedOut) window.location.replace('/');
+          else await refreshDevices();
+        } catch (error) { message('account-message', error.message, true); button.disabled = false; }
+      });
+      row.append(button); list.append(row);
+    });
+  }
+  byId('device-settings')?.addEventListener('toggle', function () {
+    if (this.open) refreshDevices().catch(error => message('account-message', error.message, true));
+  });
+  handleForm('erase-account-form', async function (input) {
+    await request('/api/player-center/account/erase', { password: input.password, confirm: input.confirm === 'on' });
+    await window.caorenDesktop?.logoutDevice?.();
+    window.location.replace('/');
+  }, 'account-message');
   handleForm('login-form', async function (input) { await authenticate(input); }, 'auth-message');
   handleForm('register-form', async function (input) {
-    await request('/api/account-auth/register', emailProof('register', input));
+    await request('/api/account-auth/register', emailProof('register', Object.assign({}, input, { age14: input.age14 === 'on' })));
     delete challenges.register;
     await refresh();
   }, 'auth-message');

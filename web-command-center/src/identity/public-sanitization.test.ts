@@ -58,7 +58,7 @@ test('identity confirmation reason is private to the player and admin', () => {
     assert.equal(sanitizeForPublic(session, 'other').players.player.confirmationReason, undefined);
 });
 
-test('full SteamID is private before scoreboard but remains available for postmatch matrices', () => {
+test('public state and postmatch matrices use room seat IDs throughout', () => {
     const session = createInitialSession();
     session.players.admin = { playerId: 'admin', name: 'Admin', role: 'Admin', isReady: true };
     session.players.player = {
@@ -70,13 +70,17 @@ test('full SteamID is private before scoreboard but remains available for postma
     };
     session.players.other = { playerId: 'other', name: 'Other', role: 'Player', isReady: false };
 
-    assert.equal(sanitizeForPublic(session, 'player').players.player.steamId, '76561198000000041');
-    assert.equal(sanitizeForPublic(session, 'admin').players.player.steamId, '76561198000000041');
-    assert.equal(sanitizeForPublic(session, 'other').players.player.steamId, undefined);
-    assert.equal(sanitizeForPublic(session, null).players.player.steamId, undefined);
-
-    session.phase = GamePhase.Scoreboard;
-    assert.equal(sanitizeForPublic(session, 'other').players.player.steamId, '76561198000000041');
+    const id = session.players.player.steamId!;
+    session.matchRuntimeStatsJournal = { 1: { id } } as any;
+    session.matchRestorePoints = [{ id }];
+    session.liveGameData = { players: { [id]: { steamId: id } }, killMatrix: { [id]: { [id]: 2 } } } as any;
+    for (const phase of [GamePhase.Lobby, GamePhase.Scoreboard]) {
+        session.phase = phase;
+        for (const viewer of ['player', 'admin', 'other', null]) {
+            assert.equal(JSON.stringify(sanitizeForPublic(session, viewer)).includes(id), false);
+        }
+    }
+    assert.deepEqual(sanitizeForPublic(session, 'other').liveGameData.killMatrix, { player: { player: 2 } });
 });
 
 test('undercover tasks are visible only to administrators and the released owner before scoreboard', () => {
@@ -241,9 +245,9 @@ test('ability Draft hides the active batch from enemies but publishes completed 
     assert.deepEqual(stateForAnonymous.confirmedPlayerIds, ['a1']);
     assert.deepEqual(stateForAnonymous.assignments, [{ playerId: 'a1', team: 'A', abilityId: 'tank' }]);
 
-    assert.equal(sanitizeForPublic(session, 'a2').players.a2.steamId, '76561198000000042');
+    assert.equal(sanitizeForPublic(session, 'a2').players.a2.steamId, undefined);
     assert.equal(sanitizeForPublic(session, 'b2').players.a2.steamId, undefined);
-    assert.equal(sanitizeForPublic(session, 'admin').players.a2.steamId, '76561198000000042');
+    assert.equal(sanitizeForPublic(session, 'admin').players.a2.steamId, undefined);
     assert.equal(sanitizeForPublic(session, 'spectator').players.a2.steamId, undefined);
     assert.equal(sanitizeForPublic(session, null).players.a2.steamId, undefined);
 

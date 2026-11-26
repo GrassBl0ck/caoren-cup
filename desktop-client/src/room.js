@@ -144,7 +144,7 @@ const jpegSource = jpeg => 'data:image/jpeg;base64,' + jpeg;
 function avatarSource(profile, steamSource) {
   if (profile?.avatarLogo) return cupLogo;
   if (profile?.avatarJpeg) return jpegSource(profile.avatarJpeg);
-  return steamSource || cupLogo;
+  return profile?.steamAvatarEnabled && steamSource || cupLogo;
 }
 function playerAvatar(source) {
   const avatar = document.createElement('img');
@@ -361,7 +361,7 @@ async function updateSteam() {
   const request = ++steamCheck;
   const epoch = viewEpoch;
   let result;
-  try { result = await desktop.inspectSteam(); }
+  try { result = await desktop.inspectSteam((room?.profile ?? account)?.steamAvatarEnabled ? bindings?.steamIds : undefined); }
   catch { result = { ok: false, reason: 'steam_detection_failed' }; }
   if (epoch !== viewEpoch || request !== steamCheck) return;
   const avatarChanged = steam?.avatarSrc !== result.avatarSrc;
@@ -555,6 +555,7 @@ async function openEntryViews() {
 byId('home').onclick = () => { leaveRoomView(); void refresh(); };
 async function enterRoom(role) {
   if (!account) return desktop.openRoomPage('login');
+  if (account.ageConfirmed === false) return desktop.openRoomPage('account');
   if (byId('enter-room').disabled || inRoom) return;
   byId('enter-room').disabled = byId('enter-host').disabled = true;
   byId('entry-message').textContent = '';
@@ -629,6 +630,7 @@ async function showArchive(match) {
       stats.append(textElement('li', `${player.team} 队 · ${player.name} · 击杀／死亡／助攻 ${values.join(' / ')}`));
     }
     historyResult.append(textElement('h3', scoreLabel(body)), stats);
+    if (body.serverExpiresAt) historyResult.append(textElement('p', '服务器下载截止时间 ' + new Date(body.serverExpiresAt).toLocaleString('zh-CN')));
     for (const [index, file] of body.demos.entries()) {
       const button = textElement('button', '下载 Demo ' + (index + 1));
       button.type = 'button';
@@ -685,6 +687,7 @@ async function loadImage(source) {
 async function syncSteamAvatar() {
   const identityId = account?.identityId;
   const active = steam;
+  if (!(room?.profile ?? account)?.steamAvatarEnabled) { lastSteamUpload = undefined; return; }
   if (!identityId || !active?.ok || !bindings?.steamIds?.includes(active.steamId)) return;
   const source = active.avatarSrc;
   if (steamSyncBusy) { steamSyncPending = true; return; }
@@ -699,7 +702,7 @@ async function syncSteamAvatar() {
       drawSquare(canvas, await loadImage(source));
       jpeg = canvas.toDataURL('image/jpeg', .74).split(',')[1];
     }
-    if (account?.identityId !== identityId || steam?.steamId !== active.steamId || steam.avatarSrc !== source) return;
+    if (!(room?.profile ?? account)?.steamAvatarEnabled || account?.identityId !== identityId || steam?.steamId !== active.steamId || steam.avatarSrc !== source) return;
     const result = await desktop.roomRequest('steamAvatar', { steamId: active.steamId, jpeg });
     if (result.body.success) lastSteamUpload = { id: identityId, steamId: active.steamId, source };
     else retrySteamUploadAt = Date.now() + 30_000;
@@ -731,7 +734,7 @@ byId('profile').onclick = () => {
   uploadRevision++;
   uploadAvatar = undefined;
   avatarEdited = false;
-  avatarMode = profile?.avatarLogo ? 'logo' : profile?.avatarJpeg ? 'custom' : 'steam';
+  avatarMode = profile?.avatarJpeg ? 'custom' : profile?.steamAvatarEnabled ? 'steam' : 'logo';
   byId('profile-dialog').showModal();
   void drawProfileAvatar();
 };

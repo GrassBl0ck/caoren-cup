@@ -123,11 +123,12 @@
       <div class="avatar-editor">
         <canvas id="profile-preview" width="128" height="128" aria-label="头像预览"></canvas>
         <div class="avatar-actions">
-          <button id="profile-steam" type="button" aria-pressed="false">Steam 头像（默认）</button>
-          <button id="profile-logo" type="button" aria-pressed="false">草台杯 Logo</button>
-          <label class="choose-avatar">上传图片<input id="profile-image" type="file" accept="image/png,image/jpeg,image/webp"></label>
+          <button id="profile-steam" type="button" aria-pressed="false">使用 Steam 头像</button>
+          <button id="profile-logo" type="button" aria-pressed="false">使用草台杯 Logo</button>
+          <label class="choose-avatar">上传自己的图片<input id="profile-image" type="file" accept="image/png,image/jpeg,image/webp"></label>
         </div>
       </div>
+      <p>保存 Steam 头像选项后，客户端会读取已绑定账号的头像并同步给草台杯。换用 Logo 或自己上传的图片，会清除已保存的 Steam 头像。</p>
       <label class="profile-field">游戏昵称<input id="profile-name" maxlength="64" autocomplete="nickname"></label>
       <p id="profile-message" role="status"></p>
     </div>

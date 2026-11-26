@@ -165,6 +165,13 @@ export class PlayerCenterSessionStore {
         });
     }
 
+    isBoundSessionCurrent(sessionId: string, identityId: string, accountUpdatedAt: number): boolean {
+        const session = this.data.sessions[sessionId];
+        const now = this.now();
+        return !!session && session.identityId === identityId && session.accountUpdatedAt === accountUpdatedAt &&
+            now < session.idleExpiresAt && now < session.absoluteExpiresAt;
+    }
+
     async useBoundSession(sessionIdRaw: unknown, identityIdRaw: unknown): Promise<PlayerCenterSessionRecord | undefined> {
         const sessionId = String(sessionIdRaw || '');
         const identityId = String(identityIdRaw || '');
@@ -180,6 +187,18 @@ export class PlayerCenterSessionStore {
             session.lastUsedAt = Math.max(session.lastUsedAt, now);
             session.idleExpiresAt = Math.min(session.absoluteExpiresAt, now + PLAYER_CENTER_IDLE_TTL_MS);
             return clone(session);
+        });
+    }
+
+    async revokeDeviceSessions(identityId: string, tokens: Set<string>) {
+        return this.mutate(data => {
+            const removed: string[] = [];
+            for (const session of Object.values(data.sessions)) {
+                if (session.identityId !== identityId || !session.currentDeviceTokenId || !tokens.has(session.currentDeviceTokenId)) continue;
+                removed.push(session.sessionId);
+                delete data.sessions[session.sessionId];
+            }
+            return removed;
         });
     }
 

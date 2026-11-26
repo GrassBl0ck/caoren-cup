@@ -1,5 +1,5 @@
-import type { Express } from 'express';
-import { GamePhase, MatchOptions, Player, GameModeId } from '../types';
+import type { Express, Request } from 'express';
+import { GamePhase, MatchOptions, GameModeId } from '../types';
 import {
   GAME_MODE_MANIFESTS,
   isLoadedGameMode,
@@ -8,24 +8,16 @@ import {
 } from '../game-mode';
 
 interface RegisterGameModeRoutesDeps {
-  adminPassword?: string;
+  isMatchAdmin: (req: Request) => boolean;
   isAbilitySyncConfirmed?: () => boolean;
   getPhase: () => GamePhase;
   getAvailableGameModes?: () => readonly GameModeId[] | undefined;
-  getPlayerById?: (playerId: string) => Player | undefined;
   ensureMatchOptions: () => MatchOptions;
   applyMatchOptions: (rawOptions: unknown) => MatchOptions;
   enqueuePluginCommand: (type: string, payload: Record<string, any>) => unknown;
   notify: (message: string) => void;
   broadcastState: () => void;
 }
-
-const isAdminRequest = (req: any, deps: RegisterGameModeRoutesDeps): boolean => {
-  const adminPassword = String(req.body?.adminPassword || '');
-  const playerId = String(req.body?.playerId || '');
-  const player = playerId && deps.getPlayerById ? deps.getPlayerById(playerId) : undefined;
-  return player?.role === 'Admin' || (!!deps.adminPassword && adminPassword === deps.adminPassword);
-};
 
 const canChangeMode = (phase: GamePhase) => phase === GamePhase.Lobby || phase === GamePhase.PreGameSetup;
 
@@ -44,8 +36,8 @@ export function registerGameModeRoutes(app: Express, deps: RegisterGameModeRoute
   });
 
   app.post('/api/admin/game-mode', (req, res) => {
-    if (!isAdminRequest(req, deps)) {
-      return res.status(401).json({ success: false, error: '管理员密码错误' });
+    if (!deps.isMatchAdmin(req)) {
+      return res.status(403).json({ success: false, error: '请先以本房间管理员身份登录' });
     }
     const phase = deps.getPhase();
     if (!canChangeMode(phase)) {
@@ -78,8 +70,8 @@ export function registerGameModeRoutes(app: Express, deps: RegisterGameModeRoute
   });
 
   app.post('/api/admin/game-mode/start', (req, res) => {
-    if (!isAdminRequest(req, deps)) {
-      return res.status(401).json({ success: false, error: '管理员密码错误' });
+    if (!deps.isMatchAdmin(req)) {
+      return res.status(403).json({ success: false, error: '请先以本房间管理员身份登录' });
     }
     const phase = deps.getPhase();
     if (!canChangeMode(phase)) {
@@ -103,8 +95,8 @@ export function registerGameModeRoutes(app: Express, deps: RegisterGameModeRoute
   });
 
   app.post('/api/admin/game-mode/stop', (req, res) => {
-    if (!isAdminRequest(req, deps)) {
-      return res.status(401).json({ success: false, error: '管理员密码错误' });
+    if (!deps.isMatchAdmin(req)) {
+      return res.status(403).json({ success: false, error: '请先以本房间管理员身份登录' });
     }
     deps.enqueuePluginCommand('GAME_MODE_STOP', { label: '停止当前游戏模式' });
     deps.notify('已请求停止当前游戏模式并恢复托管 CVar。');

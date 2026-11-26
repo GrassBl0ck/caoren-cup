@@ -160,11 +160,11 @@ export class LobbyIdentityService {
     }
 
     getLoginAccount(identityId: string) {
-        return this.store.snapshot().accounts[identityId];
+        return this.store.record('accounts', identityId);
     }
 
     getIdentity(identityId: string) {
-        return this.store.snapshot().identities[identityId];
+        return this.store.record('identities', identityId);
     }
 
     findAccountByLoginName(loginNameRaw: unknown): LoginAccountRecord | undefined {
@@ -184,7 +184,7 @@ export class LobbyIdentityService {
     }
 
     // Only call after the server has consumed an email ownership challenge.
-    async registerVerifiedEmailAccount(input: { email: unknown; loginName?: unknown; password: unknown }) {
+    async registerVerifiedEmailAccount(input: { email: unknown; loginName?: unknown; password: unknown; age14?: boolean }) {
         const email = normalizeEmail(input.email);
         const password = await hashAccountPassword(input.password, { now: this.now, randomBytes: this.randomBytes });
         return this.store.mutate((data) => {
@@ -198,7 +198,7 @@ export class LobbyIdentityService {
             const identity: IdentityRecord = { identityId, displayName: '玩家', createdAt: now, updatedAt: now };
             const account: LoginAccountRecord = {
                 identityId, loginName, enabled: true, passwordState: 'active', password,
-                email, emailVerifiedAt: now, createdAt: now, updatedAt: now,
+                email, emailVerifiedAt: now, age14ConfirmedAt: input.age14 === true ? now : undefined, createdAt: now, updatedAt: now,
             };
             data.identities[identityId] = identity;
             data.accounts[identityId] = account;
@@ -314,6 +314,11 @@ export class LobbyIdentityService {
             if (avatarRaw !== undefined || mode !== undefined) {
                 if (avatar) identity.avatarJpeg = avatar;
                 else delete identity.avatarJpeg;
+                if (mode === 'steam') identity.steamAvatarEnabled = true;
+                else {
+                    delete identity.steamAvatarEnabled;
+                    delete identity.steamAvatarJpegs;
+                }
                 if (mode === 'logo') identity.avatarLogo = true;
                 else delete identity.avatarLogo;
             }
@@ -327,11 +332,13 @@ export class LobbyIdentityService {
         if (!image && jpeg !== null) throw new Error('avatar_invalid');
         const current = this.getIdentity(identityId);
         if (!current || !isVerifiedSteamIdentity(current, steamId)) throw new Error('game_binding_required');
+        if (!current.steamAvatarEnabled) throw new Error('steam_avatar_disabled');
         if (current.steamAvatarJpegs?.[steamId] === image) return current;
         return this.store.mutate(data => {
             const identity = data.identities[identityId];
             if (!identity || !data.accounts[identityId]?.enabled || !isVerifiedSteamIdentity(identity, steamId))
                 throw new Error('game_binding_required');
+            if (!identity.steamAvatarEnabled) throw new Error('steam_avatar_disabled');
             if (!image) {
                 if (identity.steamAvatarJpegs) delete identity.steamAvatarJpegs[steamId];
             } else (identity.steamAvatarJpegs ??= {})[steamId] = image;
@@ -856,6 +863,51 @@ export class LobbyIdentityService {
             }));
     }
 
+    async confirmMinimumAge(identityId: string) {
+        return this.store.mutate(data => {
+            const account = data.accounts[identityId];
+            if (!account?.enabled) throw new Error('account_unavailable');
+            account.age14ConfirmedAt ??= this.now();
+        });
+    }
+
+    async eraseAccount(identityId: string, password: unknown) {
+        const account = this.getLoginAccount(identityId);
+        if (!account?.enabled || !account.password || !await verifyAccountPassword(password, account.password))
+            throw new Error('current_password_incorrect');
+        const identity = this.getIdentity(identityId);
+        await this.store.eraseAccount(identityId, account.password.hash);
+        return identity;
+    }
+
+    rememberedDevices(identityId: string, currentTokenId?: string) {
+        const tokens = Object.values(this.store.snapshot().deviceTokens).filter(t => t.identityId === identityId);
+        const currentDevice = tokens.find(t => t.tokenId === currentTokenId)?.deviceId;
+        const seen = new Set<string>();
+        return tokens.sort((a, b) => b.lastUsedAt - a.lastUsedAt).filter(t => {
+            if (t.status === 'revoked' || Math.min(t.idleExpiresAt, t.absoluteExpiresAt) <= this.now() || seen.has(t.deviceId)) return false;
+            seen.add(t.deviceId);
+            return true;
+        }).map(t => ({ id: t.familyId, lastUsedAt: t.lastUsedAt, current: t.deviceId === currentDevice }));
+    }
+
+    deviceWasForgotten(tokenId?: string) {
+        return !!tokenId && !!this.store.record('deviceTokens', tokenId)?.deviceForgottenAt;
+    }
+
+    async forgetDevice(identityId: string, familyId: string) {
+        return this.store.mutate(data => {
+            const tokens = Object.values(data.deviceTokens).filter(t => t.identityId === identityId);
+            const device = tokens.find(t => t.familyId === familyId);
+            if (!device) return [];
+            return tokens.filter(t => t.deviceId === device.deviceId).map(t => {
+                t.status = 'revoked';
+                t.revokedAt = t.deviceForgottenAt = this.now();
+                return t.tokenId;
+            });
+        });
+    }
+
     async revokeDeviceTokenById(identityId: string, tokenId: string): Promise<boolean> {
         const now = this.now();
         return this.store.mutate((data) => {
@@ -975,7 +1027,7 @@ export class LobbyIdentityService {
     }
 
     getMembership(membershipId: string): LobbyMembershipRecord | undefined {
-        return this.store.snapshot().memberships[membershipId];
+        return this.store.record('memberships', membershipId);
     }
 
     listMemberships(sessionId: string): LobbyMembershipRecord[] {

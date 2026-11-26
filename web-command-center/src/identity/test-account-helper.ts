@@ -18,6 +18,7 @@ export const createTestLoginAccount = async (
             currentSessionId: 'test-account-setup',
         });
     }
+    await service.confirmMinimumAge(opened.identityId);
     const identity = service.getIdentity(opened.identityId);
     const account = service.getLoginAccount(opened.identityId);
     if (!identity || !account) throw new Error('test_account_missing');

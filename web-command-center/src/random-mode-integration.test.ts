@@ -62,17 +62,17 @@ test('web refuses Random selection and start when provider is not loaded', () =>
   const session = createInitialSession();
   const commands: unknown[] = [];
   registerGameModeRoutes(app as any, {
-    adminPassword: 'test-only', getPhase: () => GamePhase.Lobby,
+    isMatchAdmin: () => true, getPhase: () => GamePhase.Lobby,
     getAvailableGameModes: () => ['competitive'], ensureMatchOptions: () => session.matchOptions,
     applyMatchOptions: options => Object.assign(session.matchOptions, options),
     enqueuePluginCommand: (...args) => commands.push(args), notify() {}, broadcastState() {},
   });
   let status = 200;
   const response = { status(code: number) { status = code; return this; }, json() {} };
-  handlers.get('/api/admin/game-mode')!({ body: { adminPassword: 'test-only', gameModeId: 'random' } }, response);
+  handlers.get('/api/admin/game-mode')!({ body: { gameModeId: 'random' } }, response);
   assert.equal(status, 400);
   session.matchOptions.gameModeId = 'random';
-  handlers.get('/api/admin/game-mode/start')!({ body: { adminPassword: 'test-only' } }, response);
+  handlers.get('/api/admin/game-mode/start')!({ body: {} }, response);
   assert.equal(status, 400);
   assert.equal(commands.length, 0);
 });

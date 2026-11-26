@@ -1,3 +1,4 @@
+import { gameAvatars } from '../game-avatars';
 import express from 'express';
 import path from 'node:path';
 import { getSession } from '../session-manager';
@@ -51,6 +52,7 @@ export interface IdentityAuthRouteDependencies {
         revokedSessionId?: string;
     }) => void | Promise<void>;
     onPlayerCenterMatchJoined?: (membership: LobbyMembershipRecord) => void | Promise<void>;
+    onAccountErased?: (identityId: string) => void | Promise<void>;
     onPlayerCenterMatchLeft?: (identityId: string, membershipId: string) => void | Promise<void>;
     consumeGameLoginTicket?: (code: unknown) => { steamId: string; name: string } | undefined;
     desktopRoomActions?: {
@@ -91,7 +93,7 @@ const cookieValue = (req: express.Request, name: string): string => {
     return '';
 };
 
-const setPlayerCenterCookie = (req: express.Request, res: express.Response, rawToken: string, maxAge: number) => {
+const setPlayerCenterCookie = (req: express.Request, res: express.Response, rawToken: string, maxAge?: number) => {
     res.cookie(PLAYER_CENTER_COOKIE, rawToken, {
         httpOnly: true,
         sameSite: 'lax',
@@ -202,6 +204,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             hasBackupPassword: account.passwordState === 'active',
             email: account.email,
             emailVerified: !!account.emailVerifiedAt,
+            ageConfirmed: !!account.age14ConfirmedAt,
             hasSteamBinding: !!identity.steamId && !!identity.gameBoundAt,
         };
     };
@@ -219,6 +222,16 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             if (rawToken) await centerSessions.revokeCurrent(rawToken);
             clearPlayerCenterCookie(req, res);
             res.status(401).json({ success: false, error: 'player_center_session_invalid' });
+            return undefined;
+        }
+        if (service.deviceWasForgotten(session.currentDeviceTokenId)) {
+            clearPlayerCenterCookie(req, res);
+            res.status(401).json({ success: false, error: 'player_center_session_invalid' });
+            return undefined;
+        }
+        const roomData = /^\/api\/player-center\/(match|desktop-room|room)(?:\/|$)/i.test(req.path);
+        if (roomData && !account.age14ConfirmedAt && !/^\/api\/player-center\/desktop-room\/account\/?$/i.test(req.path)) {
+            res.status(403).json({ success: false, error: 'age_confirmation_required' });
             return undefined;
         }
         return session;
@@ -273,6 +286,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             if (!['register', 'bind-email', 'reset-password'].includes(purpose)) {
                 return res.status(400).json({ success: false, error: 'email_purpose_invalid' });
             }
+            if (purpose === 'register' && req.body?.age14 !== true) return res.status(400).json({ success: false, error: 'age_confirmation_required' });
             const email = normalizeEmail(req.body?.email);
             let principal: string | undefined;
             if (purpose === 'bind-email') {
@@ -292,13 +306,14 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
 
     app.post('/api/account-auth/register', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
         try {
+            if (req.body?.age14 !== true) return res.status(400).json({ success: false, error: 'age_confirmation_required' });
             validateAccountPassword(req.body?.password);
             if (req.body?.password !== req.body?.confirmPassword) {
                 return res.status(400).json({ success: false, error: 'password_confirmation_mismatch' });
             }
             const email = emailCodes.consume({ ...req.body, purpose: 'register', principal: '', ip: req.ip || 'unknown' });
             const created = await service.registerVerifiedEmailAccount({
-                email, password: req.body.password,
+                email, password: req.body.password, age14: true,
             });
             const issued = await centerSessions.create(created.identity.identityId, created.account.updatedAt, undefined, usesPlayerView(req));
             setPlayerCenterCookie(req, res, issued.rawToken, issued.session.absoluteExpiresAt - Date.now());
@@ -408,7 +423,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
 
     app.post('/api/player-center/session', async (req, res) => {
         const ticket = bootstrapTickets.consume(req.body?.sessionBootstrapTicket);
-        if (!ticket) return res.status(401).json({ success: false, error: 'session_bootstrap_invalid' });
+        if (!ticket || service.deviceWasForgotten(ticket.currentDeviceTokenId)) return res.status(401).json({ success: false, error: 'session_bootstrap_invalid' });
         const account = service.getLoginAccount(ticket.identityId);
         const identity = service.getIdentity(ticket.identityId);
         if (!account || !identity || !account.enabled ||
@@ -417,7 +432,11 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         }
         try {
             const created = await centerSessions.create(ticket.identityId, account.updatedAt, ticket.currentDeviceTokenId, usesPlayerView(req));
-            setPlayerCenterCookie(req, res, created.rawToken, created.session.absoluteExpiresAt - Date.now());
+            if (service.deviceWasForgotten(ticket.currentDeviceTokenId)) {
+                await centerSessions.revokeCurrent(created.rawToken);
+                return res.status(401).json({ success: false, error: 'session_bootstrap_invalid' });
+            }
+            setPlayerCenterCookie(req, res, created.rawToken, req.body?.temporary === true ? undefined : created.session.absoluteExpiresAt - Date.now());
             return res.json({
                 success: true,
                 profile: playerCenterProfile(ticket.identityId),
@@ -459,7 +478,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
 
     function archiveSteamIds(identityId: string): string[] {
         const identity = service.getIdentity(identityId);
-        return [...(identity?.steamId ? [identity.steamId] : []), ...(identity?.additionalSteamIds ?? [])];
+        return [...(identity?.steamId && identity.gameBoundAt ? [identity.steamId] : []), ...(identity?.additionalSteamIds ?? [])];
     }
 
     app.get('/api/player-center/me', async (req, res) => {
@@ -543,6 +562,52 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             await dependencies.onPlayerCenterMatchLeft?.(centerSession.identityId, membership.membershipId);
         }
         return res.json({ success: true, ...playerCenterMatchView(centerSession.identityId) });
+    });
+
+    app.post('/api/player-center/account/erase', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+        const current = await requirePlayerCenterSession(req, res);
+        if (!current) return;
+        if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'confirmation_required' });
+        const keys = ['erase:' + current.identityId];
+        if (accountGuard.check(keys).blocked) return res.status(429).json({ success: false, error: 'rate_limited' });
+        try {
+            const identity = await service.eraseAccount(current.identityId, req.body?.password);
+            await centerSessions.applyAccountChange(current.identityId, undefined, Date.now());
+            await dependencies.onPlayerCenterSessionsRevoked?.({ identityId: current.identityId });
+            await dependencies.onAccountErased?.(current.identityId);
+            if (identity) await gameAvatars.forget(identity, id => !!service.findIdentityBySteamId(id));
+            clearPlayerCenterCookie(req, res);
+            return res.json({ success: true });
+        } catch (error) {
+            if (error instanceof Error && error.message === 'current_password_incorrect') accountGuard.recordFailure(keys);
+            return emailFailure(res, error);
+        }
+    });
+
+    app.post('/api/player-center/account/age', sameOrigin, async (req, res) => {
+        const current = await requirePlayerCenterSession(req, res);
+        if (!current) return;
+        if (req.body?.age14 !== true) return res.status(400).json({ success: false, error: 'age_confirmation_required' });
+        await service.confirmMinimumAge(current.identityId);
+        res.json({ success: true });
+    });
+
+    app.get('/api/player-center/devices', sameOrigin, async (req, res) => {
+        const current = await requirePlayerCenterSession(req, res);
+        if (current) res.json({ success: true, devices: service.rememberedDevices(current.identityId, current.currentDeviceTokenId) });
+    });
+
+    app.post('/api/player-center/devices/forget', sameOrigin, async (req, res) => {
+        const current = await requirePlayerCenterSession(req, res);
+        if (!current) return;
+        const ids = await service.forgetDevice(current.identityId, req.body?.id);
+        if (!ids.length) return res.status(404).json({ success: false, error: 'device_unknown' });
+        const sessions = await centerSessions.revokeDeviceSessions(current.identityId, new Set(ids));
+        for (const revokedSessionId of sessions) {
+            await dependencies.onPlayerCenterSessionsRevoked?.({ identityId: current.identityId, revokedSessionId });
+        }
+        if (sessions.includes(current.sessionId)) clearPlayerCenterCookie(req, res);
+        res.json({ success: true, signedOut: sessions.includes(current.sessionId) });
     });
 
     app.post('/api/player-center/logout', async (req, res) => {

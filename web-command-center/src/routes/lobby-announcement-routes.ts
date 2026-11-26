@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { Express } from 'express';
+import type { Request, Express } from 'express';
 import { sanitizeAnnouncementHtml } from '../announcement-html';
 
 export type LobbyAnnouncement = {
@@ -11,7 +11,7 @@ export type LobbyAnnouncement = {
 };
 
 type RegisterLobbyAnnouncementRoutesDeps = {
-  adminPassword?: string;
+  isMatchAdmin: (req: Request) => boolean;
   notify: (message: string) => void;
   broadcastAnnouncement: (announcement: LobbyAnnouncement) => void;
 };
@@ -66,12 +66,10 @@ export function registerLobbyAnnouncementRoutes(app: Express, deps: RegisterLobb
   });
 
   app.post('/api/admin/lobby-announcement', (req, res) => {
-    const adminPassword = String(req.body?.adminPassword || '');
-
-    if (!deps.adminPassword || adminPassword !== deps.adminPassword) {
+    if (!deps.isMatchAdmin(req)) {
       return res.status(401).json({
         success: false,
-        error: '管理员密码错误',
+        error: '管理员会话已失效',
       });
     }
 

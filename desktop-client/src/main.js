@@ -116,11 +116,11 @@ function registerDesktopIpc() {
       inspect: inspectWindowsSteam, prepareKeys: state => keybinds.prepare(state), launchWorldwide, waitForGame: waitForCs2Window,
     }, isLocalRoomEvent(event) ? payload?.expectedSteamId : undefined);
   });
-  ipcMain.handle('caoren:steam:status', async (event) => {
+  ipcMain.handle('caoren:steam:status', async (event, avatarSteamIds) => {
     requireTrustedIpc(event);
     const state = await inspectWindowsSteam();
     if (!state.ok) return state;
-    const profile = isLocalRoomEvent(event) ? await steamProfile(state.steamExe, state.steamId) : {};
+    const profile = isLocalRoomEvent(event) && Array.isArray(avatarSteamIds) && avatarSteamIds.includes(state.steamId) ? await steamProfile(state.steamExe, state.steamId) : {};
     return { ok: true, steamId: state.steamId, personaName: state.personaName || profile.personaName,
       avatarSrc: profile.avatarSrc, cs2Running: state.running };
   });
@@ -384,6 +384,8 @@ async function openCommandCenterSubwindow(route) {
 }
 
 app.whenReady().then(() => {
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionRequestHandler((_contents, _permission, respond) => respond(false));
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.caorencup.client');
   }
@@ -401,7 +403,7 @@ app.whenReady().then(() => {
   registerDesktopIpc();
   if (commandCenterUrl) registerLoginPreferences({
     ipcMain, safeStorage, userData: app.getPath('userData'), origin: new URL(commandCenterUrl).origin,
-    getWindow: () => commandCenterSubwindow,
+    getWindow: () => commandCenterSubwindow, authClient: desktopAuthClient, credentialStore: deviceCredentialStore,
   });
 
   if (commandCenterUrl) {

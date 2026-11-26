@@ -540,16 +540,6 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             return !!liveSide && !!expectedSide && liveSide !== expectedSide;
         }
 
-        async function getAdminPasswordForRequest() {
-            return await caorenPrompt('该操作需要管理员密码。', {
-                title: '管理员验证',
-                inputLabel: '管理员密码',
-                inputType: 'password',
-                required: true,
-                confirmText: '验证并继续'
-            }) || '';
-        }
-
         function renderLobbyAnnouncement(announcement) {
             const normalized = announcement || {};
             window._lobbyAnnouncement = normalized;
@@ -618,8 +608,6 @@ document.addEventListener('caoren:terminate-confirmed', () => {
         }
 
         async function saveLobbyAnnouncement() {
-            const adminPassword = await getAdminPasswordForRequest();
-            if (!adminPassword) return;
 
             const announcement = {
                 enabled: !!document.getElementById('lobby-announcement-enabled')?.checked,
@@ -631,11 +619,7 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             if (status) status.textContent = '正在保存大厅公告……';
 
             try {
-                const res = await fetch('/api/admin/lobby-announcement', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ adminPassword, announcement })
-                });
+                const res = await postMatchAdmin('/api/admin/lobby-announcement', { announcement });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '保存大厅公告失败');
                 renderLobbyAnnouncement(data.announcement);
@@ -1086,6 +1070,17 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             }
         }
 
+        async function postMatchAdmin(path, body = {}) {
+            if (!ws.connected) throw new Error('大厅连接已断开，请重新连接。');
+            const proof = await ws.timeout(5000).emitWithAck('MATCH_ADMIN_SESSION');
+            if (!proof) throw new Error('请先以本房间管理员身份登录。');
+            return fetch(path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + proof },
+                body: JSON.stringify(body),
+            });
+        }
+
         async function saveMatchOptions(options = {}) {
             const silent = options?.silent === true;
             const phase = window._currentGamePhase || 'Lobby';
@@ -1094,9 +1089,6 @@ document.addEventListener('caoren:terminate-confirmed', () => {
                 return;
             }
 
-            const isLoggedInAdmin = window._currentPlayer?.role === 'Admin';
-            const adminPassword = isLoggedInAdmin ? '' : await getAdminPasswordForRequest();
-            if (!isLoggedInAdmin && !adminPassword) return;
 
             const duelEnabled = false;
             const selectedGameMode = document.getElementById('game-mode-id')?.value || 'competitive';
@@ -1131,19 +1123,13 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             if (silent && status) status.innerHTML = '\u672c\u5c40\u6a21\u5f0f\u6b63\u5728\u81ea\u52a8\u4fdd\u5b58\u2026\u2026';
 
             try {
-                const res = await fetch('/api/admin/game-mode', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({
-                        playerId: myPlayerId,
-                        adminPassword,
-                        matchOptions,
-                        gameMode: {
-                            gameModeId: matchOptions.gameModeId,
-                            warmupSeconds: matchOptions.gameModeWarmupSeconds,
-                            cvarOverrides: matchOptions.gameModeCvarOverrides,
-                        },
-                    })
+                const res = await postMatchAdmin('/api/admin/game-mode', {
+                    matchOptions,
+                    gameMode: {
+                        gameModeId: matchOptions.gameModeId,
+                        warmupSeconds: matchOptions.gameModeWarmupSeconds,
+                        cvarOverrides: matchOptions.gameModeCvarOverrides,
+                    },
                 });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '\u4fdd\u5b58\u672c\u5c40\u6a21\u5f0f\u5931\u8d25');
@@ -1157,15 +1143,8 @@ document.addEventListener('caoren:terminate-confirmed', () => {
             }
         }
         async function startSelectedGameMode() {
-            const isLoggedInAdmin = window._currentPlayer?.role === 'Admin';
-            const adminPassword = isLoggedInAdmin ? '' : await getAdminPasswordForRequest();
-            if (!isLoggedInAdmin && !adminPassword) return;
             try {
-                const res = await fetch('/api/admin/game-mode/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ playerId: myPlayerId, adminPassword }),
-                });
+                const res = await postMatchAdmin('/api/admin/game-mode/start');
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '启动游戏模式失败');
                 showLobbyNotice('Gamemode 已进入 Warmup。', 'success');
@@ -1175,15 +1154,8 @@ document.addEventListener('caoren:terminate-confirmed', () => {
         }
 
         async function stopSelectedGameMode() {
-            const isLoggedInAdmin = window._currentPlayer?.role === 'Admin';
-            const adminPassword = isLoggedInAdmin ? '' : await getAdminPasswordForRequest();
-            if (!isLoggedInAdmin && !adminPassword) return;
             try {
-                const res = await fetch('/api/admin/game-mode/stop', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ playerId: myPlayerId, adminPassword }),
-                });
+                const res = await postMatchAdmin('/api/admin/game-mode/stop');
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '停止游戏模式失败');
                 showLobbyNotice('Gamemode 已停止。', 'success');
@@ -1344,20 +1316,13 @@ if (window._caorenModifiersEnabled !== true) {
                 return;
             }
 
-            const adminPassword = await getAdminPasswordForRequest();
-            if (!adminPassword) return;
 
             try {
-                const res = await fetch('/api/admin/caoren-mod-command', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({
-                        adminPassword,
+                const res = await postMatchAdmin('/api/admin/caoren-mod-command', {
                         module,
                         action,
                         payload: buildCaorenPayload(module)
-                    })
-                });
+                    });
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || 'CaorenCup 修改下发失败');
 
@@ -1372,16 +1337,10 @@ if (window._caorenModifiersEnabled !== true) {
         }
 
         async function syncTeamLock() {
-            const adminPassword = await getAdminPasswordForRequest();
-            if (!adminPassword) return;
             const status = document.getElementById('team-lock-status');
             if (status) status.textContent = '正在下发网页分队名单……';
             try {
-                const res = await fetch('/api/admin/team-lock/sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ adminPassword })
-                });
+                const res = await postMatchAdmin('/api/admin/team-lock/sync');
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '同步分队失败');
                 const missing = Array.isArray(data.missingSteamIds) && data.missingSteamIds.length
@@ -1402,16 +1361,10 @@ if (window._caorenModifiersEnabled !== true) {
                 title: '确认解除网页强制分队',
                 confirmText: '解除锁队'
             })) return;
-            const adminPassword = await getAdminPasswordForRequest();
-            if (!adminPassword) return;
             const status = document.getElementById('team-lock-status');
             if (status) status.textContent = '正在解除强制分队……';
             try {
-                const res = await fetch('/api/admin/team-lock/clear', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-                    body: JSON.stringify({ adminPassword })
-                });
+                const res = await postMatchAdmin('/api/admin/team-lock/clear');
                 const data = await res.json();
                 if (!res.ok || !data.success) throw new Error(data.error || '解除强制分队失败');
                 if (status) status.textContent = '解除强制分队命令已加入下发队列。';
@@ -1462,6 +1415,12 @@ if (window._caorenModifiersEnabled !== true) {
         });
 
         refreshLobbyAnnouncement();
+
+        document.getElementById('player-list').addEventListener('click', event => {
+            const button = event.target.closest('[data-kick-player]');
+            const player = button && window._currentGameState?.players[button.dataset.kickPlayer];
+            if (player) kickPlayer(player.playerId, player.name);
+        });
 
         ws.on('GAME_STATE', (state) => {
             if (!state || !state.players) return;
@@ -1555,7 +1514,7 @@ if (window._caorenModifiersEnabled !== true) {
                 const canDuelAssign = isDuel && isAdmin && p.role !== 'Admin' && p.role !== 'Spectator' && ['PreGameSetup', 'LiveGame'].includes(state.phase) && (state.phase !== 'LiveGame' || live?.duelWaitingForPlayers);
                 const duelAssignOps = canDuelAssign ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;"><button onclick="adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;padding:4px 9px;">分到A</button><button onclick="adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;padding:4px 9px;">分到B</button>${p.rosterTeam ? `<button onclick="adminUnassignTeam('${p.playerId}')" style="background:#64748b;color:#fff;padding:4px 9px;">撤销分队</button>` : ''}</div>` : '';
                 const isProtectedAbilityRosterPlayer = p.role !== 'Admin' && p.role !== 'Spectator' && (p.rosterTeam === 'A' || p.rosterTeam === 'B');
-                const kickOp = isAdmin && p.role !== 'Admin' && !(state?.abilityPhaseOnePolicy?.rosterMutationBlocked === true && isProtectedAbilityRosterPlayer) ? `<button onclick="kickPlayer('${p.playerId}', '${htmlEscape(p.name)}')" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
+                const kickOp = isAdmin && p.role !== 'Admin' && !(state?.abilityPhaseOnePolicy?.rosterMutationBlocked === true && isProtectedAbilityRosterPlayer) ? `<button type="button" data-kick-player="${htmlEscape(p.playerId)}" style="background:#b91c1c;color:#fff;padding:4px 9px;">踢出</button>` : '';
                 const adminOps = (isAdmin || duelAssignOps) ? `<td>${duelAssignOps}${kickOp || '-'}</td>` : '';
                 const sideCells = isDuel ? '' : `<td>${side}</td><td>${expectedSide}</td>`;
                 playerTable += `<tr class="${roleClass}"><td>${idx + 1}</td><td><b>${htmlEscape(p.name)}</b></td><td>${roster}</td>${sideCells}<td>${bind}</td><td>${roleText}</td><td>${ready}</td>${adminOps}</tr>`;
@@ -1649,13 +1608,13 @@ if (window._caorenModifiersEnabled !== true) {
             if (state.phase === 'CaptainSelection') {
                 const capA = state.players[state.captains.A];
                 const capB = state.players[state.captains.B];
-                extraDiv.innerHTML = '<h3>🎲 队长确立</h3><p>A队先发队长：<b>' + (capA ? capA.name : '无') + '</b></p><p>B队先发队长：<b>' + (capB ? capB.name : '无') + '</b></p>';
+                extraDiv.innerHTML = '<h3>🎲 队长确立</h3><p>A队先发队长：<b>' + htmlEscape(capA?.name || '无') + '</b></p><p>B队先发队长：<b>' + htmlEscape(capB?.name || '无') + '</b></p>';
                 if (isAdmin) {
                     extraDiv.innerHTML += '<hr><div style="background:#fff3e0; padding:10px; border:1px solid #ffcc80;"><b>管理员强制干预：</b><br>' +
                         '<button onclick="rerandomCaptain(\'A\')">重抽 A队</button> <button onclick="rerandomCaptain(\'B\')">重抽 B队</button><br><br>' +
-                        '手动指派 A队: <select id="capA-select">' + Object.values(state.players).filter(p => p.playerId !== state.captains.B && p.role !== 'Admin').map(p => '<option value="' + p.playerId + '">' + p.name + '</option>').join('') + '</select> ' +
+                        '手动指派 A队: <select id="capA-select">' + Object.values(state.players).filter(p => p.playerId !== state.captains.B && p.role !== 'Admin').map(p => '<option value="' + htmlEscape(p.playerId) + '">' + htmlEscape(p.name) + '</option>').join('') + '</select> ' +
                         '<button onclick="setCaptain(\'A\')">确认</button><br>' +
-                        '手动指派 B队: <select id="capB-select">' + Object.values(state.players).filter(p => p.playerId !== state.captains.A && p.role !== 'Admin').map(p => '<option value="' + p.playerId + '">' + p.name + '</option>').join('') + '</select> ' +
+                        '手动指派 B队: <select id="capB-select">' + Object.values(state.players).filter(p => p.playerId !== state.captains.A && p.role !== 'Admin').map(p => '<option value="' + htmlEscape(p.playerId) + '">' + htmlEscape(p.name) + '</option>').join('') + '</select> ' +
                         '<button onclick="setCaptain(\'B\')">确认</button></div>';
                 }
             }
@@ -1669,8 +1628,8 @@ if (window._caorenModifiersEnabled !== true) {
                 }
                 const rollA = state.rollValues.A !== null ? `<span style="color:red;font-size:20px">${state.rollValues.A}</span>` : '未掷';
                 const rollB = state.rollValues.B !== null ? `<span style="color:blue;font-size:20px">${state.rollValues.B}</span>` : '未掷';
-                extraDiv.innerHTML += '<p style="font-size:18px;">A队长 (' + (state.players[state.captains.A]?.name || '') + ') ： ' + rollA + '</p>';
-                extraDiv.innerHTML += '<p style="font-size:18px;">B队长 (' + (state.players[state.captains.B]?.name || '') + ') ： ' + rollB + '</p>';
+                extraDiv.innerHTML += '<p style="font-size:18px;">A队长 (' + htmlEscape(state.players[state.captains.A]?.name || '') + ') ： ' + rollA + '</p>';
+                extraDiv.innerHTML += '<p style="font-size:18px;">B队长 (' + htmlEscape(state.players[state.captains.B]?.name || '') + ') ： ' + rollB + '</p>';
                 extraDiv.innerHTML += '<p style="color:#666;">（注：点数大的一方将获得选人与BP地图的绝对先手权！）</p>';
             }
 
@@ -1703,7 +1662,7 @@ if (window._caorenModifiersEnabled !== true) {
                 }
                 html += '</div>';
                 html += `<div class="map-bp-turn-wrap">
-                            <div class="draft-turn-card"><span style="display:block;color:#607086;font-size:13px;margin-bottom:6px;">当前轮次</span><b>${currentTeam || '-'}队</b><div style="font-size:13px;color:#607086;margin-top:4px;">队长：${currentCaptain?.name || '-'}</div></div>
+                            <div class="draft-turn-card"><span style="display:block;color:#607086;font-size:13px;margin-bottom:6px;">当前轮次</span><b>${currentTeam || '-'}队</b><div style="font-size:13px;color:#607086;margin-top:4px;">队长：${htmlEscape(currentCaptain?.name || '-')}</div></div>
                             <div class="bp-inline-timer"><span>${draftActive ? '\u9009\u4eba\u5012\u8ba1\u65f6' : '\u7ba1\u7406\u5458\u9884\u5206\u961f'}</span><strong class="inline-timer-text">${draftActive ? getTimerSecondsText() : '\u4e0d\u9650\u65f6'}</strong></div>
                          </div>`;
                 html += '</div>';
@@ -1711,8 +1670,8 @@ if (window._caorenModifiersEnabled !== true) {
                 html += '<div class="map-bp-summary">';
                 html += `<div class="map-bp-summary-card"><span>选人进度</span><strong>${donePicks} / ${totalPicks}</strong></div>`;
                 html += `<div class="map-bp-summary-card"><span>本批次</span><strong>${currentTeam || '-'}队 ${batchDone}/${batchTotal}</strong></div>`;
-                html += `<div class="map-bp-summary-card"><span>A 队队长</span><strong>${capA?.name || '-'}</strong></div>`;
-                html += `<div class="map-bp-summary-card"><span>B 队队长</span><strong>${capB?.name || '-'}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>A 队队长</span><strong>${htmlEscape(capA?.name || '-')}</strong></div>`;
+                html += `<div class="map-bp-summary-card"><span>B 队队长</span><strong>${htmlEscape(capB?.name || '-')}</strong></div>`;
                 html += `<div class="map-bp-summary-card"><span>\u4f60\u7684\u72b6\u6001</span><strong>${!draftActive ? '\u7b49\u5f85\u7ba1\u7406\u5458\u5f00\u59cb' : (isMyTurn ? '\u8f6e\u5230\u4f60\u9009\u4eba' : (currentTeam ? '\u7b49\u5f85\u961f\u957f\u9009\u62e9' : '\u9009\u4eba\u5b8c\u6210'))}</strong></div>`;
                 html += '</div>';
 
@@ -1721,7 +1680,7 @@ if (window._caorenModifiersEnabled !== true) {
                     html += '<div class="draft-pick-grid">';
                     available.forEach(p => {
                         html += `<div class="draft-player-card ${isMyTurn ? 'pickable' : ''}" ${isMyTurn ? `onclick="pick('${p.playerId}')"` : ''}>
-                                    <strong>${p.name}</strong>
+                                    <strong>${htmlEscape(p.name)}</strong>
                                     <span class="map-card-status ${isMyTurn ? 'available' : 'waiting'}">${isMyTurn ? '点击选择' : '等待选择'}</span>
                                     ${isAdmin ? `<div style="margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;"><button onclick="event.stopPropagation(); adminAssignTeam('${p.playerId}', 'A')" style="background:#f97316;color:#fff;">分到A</button><button onclick="event.stopPropagation(); adminAssignTeam('${p.playerId}', 'B')" style="background:#2563eb;color:#fff;">分到B</button></div>` : ''}
                                  </div>`;
@@ -1733,8 +1692,8 @@ if (window._caorenModifiersEnabled !== true) {
                 }
 
                 html += '<div class="draft-team-panels">';
-                html += '<div class="draft-team-panel a"><b>A队阵容</b><br><br>' + state.teams.A.players.map(id => state.players[id]?.name || '-').join('<br>') + '</div>';
-                html += '<div class="draft-team-panel b"><b>B队阵容</b><br><br>' + state.teams.B.players.map(id => state.players[id]?.name || '-').join('<br>') + '</div>';
+                html += '<div class="draft-team-panel a"><b>A队阵容</b><br><br>' + state.teams.A.players.map(id => htmlEscape(state.players[id]?.name || '-')).join('<br>') + '</div>';
+                html += '<div class="draft-team-panel b"><b>B队阵容</b><br><br>' + state.teams.B.players.map(id => htmlEscape(state.players[id]?.name || '-')).join('<br>') + '</div>';
                 html += '</div>';
                 html += '</div>';
                 extraDiv.innerHTML = html;
@@ -1751,7 +1710,7 @@ if (window._caorenModifiersEnabled !== true) {
                 let voteItems = '';
                 Object.values(state.players).forEach(p => {
                     if (p.rosterTeam === currTeam && votes[p.playerId]) {
-                        voteItems += `<li>${p.name} → <b>${votes[p.playerId]}</b></li>`;
+                        voteItems += `<li>${htmlEscape(p.name)} → <b>${htmlEscape(votes[p.playerId])}</b></li>`;
                     }
                 });
 
@@ -1811,7 +1770,7 @@ if (window._caorenModifiersEnabled !== true) {
                 let voteItems = '';
                 Object.values(state.players).forEach(p => {
                     if (p.rosterTeam === voteTeam && sideVotes[p.playerId]) {
-                        voteItems += `<li>${p.name} → <b>${sideVotes[p.playerId]}</b></li>`;
+                        voteItems += `<li>${htmlEscape(p.name)} → <b>${htmlEscape(sideVotes[p.playerId])}</b></li>`;
                     }
                 });
 
@@ -1890,7 +1849,7 @@ if (window._caorenModifiersEnabled !== true) {
                 if (state.matchOptions?.matchRuntimeEnabled === true && currentPlayer
                     && currentPlayer.role !== 'Admin' && !currentPlayer.steamIdBound) {
                     html += '<section class="match-options-panel"><p>进服后在旁观席输入 <code>/ccbind</code>，把一次性码填到这里。</p>'
-                        + '<form onsubmit="submitRoomBinding(event)"><label>CS 绑定码 '
+                        + '<form method="post" onsubmit="submitRoomBinding(event)"><label>CS 绑定码 '
                         + '<input name="code" required autocomplete="one-time-code" maxlength="32"></label> '
                         + '<button type="submit">绑定</button></form></section>';
                 }
@@ -1970,7 +1929,7 @@ if (window._caorenModifiersEnabled !== true) {
                     } else {
                         html += '<h3 style="color:#4caf50;">\u2705 \u60a8\u5df2\u51c6\u5907\u5c31\u7eea\uff0c\u7b49\u5f85\u5168\u5458\u5c31\u4f4d</h3>';
                     }
-                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">网页已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => p.name).join(', ') + '</p></div>';
+                    html += '<p style="color:#888; font-size:14px; margin-top:15px;">网页已准备名单：' + Object.values(state.players).filter(p => p.isReady).map(p => htmlEscape(p.name)).join(', ') + '</p></div>';
                     extraDiv.innerHTML = html;
                 }
             }
@@ -2007,12 +1966,12 @@ if (window._caorenModifiersEnabled !== true) {
                         Object.values(state.players).forEach(p => {
                             if (p.playerId === myPlayerId || p.role === 'Spectator' || p.role === 'Admin') return;
                             if (p.rosterTeam === currentPlayer.rosterTeam) {
-                                html += `<button onclick="accuse('${p.playerId}', 'own')" style="font-size:16px; padding:8px 15px;">指认 ${p.name}</button> `;
+                                html += `<button onclick="accuse('${p.playerId}', 'own')" style="font-size:16px; padding:8px 15px;">指认 ${htmlEscape(p.name)}</button> `;
                             }
                         });
                         html += '</div>';
                     } else {
-                        html += `<p style="font-size:16px; color:#2e7d32;">✅ 己方指认完成：已锁定 <b>${state.players[myAcc.own]?.name || ''}</b></p>`;
+                        html += `<p style="font-size:16px; color:#2e7d32;">✅ 己方指认完成：已锁定 <b>${htmlEscape(state.players[myAcc.own]?.name || '')}</b></p>`;
                     }
 
                     if (!myAcc.enemy) {
@@ -2020,12 +1979,12 @@ if (window._caorenModifiersEnabled !== true) {
                         Object.values(state.players).forEach(p => {
                             if (p.playerId === myPlayerId || p.role === 'Spectator' || p.role === 'Admin') return;
                             if (p.rosterTeam !== currentPlayer.rosterTeam) {
-                                html += `<button onclick="accuse('${p.playerId}', 'enemy')" style="font-size:16px; padding:8px 15px;">指认 ${p.name}</button> `;
+                                html += `<button onclick="accuse('${p.playerId}', 'enemy')" style="font-size:16px; padding:8px 15px;">指认 ${htmlEscape(p.name)}</button> `;
                             }
                         });
                         html += '</div>';
                     } else {
-                        html += `<p style="font-size:16px; color:#c62828;">✅ 敌方指认完成：已锁定 <b>${state.players[myAcc.enemy]?.name || ''}</b></p>`;
+                        html += `<p style="font-size:16px; color:#c62828;">✅ 敌方指认完成：已锁定 <b>${htmlEscape(state.players[myAcc.enemy]?.name || '')}</b></p>`;
                     }
                 } else {
                     html += '<p style="color:#666;">（上帝不参与凡人的纷争）</p>';
@@ -2037,7 +1996,7 @@ if (window._caorenModifiersEnabled !== true) {
                     if (!p || p.role === 'Admin') continue;
                     const ownText = acc.own ? '✔️已投' : '⏳未投';
                     const enemyText = acc.enemy ? '✔️已投' : '⏳未投';
-                    html += `<p style="margin:5px 0; color:#555;">玩家 ${p.name} - 己方票: ${ownText} | 敌方票: ${enemyText}</p>`;
+                    html += `<p style="margin:5px 0; color:#555;">玩家 ${htmlEscape(p.name)} - 己方票: ${ownText} | 敌方票: ${enemyText}</p>`;
                 }
                 html += '</div>';
                 extraDiv.innerHTML = html;
@@ -2095,7 +2054,7 @@ if (window._caorenModifiersEnabled !== true) {
                         if (!p || p.role === 'Admin') continue;
                         const ownName = acc.own ? state.players[acc.own]?.name : '-';
                         const enemyName = acc.enemy ? state.players[acc.enemy]?.name : '-';
-                        html += `<p style="margin:5px 0;"><b>${p.name}</b> 咬定了 <span style="color:#2e7d32;">${ownName}(己)</span> 和 <span style="color:#c62828;">${enemyName}(敌)</span></p>`;
+                        html += `<p style="margin:5px 0;"><b>${htmlEscape(p.name)}</b> 咬定了 <span style="color:#2e7d32;">${htmlEscape(ownName)}(己)</span> 和 <span style="color:#c62828;">${htmlEscape(enemyName)}(敌)</span></p>`;
                     }
                     html += '</div>';
                 }
@@ -2420,7 +2379,7 @@ if (window._caorenModifiersEnabled !== true) {
                 if (voters.length > 0) {
                     votersHtml = voters.map(v => {
                         const isMe = v.playerId === myPlayerId;
-                        return `<span class="map-voter-pill ${isMe ? 'me' : ''}"><span class="dot"></span>${isMe ? '你' : v.name}</span>`;
+                        return `<span class="map-voter-pill ${isMe ? 'me' : ''}"><span class="dot"></span>${isMe ? '你' : htmlEscape(v.name)}</span>`;
                     }).join('');
                     votersHtml += `<span class="map-card-vote-count">${voters.length}票</span>`;
                 } else {
@@ -2981,15 +2940,11 @@ if (window._caorenModifiersEnabled !== true) {
             return Object.values(matrix || {}).some(row => Object.values(row || {}).some(value => Number(value || 0) > 0));
         }
 
-        function playerSteamId(player) {
-            return String(player.steamId || '').replace(/[^0-9]/g, '');
-        }
-
         function renderKillMatrixTable(state) {
             const live = state.liveGameData || {};
             const mode = window._postmatchMatrixMode || 'all';
             const matrix = matrixForMode(live, mode);
-            const players = Object.values(state.players || {}).filter(p => p.role !== 'Admin' && playerSteamId(p) && (p.rosterTeam === 'A' || p.rosterTeam === 'B'));
+            const players = Object.values(state.players || {}).filter(p => p.role !== 'Admin' && p.steamIdBound && (p.rosterTeam === 'A' || p.rosterTeam === 'B'));
             let html = '<div class="postmatch-tabs">';
             [['all', '总'], ['opening', 'Opening'], ['awp', 'AWP']].forEach(([key, label]) => {
                 html += `<button type="button" class="${mode === key ? 'active' : ''}" data-postmatch-matrix-mode="${key}">${label}</button>`;
@@ -3001,21 +2956,21 @@ if (window._caorenModifiersEnabled !== true) {
             if (!teamA.length || !teamB.length) return html + renderPostmatchNotice('需要 A/B 两队都有绑定 SteamID 的玩家，才能生成对位矩阵。');
             const hasVisibleValue = players.some(attacker => {
                 if (attacker.rosterTeam !== 'A' && attacker.rosterTeam !== 'B') return false;
-                const aId = playerSteamId(attacker);
+                const aId = attacker.playerId;
                 return players.some(victim => {
                     if (victim.rosterTeam !== 'A' && victim.rosterTeam !== 'B') return false;
                     if (attacker.rosterTeam === victim.rosterTeam) return false;
-                    return Number(matrix?.[aId]?.[playerSteamId(victim)] || 0) > 0;
+                    return Number(matrix?.[aId]?.[victim.playerId] || 0) > 0;
                 });
             });
             html += '<div class="matrix-wrap"><table class="matrix-table duel-matrix"><tr><th>A 队 \\ B 队</th>';
             teamB.forEach(p => { html += `<th>${htmlEscape(p.name)}</th>`; });
             html += '</tr>';
             teamA.forEach(aPlayer => {
-                const aId = playerSteamId(aPlayer);
+                const aId = aPlayer.playerId;
                 html += `<tr><th>${htmlEscape(aPlayer.name)}</th>`;
                 teamB.forEach(bPlayer => {
-                    const bId = playerSteamId(bPlayer);
+                    const bId = bPlayer.playerId;
                     const aKills = Number(matrix?.[aId]?.[bId] || 0);
                     const bKills = Number(matrix?.[bId]?.[aId] || 0);
                     html += `<td><span class="matrix-score matrix-score-row">${aKills}</span><span class="matrix-separator">:</span><span class="matrix-score matrix-score-col">${bKills}</span></td>`;

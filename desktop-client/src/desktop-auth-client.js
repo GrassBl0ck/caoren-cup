@@ -66,6 +66,7 @@ class DesktopAuthClient {
     const replacement = {
       deviceToken: response.data.rotation.rawToken,
       deviceId: loaded.credential.deviceId,
+      ...(loaded.credential.email && { email: loaded.credential.email }),
     };
     const saved = this.credentialStore.save(replacement);
     if (!saved.ok) {
@@ -117,7 +118,7 @@ class DesktopAuthClient {
     }
     const saved = this.credentialStore.save({
       deviceToken: response.data.deviceToken,
-      deviceId,
+      deviceId, email,
     });
     if (!saved.ok) {
       await this.request('/api/desktop-auth/logout', { token: response.data.deviceToken, body: {} });
@@ -155,7 +156,7 @@ class DesktopAuthClient {
       const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
       if (token) headers.Authorization = `Bearer ${token}`;
       const response = await this.fetch(`${this.baseUrl}${route}`, {
-        method: 'POST',
+        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(12000),
         headers,
         body: JSON.stringify(body || {}),
       });

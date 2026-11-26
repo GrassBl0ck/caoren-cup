@@ -1,3 +1,4 @@
+import { publicMatchStats } from './match-stat-fields';
 import { execFile } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -14,6 +15,15 @@ export interface FormalServerState {
     stage: FormalServerStage;
     message?: string;
     startRequestedAt?: number;
+}
+
+export function archiveRetentionDeadlines(archivedAt: number) {
+    const date = new Date(archivedAt);
+    const month = date.getUTCMonth();
+    date.setUTCFullYear(date.getUTCFullYear() + 3);
+    // A leap-day archive expires on the last day of February three years later.
+    if (date.getUTCMonth() !== month) date.setUTCDate(0);
+    return { serverExpiresAt: archivedAt + 180 * 24 * 60 * 60 * 1000, cloudExpiresAt: date.getTime() };
 }
 
 interface FormalServerActions {
@@ -258,7 +268,8 @@ const createActions = (): FormalServerActions | undefined => {
                 if (after.size !== sourceStats[index].size || after.mtimeMs !== sourceStats[index].mtimeMs) return false;
             }
             if (result !== settlement()) return false;
-            await writeAtomic(manifest(matchId), JSON.stringify({ ...JSON.parse(result), archivedAt: Date.now() }));
+            const archivedAt = Date.now();
+            await writeAtomic(manifest(matchId), JSON.stringify({ ...JSON.parse(result), archivedAt, ...archiveRetentionDeadlines(archivedAt) }));
             candidates.delete(matchId);
             return true;
         },
@@ -287,6 +298,9 @@ export const readFormalArchive = async (matchId: unknown, steamIds: string | rea
     const directory = path.join(root, matchId);
     try {
         const manifest = JSON.parse(await fs.readFile(path.join(directory, 'match.json'), 'utf8')) as FormalArchiveManifest;
+        if (!Number.isSafeInteger(manifest.archivedAt) || manifest.archivedAt <= 0 || manifest.archivedAt > Date.now()) return undefined;
+        const { serverExpiresAt } = archiveRetentionDeadlines(manifest.archivedAt);
+        if (Date.now() >= serverExpiresAt) return undefined;
         if (manifest.matchId !== matchId || !Array.isArray(manifest.players)
             || !manifest.players.some(player => typeof player.steamId === 'string' && owns.has(player.steamId))) return undefined;
         const demos = Array.isArray(manifest.demos) ? manifest.demos.filter(name =>
@@ -295,8 +309,11 @@ export const readFormalArchive = async (matchId: unknown, steamIds: string | rea
             directory,
             result: {
                 matchId, mapName: manifest.mapName, scoreA: manifest.scoreA, scoreB: manifest.scoreB,
-                archivedAt: manifest.archivedAt, demos,
-                players: manifest.players.map(({ steamId: _steamId, ...player }) => player),
+                archivedAt: manifest.archivedAt, serverExpiresAt, demos,
+                players: manifest.players.map(({ name, team, stats, finalScore, scoreBreakdown }) => ({
+                    name, team, ...(stats && { stats: publicMatchStats(stats) }), ...(finalScore !== undefined && { finalScore }),
+                    ...(scoreBreakdown && { scoreBreakdown }),
+                })),
             },
         };
     } catch (error) {

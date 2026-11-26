@@ -17,7 +17,7 @@
     "test:match-command-policy": "tsx src/match-command-policy.test.ts",
     "test:duel-runtime": "tsx --test src/duel-config.test.ts",
     "test:duel-admin-only": "node scripts/check-duel-admin-only.cjs",
-    "test:player-center-ui": "node scripts/check-player-center-ui.cjs && node --test scripts/player-center-login-session.test.cjs scripts/portal-session.test.cjs scripts/client-theme.test.cjs && node --test scripts/account-entry.test.cjs && tsx --test src/portal-routes.test.ts && node --test scripts/reset-account-data.test.cjs",
+    "test:player-center-ui": "node scripts/check-player-center-ui.cjs && node --test scripts/player-center-login-session.test.cjs scripts/portal-session.test.cjs scripts/client-theme.test.cjs scripts/lobby-security.test.cjs && node --test scripts/account-entry.test.cjs && tsx --test src/portal-routes.test.ts && node --test scripts/reset-account-data.test.cjs",
     "test:legacy-login-removed": "node scripts/check-legacy-player-login-removed.cjs",
     "test:lobby-identity": "tsx --test src/identity/*.test.ts src/v1333-game-login.test.ts",
     "test:weaponpaints": "tsx --test src/weaponpaints/*.test.ts && node scripts/check-weaponpaints-draft.cjs && node scripts/check-weaponpaints-ui.cjs && node --test scripts/weaponpaints-entry.test.cjs",
@@ -31,7 +31,7 @@
     "test:flow-undo": "tsx --test src/flow-undo-manager.test.ts src/session-persistence.test.ts src/flow-runtime.test.ts src/flow-undo-integration.test.ts src/flow-undo-visibility.test.ts",
     "test:phase-rollback": "npm run test:flow-undo && npm run test:flow-undo-ui",
     "test:game-inactivity": "tsx --test src/game-inactivity-watchdog.test.ts",
-    "test:game-mode": "tsx --test src/game-mode.test.ts src/random-mode-integration.test.ts",
+    "test:game-mode": "tsx --test src/game-mode.test.ts src/random-mode-integration.test.ts src/routes/match-admin-session.test.ts",
     "test:ability": "tsx --test src/ability*.test.ts && node scripts/check-ability-bp-ui.cjs",
     "test:match-runtime": "tsx --test src/match-runtime*.test.ts src/formal-server-lifecycle.test.ts src/desktop-formal-room.test.ts"
   },

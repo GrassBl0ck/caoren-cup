@@ -33,7 +33,13 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
     const force = new ForceRoomReady();
     const fail = (res: Response, status: number, error: string) => res.status(status).json({ success: false, error });
     const findSeat = (room: GameSession, identityId: string, admin: boolean) =>
-        Object.values(room.players).find(player => player.identityId === identityId && (player.role === 'Admin') === admin);
+        Object.values(room.players).find(player => {
+            if (player.identityId !== identityId || (player.role === 'Admin') !== admin) return false;
+            if (admin) return true;
+            const membership = player.membershipId && dep.service.getMembership(player.membershipId);
+            return !!membership && membership.sessionId === room.sessionId && membership.identityId === identityId &&
+                !membership.leftAt && !membership.blockedAt;
+        });
 
     app.get(`${prefix}/account`, async (req, res) => {
         const account = await dep.authenticate(req, res);
@@ -41,9 +47,9 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
         const identity = dep.service.getIdentity(account.identityId);
         if (!identity) return fail(res, 401, 'account_unavailable');
         res.setHeader('Cache-Control', 'no-store');
-        return res.json({ success: true, identityId: account.identityId, name: identity.displayName,
+        return res.json({ success: true, ageConfirmed: !!dep.service.getLoginAccount(account.identityId)?.age14ConfirmedAt, identityId: account.identityId, name: identity.displayName,
             canHost: !account.playerOnly && desktopRoomAdmins.allows(account.identityId, dep.service),
-            avatarLogo: identity.avatarLogo, avatarJpeg: identity.avatarJpeg, guidePending: identity.desktopRoomGuide === 'pending' });
+            steamAvatarEnabled: identity.steamAvatarEnabled === true, avatarLogo: identity.avatarLogo, avatarJpeg: identity.avatarJpeg, guidePending: identity.desktopRoomGuide === 'pending' });
     });
 
     app.post(`${prefix}/visit`, dep.sameOrigin, async (req, res) => {
@@ -70,12 +76,15 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
             selectedMap: room.selectedMap,
             selectedSide: room.selectedSide,
             matchOptions: { gameModeId: room.matchOptions?.gameModeId },
-            players: publicState.players,
+            players: player ? publicState.players : Object.fromEntries(Object.values(room.players).map(seat => [
+                seat.playerId, { playerId: seat.playerId, name: seat.name, role: seat.role, rosterTeam: seat.rosterTeam,
+                    isReady: seat.isReady, lobbyReady: seat.lobbyReady, isOnline: seat.isOnline },
+            ])) as typeof publicState.players,
             formalServer: room.formalServer,
             formalServerAvailable: publicState.formalServerAvailable,
             matchRuntime: room.matchRuntime && {
                 stage: room.matchRuntime.stage,
-                readySeats: room.matchRuntime.readySeats?.filter(seat => seat.seatId === player?.playerId),
+                readySeats: publicState.matchRuntime?.readySeats?.filter((seat: { seatId: string }) => seat.seatId === player?.playerId),
             },
         };
         const ids = Object.values(room.players).flatMap(seat => seat.identityId ? [seat.identityId] : []);
@@ -85,7 +94,7 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
             if (!seat.identityId || !view) continue;
             const identity = profiles[seat.identityId];
             view.avatarLogo = identity?.avatarLogo;
-            view.avatarJpeg = identity?.avatarLogo ? undefined : identity?.avatarJpeg ?? (seat.steamId && identity?.steamAvatarJpegs?.[seat.steamId]);
+            view.avatarJpeg = identity?.avatarLogo ? undefined : identity?.avatarJpeg ?? (identity?.steamAvatarEnabled && seat.steamId ? identity.steamAvatarJpegs?.[seat.steamId] : undefined);
         }
         const identity = dep.service.getIdentity(account.identityId);
         return res.json({
@@ -96,7 +105,7 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
             playerId: player?.playerId,
             selectedSteamId: player?.steamId,
             state,
-            profile: { name: identity?.displayName, avatarJpeg: identity?.avatarJpeg, avatarLogo: identity?.avatarLogo },
+            profile: { name: identity?.displayName, avatarJpeg: identity?.avatarJpeg, avatarLogo: identity?.avatarLogo, steamAvatarEnabled: identity?.steamAvatarEnabled === true },
             modes: Object.values(GAME_MODE_MANIFESTS).map(mode => ({
                 id: mode.id, name: mode.displayName, available: supportsFormalMatchMode(mode.id),
             })),
@@ -111,10 +120,12 @@ export function registerDesktopRoomRoutes(app: Express, dep: DesktopRoomDependen
         if (!identity || !canAuthenticateSteam(steamId) || !isVerifiedSteamIdentity(identity, steamId))
             return fail(res, 403, 'game_binding_required');
         try {
+            if (!identity.steamAvatarEnabled) return fail(res, 403, 'steam_avatar_disabled');
             if (req.body?.jpeg !== null) validateAvatarJpeg(req.body?.jpeg);
             await gameAvatars.sync(await dep.service.rememberSteamAvatar(account.identityId, steamId, req.body.jpeg));
             return res.json({ success: true });
         } catch (error) {
+            if (error instanceof Error && error.message === 'steam_avatar_disabled') return fail(res, 403, 'steam_avatar_disabled');
             if (error instanceof Error && error.message === 'avatar_invalid') return fail(res, 400, 'avatar_invalid');
             return fail(res, 503, 'avatar_sync_unavailable');
         }

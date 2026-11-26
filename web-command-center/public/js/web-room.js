@@ -30,6 +30,10 @@ async function request(url, body) {
     ...(body !== undefined && { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
   if (response.status === 401) { location.replace('/login?next=room'); throw new Error('登录已失效。'); }
   const data = await response.json();
+  if (response.status === 403 && data.error === 'age_confirmation_required') {
+    location.replace('/profile#age-confirmation');
+    throw new Error('请先在个人资料页确认年龄。');
+  }
   if (!response.ok || !data.success) throw new Error(reasons[data.error] || (data.pending ? '尚未完成 Steam 验证，可重新发起。' : '操作未完成，请稍后重试。'));
   return data;
 }

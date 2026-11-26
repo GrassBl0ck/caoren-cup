@@ -46,6 +46,7 @@ class FakeIo {
 
 const runtimeDir = path.resolve(__dirname, '..', '..', 'runtime', `player-center-match-socket-${process.pid}-${Date.now()}`);
 fs.mkdirSync(runtimeDir, { recursive: true });
+process.env.ADMIN_PASSWORD = 'local-test-admin';
 process.env.IDENTITY_STORE_PATH = path.join(runtimeDir, 'identity-store.json');
 process.env.PLAYER_CENTER_SESSION_STORE_PATH = path.join(runtimeDir, 'player-center-sessions.json');
 

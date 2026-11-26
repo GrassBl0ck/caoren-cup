@@ -12,6 +12,7 @@ import { PlayerCenterSessionStore } from './player-center-session-store';
 import { EmailCodeService, VerificationEmail } from './email-codes';
 import { createTestLoginAccount } from './test-account-helper';
 import { registerBoardPages } from '../portal-routes';
+import { createInitialSession } from '../session-manager';
 
 async function fixture() {
     const dir = fs.mkdtempSync(path.resolve(__dirname, '../../runtime/email-http-'));
@@ -24,12 +25,13 @@ async function fixture() {
     const codes = new EmailCodeService({ now: () => now.value, deliver: async (message) => { sent.push(message); } });
     const gameTickets = new Map<string, { steamId: string; name: string }>();
     const invalidations: string[] = [];
-    const matchSession = { sessionId: 'fixture-match', phase: 'Lobby' };
+    const matchSession = { ...createInitialSession(), sessionId: 'fixture-match', phase: 'Lobby' };
     const app = express();
     app.use(express.json());
     registerIdentityAuthRoutes(app, {
         service, playerCenterSessionStore: sessions, emailCodes: codes,
         getSession: () => matchSession as any,
+        desktopRoomActions: { publish() {}, start: () => false, changeMode() {} },
         onPlayerCenterSessionsRevoked: (event) => { invalidations.push(event.identityId); },
         consumeGameLoginTicket: (raw) => {
             const key = String(raw || '');
@@ -63,7 +65,7 @@ async function fixture() {
         };
     }
     async function proof(email: string, purpose: string, cookie?: string) {
-        const response = await request('/api/account-email/code', { email, purpose }, cookie);
+        const response = await request('/api/account-email/code', { email, purpose, age14: true }, cookie);
         assert.equal(response.status, 200);
         return { email, challengeId: response.data.challengeId, code: sent.at(-1)!.code };
     }
@@ -78,7 +80,7 @@ test('desktop email registration opens CS while MC stays retired and joining req
     assert.equal((await f.request('/mc.html')).status, 303);
     assert.equal((await f.request('/api/mc/info')).status, 401);
     const proof = await f.proof('new@example.com', 'register');
-    const fields = { ...proof, password: 'website-password', confirmPassword: 'website-password' };
+    const fields = { ...proof, age14: true, password: 'website-password', confirmPassword: 'website-password' };
     const created = await f.request('/api/account-auth/register', fields);
     assert.equal(created.status, 201);
     assert.match(created.headers.get('set-cookie')!, /HttpOnly/i);
@@ -174,7 +176,7 @@ test('proof purposes, CS ownership conflicts, duplicate signup and cross-site wr
     assert.equal((await f.request('/api/player-center/account/steam', { code: 'CONFLICT' }, cookie)).data.error, 'steam_identity_in_use');
     assert.equal(f.service.findIdentityBySteamId('76561198000019903')!.identityId, first.identity.identityId);
     const reset = await f.proof('owner@example.com', 'reset-password');
-    const wrongPurpose = await f.request('/api/account-auth/register', { ...reset, loginName: 'Attack_Player', password: 'attack-password', confirmPassword: 'attack-password' });
+    const wrongPurpose = await f.request('/api/account-auth/register', { ...reset, age14: true, loginName: 'Attack_Player', password: 'attack-password', confirmPassword: 'attack-password' });
     assert.equal(wrongPurpose.data.error, 'email_code_invalid');
     assert.equal((await f.request('/api/account-email/code', { email: 'site@example.com', purpose: 'register' }, undefined, 'https://other.example')).status, 403);
     await assert.rejects(f.service.registerVerifiedEmailAccount({ email: 'owner@example.com', loginName: 'Unused_Name', password: 'test-password' }), /registration_unavailable/);
@@ -212,4 +214,74 @@ test('join availability reports binding, match phase, joined and block reasons; 
     assert.equal((await me()).joinUnavailableReason, 'blocked_for_session');
     assert.equal((await me()).joinAvailable, false);
     assert.equal((await f.service.joinPlayerCenterMatch(second.identity.identityId, f.matchSession.sessionId)).ok, true);
+});
+
+test('age declaration precedes registration mail and unlocks existing accounts without collecting birth dates', async t => {
+    const f = await fixture(); t.after(f.close);
+    const email = 'returning@example.com';
+    for (const age14 of [undefined, false, 'true']) {
+        assert.equal((await f.request('/api/account-email/code', { email, purpose: 'register', age14 })).status, 400);
+        assert.equal((await f.request('/api/account-auth/register', { email, age14 })).status, 400);
+    }
+    assert.equal(f.sent.length, 0);
+    const { account } = await f.service.registerVerifiedEmailAccount({ email, password: 'returning-password' });
+    const issued = await f.sessions.create(account.identityId, account.updatedAt);
+    const cookie = 'caoren_player_center=' + issued.rawToken;
+    for (const roomPath of ['/api/player-center/desktop-room', '/api/player-center/room']) {
+        const blocked = await f.request(roomPath, undefined, cookie);
+        assert.equal(blocked.status, 403);
+        assert.equal(blocked.data.error, 'age_confirmation_required');
+    }
+    assert.equal((await f.request('/api/player-center/account/age', { age14: true }, cookie)).status, 200);
+    assert.equal((await f.request('/api/player-center/room', undefined, cookie)).status, 200);
+    assert.equal((await f.request('/api/player-center/me', undefined, cookie)).data.profile.ageConfirmed, true);
+    f.matchSession.players.guest = { playerId: 'guest', role: 'Player', name: '公开昵称', isReady: true, steamId: '76561198000000041', gameRole: 'Undercover' };
+    const room = await f.request('/api/player-center/desktop-room', undefined, cookie);
+    assert.equal(room.data.state.players.guest.name, '公开昵称');
+    assert.equal(room.data.state.players.guest.gameRole, undefined);
+    assert.equal(JSON.stringify(room.data).includes('76561198000000041'), false);
+});
+
+test('forgetting a device revokes its rotations and sessions while retaining another computer', async t => {
+    const f = await fixture(); t.after(f.close);
+    const { account } = await createTestLoginAccount(f.service, { steamId: '76561198000000651', nickname: 'Player A' });
+    const first = await f.service.issueDeviceToken(account.identityId, 'one');
+    const second = await f.service.issueDeviceToken(account.identityId, 'two');
+    const rotated = await f.service.beginDeviceTokenRotation(first.rawToken);
+    assert.ok(rotated.ok);
+    const open = async (token: string) => 'caoren_player_center=' + (await f.sessions.create(account.identityId, account.updatedAt, token)).rawToken;
+    const firstCookie = await open(first.tokenId), secondCookie = await open(second.tokenId);
+    const devices = (await f.request('/api/player-center/devices', undefined, firstCookie)).data.devices;
+    assert.equal(devices.length, 2);
+    assert.equal(JSON.stringify(devices).includes(first.rawToken), false);
+    const id = devices.find((d: any) => d.current).id;
+    assert.equal((await f.request('/api/player-center/devices/forget', { id }, secondCookie)).status, 200);
+    assert.equal((await f.request('/api/player-center/me', undefined, firstCookie)).status, 401);
+    assert.equal((await f.request('/api/player-center/me', undefined, secondCookie)).status, 200);
+    assert.equal((await f.service.authenticatePlayerCenterDeviceToken(rotated.rawToken)).ok, false);
+});
+
+test('confirmed erasure survives restoration of the previous database and preserves other accounts', async t => {
+    const f = await fixture(); t.after(f.close);
+    const owner = await createTestLoginAccount(f.service, { steamId: '76561198000000652', nickname: 'Erase me' });
+    const other = await createTestLoginAccount(f.service, { steamId: '76561198000000653', nickname: 'Keep me' });
+    const token = await f.service.issueDeviceToken(owner.account.identityId, 'one');
+    const backup = fs.readFileSync(f.store.filePath);
+    const issued = await f.sessions.create(owner.account.identityId, owner.account.updatedAt);
+    const cookie = 'caoren_player_center=' + issued.rawToken;
+    const url = '/api/player-center/account/erase';
+    assert.equal((await f.request(url, { password: owner.password }, cookie)).status, 400);
+    assert.notEqual((await f.request(url, { password: 'incorrect', confirm: true }, cookie)).status, 200);
+    assert.equal((await f.request(url, { password: owner.password, confirm: true }, cookie)).status, 200);
+    assert.equal((await f.request('/api/player-center/me', undefined, cookie)).status, 401);
+    assert.equal((await f.service.authenticatePlayerCenterDeviceToken(token.rawToken)).ok, false);
+    for (const target of [f.store.filePath, f.store.previousPath]) {
+        assert.equal(fs.readFileSync(target, 'utf8').includes(owner.account.identityId), false);
+        fs.writeFileSync(target, backup);
+    }
+    const restored = new IdentityStore(f.store.filePath);
+    await restored.load();
+    assert.equal(restored.snapshot().accounts[owner.account.identityId], undefined);
+    assert.ok(restored.snapshot().accounts[other.account.identityId]);
+    assert.equal(fs.readFileSync(restored.previousPath, 'utf8').includes(owner.account.identityId), false);
 });

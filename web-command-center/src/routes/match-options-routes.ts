@@ -1,10 +1,9 @@
-import type { Express } from 'express';
-import { GamePhase, MatchOptions, Player } from '../types';
+import type { Express, Request } from 'express';
+import { GamePhase, MatchOptions } from '../types';
 
 type RegisterMatchOptionsRoutesDeps = {
-  adminPassword?: string;
+  isMatchAdmin: (req: Request) => boolean;
   getPhase: () => GamePhase;
-  getPlayerById?: (playerId: string) => Player | undefined;
   ensureMatchOptions: () => MatchOptions;
   applyMatchOptions: (rawOptions: unknown) => MatchOptions;
   notify: (message: string) => void;
@@ -21,16 +20,10 @@ export function registerMatchOptionsRoutes(app: Express, deps: RegisterMatchOpti
   });
 
   app.post('/api/admin/match-options', (req, res) => {
-    const adminPassword = String(req.body?.adminPassword || '');
-    const playerId = String(req.body?.playerId || '');
-    const player = playerId && deps.getPlayerById ? deps.getPlayerById(playerId) : undefined;
-    const isLoggedInAdmin = player?.role === 'Admin';
-    const hasPassword = !!deps.adminPassword && adminPassword === deps.adminPassword;
-
-    if (!isLoggedInAdmin && !hasPassword) {
-      return res.status(401).json({
+    if (!deps.isMatchAdmin(req)) {
+      return res.status(403).json({
         success: false,
-        error: '管理员密码错误',
+        error: '请先以本房间管理员身份登录',
       });
     }
 

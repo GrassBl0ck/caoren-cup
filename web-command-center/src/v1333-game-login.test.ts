@@ -41,6 +41,8 @@ test('GAME_CODE_LOGIN cannot consume player recovery codes while administrator l
     const runtimeDir = path.resolve(__dirname, '..', 'runtime', `legacy-socket-test-${process.pid}-${Date.now()}`);
     fs.mkdirSync(runtimeDir, { recursive: true });
     t.after(() => fs.rmSync(runtimeDir, { recursive: true, force: true }));
+    process.env.ADMIN_PASSWORD = 'local-test-admin';
+    process.env.PLUGIN_TOKEN = 'local-test-bridge';
     process.env.IDENTITY_STORE_PATH = path.join(runtimeDir, 'identity-store.json');
 
     const [{ registerGameCodeLogin, v1333ConsumeGameLoginTicket, v1333IssueGameLoginCode }, identityRuntime, sessionManager, constants] = await Promise.all([

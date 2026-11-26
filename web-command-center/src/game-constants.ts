@@ -23,8 +23,17 @@ const v1333NumberEnv = (raw: unknown, fallback: number, min: number): number => 
 
 // ---- 常量导出 ----
 
-export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CHANGE_ME_ADMIN_PASSWORD';
-export const PLUGIN_TOKEN = process.env.PLUGIN_TOKEN || 'CHANGE_ME_PLUGIN_TOKEN';
+// Missing secrets and the values shipped in setup examples disable that login.
+export function configuredSecret(value: string | undefined): string {
+    const placeholders = ['CHANGE_ME_ADMIN_PASSWORD', 'CHANGE_ME_PLUGIN_TOKEN', 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET',
+        'CHANGE_ME_TO_THE_SAME_VALUE_AS_BACKEND_PLUGIN_TOKEN', 'REPLACE_ADMIN_PASSWORD', 'REPLACE_BRIDGE_TOKEN'];
+    return value?.trim() && !placeholders.includes(value.trim()) ? value : '';
+}
+
+const adminSecret = configuredSecret(process.env.ADMIN_PASSWORD);
+const bridgeSecret = configuredSecret(process.env.PLUGIN_TOKEN);
+export const ADMIN_PASSWORD = adminSecret !== bridgeSecret ? adminSecret : '';
+export const PLUGIN_TOKEN = adminSecret !== bridgeSecret ? bridgeSecret : '';
 
 // 本地开发专用：置 CAOREN_DEV_PLAYER_LOGIN=1 后，登录名以 P: 开头并输入管理员密码，
 // 将以普通玩家（Player）身份进入房间，用于无 CS2 服务器时测试玩家侧交互。生产环境不得设置此变量。

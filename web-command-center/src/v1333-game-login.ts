@@ -131,12 +131,12 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
     io.on('connection', (socket) => {
         socket.on('GAME_CODE_LOGIN', (payload: { credential?: unknown }) => {
             const credentialRaw = normalizeLoginText(payload?.credential);
-            if (credentialRaw !== ADMIN_PASSWORD) {
+            const session = getSession();
+            if (session.desktopFormalRoom || !ADMIN_PASSWORD || credentialRaw !== ADMIN_PASSWORD) {
                 socket.emit(WsEvents.LOGIN_RESPONSE, { success: false, message: '管理员密码错误。' });
                 return;
             }
-            const session = getSession();
-            const existingAdmin = Object.values(session.players).find((player) => player.role === 'Admin' && player.name === 'Admin');
+            const existingAdmin = Object.values(session.players).find((player) => player.role === 'Admin' && player.name === 'Admin' && !player.identityId);
             const adminPlayer = existingAdmin || (() => {
                 const playerId = uuidv4();
                 const player: Player = {

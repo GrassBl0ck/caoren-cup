@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { FormalServerLifecycle, listFormalArchives, readFormalArchive } from './formal-server-lifecycle';
+import { archiveRetentionDeadlines, FormalServerLifecycle, listFormalArchives, readFormalArchive } from './formal-server-lifecycle';
 import { createInitialSession } from './session-manager';
 import { GamePhase } from './types';
 import type { MatchRuntimeSnapshot } from './match-runtime-types';
@@ -126,19 +126,34 @@ test('archive listing and details are available only to an identity that played 
     const stranger = '76561198000000453';
     const own = 'c0000000-0000-4000-8000-000000000001';
     const other = 'c0000000-0000-4000-8000-000000000002';
+    const archivedAt = Date.now();
     const demo = `round_${own}_segment1.dem`;
     for (const [matchId, steamId] of [[own, played], [other, stranger]]) {
         const dir = path.join(root, matchId);
         await mkdir(dir);
         await writeFile(path.join(dir, 'match.json'), JSON.stringify({
-            matchId, mapName: 'de_mirage', scoreA: 13, scoreB: 8, archivedAt: 5000,
+            matchId, mapName: 'de_mirage', scoreA: 13, scoreB: 8, archivedAt,
             players: [{ name: '玩家', steamId, team: 'A' }], demos: [demo, '../unsafe.dem'],
         }));
     }
     assert.deepEqual(await listFormalArchives([primary, played]), [{
-        matchId: own, mapName: 'de_mirage', scoreA: 13, scoreB: 8, archivedAt: 5000,
+        matchId: own, mapName: 'de_mirage', scoreA: 13, scoreB: 8, archivedAt,
     }]);
     assert.equal(await readFormalArchive(other, [primary, played]), undefined);
     assert.deepEqual((await readFormalArchive(own, [primary, played]))?.result.players, [{ name: '玩家', team: 'A' }]);
     assert.deepEqual((await readFormalArchive(own, [primary, played]))?.result.demos, [demo]);
+    const manifestFile = path.join(root, own, 'match.json');
+    const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
+    manifest.archivedAt = Date.now() - 180 * 24 * 60 * 60 * 1000;
+    await writeFile(manifestFile, JSON.stringify(manifest));
+    assert.equal(await readFormalArchive(own, [played]), undefined);
+});
+
+
+test('archive retention counts 180 days locally and three calendar years for private storage', () => {
+    const start = Date.UTC(2024, 1, 29, 12);
+    assert.deepEqual(archiveRetentionDeadlines(start), {
+        serverExpiresAt: start + 180 * 86400000,
+        cloudExpiresAt: Date.UTC(2027, 1, 28, 12),
+    });
 });

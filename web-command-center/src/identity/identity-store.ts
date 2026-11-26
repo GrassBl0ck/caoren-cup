@@ -24,6 +24,17 @@ const omitLegacyMembershipAuthFields = (data: IdentityStoreData): IdentityStoreD
     return data;
 };
 
+function eraseFromStore(data: IdentityStoreData, id: string) {
+    delete data.accounts[id];
+    delete data.identities[id];
+    for (const [key, member] of Object.entries(data.memberships)) {
+        if (member.identityId === id) delete data.memberships[key];
+    }
+    for (const [key, device] of Object.entries(data.deviceTokens)) {
+        if (device.identityId === id) delete data.deviceTokens[key];
+    }
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
     !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -112,6 +123,7 @@ const validateCurrentData = (parsed: Record<string, unknown>): IdentityStoreData
         }
         if ((identityValue.customDisplayName !== undefined && typeof identityValue.customDisplayName !== 'boolean') ||
             (identityValue.avatarJpeg !== undefined && !isDesktopAvatar(identityValue.avatarJpeg)) ||
+            (identityValue.steamAvatarEnabled !== undefined && identityValue.steamAvatarEnabled !== true) ||
             (identityValue.avatarLogo !== undefined && identityValue.avatarLogo !== true) ||
             (identityValue.steamAvatarJpegs !== undefined && (!isRecord(identityValue.steamAvatarJpegs) ||
                 Object.entries(identityValue.steamAvatarJpegs).some(([id, jpeg]) =>
@@ -141,6 +153,8 @@ const validateCurrentData = (parsed: Record<string, unknown>): IdentityStoreData
             throw new Error('login account identity has no trusted SteamID');
         }
         if (!identity.steamId && accountValue.passwordState !== 'active') throw new Error('website account has no active password');
+        if (accountValue.age14ConfirmedAt !== undefined && (!Number.isSafeInteger(accountValue.age14ConfirmedAt) || Number(accountValue.age14ConfirmedAt) <= 0))
+            throw new Error('invalid age declaration');
         const loginName = validateLoginName(accountValue.loginName);
         if (loginNames.has(loginName)) throw new Error('login account name is duplicated');
         loginNames.add(loginName);
@@ -241,6 +255,50 @@ export class IdentityStore {
         );
     }
 
+    // Keep this directory when restoring an earlier identity database. It contains only random account ID hashes.
+    private marker(id: string) {
+        return path.join(this.filePath + '.erasures', crypto.createHash('sha256').update(id).digest('hex'));
+    }
+
+    private applyErasures(data: IdentityStoreData): boolean {
+        let changed = false;
+        for (const id of Object.keys(data.identities)) {
+            if (this.fileSystem.existsSync(this.marker(id))) {
+                eraseFromStore(data, id);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private scrubPrevious(fallback: IdentityStoreData) {
+        if (!this.fileSystem.existsSync(this.previousPath)) return;
+        const raw = this.fileSystem.readFileSync(this.previousPath, 'utf8');
+        let previous: IdentityStoreData;
+        try {
+            previous = parseData(raw, this.randomBytes).data;
+            if (!this.applyErasures(previous)) return;
+        } catch (error) {
+            if (error instanceof IdentityMigrationError) throw error;
+            previous = fallback;
+        }
+        const temporary = this.previousPath + '.scrub-' + crypto.randomUUID();
+        this.fileSystem.writeFileSync(temporary, JSON.stringify(previous), { flag: 'wx', mode: 0o600 });
+        this.fileSystem.renameSync(temporary, this.previousPath);
+    }
+
+    async eraseAccount(id: string, expectedHash: string) {
+        await this.mutate(draft => {
+            if (draft.accounts[id]?.password?.hash !== expectedHash) throw new Error('account_changed');
+            const marker = this.marker(id);
+            this.fileSystem.mkdirSync(path.dirname(marker), { recursive: true, mode: 0o700 });
+            this.fileSystem.writeFileSync(marker, '', { mode: 0o600 });
+            eraseFromStore(draft, id);
+            eraseFromStore(this.data, id);
+        });
+        this.scrubPrevious(this.data);
+    }
+
     async load(): Promise<void> {
         const primaryExists = this.fileSystem.existsSync(this.filePath);
         const previousExists = this.fileSystem.existsSync(this.previousPath);
@@ -259,10 +317,12 @@ export class IdentityStore {
                 if (!previousExists) throw primaryError;
             }
             if (parsed) {
-                if (parsed.migrated) {
+                const erased = this.applyErasures(parsed.data);
+                if (parsed.migrated || erased) {
                     omitLegacyMembershipAuthFields(parsed.data);
                     await this.persist(parsed.data);
                 }
+                if (this.fileSystem.existsSync(this.filePath + '.erasures')) this.scrubPrevious(parsed.data);
                 this.data = parsed.data;
                 return;
             }
@@ -271,8 +331,15 @@ export class IdentityStore {
         const restored = omitLegacyMembershipAuthFields(
             parseData(this.fileSystem.readFileSync(this.previousPath, 'utf8'), this.randomBytes).data,
         );
+        this.applyErasures(restored);
         await this.persist(restored, false);
+        if (this.fileSystem.existsSync(this.filePath + '.erasures')) this.scrubPrevious(restored);
         this.data = restored;
+    }
+
+    record<K extends 'identities' | 'accounts' | 'memberships' | 'deviceTokens'>(table: K, id: string): IdentityStoreData[K][string] | undefined {
+        const row = this.data[table][id];
+        return row ? structuredClone(row) as IdentityStoreData[K][string] : undefined;
     }
 
     snapshot(): IdentityStoreData {

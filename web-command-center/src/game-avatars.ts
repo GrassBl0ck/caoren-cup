@@ -59,6 +59,21 @@ export class GameAvatars {
         for (const identity of identities) await this.sync(identity);
     }
 
+    forget(identity: IdentityRecord, stillBound: (steamId: string) => boolean) {
+        if (!this.directory) return Promise.resolve();
+        const ids = new Set(identity.additionalSteamIds || []);
+        if (identity.gameBoundAt && identity.steamId) ids.add(identity.steamId);
+        const run = this.queue.then(async () => {
+            for (const id of ids) {
+                if (/^7656119\d{10}$/.test(id) && !stillBound(id)) {
+                    await fs.rm(path.join(this.directory!, id + '.png'), { force: true });
+                }
+            }
+        });
+        this.queue = run.catch(() => {});
+        return run;
+    }
+
     sync(identity: IdentityRecord) {
         if (!this.directory) return Promise.resolve();
         const run = this.queue.then(async () => {
@@ -67,7 +82,7 @@ export class GameAvatars {
             if (identity.gameBoundAt && identity.steamId) ids.add(identity.steamId);
             for (const id of ids) {
                 if (!/^7656119\d{10}$/.test(id)) continue;
-                const data = identity.avatarLogo ? undefined : identity.avatarJpeg ?? identity.steamAvatarJpegs?.[id];
+                const data = identity.avatarLogo ? undefined : identity.avatarJpeg ?? (identity.steamAvatarEnabled ? identity.steamAvatarJpegs?.[id] : undefined);
                 let png = this.logo;
                 if (data) {
                     // Older clients validated the JPEG header only. A damaged historical image uses the cup logo.

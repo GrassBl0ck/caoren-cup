@@ -1,11 +1,11 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>[草台杯] 个人资料</title><link rel="icon" type="image/png" href="/assets/brand-icon.png"><link rel="stylesheet" href="/css/portal.css"><script defer src="/js/portal.js?v=2.2.5-ccbind1"></script>
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="form-action 'none'"><meta name="viewport" content="width=device-width, initial-scale=1"><title>[草台杯] 个人资料</title><link rel="icon" type="image/png" href="/assets/brand-icon.png"><link rel="stylesheet" href="/css/portal.css"><script defer src="/js/portal.js?v=2.2.5-ccbind1"></script>
   <link rel="stylesheet" href="/css/client-theme.css">
   <script src="/js/client-theme.js"></script>
-</head><body data-page="profile"><div class="portal-shell"><header class="portal-header"><a class="portal-brand" href="/"><img src="/assets/brand.png" alt="草台杯" width="106" height="34"></a><nav class="board-navigation"><a href="/room" id="browser-room-link">参赛房间</a><button id="logout" type="button">退出登录</button><button id="theme-toggle" type="button" hidden>浅色模式</button></nav></header><main><p id="auth-message" class="form-message" role="status"></p><section id="board-picker"><h1>你好，<span id="account-name">玩家</span></h1>        <section class="account-settings" id="account-settings"><h2>个人资料与游戏身份</h2>
+</head><body data-page="profile"><div class="portal-shell"><header class="portal-header"><a class="portal-brand" href="/"><img src="/assets/brand.png" alt="草台杯" width="106" height="34"></a><nav class="board-navigation"><a href="/room" id="browser-room-link">参赛房间</a><button id="logout" type="button">退出登录</button><button id="theme-toggle" type="button" hidden>浅色模式</button></nav></header><main><noscript>请启用 JavaScript 后重试账户操作。</noscript><p id="auth-message" class="form-message" role="status"></p><section id="board-picker"><h1>你好，<span id="account-name">玩家</span></h1>        <section class="account-settings" id="account-settings"><h2>个人资料与游戏身份</h2>
           <div class="settings-grid">
             <section><h3>账户邮箱</h3><p id="login-name-status" class="muted"></p></section>
             <section><h3>修改密码</h3>
-              <form id="change-password-form">
+              <form method="post" id="change-password-form">
                 <label>当前密码<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
                 <label>新密码<input name="newPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required placeholder="8–128 位，使用草台杯独立密码"></label>
                 <label>再次输入新密码<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" required></label>
@@ -14,7 +14,7 @@
               <p class="small-note">修改的是草台杯账户密码。其他设备需要重新登录。</p>
             </section>
             <section><h3>邮箱</h3><p id="email-status" class="muted"></p>
-              <form id="bind-email-form" hidden>
+              <form method="post" id="bind-email-form" hidden>
                 <label>绑定邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required></label>
                 <div class="code-row"><label>验证码<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label><button type="button" data-send-code="bind-email">发送验证码</button></div>
                 <label>当前账号密码<input name="currentPassword" type="password" autocomplete="current-password" maxlength="128" required></label>
@@ -22,9 +22,16 @@
               </form>
             </section>
             <details class="game-identity"><summary>CS 游戏身份与绑定码</summary><p id="steam-status" class="muted"></p>
-              <form id="bind-steam-form" hidden><p class="muted">进入草台杯 CS2 服务器，在聊天栏输入 <code>/ccbind</code>，再将一次性绑定码填在这里。</p><label>一次性绑定码<input name="code" autocomplete="one-time-code" maxlength="16" required></label><button class="secondary-button" type="submit">绑定 CS 游戏身份</button></form>
+              <form method="post" id="bind-steam-form" hidden><p class="muted">进入草台杯 CS2 服务器，在聊天栏输入 <code>/ccbind</code>，再将一次性绑定码填在这里。</p><label>一次性绑定码<input name="code" autocomplete="one-time-code" maxlength="16" required></label><button class="secondary-button" type="submit">绑定 CS 游戏身份</button></form>
               <p class="small-note">也可以进入房间，直接绑定当前登录的 Steam 账号。</p>
             </details>
           </div>
+          <section id="age-confirmation" hidden><h3>进入房间前确认年龄</h3><p>草台杯仅向已满 14 周岁的玩家开放，无需提供生日或证件。</p><button type="button" id="confirm-age">确认我已满 14 周岁</button></section>
+          <details class="account-section" id="device-settings"><summary>记住的设备</summary><div id="device-list" aria-live="polite"></div></details>
+          <details class="account-section"><summary>隐私与注销账号</summary><p><a href="/privacy.html">查看隐私说明</a> · 3465434029@qq.com</p>
+            <form method="post" id="erase-account-form"><p>注销将删除账号、绑定和设备登录资格。共同对局记录按隐私说明保存。</p>
+              <label>当前密码<input type="password" name="password" required autocomplete="current-password"></label>
+              <label><input type="checkbox" name="confirm" required>确认永久注销我的草台杯账号</label>
+              <button type="submit">注销账号</button></form></details>
           <p id="account-message" class="form-message" role="status" aria-live="polite"></p>
         </section></section></main></div></body></html>
