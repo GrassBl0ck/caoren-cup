@@ -38,7 +38,7 @@ import {
     resolveRosterTeamByInitialSide,
     synchronizeRandomModeRuntime,
 } from './game-flow-manager';
-import { PLUGIN_TOKEN } from './game-constants';
+import { hasPluginHeader } from './plugin-auth';
 import { resolveDuelMapConfig } from './duel-config';
 import { lobbyIdentityService } from './identity/identity-runtime';
 import { applyMembershipToPlayer } from './identity/session-integration';
@@ -223,8 +223,7 @@ const enqueueTeamAssignments = (
 };
 
 const requirePluginAuth = (req: any, res: any, next: any) => {
-    const token = req.header('x-caoren-plugin-token') || req.query?.token;
-    if (!PLUGIN_TOKEN || token !== PLUGIN_TOKEN) return res.status(401).json({ success: false, error: '插件认证失败' });
+    if (!hasPluginHeader(req)) return res.status(401).json({ success: false, error: '插件认证失败' });
     next();
 };
 

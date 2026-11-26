@@ -1,3 +1,4 @@
+import { hasPluginHeader } from './plugin-auth';
 import express from 'express';
 import crypto from 'node:crypto';
 import { Server as SocketIOServer } from 'socket.io';
@@ -13,7 +14,6 @@ import {
     V1333_PLUGIN_ONLINE_TTL_MS,
     V1333_GAME_SERVER_CONNECT_URL,
     ADMIN_PASSWORD,
-    PLUGIN_TOKEN,
 } from './game-constants';
 
 interface GameLoginTicket {
@@ -98,16 +98,14 @@ export function registerGameCodeLogin(app: express.Express, io: SocketIOServer, 
     });
 
     app.post('/api/plugin/account-register', async (req, res) => {
-        const token = req.header('x-caoren-plugin-token') || req.query?.token;
-        if (!PLUGIN_TOKEN || token !== PLUGIN_TOKEN) {
+        if (!hasPluginHeader(req)) {
             return res.status(401).json({ success: false, error: '插件认证失败' });
         }
         return res.status(410).json({ success: false, error: 'account_registration_on_web' });
     });
 
     app.post('/api/plugin/game-login-code', (req, res) => {
-        const token = req.header('x-caoren-plugin-token') || req.query?.token;
-        if (!PLUGIN_TOKEN || token !== PLUGIN_TOKEN) {
+        if (!hasPluginHeader(req)) {
             return res.status(401).json({ success: false, error: '插件认证失败' });
         }
         try {

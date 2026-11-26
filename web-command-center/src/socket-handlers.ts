@@ -1,4 +1,4 @@
-﻿// socket-handlers.ts
+// socket-handlers.ts
 import { Server as SocketIOServer } from 'socket.io';
 import { syncRoomPresence } from './desktop-formal-room';
 import { v4 as uuidv4 } from 'uuid';
@@ -371,49 +371,22 @@ export function registerSocketHandlers(io: SocketIOServer, deps: {
             establishSocketIdentity(socket, player, `欢迎，${player.name}！已加入本场比赛。`);
         });
 
-        socket.on(WsEvents.IDENTITY_ADMIN_ACTION, async (data: {
-            action?: string;
-            identityId?: string;
-            tokenId?: string;
-        }) => {
+        socket.on(WsEvents.IDENTITY_ADMIN_ACTION, (data: { action?: string }) => {
             const session = getSession();
             const admin = socket.data.playerId ? findPlayerById(session, socket.data.playerId) : undefined;
-            if (!admin || admin.role !== 'Admin' || (session.desktopFormalRoom &&
+            if (socket.data.playerOnly || !admin || admin.role !== 'Admin' || (session.desktopFormalRoom &&
                 (!admin.identityId || socket.data.identityId !== admin.identityId || !desktopRoomAdmins.allows(admin.identityId, lobbyIdentityService)))) {
                 socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, error: 'admin_required' });
                 return;
             }
-            if (data?.action === 'GET_STATUS') {
-                const memberships = lobbyIdentityService.listMemberships(session.sessionId).map((membership) => ({
-                    membershipId: membership.membershipId,
-                    identityId: membership.identityId,
-                    nickname: membership.nickname,
-                    identityLevel: membership.identityLevel,
-                    confirmationState: membership.confirmationState,
-                    confirmationReason: membership.confirmationReason,
-                    steamIdMasked: (membership.trustedSteamId || membership.claimedSteamId)
-                        ? `****${(membership.trustedSteamId || membership.claimedSteamId)!.slice(-4)}`
-                        : '',
-                    devices: lobbyIdentityService.listDeviceTokens(membership.identityId),
-                }));
-                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, {
-                    success: true,
-                    action: data.action,
-                    memberships,
-                });
+            if (data?.action !== 'GET_STATUS') {
+                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, error: 'unknown_action' });
                 return;
             }
-            if (data?.action === 'REVOKE_ALL_TOKENS' && data.identityId) {
-                const revoked = await lobbyIdentityService.revokeAllDeviceTokens(data.identityId);
-                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: true, action: data.action, revoked });
-                return;
-            }
-            if (data?.action === 'REVOKE_DEVICE' && data.identityId && data.tokenId) {
-                const revoked = await lobbyIdentityService.revokeDeviceTokenById(data.identityId, data.tokenId);
-                socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: revoked, action: data.action });
-                return;
-            }
-            socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: false, error: 'unknown_action' });
+            const memberships = lobbyIdentityService.listMemberships(session.sessionId)
+                .filter(member => !member.leftAt && !member.blockedAt)
+                .map(({ nickname, confirmationState, confirmationReason }) => ({ nickname, confirmationState, confirmationReason }));
+            socket.emit(WsEvents.IDENTITY_ADMIN_ACTION, { success: true, action: 'GET_STATUS', memberships });
         });
 
         socket.on(WsEvents.LOGIN, (data: { name: string; extraParam?: string }) => {

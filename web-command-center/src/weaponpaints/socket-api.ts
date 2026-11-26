@@ -9,7 +9,7 @@ import { getSession } from '../session-manager';
 import { findPlayerById } from '../player-utils';
 import type { Player } from '../types';
 import { resolveSkinActor, type SkinActorPlayer } from './permissions';
-import { buildBridgeHealth } from './health';
+import { buildBridgeHealth, publicWeaponPaintsHealth } from './health';
 import { weaponPaintsRuntime } from './runtime';
 import type { WeaponPaintsSettingsStore } from './settings';
 import type { WeaponPaintsService } from './service';
@@ -151,7 +151,7 @@ export const registerWeaponPaintsSocketHandlers = (socket: Socket) => {
         const isAdmin = statusAccess?.isAdmin === true;
         respond({
             success: true,
-            health,
+            health: publicWeaponPaintsHealth(health),
             isAdmin,
             canUse: health.settings.enabled && !!statusAccess,
             targets: isAdmin ? verified : undefined,

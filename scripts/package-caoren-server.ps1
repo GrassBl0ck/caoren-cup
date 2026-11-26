@@ -40,6 +40,7 @@ if ($hasFunCommands -and -not $RetainPerformanceCalls) {
     throw 'FunCommands retains performance call sites. Obtain user approval before passing -RetainPerformanceCalls; Diagnostics itself is excluded.'
 }
 if ($hasAudio) { $null = Read-ReleaseAudioCatalog $AudioEventsPath $AudioAssetsPath }
+Assert-ServerReleaseSource $repoRoot
 $partial = $Modules.Count -gt 0
 $label = if ($partial) { '局部更新' } else { '服务器插件合集' }
 $baseName = if ($partial) { 'CaorenCupUpdate-' + ($Modules -join '+') } else { 'CaorenCupServer' }

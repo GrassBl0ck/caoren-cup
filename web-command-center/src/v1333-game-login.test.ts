@@ -68,6 +68,8 @@ test('GAME_CODE_LOGIN cannot consume player recovery codes while administrator l
     } }, registerRes);
     assert.equal(registerStatus, 410);
     assert.equal(registerResponse.error, 'account_registration_on_web');
+    await routes.get('/api/plugin/game-login-code')({ header: () => undefined, query: { token: constants.PLUGIN_TOKEN } }, registerRes);
+    assert.equal(registerStatus, 401);
     assert.equal(identityRuntime.lobbyIdentityService.findIdentityBySteamId('76561198000000036'), undefined);
 
     const firstCode = v1333IssueGameLoginCode('76561198000000035', 'Legacy Socket Player');

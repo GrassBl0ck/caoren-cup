@@ -204,6 +204,10 @@ export class MySqlLoadoutRepository implements LoadoutRepository {
         });
     }
 
+    async pruneExpiredAudit(): Promise<void> {
+        await this.pool.execute('DELETE FROM web_audit_log WHERE created_at < CURRENT_TIMESTAMP - INTERVAL 180 DAY');
+    }
+
     async audit(entry: SkinAuditEntry): Promise<void> {
         await insertAudit(this.pool, entry);
     }

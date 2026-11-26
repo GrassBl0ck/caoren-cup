@@ -25,8 +25,30 @@
     "directories": {
       "output": "dist"
     },
+    "afterPack": "./scripts/check-packed-app.cjs",
     "files": [
-      "src/**/*",
+      "src/brand-icon.png",
+      "src/brand.png",
+      "src/client-config.js",
+      "src/cs2-key-config.js",
+      "src/desktop-auth-client.js",
+      "src/device-credentials.js",
+      "src/game-connect.js",
+      "src/game-keybinds.js",
+      "src/icons-license.txt",
+      "src/local-images.js",
+      "src/login-preferences.js",
+      "src/main.js",
+      "src/popup-windows.js",
+      "src/popup.css",
+      "src/preload.js",
+      "src/room-banner.jpg",
+      "src/room-keybinds.js",
+      "src/room.css",
+      "src/room.html",
+      "src/room.js",
+      "src/steam-avatar.js",
+      "src/windows-steam.js",
       "package.json"
     ],
     "win": {

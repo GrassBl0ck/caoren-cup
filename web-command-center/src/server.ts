@@ -1,3 +1,5 @@
+import type { TLSSocket } from 'node:tls';
+import { isLoopbackAddress, isSocketAuthTransportSecure } from './identity/auth-core';
 import { isIP } from 'node:net';
 import { AccountLoginGuard } from './identity/password-auth';
 import { isCurrentAbilitySyncConfirmed } from './ability-phase-one-policy';
@@ -12,7 +14,7 @@ import {
 } from './types';
 import { getSession } from './session-manager';
 import { restoreSessionSnapshot, saveSessionSnapshotNow, scheduleSessionSnapshotSave } from './session-persistence';
-import { formalServerLifecycle } from './formal-server-lifecycle';
+import { formalServerLifecycle, pruneFormalArchives } from './formal-server-lifecycle';
 import { loadTaskPresets } from './task-preset-store';
 import { generateBindCode, sanitizeGameStateForViewer } from './player-utils';
 import { desktopRoomAdmins } from './desktop-formal-room';
@@ -62,7 +64,7 @@ import { initializeIdentityRuntime, lobbyIdentityService, playerCenterBootstrapT
 import { bindPlayerCenterSocketIdentity } from './identity/player-center-socket';
 import { attachMembershipToSession, detachMatchMembershipsForScoreboard, removeIdentityFromSession } from './identity/session-integration';
 import { registerWeaponPaintsHttpRoutes } from './weaponpaints/http-routes';
-import { initializeWeaponPaintsRuntime } from './weaponpaints/runtime';
+import { initializeWeaponPaintsRuntime, weaponPaintsRuntime } from './weaponpaints/runtime';
 import { UpdateAnnouncementService } from './update-announcements/update-announcement-service';
 import { UpdateAnnouncementStore } from './update-announcements/update-announcement-store';
 import { registerUpdateAnnouncementAdminSocketHandlers } from './update-announcements/update-announcement-admin-socket';
@@ -75,6 +77,16 @@ import {
 
 const app = express();
 if (process.env.TRUST_PROXY === 'loopback') app.set('trust proxy', 'loopback');
+app.use((req, res, next) => {
+    if (req.secure) return next();
+    if (/^\/api\/plugin(?:\/|$)/i.test(req.path)) {
+        if (isLoopbackAddress(req.socket.remoteAddress)) return next();
+        return res.status(403).json({ success: false, error: 'HTTPS_REQUIRED' });
+    }
+    if (process.env.NODE_ENV !== 'production' || (req.method === 'GET' && req.path === '/api/public/server-status')) return next();
+    // Do not render credential forms or accept account data on a plaintext production site.
+    return res.status(403).set('Cache-Control', 'no-store').send('请通过 HTTPS 访问草台杯。');
+});
 app.use(express.json({ limit: '1mb' }));
 registerBoardPages(app, {
     service: lobbyIdentityService,
@@ -128,6 +140,13 @@ const io = new SocketIOServer(httpServer, {
 });
 
 io.use(async (socket, next) => {
+    const connection = socket.request.socket;
+    if (process.env.NODE_ENV === 'production' && !isSocketAuthTransportSecure({
+        encrypted: (connection as TLSSocket).encrypted === true,
+        trustLoopbackProxy: process.env.TRUST_PROXY === 'loopback',
+        remoteAddress: connection.remoteAddress,
+        forwardedProtocol: socket.request.headers['x-forwarded-proto'],
+    })) return next(new Error('HTTPS_REQUIRED'));
     try {
         const result = await bindPlayerCenterSocketIdentity({
             cookieHeader: socket.handshake.headers.cookie,
@@ -524,14 +543,22 @@ setInterval(() => {
 }, 2500);
 
 
+const enforceRetention = () => {
+    void pruneFormalArchives().catch(() => console.warn('[Retention] 正式比赛归档清理失败。'));
+    void weaponPaintsRuntime.pruneExpiredAudit().catch(() => console.warn('[Retention] 换肤审计清理失败。'));
+};
+
 const PORT = process.env.PORT || 3000;
 Promise.all([
     initializeIdentityRuntime().then(() => gameAvatars.initialize(lobbyIdentityService.avatarIdentities())),
     initializeWeaponPaintsRuntime(),
     updateAnnouncementService.initialize(),
 ])
-    .then(() => httpServer.listen({ port: Number(PORT), host: process.env.WEB_BIND_HOST || undefined },
-        () => console.log(`草人杯指挥台已启动: http://${process.env.WEB_BIND_HOST || 'localhost'}:${PORT}`)))
+    .then(() => httpServer.listen({ port: Number(PORT), host: process.env.WEB_BIND_HOST || '127.0.0.1' }, () => {
+        console.log(`草人杯指挥台已启动: http://${process.env.WEB_BIND_HOST || 'localhost'}:${PORT}`);
+        enforceRetention();
+        setInterval(enforceRetention, 24 * 60 * 60 * 1000).unref();
+    }))
     .catch((error) => {
         console.error('[Startup] 核心服务初始化失败，服务未启动：', error);
         process.exitCode = 1;

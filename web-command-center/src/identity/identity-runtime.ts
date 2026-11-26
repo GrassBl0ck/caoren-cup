@@ -20,8 +20,10 @@ const playerCenterSessionStorePath = process.env.PLAYER_CENTER_SESSION_STORE_PAT
     : path.resolve(__dirname, '..', '..', 'runtime', 'player-center-sessions.json');
 
 export const identityStore = new IdentityStore(identityStorePath);
-export const playerCenterSessionStore = new PlayerCenterSessionStore(playerCenterSessionStorePath);
 export const lobbyIdentityService = new LobbyIdentityService(identityStore);
+export const playerCenterSessionStore = new PlayerCenterSessionStore(playerCenterSessionStorePath, {
+    isDeviceForgotten: tokenId => lobbyIdentityService.deviceWasForgotten(tokenId),
+});
 export const playerCenterBootstrapTickets = new EphemeralTicketService<PlayerCenterBootstrapTicket>();
 export const playerCenterMatchSocketTickets = new EphemeralTicketService<PlayerCenterMatchSocketTicket>();
 export const accountRecoveryTickets = new EphemeralTicketService<AccountRecoveryTicket>();

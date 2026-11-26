@@ -28,7 +28,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin, ICaorenCupHostedMatchA
     public override string ModuleAuthor => "CaorenCup";
     public override string ModuleDescription => "Bridge trusted CS2 identity, score and match stats to the CaorenCup web command center.";
 
-    private readonly HttpClient _http = new();
+    private readonly HttpClient _http = new(new HttpClientHandler { AllowAutoRedirect = false });
     private readonly DuelTelemetryIsolationState _duelTelemetryIsolation = new();
     private readonly HeartbeatResponseOrder _heartbeatResponseOrder = new();
     private readonly string _heartbeatInstanceId = Guid.NewGuid().ToString("N");
@@ -144,6 +144,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin, ICaorenCupHostedMatchA
     {
         _isUnloading = false;
         LoadConfig();
+        _http.BaseAddress = BridgeServerCommandPolicy.ParseBackendAddress(_config.CommandCenterBaseUrl);
         CaorenCupMatchAdministration.PublishHosted(this);
         _practiceRuntime = new PracticeRuntime();
         _practiceLineups = new PracticeLineupStore(Path.Combine(ModuleDirectory, "practice-lineups"));
@@ -152,7 +153,6 @@ public sealed partial class CaorenCupPlugin : BasePlugin, ICaorenCupHostedMatchA
         var registerFormalCommands = _config.CaorenMatchRuntimeEnabled || IsManagedFormalInstance;
         CaorenCupMatchAuthority.BridgeCompatibilityCommandsEnabled = registerFormalCommands && !MatchRuntimeOwnership.IsMatchZyLoaded;
         if (registerFormalCommands) RegisterMatchCompatibilityCommands();
-        _http.BaseAddress = new Uri(_config.CommandCenterBaseUrl.TrimEnd('/') + "/");
         _http.DefaultRequestHeaders.Remove("x-caoren-plugin-token");
         _http.DefaultRequestHeaders.Add("x-caoren-plugin-token", _config.PluginToken);
 
@@ -2153,7 +2153,7 @@ public sealed partial class CaorenCupPlugin : BasePlugin, ICaorenCupHostedMatchA
 
         if (!BridgeServerCommandPolicy.IsAllowed(serverCommand))
         {
-            Logger.LogWarning("Rejected web command because it is not in bridge allowlist: {Command}", serverCommand);
+            Logger.LogWarning("Rejected unsupported web command or arguments.");
             return Task.FromResult(true);
         }
 

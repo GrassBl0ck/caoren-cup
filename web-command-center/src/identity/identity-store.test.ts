@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { IdentityStore } from './identity-store';
+import { LobbyIdentityService } from './identity-service';
 
 const makeStoreDir = (name: string) => {
     const root = process.env.CAOREN_STEP8_DRILL_ROOT || path.resolve(__dirname, '..', '..', 'runtime');
@@ -242,4 +243,28 @@ test('schema v2 rejects duplicate permanent SteamID bindings', async (t) => {
     fs.writeFileSync(file, JSON.stringify(duplicate), 'utf8');
 
     await assert.rejects(new IdentityStore(file).load(), /identity SteamID is duplicated/);
+});
+
+
+test('identity snapshot recovery invalidates saved device credentials and old account versions', async (t) => {
+    const dir = makeStoreDir('private-recovery');
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'identity.json');
+    const store = new IdentityStore(file);
+    const identity = new LobbyIdentityService(store);
+    await store.load();
+    const { account } = await identity.registerVerifiedEmailAccount({
+        email: 'recover@example.test', password: 'local-test-password',
+    });
+    const device = await identity.issueDeviceToken(account.identityId, 'fixture-recover-device');
+    fs.copyFileSync(file, store.previousPath);
+    fs.writeFileSync(file, '{broken', 'utf8');
+
+    const recovered = new IdentityStore(file);
+    await recovered.load();
+    const auth = new LobbyIdentityService(recovered);
+    assert.equal(auth.deviceWasForgotten(device.tokenId), true);
+    assert.equal((await auth.authenticatePlayerCenterDeviceToken(device.rawToken)).ok, false);
+    assert.ok(auth.getLoginAccount(account.identityId)!.updatedAt > account.updatedAt);
+    if (process.platform !== 'win32') assert.equal(fs.statSync(file).mode & 0o777, 0o600);
 });

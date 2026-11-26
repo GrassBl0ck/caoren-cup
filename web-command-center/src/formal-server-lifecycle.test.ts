@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
-import { archiveRetentionDeadlines, FormalServerLifecycle, listFormalArchives, readFormalArchive } from './formal-server-lifecycle';
+import { archiveRetentionDeadlines, pruneFormalArchives, FormalServerLifecycle, listFormalArchives, readFormalArchive } from './formal-server-lifecycle';
 import { createInitialSession } from './session-manager';
 import { GamePhase } from './types';
 import type { MatchRuntimeSnapshot } from './match-runtime-types';
@@ -156,4 +156,42 @@ test('archive retention counts 180 days locally and three calendar years for pri
         serverExpiresAt: start + 180 * 86400000,
         cloudExpiresAt: Date.UTC(2027, 1, 28, 12),
     });
+});
+
+test('managed storage removes only expired archives and existing source recordings', async (t) => {
+    const root = await mkdtemp(path.resolve(__dirname, '..', 'test-retention-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const local = path.join(root, 'local');
+    const mirror = path.join(root, 'mirror');
+    const source = path.join(root, 'source');
+    await Promise.all([mkdir(local), mkdir(mirror), mkdir(source)]);
+    const now = Date.UTC(2026, 9, 1);
+    const older = Date.UTC(2022, 0, 1);
+    const retained = Date.UTC(2026, 8, 1);
+    const id = (n: number) => 'c0000000-0000-4000-8000-' + String(n).padStart(12, '0');
+    const create = async (where: string, n: number, time: number, extra = false) => {
+        const directory = path.join(where, id(n));
+        const demo = 'round_' + id(n) + '_segment1.dem';
+        await mkdir(directory);
+        await writeFile(path.join(directory, 'match.json'), JSON.stringify({ matchId: id(n), archivedAt: time, demos: [demo] }));
+        await writeFile(path.join(directory, demo), 'fixture');
+        if (extra) await writeFile(path.join(directory, 'keep.txt'), 'unmanaged');
+        return demo;
+    };
+    const original = await create(local, 1, older);
+    await writeFile(path.join(source, original), 'fixture source');
+    await create(local, 2, retained);
+    await create(local, 3, older, true);
+    await create(mirror, 4, Date.UTC(2025, 0, 1));
+    await create(mirror, 5, older);
+    assert.equal(await pruneFormalArchives({
+        CAOREN_FORMAL_ARCHIVE_ROOT: local, CAOREN_FORMAL_DEMO_ROOT: source,
+        CAOREN_FORMAL_PRIVATE_ARCHIVE_ROOT: mirror,
+    }, now), 2);
+    await assert.rejects(readFile(path.join(source, original)), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(local, id(1), 'match.json')), { code: 'ENOENT' });
+    await assert.rejects(readFile(path.join(mirror, id(5), 'match.json')), { code: 'ENOENT' });
+    await readFile(path.join(local, id(2), 'match.json'));
+    await readFile(path.join(local, id(3), 'keep.txt'));
+    await readFile(path.join(mirror, id(4), 'match.json'));
 });

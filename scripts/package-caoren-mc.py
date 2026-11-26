@@ -8,7 +8,19 @@ ROOT=Path(__file__).resolve().parents[1]
 MC=ROOT/'mc'
 FIXED_TIME=(2026,1,1,0,0,0)
 EXCLUDED={'.local-maps','build','dist','bin','obj','.gradle','.kotlin','.cache','.runtime','.assets','runtime','__pycache__','playerdata','logs','checks','.git','node_modules'}
-FORBIDDEN={'server.properties','ops.json','whitelist.json','usercache.json','.env','caoren_config.json','ecosystem.config.cjs','AGENTS.md'}
+FORBIDDEN={'server.properties','ops.json','whitelist.json','usercache.json','banned-ips.json','banned-players.json',
+           '.env','caoren_config.json','ecosystem.config.cjs','agents.md'}
+PRIVATE_DIRS=EXCLUDED|{'private','exports','player-stats','stats','advancements','world','world_nether','world_the_end'}
+PRIVATE_SUFFIXES={'.pem','.key','.pfx','.db','.sqlite','.sqlite3','.log','.bak'}
+
+def is_private(relative):
+    parts=tuple(part.lower() for part in relative.parts)
+    if not parts:
+        return True
+    name=parts[-1]
+    return (name in FORBIDDEN or name.startswith('.env.') or '.previous.' in name
+            or any(part in PRIVATE_DIRS or part.startswith(('backup_', 'backup-')) for part in parts)
+            or relative.suffix.lower() in PRIVATE_SUFFIXES)
 TEXT={'.java','.kt','.kts','.py','.ps1','.sh','.bat','.json','.mcfunction','.mcmeta','.md','.txt','.yml','.yaml','.xml','.properties','.toml','.gradle','.pom','.conf','.csv'}
 
 def digest(raw): return hashlib.sha256(raw).hexdigest()
@@ -21,7 +33,7 @@ def is_source_file(relative):
     if relative.as_posix().startswith(retired): return False
     if (len(parts) == 4 and parts[:3] == ('cushion-wars','cushion-wars-a','tools')
             and parts[3] in {'gen_map.py','layout.py','verify_map.py','build_pack.py'}): return False
-    if any(p in EXCLUDED or p.startswith('backup_') or p.startswith('backup-') for p in parts) or relative.name in FORBIDDEN: return False
+    if is_private(relative): return False
     if relative.suffix.lower()=='.jar': return tuple(parts[-3:])==('gradle','wrapper','gradle-wrapper.jar')
     return relative.suffix.lower() in TEXT|{'.png','.svg'} or relative.name in {'LICENSE','LICENCE','LISENCE','NOTICE','gradlew','mapctl','mcctl','.gitignore','.gitattributes','.editorconfig'}
 def safe_relative(relative):
@@ -38,7 +50,24 @@ def imported_current_paths(manifest,layout):
             if entry['path'] not in layout.get('excludedPaths', {})
             and not any(entry['path'].startswith(prefix) for prefix in layout.get('excludedPrefixes', {}))}
 def source_files(root):
-    return [p for p in sorted(root.rglob('*')) if p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(root.resolve()) and is_source_file(p.relative_to(root))]
+    root=root.resolve()
+    try:
+        repo=Path(subprocess.check_output(['git','rev-parse','--show-toplevel'],cwd=root,encoding='utf-8').strip()).resolve()
+        scope=root.relative_to(repo).as_posix()
+        entries=subprocess.check_output(['git','ls-tree','-rz','--name-only','HEAD','--',scope],cwd=repo).decode('utf-8').split('\0')
+        subprocess.run(['git','diff','--quiet','HEAD','--',scope],cwd=repo,check=True)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError('Packaging requires a committed Git snapshot of the source') from exc
+    selected=[]
+    for entry in filter(None, entries):
+        candidate=repo/entry
+        relative=candidate.relative_to(root)
+        if not is_source_file(relative):
+            continue
+        if not candidate.is_file() or candidate.resolve()!=candidate:
+            raise ValueError('Package source contains a link or missing file')
+        selected.append(candidate)
+    return sorted(selected)
 def write_zip(files,output):
     if output.exists(): raise FileExistsError(output.name)
     output.parent.mkdir(parents=True,exist_ok=True)
@@ -78,6 +107,11 @@ def validate_plugin(file,name,version=None,expected_sha=None):
     if expected_sha and digest(file.read_bytes())!=expected_sha.lower(): raise ValueError('Plugin artifact SHA-256 differs')
     with zipfile.ZipFile(file) as z:
         if z.testzip() is not None: raise ValueError('Plugin CRC failed')
+        for entry in z.infolist():
+            relative=PurePosixPath(entry.filename)
+            safe_relative(relative)
+            if is_private(relative):
+                raise ValueError('Plugin artifact contains private runtime data')
         descriptor=z.read('plugin.yml').decode('utf-8-sig')
         def field(key):
             match=re.search(r'^'+key+r':\s*([^\r\n]+)',descriptor,re.M)

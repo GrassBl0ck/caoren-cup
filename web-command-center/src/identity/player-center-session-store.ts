@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { protectPrivateFile, writePrivateFile } from './private-store-files';
 
 export const PLAYER_CENTER_IDLE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const PLAYER_CENTER_ABSOLUTE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -27,6 +28,7 @@ interface PlayerCenterSessionStoreOptions {
     fs?: typeof fs;
     now?: () => number;
     randomBytes?: (size: number) => Buffer;
+    isDeviceForgotten?: (tokenId: string) => boolean;
 }
 
 const emptyData = (): PlayerCenterSessionStoreData => ({ schemaVersion: 1, sessions: {} });
@@ -84,6 +86,7 @@ export class PlayerCenterSessionStore {
     private readonly fileSystem: typeof fs;
     private readonly now: () => number;
     private readonly randomBytes: (size: number) => Buffer;
+    private readonly isDeviceForgotten: (tokenId: string) => boolean;
     readonly filePath: string;
     readonly previousPath: string;
 
@@ -91,6 +94,7 @@ export class PlayerCenterSessionStore {
         this.fileSystem = options.fs || fs;
         this.now = options.now || Date.now;
         this.randomBytes = options.randomBytes || crypto.randomBytes;
+        this.isDeviceForgotten = options.isDeviceForgotten ?? (() => false);
         this.filePath = path.resolve(filePath);
         const extension = path.extname(this.filePath) || '.json';
         this.previousPath = path.join(
@@ -100,24 +104,23 @@ export class PlayerCenterSessionStore {
     }
 
     async load(): Promise<void> {
-        const primaryExists = this.fileSystem.existsSync(this.filePath);
-        const previousExists = this.fileSystem.existsSync(this.previousPath);
-        if (!primaryExists && !previousExists) {
-            this.data = emptyData();
-            await this.persist(this.data);
-            return;
-        }
-        if (primaryExists) {
+        protectPrivateFile(this.fileSystem, this.previousPath);
+        if (protectPrivateFile(this.fileSystem, this.filePath)) {
+            const source = this.fileSystem.readFileSync(this.filePath, 'utf8');
             try {
-                this.data = parseData(this.fileSystem.readFileSync(this.filePath, 'utf8'));
+                this.data = parseData(source);
                 return;
-            } catch (error) {
-                if (!previousExists) throw error;
+            } catch {
+                // Old snapshots can contain signed-out sessions. Require login after a damaged store.
             }
         }
-        const restored = parseData(this.fileSystem.readFileSync(this.previousPath, 'utf8'));
-        await this.persist(restored, false);
-        this.data = restored;
+        this.data = emptyData();
+        await this.persist(this.data);
+    }
+
+    private isSessionLive(session: PlayerCenterSessionRecord, now: number): boolean {
+        return now < session.idleExpiresAt && now < session.absoluteExpiresAt &&
+            !(session.currentDeviceTokenId && this.isDeviceForgotten(session.currentDeviceTokenId));
     }
 
     snapshot(): PlayerCenterSessionStoreData {
@@ -155,7 +158,7 @@ export class PlayerCenterSessionStore {
             const session = data.sessions[parsed.sessionId];
             if (!session || !tokenMatches(session, parsed.rawToken)) return undefined;
             const now = this.now();
-            if (now >= session.idleExpiresAt || now >= session.absoluteExpiresAt) {
+            if (!this.isSessionLive(session, now)) {
                 delete data.sessions[session.sessionId];
                 return undefined;
             }
@@ -169,7 +172,7 @@ export class PlayerCenterSessionStore {
         const session = this.data.sessions[sessionId];
         const now = this.now();
         return !!session && session.identityId === identityId && session.accountUpdatedAt === accountUpdatedAt &&
-            now < session.idleExpiresAt && now < session.absoluteExpiresAt;
+            this.isSessionLive(session, now);
     }
 
     async useBoundSession(sessionIdRaw: unknown, identityIdRaw: unknown): Promise<PlayerCenterSessionRecord | undefined> {
@@ -180,7 +183,7 @@ export class PlayerCenterSessionStore {
             const session = data.sessions[sessionId];
             if (!session || session.identityId !== identityId) return undefined;
             const now = this.now();
-            if (now >= session.idleExpiresAt || now >= session.absoluteExpiresAt) {
+            if (!this.isSessionLive(session, now)) {
                 delete data.sessions[session.sessionId];
                 return undefined;
             }
@@ -242,18 +245,7 @@ export class PlayerCenterSessionStore {
         return result;
     }
 
-    private async persist(data: PlayerCenterSessionStoreData, backupCurrent = true): Promise<void> {
-        const directory = path.dirname(this.filePath);
-        this.fileSystem.mkdirSync(directory, { recursive: true });
-        const tempPath = `${this.filePath}.tmp-${process.pid}-${Date.now()}`;
-        try {
-            this.fileSystem.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
-            if (backupCurrent && this.fileSystem.existsSync(this.filePath)) {
-                this.fileSystem.copyFileSync(this.filePath, this.previousPath);
-            }
-            this.fileSystem.renameSync(tempPath, this.filePath);
-        } finally {
-            if (this.fileSystem.existsSync(tempPath)) this.fileSystem.rmSync(tempPath, { force: true });
-        }
+    private async persist(data: PlayerCenterSessionStoreData): Promise<void> {
+        writePrivateFile(this.fileSystem, this.filePath, JSON.stringify(data, null, 2));
     }
 }

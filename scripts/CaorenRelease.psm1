@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version Latest
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Resolve-ReleasePath {
@@ -69,6 +69,8 @@ function Test-ReleaseEntry {
     if ($name -match '(^|/)\.\.(/|$)' -or $name -match '^/|^[A-Za-z]:' -or
         $name -match '(^|/)(\.git|\.vs|node_modules|bin|obj|runtime|TestResults|release-build|release-output|tests?|backup[^/]*|Diagnostics|ParticleMenu|friberg-game|development)(/|$)' -or
         $name -match '(?i)\.(bak|backup|log|zip|rar|7z|vpk|pem|key|pfx)(-|$|\.)' -or
+        $name -match '(?i)(^|/)(playerdata|player-stats|[^/]+\.erasures|private|prod-config)(/|$)' -or
+        $name -match '(?i)\.previous\.(json|cjs|ya?ml|toml|conf)$' -or
         $name -match '(?i)\.(db|sqlite|sqlite3)($|-(wal|shm|journal)$)' -or
         $name -match '(?i)(^|/)(\.env(?:\.(?!example$)[^/]+)?|caoren_config\.json|ecosystem\.config\.cjs|player-preferences\.json|menu-user-preferences\.json|identity-store\.json|player-center-sessions\.json|live-session-snapshot\.json|id_rsa|server_io\.py)$') {
         return $false
@@ -153,26 +155,51 @@ function Assert-WebReleaseBoundary {
     }
 }
 
+function Get-ReleaseTrackedPaths {
+    param([string]$RepoRoot, [string]$Scope)
+    $entries = @(git -c core.quotepath=false -C $RepoRoot ls-tree -r --name-only HEAD -- $Scope)
+    if ($LASTEXITCODE -ne 0 -or $entries.Count -eq 0) { throw "Release source requires a Git snapshot: $Scope" }
+    git -C $RepoRoot diff --quiet HEAD -- $Scope
+    if ($LASTEXITCODE -ne 0) { throw "Commit release source changes before packaging: $Scope" }
+    return $entries
+}
+
+function Assert-ServerReleaseSource {
+    param([string]$RepoRoot)
+    $null = Get-ReleaseTrackedPaths $RepoRoot 'cs'
+    git -C $RepoRoot diff --quiet HEAD -- Directory.Build.props Directory.Build.targets Directory.Packages.props global.json
+    if ($LASTEXITCODE -ne 0) { throw 'Commit .NET build settings before packaging' }
+    $untracked = @(git -c core.quotepath=false -C $RepoRoot ls-files --others -- cs Directory.Build.props Directory.Build.targets Directory.Packages.props global.json)
+    if ($LASTEXITCODE -ne 0) { throw 'Could not verify .NET source checkout' }
+    $extraInputs = @($untracked | Where-Object {
+        $_ -notmatch '(^|/)(bin|obj)(/|$)' -and
+        $_ -match '\.(cs|csproj|props|targets|resx|resources)$|(^|/)global\.json$'
+    })
+    if ($extraInputs.Count) { throw 'Server packaging requires a checkout without untracked .NET build inputs' }
+}
+
 function Copy-ReleaseWebTree {
     param([string]$RepoRoot, [string]$Destination, [string]$Version)
     $source = Resolve-ReleasePath $RepoRoot 'web-command-center'
-    foreach ($item in Get-ChildItem -LiteralPath $source -File -Recurse -Force) {
-        $relative = $item.FullName.Substring($source.Length).TrimStart('\', '/').Replace('\', '/')
+    foreach ($entry in Get-ReleaseTrackedPaths $RepoRoot 'web-command-center') {
+        $relative = $entry.Substring('web-command-center/'.Length)
         if (-not (Test-ReleaseEntry $relative) -or $relative -match '^(CaorenCupPlugin|CaorenCupPlugin.Tests|scripts|public/weaponpaints)/' -or
             $relative -match '\.test\.[jt]s$|postmatch-mock-test\.html$' -or
             ($Version -match '^v1\.10\.' -and $relative -match '(^|/)steam-(auth|openid)[^/]*\.ts$')) { continue }
-        $null = Resolve-ReleasePath $source $relative
+        $itemPath = Resolve-ReleasePath $source $relative
         $target = Resolve-ReleasePath $Destination $relative
         $null = New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force
-        Copy-Item -LiteralPath $item.FullName -Destination $target
+        Copy-Item -LiteralPath $itemPath -Destination $target
     }
     $data = Resolve-ReleasePath $RepoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
-    foreach ($item in Get-ChildItem -LiteralPath $data -File -Recurse -Filter '*.json') {
-        $relative = $item.FullName.Substring($data.Length).TrimStart('\', '/')
-        $null = Resolve-ReleasePath $data $relative
+    $dataScope = 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data'
+    foreach ($entry in Get-ReleaseTrackedPaths $RepoRoot $dataScope) {
+        $relative = $entry.Substring($dataScope.Length + 1)
+        if (-not (Test-ReleaseEntry $relative) -or $relative -notmatch '^skin-rarities\.json$|^(en|zh-CN)/(skins|stickers|music|keychains|gloves|collectibles|agents)\.json$') { continue }
+        $itemPath = Resolve-ReleasePath $data $relative
         $target = Resolve-ReleasePath $Destination ('weaponpaints-data/' + $relative)
         $null = New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force
-        Copy-Item -LiteralPath $item.FullName -Destination $target
+        Copy-Item -LiteralPath $itemPath -Destination $target
     }
     $component = Resolve-ReleasePath $RepoRoot 'cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints'
     foreach ($name in @('LICENSE', 'UPSTREAM.md')) {
@@ -350,4 +377,4 @@ function Copy-DeploymentGuide {
     }
 }
 
-Export-ModuleMember -Function Resolve-ReleasePath, Read-ServerPackageManifest, Select-ReleaseModules, Test-ReleaseEntry, Read-ReleaseAudioCatalog, Assert-WebReleaseBoundary, Copy-ReleaseWebTree, Copy-ReleasePublishTree, Assert-ReleaseTree, Write-ReleaseFileManifest, New-PortableReleaseZip, Copy-DeploymentGuide
+Export-ModuleMember -Function Resolve-ReleasePath, Read-ServerPackageManifest, Select-ReleaseModules, Test-ReleaseEntry, Assert-ServerReleaseSource, Read-ReleaseAudioCatalog, Assert-WebReleaseBoundary, Copy-ReleaseWebTree, Copy-ReleasePublishTree, Assert-ReleaseTree, Write-ReleaseFileManifest, New-PortableReleaseZip, Copy-DeploymentGuide

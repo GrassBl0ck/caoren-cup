@@ -49,4 +49,9 @@ if (!mainJs.includes(`CaorenCupDesktopClient/${packageJson.version}`)) {
   throw new Error('desktop-client must mark its user agent so the web page can hide the client download button.');
 }
 
+const releaseFiles = packageJson.build.files;
+if (!Array.isArray(releaseFiles) || releaseFiles.some(file =>
+  typeof file !== 'string' || !/^(?:package\.json|src\/[a-z0-9-]+\.(?:js|css|html|png|jpg|txt))$/.test(file))) {
+  throw new Error('desktop-client release files must be individual application assets.');
+}
 console.log('desktop-client config check passed.');

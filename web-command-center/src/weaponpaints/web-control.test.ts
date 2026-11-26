@@ -9,7 +9,7 @@ import {
     enqueuePluginCommand,
     getPluginCommandQueueSummary,
 } from '../plugin-command-queue';
-import { buildBridgeHealth, buildWeaponPaintsHealth } from './health';
+import { buildBridgeHealth, buildWeaponPaintsHealth, publicWeaponPaintsHealth } from './health';
 import { WeaponPaintsRuntime } from './runtime';
 import { requireWeaponPaintsWebEnabled, WeaponPaintsSettingsStore } from './settings';
 import { executeWeaponPaintsAdminAction } from './socket-api';
@@ -159,4 +159,17 @@ test('运行时目录和数据库入口都会执行网页总开关保护', async
         assert.throws(() => runtime.requireCatalog(), /已关闭/);
         assert.throws(() => runtime.requireService(), /已关闭/);
     });
+});
+
+test('public cosmetic health omits private database diagnostics and catalog paths', () => {
+    const status = publicWeaponPaintsHealth(buildWeaponPaintsHealth({
+        settings: { enabled: true },
+        catalog: { ok: false, error: 'private catalog fixture' },
+        database: { ok: false, error: 'private database fixture' },
+        bridge: { ok: false, lastHeartbeatAt: 15 },
+    }));
+    assert.equal(status.status, 'unhealthy');
+    assert.deepEqual(status.catalog, { ok: false });
+    assert.deepEqual(status.database, { ok: false });
+    assert.deepEqual(status.bridge, { ok: false });
 });

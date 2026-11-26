@@ -95,9 +95,23 @@ $null = Put 'boundary/cs/web-bridge/CaorenCupPlugin/secret.dll' 'separate server
 $null = Put 'boundary/cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/data/skin-rarities.json' '{}'
 $null = Put 'boundary/cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/LICENSE' 'fixture license'
 $null = Put 'boundary/cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints/UPSTREAM.md' 'fixture upstream'
+$null = Put 'boundary/web-command-center/public/stats-copy.json' '{"sample":true}'
+$null = Put 'boundary/web-command-center/public/identity-store.previous.json' '{"sample":true}'
+git -C $boundary init --quiet
+if ($LASTEXITCODE -ne 0) { throw 'Git fixture setup failed' }
+git -c core.autocrlf=false -C $boundary add -- web-command-center/package.json web-command-center/public/index.html web-command-center/src cs/game-plugin/PluginSplit/CaorenCupQOLs/CaorenWeaponPaints
+if ($LASTEXITCODE -ne 0) { throw 'Git fixture add failed' }
+git -c user.name=Fixture -c user.email=fixture@example.test -c commit.gpgSign=false -C $boundary commit --quiet -m 'release fixture'
+if ($LASTEXITCODE -ne 0) { throw 'Git fixture commit failed' }
+Assert-ServerReleaseSource $boundary
+$null = Put 'boundary/cs/hidden/LocalExtra.cs' '// local candidate'
+Reject { Assert-ServerReleaseSource $boundary } 'untracked server source is rejected before compilation'
 $webStage = Resolve-ReleasePath $fixture 'web-stage'
 Copy-ReleaseWebTree $boundary $webStage 'v1.10.0'
 Check (-not (Test-Path -LiteralPath (Join-Path $webStage '.env'))) 'web production environment excluded'
+Check (-not (Test-Path -LiteralPath (Join-Path $webStage 'public/stats-copy.json'))) 'untracked web export excluded'
+Check (-not (Test-ReleaseEntry 'public/identity-store.previous.json')) 'previous account snapshot forbidden'
+Check (-not (Test-Path -LiteralPath (Join-Path $webStage 'public/identity-store.previous.json'))) 'web backup excluded'
 Check (-not (Test-Path -LiteralPath (Join-Path $webStage 'CaorenCupPlugin'))) 'bridge not duplicated in web ZIP'
 Check (-not (Test-Path -LiteralPath (Join-Path $webStage 'node_modules'))) 'web node_modules excluded'
 Check (Test-Path -LiteralPath (Join-Path $webStage 'weaponpaints-data/LICENSE')) 'web data retains component license'

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
     EphemeralTicketService,
     isDeviceAuthTransportAllowed,
+    isSocketAuthTransportSecure,
     lastForwardedValue,
 } from './auth-core';
 
@@ -33,4 +34,13 @@ test('device auth requires HTTPS in production and permits only local HTTP devel
 test('trusted proxy parsing uses the address nearest to the server', () => {
     assert.equal(lastForwardedValue('198.51.100.8, 203.0.113.24'), '203.0.113.24');
     assert.equal(lastForwardedValue(''), undefined);
+});
+
+test('socket HTTPS accepts local proxy metadata only across the configured loopback hop', () => {
+    const input = { encrypted: false, trustLoopbackProxy: true, remoteAddress: '::ffff:127.0.0.1', forwardedProtocol: 'https' };
+    assert.equal(isSocketAuthTransportSecure(input), true);
+    assert.equal(isSocketAuthTransportSecure({ ...input, trustLoopbackProxy: false }), false);
+    assert.equal(isSocketAuthTransportSecure({ ...input, remoteAddress: '203.0.113.40' }), false);
+    assert.equal(isSocketAuthTransportSecure({ ...input, forwardedProtocol: 'http' }), false);
+    assert.equal(isSocketAuthTransportSecure({ ...input, encrypted: true }), true);
 });

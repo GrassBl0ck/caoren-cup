@@ -31,3 +31,12 @@ export const buildBridgeHealth = (
         lastHeartbeatAt,
     };
 };
+
+export const publicWeaponPaintsHealth = (health: ReturnType<typeof buildWeaponPaintsHealth>) => ({
+    ok: health.ok,
+    status: health.status,
+    settings: { enabled: health.settings.enabled },
+    catalog: { ok: health.catalog.ok },
+    database: { ok: health.database.ok },
+    bridge: { ok: health.bridge.ok },
+});

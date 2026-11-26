@@ -49,6 +49,18 @@ export class EphemeralTicketService<T> {
     }
 }
 
+export const isLoopbackAddress = (address?: string): boolean =>
+    address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+
+export const isSocketAuthTransportSecure = (input: {
+    encrypted: boolean;
+    trustLoopbackProxy: boolean;
+    remoteAddress?: string;
+    forwardedProtocol?: string | string[];
+}): boolean => input.encrypted || (
+    input.trustLoopbackProxy && isLoopbackAddress(input.remoteAddress) && input.forwardedProtocol === 'https'
+);
+
 export const isDeviceAuthTransportAllowed = (input: {
     production: boolean;
     secure: boolean;

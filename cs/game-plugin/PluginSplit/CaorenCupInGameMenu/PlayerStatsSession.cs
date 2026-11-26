@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using CaorenCup.Contracts;
 
 namespace CaorenCup.Features.InGameMenu;
@@ -97,13 +98,34 @@ public sealed record PlayerStatsMatchExport(
 public static class PlayerStatsCsvExporter
 {
     private static readonly UTF8Encoding Utf8Bom = new(encoderShouldEmitUTF8Identifier: true);
+    private static readonly Regex ExportName = new(@"\Aplayer-stats_[0-9]{8}_[0-9]{6}_[\p{L}\p{N}_-]+_[\p{L}\p{N}_-]+\.csv\z");
+    private const UnixFileMode PrivateFile = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+    public static int PruneExpired(string directory, DateTimeOffset now)
+    {
+        var root = new DirectoryInfo(directory);
+        if (!root.Exists || (root.Attributes & FileAttributes.ReparsePoint) != 0) return 0;
+        int removed = 0;
+        foreach (var file in root.EnumerateFiles("player-stats_*.csv"))
+        {
+            if ((file.Attributes & FileAttributes.ReparsePoint) != 0 || !ExportName.IsMatch(file.Name)) continue;
+            if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(file.FullName, PrivateFile);
+            if (file.LastWriteTimeUtc > now.UtcDateTime.AddDays(-180)) continue;
+            file.Delete();
+            removed++;
+        }
+        return removed;
+    }
 
     public static string Export(PlayerStatsMatchExport export, string directory)
     {
         ArgumentNullException.ThrowIfNull(export);
         if (string.IsNullOrWhiteSpace(directory)) throw new ArgumentException("CSV 目录不能为空。", nameof(directory));
 
-        Directory.CreateDirectory(directory);
+        var folder = OperatingSystem.IsWindows()
+            ? Directory.CreateDirectory(directory)
+            : Directory.CreateDirectory(directory, PrivateFile | UnixFileMode.UserExecute);
+        if ((folder.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("CSV 目录必须为实际目录。");
         var timestamp = export.StartedAt.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
         var fileName = $"player-stats_{timestamp}_{SafeSegment(export.ModeId)}_{SafeSegment(export.MapName)}.csv";
         var path = Path.Combine(directory, fileName);
@@ -127,13 +149,20 @@ public static class PlayerStatsCsvExporter
                 row.HitPercentage?.ToString("F1", CultureInfo.InvariantCulture) ?? string.Empty));
         }
 
-        File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", Utf8Bom);
+        var options = new FileStreamOptions { Access = FileAccess.Write, Mode = FileMode.CreateNew };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = PrivateFile;
+        using var writer = new StreamWriter(path, Utf8Bom, options);
+        foreach (var line in lines) writer.Write(line + "\r\n");
         return Path.GetFullPath(path);
     }
 
     private static string Csv(string? value)
     {
         var text = value ?? string.Empty;
+        if (text.TrimStart().StartsWith('=')
+            || text.TrimStart().StartsWith('+')
+            || text.TrimStart().StartsWith('-')
+            || text.TrimStart().StartsWith('@')) text = "'" + text;
         return text.IndexOfAny(new[] { ',', '"', '\r', '\n' }) >= 0
             ? $"\"{text.Replace("\"", "\"\"")}\""
             : text;

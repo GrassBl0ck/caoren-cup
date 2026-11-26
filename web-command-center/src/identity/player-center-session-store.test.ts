@@ -99,17 +99,35 @@ test('account change preserves and rebinds only the current session', async (t) 
     assert.ok(store.snapshot().sessions[unrelated.session.sessionId]);
 });
 
-test('corrupt primary restores the previous valid player-center session snapshot', async (t) => {
+test('corrupt primary never reactivates a logged-out session from a legacy snapshot', async (t) => {
     const now = { value: 5_000_000 };
     const { dir, file, store } = makeStore('previous', now);
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     await store.load();
     const first = await store.create('identity-a', 1);
-    await store.create('identity-b', 2);
+    fs.copyFileSync(file, store.previousPath);
+    await store.revokeCurrent(first.rawToken);
     fs.writeFileSync(file, '{broken', 'utf8');
 
     const recovered = new PlayerCenterSessionStore(file, { now: () => now.value });
     await recovered.load();
-    assert.equal((await recovered.use(first.rawToken))?.identityId, 'identity-a');
-    assert.equal(Object.keys(recovered.snapshot().sessions).length, 1);
+    assert.equal(await recovered.use(first.rawToken), undefined);
+    assert.deepEqual(recovered.snapshot().sessions, {});
+});
+
+test('durably forgotten devices immediately lose bound sessions even before session-file cleanup', async (t) => {
+    const now = { value: 6_000_000 };
+    const { dir, file } = makeStore('device-guard', now);
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const forgotten = new Set<string>();
+    const store = new PlayerCenterSessionStore(file, { now: () => now.value, isDeviceForgotten: id => forgotten.has(id) });
+    await store.load();
+    const removed = await store.create('identity-a', 1, 'removed-device');
+    const other = await store.create('identity-a', 1, 'another-device');
+    forgotten.add('removed-device');
+    assert.ok(store.snapshot().sessions[removed.session.sessionId]);
+    assert.equal(store.isBoundSessionCurrent(removed.session.sessionId, 'identity-a', 1), false);
+    assert.equal(await store.useBoundSession(removed.session.sessionId, 'identity-a'), undefined);
+    assert.equal(await store.use(removed.rawToken), undefined);
+    assert.ok(await store.use(other.rawToken));
 });

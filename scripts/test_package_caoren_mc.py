@@ -1,3 +1,4 @@
+import subprocess
 """Packaging behavior checks; fixtures stay in ignored release-build for review."""
 from pathlib import Path
 import importlib.util,json,tempfile,unittest,zipfile
@@ -13,11 +14,19 @@ class McPackageTests(unittest.TestCase):
         (ROOT/'release-build').mkdir(exist_ok=True)
         self.root=Path(tempfile.mkdtemp(prefix='mc-package-test-',dir=ROOT/'release-build'))
         assert self.root.resolve().is_relative_to((ROOT/'release-build').resolve())
+    def commit_fixture(self, source, *paths):
+        if not (source/'.git').is_dir():
+            subprocess.run(['git','init','--quiet'],cwd=source,check=True)
+        subprocess.run(['git','-c','core.autocrlf=false','add','--',*paths],cwd=source,check=True)
+        subprocess.run(['git','-c','user.name=Fixture','-c','user.email=fixture@example.test',
+                        '-c','commit.gpgSign=false','commit','--quiet','-m','package fixture'],cwd=source,check=True)
+
     def pack_source(self):
         source=self.root/'datapack';source.mkdir()
         (source/'pack.mcmeta').write_text('{"pack":{"pack_format":98,"description":"fixture"}}',encoding='utf-8')
         fn=source/'data/example/function/load.mcfunction';fn.parent.mkdir(parents=True)
         fn.write_text('say fixture\n',encoding='utf-8')
+        self.commit_fixture(source, 'pack.mcmeta', 'data')
         return source
     def test_datapack_has_installable_root_and_no_runtime(self):
         source=self.pack_source();cache=source/'__pycache__';cache.mkdir();(cache/'x.pyc').write_bytes(b'cache')
@@ -30,9 +39,12 @@ class McPackageTests(unittest.TestCase):
         nested=source/'docs';nested.mkdir()
         (nested/'AGENTS.md').write_text('private nested workflow',encoding='utf-8')
         (nested/'README.md').write_text('public game guide',encoding='utf-8')
+        self.commit_fixture(source, 'AGENTS.md', 'docs')
+        (nested/'export.json').write_text('{}',encoding='utf-8')
         output=self.root/'pack.zip';package.pack_datapack(source,output)
         with zipfile.ZipFile(output) as z:
             self.assertIn('docs/README.md',z.namelist())
+            self.assertNotIn('docs/export.json',z.namelist())
             self.assertFalse(any(Path(name).name=='AGENTS.md' for name in z.namelist()))
             self.assertFalse(any(b'private' in z.read(name) for name in z.namelist()))
     def test_missing_datapack_entry_fails_before_output(self):
@@ -61,6 +73,19 @@ class McPackageTests(unittest.TestCase):
         self.assertFalse(any(name.startswith('minigames/') for name in expected | selected))
         missing=next(iter(expected))
         self.assertFalse(expected.issubset(selected-{missing}))
+    def test_plugin_jar_rejects_embedded_runtime_snapshot(self):
+        safe=self.root/'safe.jar'
+        private=self.root/'private.jar'
+        for output in (safe, private):
+            with zipfile.ZipFile(output,'w') as jar:
+                jar.writestr('plugin.yml','name: Fixture\nversion: 1.0.0\nmain: demo.Fixture\n')
+                jar.writestr('demo/Fixture.class',b'fixture')
+                if output==private:
+                    jar.writestr('data/auth.previous.json','{}')
+        package.validate_plugin(safe,'Fixture','1.0.0')
+        with self.assertRaisesRegex(ValueError,'private runtime data'):
+            package.validate_plugin(private,'Fixture','1.0.0')
+
     def test_bundle_manifest_paths_hashes_and_exclusive_output(self):
         stage=self.root/'stage';stage.mkdir();(stage/'INSTALL.md').write_text('install\n',encoding='utf-8')
         target=self.root/'bundle.zip';package.write_bundle(stage,target,'v2.0.0',{'experimentalDefaultEnabled':False})

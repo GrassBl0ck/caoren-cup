@@ -56,6 +56,10 @@ export class WeaponPaintsRuntime {
         }
     }
 
+    async pruneExpiredAudit(): Promise<void> {
+        if (this.repository && !this.databaseError) await this.repository.pruneExpiredAudit();
+    }
+
     requireCatalog() {
         requireWeaponPaintsWebEnabled(this.settings);
         if (!this.catalog) throw new Error(this.catalogError || '本地物品目录尚未就绪。');

@@ -31,6 +31,8 @@ public sealed partial class CaorenCupInGameMenuPlugin
         RegisterEventHandler<EventRoundStart>(OnPlayerStatsRoundStart);
         RegisterEventHandler<EventPlayerHurt>(OnPlayerStatsPlayerHurt);
         RegisterEventHandler<EventWeaponFire>(OnPlayerStatsWeaponFire);
+        PrunePlayerStatsExports();
+        AddTimer(86400, PrunePlayerStatsExports, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
     }
 
     private void OnPlayerStatsTick()
@@ -54,6 +56,15 @@ public sealed partial class CaorenCupInGameMenuPlugin
     {
         var export = _playerStatsSession?.End(reason, DateTimeOffset.Now);
         if (export is not null) ExportPlayerStats(export);
+    }
+
+    private void PrunePlayerStatsExports()
+    {
+        try { PlayerStatsCsvExporter.PruneExpired(Path.Combine(ModuleDirectory, "data", "player-stats"), DateTimeOffset.UtcNow); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine("[草人杯] 正式比赛统计归档清理失败。");
+        }
     }
 
     private void ExportPlayerStats(PlayerStatsMatchExport export)

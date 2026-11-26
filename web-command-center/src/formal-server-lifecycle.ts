@@ -262,6 +262,7 @@ const createActions = (): FormalServerActions | undefined => {
                 const source = path.join(demoRoot, name);
                 const destination = path.join(directory, name);
                 await fs.copyFile(source, destination);
+                await fs.chmod(destination, 0o600);
                 const recording = await fs.open(destination, 'r');
                 try { await recording.sync(); } finally { await recording.close(); }
                 const after = await fs.stat(source);
@@ -292,12 +293,16 @@ interface FormalArchiveManifest {
 }
 
 export const readFormalArchive = async (matchId: unknown, steamIds: string | readonly string[] | undefined) => {
-    const root = process.env.CAOREN_FORMAL_ARCHIVE_ROOT?.trim();
-    if (!steamIds || !root || !path.isAbsolute(root) || !isFormalMatchId(matchId)) return undefined;
+    if (!steamIds || !isFormalMatchId(matchId)) return undefined;
+    const root = await existingArchiveRoot(process.env.CAOREN_FORMAL_ARCHIVE_ROOT);
+    if (!root) return undefined;
     const owns = new Set(typeof steamIds === 'string' ? [steamIds] : steamIds);
     const directory = path.join(root, matchId);
     try {
-        const manifest = JSON.parse(await fs.readFile(path.join(directory, 'match.json'), 'utf8')) as FormalArchiveManifest;
+        if (path.relative(directory, await fs.realpath(directory))) return undefined;
+        const manifestFile = path.join(directory, 'match.json');
+        if (!(await fs.lstat(manifestFile)).isFile()) return undefined;
+        const manifest = JSON.parse(await fs.readFile(manifestFile, 'utf8')) as FormalArchiveManifest;
         if (!Number.isSafeInteger(manifest.archivedAt) || manifest.archivedAt <= 0 || manifest.archivedAt > Date.now()) return undefined;
         const { serverExpiresAt } = archiveRetentionDeadlines(manifest.archivedAt);
         if (Date.now() >= serverExpiresAt) return undefined;
@@ -323,6 +328,16 @@ export const readFormalArchive = async (matchId: unknown, steamIds: string | rea
     }
 };
 
+export async function isRegularArchiveDemo(directory: string, name: string): Promise<boolean> {
+    if (!fileNamePattern.test(name)) return false;
+    try {
+        return (await fs.lstat(path.join(directory, name))).isFile();
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+        throw error;
+    }
+}
+
 export async function listFormalArchives(steamIds: readonly string[]) {
     const root = process.env.CAOREN_FORMAL_ARCHIVE_ROOT?.trim();
     if (!steamIds.length || !root || !path.isAbsolute(root)) return [];
@@ -344,6 +359,80 @@ export async function listFormalArchives(steamIds: readonly string[]) {
         }
     }
     return summaries.sort((a, b) => b.archivedAt - a.archivedAt).slice(0, 30);
+}
+
+type ArchiveTier = 'server' | 'private';
+
+async function existingArchiveRoot(value?: string): Promise<string | undefined> {
+    const directory = value?.trim();
+    if (!directory || !path.isAbsolute(directory)) return;
+    const root = path.resolve(directory);
+    if (path.dirname(root) === root) throw new Error('Invalid managed archive root');
+    try {
+        if (path.relative(root, await fs.realpath(root)) || !(await fs.lstat(root)).isDirectory())
+            throw new Error('Managed archive root must be a real directory');
+        return root;
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+}
+
+function archiveDemos(value: unknown, matchId: string): string[] | undefined {
+    if (!Array.isArray(value) || value.some(name =>
+        typeof name !== 'string' || !fileNamePattern.test(name) || !name.includes('_' + matchId + '_'))) return;
+    return [...new Set(value)] as string[];
+}
+
+async function pruneExpiredArchiveRoot(root: string, tier: ArchiveTier, now: number, sourceRoot?: string): Promise<number> {
+    let removed = 0;
+    const folders = await fs.readdir(root, { withFileTypes: true });
+    for (const folder of folders) {
+        const matchId = folder.name;
+        if (!folder.isDirectory() || !isFormalMatchId(matchId)) continue;
+        const directory = path.join(root, matchId);
+        if (path.relative(directory, await fs.realpath(directory))) continue;
+        const manifest = path.join(directory, 'match.json');
+        const entries = await fs.readdir(directory, { withFileTypes: true });
+        if (!entries.some(entry => entry.name === 'match.json' && entry.isFile())) continue;
+        let record: FormalArchiveManifest;
+        try { record = JSON.parse(await fs.readFile(manifest, 'utf8')); }
+        catch (error) {
+            if (error instanceof SyntaxError) continue;
+            throw error;
+        }
+        if (!record || record.matchId !== matchId || !Number.isSafeInteger(record.archivedAt)
+            || record.archivedAt <= 0 || record.archivedAt > now) continue;
+        const deadlines = archiveRetentionDeadlines(record.archivedAt);
+        if (now < (tier === 'server' ? deadlines.serverExpiresAt : deadlines.cloudExpiresAt)) continue;
+        const demos = archiveDemos(record.demos, matchId);
+        if (!demos || entries.some(entry => !entry.isFile() || (entry.name !== 'match.json' && !demos.includes(entry.name)))) continue;
+
+        for (const name of demos) {
+            for (const storage of new Set([directory, sourceRoot].filter((storage): storage is string => !!storage))) {
+                const file = path.join(storage, name);
+                try {
+                    const info = await fs.lstat(file);
+                    if (info.isFile()) await fs.unlink(file);
+                } catch (error) {
+                    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+                }
+            }
+        }
+        await fs.unlink(manifest);
+        await fs.rmdir(directory);
+        removed++;
+    }
+    return removed;
+}
+
+export async function pruneFormalArchives(env: NodeJS.ProcessEnv = process.env, now = Date.now()): Promise<number> {
+    const server = await existingArchiveRoot(env.CAOREN_FORMAL_ARCHIVE_ROOT);
+    const privateArchive = await existingArchiveRoot(env.CAOREN_FORMAL_PRIVATE_ARCHIVE_ROOT);
+    const demo = await existingArchiveRoot(env.CAOREN_FORMAL_DEMO_ROOT);
+    if (privateArchive && (privateArchive === server || privateArchive === demo))
+        throw new Error('Private archive requires a separate managed directory');
+    const removed = server ? await pruneExpiredArchiveRoot(server, 'server', now, demo) : 0;
+    return removed + (privateArchive ? await pruneExpiredArchiveRoot(privateArchive, 'private', now) : 0);
 }
 
 export const formalServerLifecycle = new FormalServerLifecycle(createActions());

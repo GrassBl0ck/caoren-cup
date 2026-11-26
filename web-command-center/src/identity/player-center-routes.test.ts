@@ -241,8 +241,9 @@ test('production blocks every HTTP device-auth endpoint and accepts HTTPS only f
     t.after(() => { if (original === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = original; });
     const runtime = await startServer('production-transport', true);
     t.after(runtime.close);
-    for (const endpoint of ['account-login', 'login', 'rotation/confirm', 'logout']) {
-        const response = await requestJson(`${runtime.baseUrl}/api/desktop-auth/${endpoint}`, 'POST', {});
+    for (const endpoint of ['/api/desktop-auth/account-login', '/api/desktop-auth/login', '/api/desktop-auth/rotation/confirm',
+        '/api/desktop-auth/logout', '/api/account-auth/login', '/api/player-center/session', '/api/player-center/account/password']) {
+        const response = await requestJson(runtime.baseUrl + endpoint, 'POST', {});
         assert.equal(response.status, 403, endpoint);
         assert.equal(response.body.error, 'DEVICE_AUTH_TRANSPORT_NOT_ALLOWED');
     }

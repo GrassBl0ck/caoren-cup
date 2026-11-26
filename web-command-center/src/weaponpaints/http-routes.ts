@@ -3,7 +3,7 @@ import type { Express } from 'express';
 import { V1333_PLUGIN_ONLINE_TTL_MS } from '../game-constants';
 import { getSession } from '../session-manager';
 import type { CatalogCategory } from './catalog';
-import { buildBridgeHealth } from './health';
+import { buildBridgeHealth, publicWeaponPaintsHealth } from './health';
 import { weaponPaintsRuntime } from './runtime';
 
 const CATEGORIES = new Set<CatalogCategory>(['skin', 'glove', 'agent', 'music', 'pin', 'sticker', 'keychain']);
@@ -28,7 +28,7 @@ export const registerWeaponPaintsHttpRoutes = (app: Express) => {
             Date.now(),
             V1333_PLUGIN_ONLINE_TTL_MS,
         ));
-        res.status(health.ok ? 200 : 503).json(health);
+        res.status(health.ok ? 200 : 503).json(publicWeaponPaintsHealth(health));
     });
 
     app.get('/api/weaponpaints/catalog', (req, res) => {
@@ -54,8 +54,8 @@ export const registerWeaponPaintsHttpRoutes = (app: Express) => {
                 })
                 : catalog.search(category, String(req.query.query || ''), { ...options, defIndex });
             return res.json({ success: true, ...result });
-        } catch (error) {
-            return res.status(503).json({ success: false, error: error instanceof Error ? error.message : '物品目录不可用。' });
+        } catch {
+            return res.status(503).json({ success: false, error: '物品目录暂不可用。' });
         }
     });
 };

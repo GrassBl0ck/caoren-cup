@@ -6,6 +6,7 @@ import {
     AccountRecoveryTicket,
     EphemeralTicketService,
     isDeviceAuthTransportAllowed,
+    isLoopbackAddress,
     PlayerCenterBootstrapTicket,
     PlayerCenterMatchSocketTicket,
 } from './auth-core';
@@ -24,7 +25,7 @@ import { isVerifiedSteamIdentity, LobbyMembershipRecord } from './identity-types
 import { desktopRoomAdmins } from '../desktop-formal-room';
 import { EmailAuthError, EmailCodeService, EmailCodePurpose } from './email-codes';
 import { normalizeEmail } from './email-address';
-import { listFormalArchives, readFormalArchive } from '../formal-server-lifecycle';
+import { isRegularArchiveDemo, listFormalArchives, readFormalArchive } from '../formal-server-lifecycle';
 import { registerSteamBindingRoutes } from './steam-binding-routes';
 import { registerDesktopRoomRoutes } from './desktop-room-routes';
 
@@ -112,7 +113,8 @@ const clearPlayerCenterCookie = (req: express.Request, res: express.Response) =>
     });
 };
 
-const deviceAuthAllowed = (req: express.Request): boolean => isDeviceAuthTransportAllowed({
+const deviceAuthAllowed = (req: express.Request): boolean =>
+    (requestIsSecure(req) || isLoopbackAddress(req.socket.remoteAddress)) && isDeviceAuthTransportAllowed({
     production: process.env.NODE_ENV === 'production',
     secure: requestIsSecure(req),
     hostname: req.hostname,
@@ -120,7 +122,7 @@ const deviceAuthAllowed = (req: express.Request): boolean => isDeviceAuthTranspo
 
 const requireAllowedDeviceAuthTransport: express.RequestHandler = (req, res, next) => {
     if (!deviceAuthAllowed(req)) {
-        res.status(403).json({ success: false, error: 'DEVICE_AUTH_TRANSPORT_NOT_ALLOWED', message: '当前传输方式不支持设备认证。' });
+        res.status(403).json({ success: false, error: 'DEVICE_AUTH_TRANSPORT_NOT_ALLOWED', message: '账号和设备操作需要通过安全连接访问。' });
         return;
     }
     next();
@@ -130,7 +132,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
     app.use(['/api/account-auth', '/api/account-email', '/api/account-recovery', '/api/player-center', '/api/desktop-auth'], (_req, res, next) => {
         res.setHeader('Cache-Control', 'no-store');
         next();
-    });
+    }, requireAllowedDeviceAuthTransport);
     const service = dependencies.service || lobbyIdentityService;
     const getActiveSession = dependencies.getSession || getSession;
     const accountGuard = dependencies.accountLoginGuard || defaultAccountLoginGuard;
@@ -280,7 +282,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         res.json({ success: true, emailRegistrationAvailable: emailCodes.enabled, steamQuickLoginAvailable: false });
     });
 
-    app.post('/api/account-email/code', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+    app.post('/api/account-email/code', sameOrigin, async (req, res) => {
         try {
             const purpose = req.body?.purpose as EmailCodePurpose;
             if (!['register', 'bind-email', 'reset-password'].includes(purpose)) {
@@ -304,7 +306,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         } catch (error) { return emailFailure(res, error); }
     });
 
-    app.post('/api/account-auth/register', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+    app.post('/api/account-auth/register', sameOrigin, async (req, res) => {
         try {
             if (req.body?.age14 !== true) return res.status(400).json({ success: false, error: 'age_confirmation_required' });
             validateAccountPassword(req.body?.password);
@@ -321,7 +323,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         } catch (error) { return emailFailure(res, error); }
     });
 
-    app.post('/api/player-center/account/email', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+    app.post('/api/player-center/account/email', sameOrigin, async (req, res) => {
         const session = await requirePlayerCenterSession(req, res);
         if (!session) return;
         try {
@@ -335,7 +337,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         } catch (error) { return emailFailure(res, error); }
     });
 
-    app.post('/api/account-recovery/email', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+    app.post('/api/account-recovery/email', sameOrigin, async (req, res) => {
         try {
             validateAccountPassword(req.body?.newPassword);
             if (req.body?.newPassword !== req.body?.confirmPassword) {
@@ -350,7 +352,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         } catch (error) { return emailFailure(res, error); }
     });
 
-    app.post('/api/player-center/account/steam', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+    app.post('/api/player-center/account/steam', sameOrigin, async (req, res) => {
         const session = await requirePlayerCenterSession(req, res);
         if (!session) return;
         const keys = [`ip:${req.ip || 'unknown'}`, `account:${session.identityId}`];
@@ -389,7 +391,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         });
     });
 
-    app.post('/api/account-auth/login', async (req, res) => {
+    app.post('/api/account-auth/login', sameOrigin, async (req, res) => {
         const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
         const keys = [`ip:${req.ip || req.socket.remoteAddress || 'unknown'}`, `account:${email.slice(0, 254)}`];
         const limited = accountGuard.check(keys);
@@ -421,7 +423,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         });
     });
 
-    app.post('/api/player-center/session', async (req, res) => {
+    app.post('/api/player-center/session', sameOrigin, async (req, res) => {
         const ticket = bootstrapTickets.consume(req.body?.sessionBootstrapTicket);
         if (!ticket || service.deviceWasForgotten(ticket.currentDeviceTokenId)) return res.status(401).json({ success: false, error: 'session_bootstrap_invalid' });
         const account = service.getLoginAccount(ticket.identityId);
@@ -471,7 +473,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         if (!session) return;
         const archive = await readFormalArchive(req.params.matchId, archiveSteamIds(session.identityId));
         const requestedFile = req.params.file;
-        if (!archive || !archive.result.demos.includes(requestedFile))
+        if (!archive || !archive.result.demos.includes(requestedFile) || !await isRegularArchiveDemo(archive.directory, requestedFile))
             return res.status(404).json({ success: false, error: 'match_archive_unavailable' });
         return res.download(path.join(archive.directory, requestedFile));
     });
@@ -564,7 +566,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         return res.json({ success: true, ...playerCenterMatchView(centerSession.identityId) });
     });
 
-    app.post('/api/player-center/account/erase', requireAllowedDeviceAuthTransport, sameOrigin, async (req, res) => {
+    app.post('/api/player-center/account/erase', sameOrigin, async (req, res) => {
         const current = await requirePlayerCenterSession(req, res);
         if (!current) return;
         if (req.body?.confirm !== true) return res.status(400).json({ success: false, error: 'confirmation_required' });
@@ -602,7 +604,13 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         if (!current) return;
         const ids = await service.forgetDevice(current.identityId, req.body?.id);
         if (!ids.length) return res.status(404).json({ success: false, error: 'device_unknown' });
-        const sessions = await centerSessions.revokeDeviceSessions(current.identityId, new Set(ids));
+        const tokens = new Set(ids);
+        // The durable device revocation already invalidates these sessions on every entry point.
+        const sessions = Object.values(centerSessions.snapshot().sessions)
+            .filter(session => session.identityId === current.identityId && session.currentDeviceTokenId && tokens.has(session.currentDeviceTokenId))
+            .map(session => session.sessionId);
+        try { await centerSessions.revokeDeviceSessions(current.identityId, tokens); }
+        catch { console.warn('[PlayerCenter] 已撤销设备，会话文件将在后续访问时整理。'); }
         for (const revokedSessionId of sessions) {
             await dependencies.onPlayerCenterSessionsRevoked?.({ identityId: current.identityId, revokedSessionId });
         }
@@ -610,7 +618,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         res.json({ success: true, signedOut: sessions.includes(current.sessionId) });
     });
 
-    app.post('/api/player-center/logout', async (req, res) => {
+    app.post('/api/player-center/logout', sameOrigin, async (req, res) => {
         const rawToken = cookieValue(req, PLAYER_CENTER_COOKIE);
         const current = await centerSessions.use(rawToken);
         await centerSessions.revokeCurrent(rawToken);
@@ -626,7 +634,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         return res.status(410).json({ success: false, error: 'endpoint_retired' });
     });
 
-    app.post('/api/player-center/account/password', async (req, res) => {
+    app.post('/api/player-center/account/password', sameOrigin, async (req, res) => {
         const session = await requirePlayerCenterSession(req, res);
         if (!session) return;
         if (req.body?.newPassword !== req.body?.confirmPassword) {
@@ -670,7 +678,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         app.post(endpoint, (_req, res) => res.status(410).json({ success: false, error: 'endpoint_retired' }));
     }
 
-    app.post('/api/desktop-auth/account-login', requireAllowedDeviceAuthTransport, async (req, res) => {
+    app.post('/api/desktop-auth/account-login', async (req, res) => {
         const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
         const keys = [`desktop-ip:${req.ip || req.socket.remoteAddress || 'unknown'}`, `desktop-account:${email.slice(0, 254)}`];
         const limited = desktopGuard.check(keys);
@@ -705,7 +713,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         });
     });
 
-    app.post('/api/desktop-auth/login', requireAllowedDeviceAuthTransport, async (req, res) => {
+    app.post('/api/desktop-auth/login', async (req, res) => {
         const token = bearerToken(req);
         const keys = [`desktop-ip:${req.ip || req.socket.remoteAddress || 'unknown'}`];
         const limited = desktopGuard.check(keys);
@@ -743,7 +751,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
         });
     });
 
-    app.post('/api/desktop-auth/rotation/confirm', requireAllowedDeviceAuthTransport, async (req, res) => {
+    app.post('/api/desktop-auth/rotation/confirm', async (req, res) => {
         const confirmed = await service.confirmDeviceTokenRotation(bearerToken(req));
         auditDesktopAuth(req, {
             action: 'rotation_confirm', outcome: confirmed ? 'success' : 'rejected',
@@ -754,7 +762,7 @@ export const registerIdentityAuthRoutes = (app: express.Express, dependencies: I
             : res.status(400).json({ success: false, error: 'rotation_invalid' });
     });
 
-    app.post('/api/desktop-auth/logout', requireAllowedDeviceAuthTransport, async (req, res) => {
+    app.post('/api/desktop-auth/logout', async (req, res) => {
         const revoked = await service.revokeDeviceToken(bearerToken(req));
         auditDesktopAuth(req, {
             action: 'logout', outcome: revoked ? 'success' : 'rejected', reason: revoked ? undefined : 'token_invalid',

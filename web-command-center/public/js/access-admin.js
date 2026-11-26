@@ -85,28 +85,16 @@
       return;
     }
     container.innerHTML = '<div class="identity-admin-table-wrap"><table class="identity-admin-table"><thead><tr>' +
-      '<th>玩家</th><th>SteamID</th><th>确认状态</th><th>设备</th></tr></thead><tbody>' +
+      '<th>玩家</th><th>确认状态</th></tr></thead><tbody>' +
       memberships.map(function (member) {
-        var identityId = escapeHtml(member.identityId);
-        var devices = Array.isArray(member.devices) ? member.devices : [];
-        var deviceActions = devices.map(function (device, index) {
-          return '<button type="button" onclick="revokeIdentityDevice(\'' + identityId + '\',\'' + escapeHtml(device.tokenId) + '\')">撤销设备 ' + (index + 1) + '</button>';
-        }).join(' ');
-        if (devices.length) deviceActions += ' <button type="button" onclick="revokeIdentityTokens(\'' + identityId + '\')">撤销全部</button>';
-        return '<tr><td>' + escapeHtml(member.nickname) + '</td><td>' + escapeHtml(member.steamIdMasked || '未提供') +
-          '</td><td>' + escapeHtml(member.confirmationState || 'unknown') + '</td><td>' + (deviceActions || '无有效设备') + '</td></tr>';
+        return '<tr><td>' + escapeHtml(member.nickname) + '</td><td>' +
+          escapeHtml(member.confirmationState || 'unknown') + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
 
   function refreshIdentityAdmin() { socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'GET_STATUS' }); }
-  async function revokeIdentityDevice(identityId, tokenId) {
-    if (await window.caorenConfirm('这台设备会立即退出登录，需要重新验证。', { title: '撤销设备登录', tone: 'danger', confirmText: '确认撤销' })) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_DEVICE', identityId: identityId, tokenId: tokenId });
-  }
-  async function revokeIdentityTokens(identityId) {
-    if (await window.caorenConfirm('该账号的所有设备都会立即退出登录。', { title: '撤销全部设备登录', tone: 'danger', confirmText: '撤销全部' })) socket()?.emit('IDENTITY_ADMIN_ACTION', { action: 'REVOKE_ALL_TOKENS', identityId: identityId });
-  }
 
-  Object.assign(window, { refreshIdentityAdmin, revokeIdentityDevice, revokeIdentityTokens });
+  Object.assign(window, { refreshIdentityAdmin });
 
   function boot() {
     if (document.body.dataset.page === 'admin' && byId('admin-login-entry')) byId('admin-login-entry').open = true;
@@ -125,7 +113,6 @@
     if (loginSocket?.on) {
       loginSocket.on('IDENTITY_ADMIN_ACTION', function (data) {
         if (data?.success && data.action === 'GET_STATUS') renderIdentityStatus(data);
-        else if (data?.success) refreshIdentityAdmin();
       });
     }
     refreshServerStatus();

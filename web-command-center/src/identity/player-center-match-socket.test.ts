@@ -231,3 +231,40 @@ test('disconnecting one tab keeps the shared player online while another authent
     await second.trigger('disconnect', undefined);
     assert.equal(session.players.player.isOnline, false);
 });
+
+test('room administrators can see only current match confirmation status and cannot revoke platform credentials', async () => {
+    const [socketModule, identityRuntime, sessionManager] = await Promise.all([
+        (require('../socket-handlers') as typeof import('../socket-handlers')),
+        (require('./identity-runtime') as typeof import('./identity-runtime')),
+        (require('../session-manager') as typeof import('../session-manager')),
+    ]);
+    await identityRuntime.initializeIdentityRuntime();
+    const room = sessionManager.createInitialSession();
+    sessionManager.setSession(room);
+    const account = await createTestLoginAccount(identityRuntime.lobbyIdentityService, {
+        steamId: '76561198000010821', nickname: 'Room Fixture Player', password: 'current-pass',
+    });
+    const joined = await identityRuntime.lobbyIdentityService.joinPlayerCenterMatch(account.identity.identityId, room.sessionId);
+    assert.equal(joined.ok, true);
+    room.players['fixture-admin'] = {
+        playerId: 'fixture-admin', name: 'Fixture Admin', role: 'Admin', isReady: true,
+    };
+    const io = new FakeIo();
+    socketModule.registerSocketHandlers(io as any, { broadcastState() {}, notifyMessage() {} });
+    const host = new FakeSocket('fixture-host');
+    io.connect(host);
+    await host.trigger(WsEvents.LOGIN, { name: 'Fixture Admin', extraParam: process.env.ADMIN_PASSWORD });
+    assert.equal(host.last(WsEvents.LOGIN_RESPONSE)?.success, true);
+    await host.trigger(WsEvents.IDENTITY_ADMIN_ACTION, { action: 'GET_STATUS' });
+    const status = host.last(WsEvents.IDENTITY_ADMIN_ACTION);
+    assert.equal(status?.success, true);
+    assert.equal(status?.memberships[0].nickname, 'Room Fixture Player');
+    assert.equal(status?.memberships[0].devices, undefined);
+    assert.equal(status?.memberships[0].identityId, undefined);
+    await host.trigger(WsEvents.IDENTITY_ADMIN_ACTION, { action: 'REVOKE_ALL_TOKENS', identityId: account.identity.identityId });
+    assert.equal(host.last(WsEvents.IDENTITY_ADMIN_ACTION)?.success, false);
+
+    host.data.playerOnly = true;
+    await host.trigger(WsEvents.IDENTITY_ADMIN_ACTION, { action: 'GET_STATUS' });
+    assert.equal(host.last(WsEvents.IDENTITY_ADMIN_ACTION)?.error, 'admin_required');
+});

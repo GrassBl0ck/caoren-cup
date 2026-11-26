@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { protectPrivateFile, writePrivateFile } from './private-store-files';
 import crypto from 'node:crypto';
 import { generateRandomLoginName, validateLoginName } from './account-foundation';
 import { IdentityStoreData, IdentityStoreDataLegacy, isDesktopAvatar, LoginAccountRecord } from './identity-types';
@@ -282,9 +283,7 @@ export class IdentityStore {
             if (error instanceof IdentityMigrationError) throw error;
             previous = fallback;
         }
-        const temporary = this.previousPath + '.scrub-' + crypto.randomUUID();
-        this.fileSystem.writeFileSync(temporary, JSON.stringify(previous), { flag: 'wx', mode: 0o600 });
-        this.fileSystem.renameSync(temporary, this.previousPath);
+        writePrivateFile(this.fileSystem, this.previousPath, JSON.stringify(previous));
     }
 
     async eraseAccount(id: string, expectedHash: string) {
@@ -292,7 +291,7 @@ export class IdentityStore {
             if (draft.accounts[id]?.password?.hash !== expectedHash) throw new Error('account_changed');
             const marker = this.marker(id);
             this.fileSystem.mkdirSync(path.dirname(marker), { recursive: true, mode: 0o700 });
-            this.fileSystem.writeFileSync(marker, '', { mode: 0o600 });
+            writePrivateFile(this.fileSystem, marker, '');
             eraseFromStore(draft, id);
             eraseFromStore(this.data, id);
         });
@@ -300,8 +299,8 @@ export class IdentityStore {
     }
 
     async load(): Promise<void> {
-        const primaryExists = this.fileSystem.existsSync(this.filePath);
-        const previousExists = this.fileSystem.existsSync(this.previousPath);
+        const primaryExists = protectPrivateFile(this.fileSystem, this.filePath);
+        const previousExists = protectPrivateFile(this.fileSystem, this.previousPath);
         if (!primaryExists && !previousExists) {
             this.data = createEmptyData();
             await this.persist(this.data);
@@ -332,6 +331,14 @@ export class IdentityStore {
             parseData(this.fileSystem.readFileSync(this.previousPath, 'utf8'), this.randomBytes).data,
         );
         this.applyErasures(restored);
+        const recoveredAt = Date.now();
+        for (const account of Object.values(restored.accounts)) {
+            account.updatedAt = Math.max(account.updatedAt + 1, recoveredAt);
+        }
+        for (const device of Object.values(restored.deviceTokens)) {
+            device.status = 'revoked';
+            device.revokedAt = device.deviceForgottenAt = recoveredAt;
+        }
         await this.persist(restored, false);
         if (this.fileSystem.existsSync(this.filePath + '.erasures')) this.scrubPrevious(restored);
         this.data = restored;
@@ -365,17 +372,9 @@ export class IdentityStore {
     }
 
     private async persist(data: IdentityStoreData, backupCurrent = true): Promise<void> {
-        const directory = path.dirname(this.filePath);
-        this.fileSystem.mkdirSync(directory, { recursive: true });
-        const tempPath = `${this.filePath}.tmp-${process.pid}-${Date.now()}`;
-        try {
-            this.fileSystem.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
-            if (backupCurrent && this.fileSystem.existsSync(this.filePath)) {
-                this.fileSystem.copyFileSync(this.filePath, this.previousPath);
-            }
-            this.fileSystem.renameSync(tempPath, this.filePath);
-        } finally {
-            if (this.fileSystem.existsSync(tempPath)) this.fileSystem.rmSync(tempPath, { force: true });
+        if (backupCurrent && protectPrivateFile(this.fileSystem, this.filePath)) {
+            writePrivateFile(this.fileSystem, this.previousPath, this.fileSystem.readFileSync(this.filePath));
         }
+        writePrivateFile(this.fileSystem, this.filePath, JSON.stringify(data, null, 2));
     }
 }
