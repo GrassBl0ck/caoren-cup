@@ -14,8 +14,9 @@ const { GameKeybinds } = require('./game-keybinds');
 const { connectGameServer } = require('./game-connect');
 const { inspectWindowsSteam, launchWorldwide, waitForCs2Window } = require('./windows-steam');
 const { steamProfile } = require('./steam-avatar');
+const { WorkshopMaps } = require('./workshop-maps');
 
-const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/2.5.3';
+const DESKTOP_CLIENT_USER_AGENT_TOKEN = 'CaorenCupDesktopClient/2.6.0';
 const clientDir = app.isPackaged
   ? process.env.PORTABLE_EXECUTABLE_DIR || path.dirname(app.getPath('exe'))
   : path.resolve(__dirname, '..');
@@ -93,6 +94,13 @@ function requireTrustedIpc(event) {
 }
 
 function registerDesktopIpc() {
+  const workshop = new WorkshopMaps();
+  ipcMain.handle('caoren:workshop-maps', (event, operation, id) => {
+    if (!isLocalRoomEvent(event)) throw new Error('IPC_SOURCE_NOT_ALLOWED');
+    if (operation === 'list') return workshop.list();
+    if (operation === 'download') return workshop.download(id);
+    throw new Error('无效的地图操作');
+  });
   const keybinds = new GameKeybinds(app.getPath('userData'));
   ipcMain.handle('caoren:keybinds', async (event, operation, request) => {
     if (!isLocalRoomEvent(event)) throw new Error('IPC_SOURCE_NOT_ALLOWED');

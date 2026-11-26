@@ -59,7 +59,7 @@ function readVdf(text) {
   return root;
 }
 
-async function findCfg(steamRoot) {
+async function findCs2Install(steamRoot) {
   const libraries = [steamRoot];
   const listing = await readText(path.join(steamRoot, 'steamapps', 'libraryfolders.vdf'), true);
   if (listing) {
@@ -75,7 +75,7 @@ async function findCfg(steamRoot) {
     const app = readVdf(manifest).appstate;
     if (app?.appid !== '730' || !app.installdir || /[\\/:]/.test(app.installdir) || /^\.+$/.test(app.installdir)) continue;
     const cfg = path.join(apps, 'common', app.installdir, 'game', 'csgo', 'cfg');
-    if (await fs.stat(path.join(cfg, 'user_keys_default.vcfg')).then(s => s.isFile(), () => false)) return cfg;
+    if (await fs.stat(path.join(cfg, 'user_keys_default.vcfg')).then(s => s.isFile(), () => false)) return { cfg, apps };
   }
   throw Error('找不到 CS2 的配置目录。');
 }
@@ -116,7 +116,7 @@ async function inspectConfig(steam) {
   const account = BigInt(steam.steamId) - 76561197960265728n;
   if (account < 1n || account > 0xffffffffn) throw Error('无效的 Steam 账号');
   const root = path.dirname(steam.steamExe);
-  const cfg = await findCfg(root);
+  const { cfg } = await findCs2Install(root);
   const user = path.join(root, 'userdata', String(account));
   const keys = new Map([...supported].map(k => [k, '']));
   readKeys(await readText(path.join(cfg, 'user_keys_default.vcfg')), keys, true);
@@ -174,4 +174,4 @@ async function inspectConfig(steam) {
   return { cfg, keys };
 }
 
-module.exports = { inspectConfig, supported, readVdf };
+module.exports = { inspectConfig, supported, readVdf, findCs2Install };

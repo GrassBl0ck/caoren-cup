@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('caorenDesktop', Object.freeze({
   connectGameServer: (connectUrl, expectedSteamId) => ipcRenderer.invoke('caoren:game:connect', { connectUrl, expectedSteamId }),
   ...(process.isMainFrame && location.protocol === 'file:' ? {
     keybinds: (operation, request) => ipcRenderer.invoke('caoren:keybinds', operation, request),
+    workshopMaps: (operation, id) => ipcRenderer.invoke('caoren:workshop-maps', operation, id),
   } : {}),
   inspectSteam: avatarSteamIds => ipcRenderer.invoke('caoren:steam:status', avatarSteamIds),
   roomRequest: (operation, payload) => ipcRenderer.invoke('caoren:room:request', operation, payload),

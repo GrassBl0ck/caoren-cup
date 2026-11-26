@@ -1,6 +1,6 @@
 {
   "name": "caoren-cup-desktop-client",
-  "version": "2.5.3",
+  "version": "2.6.0",
   "private": true,
   "description": "Caotai Cup player-center Windows desktop client.",
   "main": "src/main.js",
@@ -44,11 +44,13 @@
       "src/preload.js",
       "src/room-banner.jpg",
       "src/room-keybinds.js",
+      "src/room-resources.js",
       "src/room.css",
       "src/room.html",
       "src/room.js",
       "src/steam-avatar.js",
       "src/windows-steam.js",
+      "src/workshop-maps.js",
       "package.json"
     ],
     "win": {

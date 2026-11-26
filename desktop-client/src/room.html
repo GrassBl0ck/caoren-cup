@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="room.css">
   <script defer src="room.js"></script>
   <script defer src="room-keybinds.js"></script>
+  <script defer src="room-resources.js"></script>
 </head>
 <body class="at-home">
   <nav class="bar" aria-label="客户端">
@@ -15,6 +16,7 @@
       <img class="brand-image" src="brand.png" width="106" height="34" alt="草台杯">
     </button>
     <div class="bar-actions">
+      <button id="resources-open" class="guide-link" type="button">资源</button>
       <button id="rules" class="guide-link" type="button">赛前指引</button>
       <button id="account-toggle" class="bar-icon" type="button" aria-label="账户" title="账户" popovertarget="account-menu">
         <span id="guest-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.925 20.056a6 6 0 0 0-11.851.001"/><circle cx="12" cy="11" r="4"/><circle cx="12" cy="12" r="10"/></svg></span>
@@ -98,6 +100,15 @@
       </section>
     </div>
   </main>
+  <dialog id="resources-dialog" aria-labelledby="resources-title">
+    <div class="dialog-body">
+      <h2 id="resources-title">工坊地图</h2>
+      <p id="resources-summary"></p>
+      <p id="resources-status" role="status"></p>
+      <ul id="resources-list"></ul>
+    </div>
+    <div class="dialog-actions"><button id="resources-close" type="button">关闭</button></div>
+  </dialog>
   <dialog id="keybinds-dialog" aria-labelledby="keybinds-title">
     <header class="sheet-heading"><h2 id="keybinds-title">游戏键位</h2></header>
     <div class="sheet-content">

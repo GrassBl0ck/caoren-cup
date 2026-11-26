@@ -269,3 +269,15 @@ dialog::backdrop { background: #080909bf; }
 .keybind-row button { padding: 4px 8px; }
 .keybind-row .listening { border-color: var(--accent); }
 #keybinds-status { color: var(--ink, #f3f0e9); white-space: pre-line; overflow-wrap: anywhere; }
+
+#resources-dialog { width: min(610px, 94vw); max-height: 88vh; overflow: hidden; }
+#resources-dialog[open] { display: flex; flex-direction: column; }
+#resources-dialog .dialog-body { padding: 18px 22px 4px; overflow-y: auto; }
+#resources-dialog .dialog-actions { flex: none; }
+#resources-summary, #resources-list small { color: var(--muted); }
+#resources-summary { margin: 4px 0 14px; }
+#resources-status:not(:empty) { margin: 8px 0; }
+#resources-list { margin: 0; padding: 0; list-style: none; }
+#resources-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto 96px; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+#resources-list small { display: block; }
+#resources-list span { font-variant-numeric: tabular-nums; }
